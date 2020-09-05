@@ -1,12 +1,18 @@
-# prometheus-charm
+# Juju Charm/Operator for Prometheus on Kubernetes
 
 ## Description
 
-TODO: fill out the description
+[Prometheus](https://prometheus.io) is an open source monitoring
+system and alterting toolkit. This repository contains a
+[Charm](https://discourse.juju.is/t/charm-writing/1260) for deploying
+Prometheus in Kubernetes clusters using [Juju](https://jaas.ai/).
+
 
 ## Usage
 
-TODO: explain how to use the charm
+```
+    juju deploy prometheus
+```
 
 ### Scale Out Usage
 

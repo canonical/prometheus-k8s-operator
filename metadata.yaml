@@ -1,10 +1,27 @@
-# Copyright 2020 Balbir Thomas
-# See LICENSE file for licensing details.
-name: prometheus-charm
+name: prometheus
+summary: Alerting and Monitoring for Kubernetes Clusters
+maintainers:
+    - Balbir Thomas <balbir.thomas@canonical.com>
 description: |
-  TODO: fill out the charm's description
-summary: |
-  TODO: fill out the charm's summary
-series: [kubernetes]
-
-
+  Deploys and operates Prometheus on Kubernetes
+tags:
+    - lma
+    - prometheus
+    - monitoring
+    - alerting
+    - grafana
+series:
+    - kubernetes
+provides:
+    http-api:
+        interface: prometheus-http-api
+requires:
+    grafana-source:
+        interface: grafana-dashsource
+requires:
+    alertmanager:
+        interface: prometheus-alerting-config
+storage:
+  database:
+    type: filesystem
+    location: /var/lib/prometheus

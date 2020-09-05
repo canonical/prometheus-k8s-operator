@@ -1,10 +1,155 @@
-# Copyright 2020 Balbir Thomas
-# See LICENSE file for licensing details.
-#
-# This is only an example, and you should edit to suit your needs.
-# If you don't need config, you can remove the file entirely.
 options:
-  thing:
-    default: 🎁
-    description: A thing used by the charm.
+  prometheus-image-path:
     type: string
+    description: |
+      The location of the image to use,
+      e.g. "registry.example.com/prometheus:v1".
+
+      This setting is required.
+    default: "prom/prometheus:latest"
+  prometheus-image-username:
+    type: string
+    description: |
+      The username for accessing the registry specified in
+      prometheus-image-path.
+    default: ""
+  prometheus-image-password:
+    type: string
+    description: |
+      The password associated with prometheus-image-username for
+      accessing the registry specified in prometheus-image-path.
+    default: ""
+  advertised-port:
+    description: The port prometheus will be listening on
+    type: int
+    default: 9090
+  enforce-pod-restart:
+    type: boolean
+    default: false
+    description: |
+      If set to True, charm will forcibly shutdown and re-create the workload
+      pod(s), one by one. If there is only one pod - any config modification
+      will lead to the short service downtime.
+  ssl-cert:
+    type: string
+    default:
+    description: |
+      SSL certificate to install and use for Prometheus endpoint.
+  ssl-key:
+    type: string
+    default:
+    description: |
+      SSL key to use with certificate specified as ssl-cert.
+  log-level:
+    description: |
+      Prometheus server log level (only log messages with the given severity
+      or above). Must be one of: [debug, info, warn, error, fatal].
+      If not set, the Prometheus default one (info) will be used.
+    type: string
+    default:
+  web-max-connections:
+    description: |
+      Maximum number of simultaneous connections.
+    type: int
+    default: 512
+  web-read-timeout:
+    description: |
+      Maximum duration before timing out read of the request, and
+      closing idle connections.
+    type: string
+    default: 5m
+  web-external-url:
+    description: |
+      The URL under which Prometheus is externally reachable (for example,
+      if Prometheus is served via a reverse proxy).
+      Used for generating relative and absolute links back to
+      Prometheus itself. If the URL has a path portion, it will be used to
+      prefix all HTTP endpoints served by Prometheus.
+
+      If omitted, relevant URL components will be derived automatically.
+    type: string
+    default: ""
+  # TODO: After the nginx reverse proxy sidecar will be implemented,
+  # it will be a good idea to restrict this kind of access to some particular
+  # IP address range at least.
+  web-enable-admin-api:
+    description: |
+      Enable API endpoints for admin control actions.
+
+      As of Prometheus 2.0, this flag controls access to the
+      administrative HTTP API which includes functionality such as
+      deleting time series. This is disabled by default.
+
+      If enabled, administrative and mutating functionality will
+      be accessible under the /api/*/admin/ paths.
+    type: boolean
+    default: false
+  web-page-title:
+    description: |
+      Document title of Prometheus instance.
+    type: string
+    default: "Charmed LMA - Prometheus TSDB, Collection & Processing"
+  tsdb-retention-time:
+    description: |
+      How long to retain samples in the storage.
+      Units Supported: y, w, d, h, m, s, ms.
+    type: string
+    default: 15d
+  tsdb-wal-compression:
+    description: |
+      This flag enables compression of the write-ahead log (WAL).
+      Depending on your data, you can expect the WAL size to be
+      halved with little extra cpu load.
+    type: boolean
+    default: false
+  alertmanager-notification-queue-capacity:
+    description: |
+      The capacity of the queue for pending alert manager notifications.
+    type: int
+    default: 10000
+  alertmanager-timeout:
+    description: |
+      Timeout for sending alerts to AlertManager.
+    type: string
+    default: 10s
+  external-labels:
+    description: |
+      A JSON string of key-value pairs that specify the labels to
+      attach to metrics in this Prometheus instance when they get pulled
+      by an aggregating parent. This is useful in the case of federation
+      where, for example, you want each datacenter to have its own
+      Prometheus instance and then have a global instance that pulls from
+      each of these datacenter instances. By specifying a unique set of
+      external-labels for each datacenter instance, you can easily determine
+      in the aggregating Prometheus instance which datacenter a metric is
+      coming from. Note that you are not limited to one instance per
+      datacenter. The datacenter example here is arbitrary and you are free
+      to organize your federation's hierarchy as you see fit.
+      Ex. '{ "cluster": "datacenter1" }'. Both keys and values may be
+      arbitrarily chosen as you see fit.
+    type: string
+    default: "{}"
+  monitor-k8s:
+    description: |
+      Adds additional scrape configs to the prometheus config file such that
+      it collects metrics about the k8s cluster it is deployed in. It's
+      important that metrics-server be running in the kube-system namespace
+      otherwise the charm will remain in the blocked status.
+    type: boolean
+    default: false
+  scrape-interval:
+    description: |
+      How frequently to scrape targets by default.
+    type: string
+    default: 1m
+  scrape-timeout:
+    description: |
+      How long until a scrape request times out.
+    type: string
+    default: 10s
+  evaluation-interval:
+    description: |
+      How frequently rules will be evaluated.
+    type: string
+    default: 1m
+
