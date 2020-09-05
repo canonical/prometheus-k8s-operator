@@ -2,35 +2,39 @@
 # See LICENSE file for licensing details.
 
 import unittest
-from unittest.mock import Mock
+# from unittest.mock import Mock
 
 from ops.testing import Harness
 from charm import PrometheusCharm
 
 
 class TestCharm(unittest.TestCase):
-    def test_config_changed(self):
-        harness = Harness(PrometheusCharm)
-        # from 0.8 you should also do:
-        # self.addCleanup(harness.cleanup)
-        harness.begin()
-        self.assertEqual(list(harness.charm._stored.things), [])
-        harness.update_config({"thing": "foo"})
-        self.assertEqual(list(harness.charm._stored.things), ["foo"])
+    def setUp(self):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
 
-    def test_action(self):
-        harness = Harness(PrometheusCharm)
-        harness.begin()
-        # the harness doesn't (yet!) help much with actions themselves
-        action_event = Mock(params={"fail": ""})
-        harness.charm._on_fortune_action(action_event)
+    def test_image_path_is_required(self):
+        self.harness.begin()
+        missing_image_config = {
+            'prometheus-image-path': '',
+            'prometheus-image-username': '',
+            'prometheus-image-password': ''
+        }
+        self.harness.update_config(missing_image_config)
 
-        self.assertTrue(action_event.set_results.called)
+        missing = self.harness.charm._check_config()
+        expected = ['prometheus-image-path']
+        self.assertEqual(missing, expected)
 
-    def test_action_fail(self):
-        harness = Harness(PrometheusCharm)
-        harness.begin()
-        action_event = Mock(params={"fail": "fail this"})
-        harness.charm._on_fortune_action(action_event)
+    def test_password_is_required_when_username_is_set(self):
+        self.harness.begin()
+        missing_password_config = {
+            'prometheus-image-path': 'prom/prometheus:latest',
+            'prometheus-image-username': 'some-user',
+            'prometheus-image-password': '',
+        }
+        self.harness.update_config(missing_password_config)
 
-        self.assertEqual(action_event.fail.call_args, [("fail this",)])
+        missing = self.harness.charm._check_config()
+        expected = ['prometheus-image-password']
+        self.assertEqual(missing, expected)
