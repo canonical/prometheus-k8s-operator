@@ -1,0 +1,10 @@
+# Copyright 2020 Balbir Thomas
+# See LICENSE file for licensing details.
+name: prometheus-charm
+description: |
+  TODO: fill out the charm's description
+summary: |
+  TODO: fill out the charm's summary
+series: [kubernetes]
+
+
