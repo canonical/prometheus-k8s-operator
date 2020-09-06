@@ -96,11 +96,13 @@ class PrometheusCharm(CharmBase):
 
         return args
 
-    def _set_prometheus_config(self, spec):
+    def _prometheus_config(self):
         config = self.model.config
         scrape_config = {'global': {},
                          'scrape_configs': [],
                          'alerting': ''}
+
+        # By default only monitor prometheus server itself
         default_config = {
             'job_name': 'prometheus',
             'scrape_interval': '5s',
@@ -115,9 +117,17 @@ class PrometheusCharm(CharmBase):
             }]
         }
         scrape_config['scrape_configs'].append(default_config)
-        spec['containers'][0]['files'][0]['files']['prometheus.yml'] = yaml.dump(scrape_config)
 
-        return spec
+        # If monitoring of k8s is requested gather all scraping configuration for k8s
+        if config.get('monitor-k8s'):
+            with open('config/prometheus-k8s.yml') as yaml_file:
+                k8s_scrape_configs = yaml.safe_load(yaml_file).get('scrape_configs', [])
+            for k8s_config in k8s_scrape_configs:
+                scrape_config.append(k8s_config)
+
+        logger.debug('Prometheus config : {}'.format(scrape_config))
+
+        return yaml.dump(scrape_config)
 
     def _build_pod_spec(self):
         logger.debug('Building Pod Spec')
@@ -156,13 +166,11 @@ class PrometheusCharm(CharmBase):
                     'name': 'prometheus-config',
                     'mountPath': '/etc/prometheus',
                     'files': {
-                        'prometheus.yml': ''
+                        'prometheus.yml': self._prometheus_config()
                     }
                 }]
             }]
         }
-
-        spec = self._set_prometheus_config(spec)
 
         return spec
 
