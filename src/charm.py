@@ -96,9 +96,46 @@ class PrometheusCharm(CharmBase):
 
         return args
 
+    def _is_valid_timespec(self, timeval):
+        if not timeval:
+            return False
+
+        time, unit = timeval[:-1], timeval[-1]
+
+        # TODO 'ms' - bug in original charm ?
+        if unit not in ['y', 'w', 'd', 'h', 'm', 's']:
+            logger.error('Invalid unit {} in time spec'.format(unit))
+            return False
+
+        try:
+            int(time)
+        except ValueError:
+            logger.error('Can not convert time {} to integer'.format(time))
+            return False
+
+        return True
+
+    def _prometheus_global_config(self):
+        config = self.model.config
+        global_config = {}
+
+        if config.get('scrape-interval') and self._is_valid_timespec(
+                config['scrape-interval']):
+            global_config['scrape_interval'] = config['scrape-interval']
+
+        if config.get('scrape-timeout') and self._is_valid_timespec(
+                config['scrape-timeout']):
+            global_config['scrape_timeout'] = config['scrape-timeout']
+
+        if config.get('evaluation-interval') and self._is_valid_timespec(
+                config['evaluation-interval']):
+            global_config['evaluation_interval'] = config['evaluation-interval']
+
+        return global_config
+
     def _prometheus_config(self):
         config = self.model.config
-        scrape_config = {'global': {},
+        scrape_config = {'global': self._prometheus_global_config(),
                          'scrape_configs': [],
                          'alerting': ''}
 
