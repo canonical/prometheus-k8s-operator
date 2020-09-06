@@ -7,6 +7,7 @@ import yaml
 import json
 
 from ops.charm import CharmBase
+from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
 
@@ -15,17 +16,60 @@ logger = logging.getLogger(__name__)
 
 class PrometheusCharm(CharmBase):
 
+    _state = StoredState()
+
     def __init__(self, *args):
         logger.debug('Initializing Charm')
+
         super().__init__(*args)
+        self._state.set_default(alertmanagers=dict())
+
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
+        self.framework.observe(self.on['alertmanager'].relation_changed,
+                               self.on_alertmanager_changed)
+        self.framework.observe(self.on['alertmanager'].relation_departed,
+                               self.on_alertmanager_departed)
 
     def _on_config_changed(self, _):
         self.configure_pod()
 
     def _on_stop(self, _):
         self.unit.status = MaintenanceStatus('Pod is terminating.')
+
+    def on_alertmanager_changed(self, event):
+        if not self.unit.is_leader():
+            logger.debug('{} is not leader. '
+                         'Not handling alertmanager change.'.format(
+                             self.unit.name))
+            return
+
+        if event.unit is None:
+            self._state.alertmanagers.pop(event.relation.id)
+            logger.warning('Got null event unit on alertmanager changed')
+            return
+
+        alerting_config = event.data.get('alerting_config', {})
+        logger.debug('Received alerting config: {}'.format(alerting_config))
+
+        if not alerting_config:
+            logger.warning('Got empty alerting config for relation id '.format(
+                event.relation.id))
+            return
+
+        self._state.alertmanagers.update({event.relation.id: alerting_config})
+
+        self.configure_pod()
+
+    def on_alertmanager_departed(self, event):
+        if not self.unit.is_leader():
+            logger.debug('{} is not leader. '
+                         'Not handling alertmanager departed.'.format(
+                             self.unit.name))
+            return
+
+        self._state.alertmanagers.pop(event.relation.id)
+        self.configure_pod()
 
     def _cli_args(self):
         config = self.model.config
@@ -169,11 +213,26 @@ class PrometheusCharm(CharmBase):
 
         return global_config
 
+    def _alerting_config(self):
+        alerting_config = ''
+
+        if len(self._state.alertmanagers) < 1:
+            logger.debug('No alertmanagers available')
+            return alerting_config
+
+        if len(self._state.alertmanagers) > 1:
+            logger.warning('More than one altermanager found. Using first!')
+
+        manager = list(self._state.alertmanagers.keys())[0]
+        alerting_config = self._state.alertmanagers.get(manager, '')
+
+        return alerting_config
+
     def _prometheus_config(self):
         config = self.model.config
         scrape_config = {'global': self._prometheus_global_config(),
                          'scrape_configs': [],
-                         'alerting': ''}
+                         'alerting': self._alerting_config()}
 
         # By default only monitor prometheus server itself
         default_config = {
