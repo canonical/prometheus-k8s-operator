@@ -4,6 +4,7 @@
 
 import logging
 import yaml
+import json
 
 from ops.charm import CharmBase
 from ops.main import main
@@ -115,9 +116,44 @@ class PrometheusCharm(CharmBase):
 
         return True
 
+    def _are_valid_labels(self, json_data):
+        if not json_data:
+            return False
+
+        try:
+            labels = json.loads(json_data)
+        except (ValueError, TypeError):
+            logger.error('Can not parse external labels : {}'.format(json_data))
+            return False
+
+        if not isinstance(labels, dict):
+            logger.error('Expected label dictionary but got : {}'.format(labels))
+            return False
+
+        for key, value in labels:
+            if not isinstance(key, str) or not isinstance(value, str):
+                logger.error('External label keys/values must be strings')
+                return False
+
+        return True
+
+    def _external_labels(self):
+        config = self.model.config
+        labels = {}
+
+        if config.get('external-labels') and self._are_valid_labels(
+                config['external-labels']):
+            labels = json.loads(config['external-labels'])
+
+        return labels
+
     def _prometheus_global_config(self):
         config = self.model.config
         global_config = {}
+
+        labels = self._external_labels()
+        if labels:
+            global_config['external_labels'] = labels
 
         if config.get('scrape-interval') and self._is_valid_timespec(
                 config['scrape-interval']):
