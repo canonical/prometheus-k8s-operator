@@ -26,6 +26,76 @@ class PrometheusCharm(CharmBase):
     def _on_stop(self, _):
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
+    def _cli_args(self):
+        config = self.model.config
+        args = [
+            '--config.file=/etc/prometheus/prometheus.yml',
+            '--storage.tsdb.path=/prometheus',
+            '--web.enable-lifecycle',
+            '--web.console.templates=/usr/share/prometheus/consoles',
+            '--web.console.libraries=/usr/share/prometheus/console_libraries'
+        ]
+
+        # get log level
+        allowed_log_levels = ['debug', 'info', 'warn', 'error', 'fatal']
+        if config.get('log-level'):
+            log_level = config['log-level'].lower()
+        else:
+            log_level = 'info'
+
+        # If log level is invalid set it to debug
+        if log_level not in allowed_log_levels:
+            logging.error(
+                'Invalid loglevel: {0} given, {1} allowed. '
+                'defaulting to DEBUG loglevel.'.format(
+                    log_level, '/'.join(allowed_log_levels)
+                )
+            )
+            log_level = 'debug'
+
+        # set log level
+        args.append(
+            '--log.level={0}'.format(log_level)
+        )
+
+        # Expose Prometheus Adminstration API only if requested
+        if config.get('web-enable-admin-api'):
+            args.append('--web.enable-admin-api')
+
+        # User specified Prometheus web page title
+        if config.get('web-page-title'):
+            # TODO: Validate and sanitize input
+            args.append(
+                '--web.page-title="{0}"'.format(
+                    config['web-page-title']
+                )
+            )
+
+        # Enable time series database compression
+        if config.get('tsdb-wal-compression'):
+            args.append('--storage.tsdb.wal-compression')
+
+        # Set time series retention time
+        if config.get('tsdb-retention-time'):
+            args.append('--storage.tsdb.retention.time={}'.format(config['tsdb-retention-time']))
+
+        # Set maximum number of connections to prometheus server
+        if config.get('web-max-connections'):
+            args.append('--web.max-connections={}'.format(config['web-max-connections']))
+
+        # Set maximum number of pending alerts
+        if config.get('alertmanager-notification-queue-capacity'):
+            args.append('--alertmanager.notification-queue-capacity={}'.format(
+                config['alertmanager-notification-queue-capacity']))
+
+        # Set timeout for alerts
+        if config.get('alertmanager-timeout'):
+            args.append('--alertmanager.timeout={}'.format(config['alertmanager-timeout']))
+
+        logger.debug("CLI args: {0}".format(' '.join(args)))
+
+        return args
+
     def _set_prometheus_config(self, spec):
         config = self.model.config
         scrape_config = {'global': {},
@@ -60,11 +130,7 @@ class PrometheusCharm(CharmBase):
                     'username': config['prometheus-image-username'],
                     'password': config['prometheus-image-password']
                 },
-                'args': ['--config.file=/etc/prometheus/prometheus.yml',
-                         '--storage.tsdb.path=/prometheus',
-                         '--web.enable-lifecycle',
-                         '--web.console.templates=/usr/share/prometheus/consoles',
-                         '--web.console.libraries=/usr/share/prometheus/console_libraries'],
+                'args': self._cli_args(),
                 'readinessProbe': {
                     'httpGet': {
                         'path': '/-/ready',
