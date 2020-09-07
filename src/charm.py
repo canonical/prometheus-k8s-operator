@@ -269,8 +269,8 @@ class PrometheusCharm(CharmBase):
                 'name': self.app.name,
                 'imageDetails': {
                     'imagePath': config['prometheus-image-path'],
-                    'username': config['prometheus-image-username'],
-                    'password': config['prometheus-image-password']
+                    'username': config.get('prometheus-image-username', ''),
+                    'password': config.get('prometheus-image-password', '')
                 },
                 'args': self._cli_args(),
                 'readinessProbe': {
@@ -315,11 +315,11 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         missing = []
 
-        if not config['prometheus-image-path']:
+        if not config.get('prometheus-image-path'):
             missing.append('prometheus-image-path')
 
-        if config['prometheus-image-username'] \
-                and not config['prometheus-image-password']:
+        if config.get('prometheus-image-username') \
+                and not config.get('prometheus-image-password'):
             missing.append('prometheus-image-password')
 
         if missing:
