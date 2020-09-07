@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 class PrometheusCharm(CharmBase):
 
-    _state = StoredState()
+    stored = StoredState()
 
     def __init__(self, *args):
         logger.debug('Initializing Charm')
 
         super().__init__(*args)
-        self._state.set_default(alertmanagers=dict())
+        self.stored.set_default(alertmanagers=dict())
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
@@ -45,7 +45,7 @@ class PrometheusCharm(CharmBase):
             return
 
         if event.unit is None:
-            self._state.alertmanagers.pop(event.relation.id)
+            self.stored.alertmanagers.pop(event.relation.id)
             logger.warning('Got null event unit on alertmanager changed')
             return
 
@@ -57,7 +57,7 @@ class PrometheusCharm(CharmBase):
                 event.relation.id))
             return
 
-        self._state.alertmanagers.update({event.relation.id: alerting_config})
+        self.stored.alertmanagers.update({event.relation.id: alerting_config})
 
         self.configure_pod()
 
@@ -68,7 +68,7 @@ class PrometheusCharm(CharmBase):
                              self.unit.name))
             return
 
-        self._state.alertmanagers.pop(event.relation.id)
+        self.stored.alertmanagers.pop(event.relation.id)
         self.configure_pod()
 
     def _cli_args(self):
@@ -216,15 +216,15 @@ class PrometheusCharm(CharmBase):
     def _alerting_config(self):
         alerting_config = ''
 
-        if len(self._state.alertmanagers) < 1:
+        if len(self.stored.alertmanagers) < 1:
             logger.debug('No alertmanagers available')
             return alerting_config
 
-        if len(self._state.alertmanagers) > 1:
+        if len(self.stored.alertmanagers) > 1:
             logger.warning('More than one altermanager found. Using first!')
 
-        manager = list(self._state.alertmanagers.keys())[0]
-        alerting_config = self._state.alertmanagers.get(manager, '')
+        manager = list(self.stored.alertmanagers.keys())[0]
+        alerting_config = self.stored.alertmanagers.get(manager, '')
 
         return alerting_config
 
