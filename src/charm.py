@@ -49,11 +49,11 @@ class PrometheusCharm(CharmBase):
             logger.warning('Got null event unit on alertmanager changed')
             return
 
-        alerting_config = event.data.get('alerting_config', {})
+        alerting_config = event.relation.data[event.unit].get('alerting_config', {})
         logger.debug('Received alerting config: {}'.format(alerting_config))
 
         if not alerting_config:
-            logger.warning('Got empty alerting config for relation id '.format(
+            logger.warning('Got empty alerting config for relation id {}'.format(
                 event.relation.id))
             return
 
