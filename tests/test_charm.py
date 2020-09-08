@@ -26,9 +26,9 @@ class TestCharm(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
+        self.harness.begin()
 
     def test_image_path_is_required(self):
-        self.harness.begin()
         missing_image_config = {
             'prometheus-image-path': '',
             'prometheus-image-username': '',
@@ -41,7 +41,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(missing, expected)
 
     def test_password_is_required_when_username_is_set(self):
-        self.harness.begin()
         missing_password_config = {
             'prometheus-image-path': 'prom/prometheus:latest',
             'prometheus-image-username': 'some-user',
@@ -54,7 +53,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(missing, expected)
 
     def test_alerting_config_is_updated_by_alertmanager_relation(self):
-        self.harness.begin()
         self.harness.set_leader(True)
 
         # check alerting config is empty without alertmanager relation
@@ -78,7 +76,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(alerting_config(pod_spec), SMTP_ALERTING_CONFIG)
 
     def test_alerting_config_is_removed_when_alertmanager_departs(self):
-        self.harness.begin()
         self.harness.set_leader(True)
 
         # ensure there is a non-empty alerting config
@@ -102,14 +99,12 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(alerting_config(pod_spec), str())
 
     def test_default_cli_log_level_is_info(self):
-        self.harness.begin()
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'info')
 
     def test_invalid_log_level_defaults_to_debug(self):
-        self.harness.begin()
         self.harness.set_leader(True)
         bad_log_config = MINIMAL_CONFIG
         bad_log_config['log-level'] = 'bad-level'
@@ -118,7 +113,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'debug')
 
     def test_valid_log_level_is_accepted(self):
-        self.harness.begin()
         self.harness.set_leader(True)
         valid_log_config = MINIMAL_CONFIG
         valid_log_config['log-level'] = 'warn'
