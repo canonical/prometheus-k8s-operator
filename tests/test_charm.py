@@ -101,6 +101,31 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), str())
 
+    def test_default_cli_log_level_is_info(self):
+        self.harness.begin()
+        self.harness.set_leader(True)
+        self.harness.update_config(MINIMAL_CONFIG)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--log.level'), 'info')
+
+    def test_invalid_log_level_defaults_to_debug(self):
+        self.harness.begin()
+        self.harness.set_leader(True)
+        bad_log_config = MINIMAL_CONFIG
+        bad_log_config['log-level'] = 'bad-level'
+        self.harness.update_config(bad_log_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--log.level'), 'debug')
+
+    def test_valid_log_level_is_accepted(self):
+        self.harness.begin()
+        self.harness.set_leader(True)
+        valid_log_config = MINIMAL_CONFIG
+        valid_log_config['log-level'] = 'warn'
+        self.harness.update_config(valid_log_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--log.level'), 'warn')
+
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
@@ -108,3 +133,14 @@ def alerting_config(pod_spec):
     alerting_yaml = config_dict['alerting']
     alerting = yaml.safe_load(alerting_yaml) if alerting_yaml else str()
     return alerting
+
+
+def cli_arg(pod_spec, cli_opt):
+    args = pod_spec[0]['containers'][0]['args']
+    for arg in args:
+        opt_list = arg.split('=')
+        if len(opt_list) == 2 and opt_list[0] == cli_opt:
+            return opt_list[1]
+        if len(opt_list) == 1 and opt_list[0] == cli_opt:
+            return opt_list[0]
+    return None
