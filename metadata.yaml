@@ -18,7 +18,6 @@ provides:
 requires:
     grafana-source:
         interface: grafana-dashsource
-requires:
     alertmanager:
         interface: prometheus-alerting-config
 storage:
