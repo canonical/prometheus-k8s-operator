@@ -120,6 +120,55 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'warn')
 
+    def test_web_admin_api_can_be_enabled(self):
+        self.harness.set_leader(True)
+
+        # without web admin enabled
+        self.harness.update_config(MINIMAL_CONFIG)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
+                         None)
+
+        # with web admin enabled
+        admin_api_config = MINIMAL_CONFIG
+        admin_api_config['web-enable-admin-api'] = True
+        self.harness.update_config(admin_api_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
+                         '--web.enable-admin-api')
+
+    def test_valid_tsdb_retention_times_can_be_set(self):
+        self.harness.set_leader(True)
+        retention_time_config = MINIMAL_CONFIG
+        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
+        for unit in acceptable_units:
+            retention_time = '{}{}'.format(1, unit)
+            retention_time_config['tsdb-retention-time'] = retention_time
+            self.harness.update_config(retention_time_config)
+            pod_spec = self.harness.get_pod_spec()
+            self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
+                             retention_time)
+
+    def test_invalid_tsdb_retention_times_can_not_be_set(self):
+        self.harness.set_leader(True)
+        retention_time_config = MINIMAL_CONFIG
+
+        # invalid unit
+        retention_time = '{}{}'.format(1, 'x')
+        retention_time_config['tsdb-retention-time'] = retention_time
+        self.harness.update_config(retention_time_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
+                         None)
+
+        # invalid time value
+        retention_time = '{}{}'.format(0, 'd')
+        retention_time_config['tsdb-retention-time'] = retention_time
+        self.harness.update_config(retention_time_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
+                         None)
+
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
