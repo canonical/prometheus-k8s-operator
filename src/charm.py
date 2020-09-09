@@ -121,7 +121,8 @@ class PrometheusCharm(CharmBase):
             args.append('--storage.tsdb.wal-compression')
 
         # Set time series retention time
-        if config.get('tsdb-retention-time'):
+        if config.get('tsdb-retention-time') and self._is_valid_timespec(
+                config['tsdb-retention-time']):
             args.append('--storage.tsdb.retention.time={}'.format(config['tsdb-retention-time']))
 
         # Set maximum number of connections to prometheus server
@@ -156,6 +157,10 @@ class PrometheusCharm(CharmBase):
             int(time)
         except ValueError:
             logger.error('Can not convert time {} to integer'.format(time))
+            return False
+
+        if not int(time) > 0:
+            logger.error('Expected positive time spec but got {}'.format(time))
             return False
 
         return True
