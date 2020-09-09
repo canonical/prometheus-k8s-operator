@@ -173,8 +173,10 @@ class TestCharm(unittest.TestCase):
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
     config_dict = yaml.safe_load(config_yaml)
-    alerting_yaml = config_dict['alerting']
-    alerting = yaml.safe_load(alerting_yaml) if alerting_yaml else str()
+    alerting_yaml = config_dict.get('alerting')
+    alerting = str()
+    if alerting_yaml:
+        alerting = yaml.safe_load(alerting_yaml)
     return alerting
 
 

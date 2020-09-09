@@ -235,9 +235,13 @@ class PrometheusCharm(CharmBase):
 
     def _prometheus_config(self):
         config = self.model.config
+
         scrape_config = {'global': self._prometheus_global_config(),
-                         'scrape_configs': [],
-                         'alerting': self._alerting_config()}
+                         'scrape_configs': []}
+
+        alerting_config = self._alerting_config()
+        if alerting_config:
+            scrape_config['alerting'] = alerting_config
 
         # By default only monitor prometheus server itself
         default_config = {
