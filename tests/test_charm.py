@@ -106,7 +106,7 @@ class TestCharm(unittest.TestCase):
 
     def test_invalid_log_level_defaults_to_debug(self):
         self.harness.set_leader(True)
-        bad_log_config = MINIMAL_CONFIG
+        bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config['log-level'] = 'bad-level'
         self.harness.update_config(bad_log_config)
         pod_spec = self.harness.get_pod_spec()
@@ -114,7 +114,7 @@ class TestCharm(unittest.TestCase):
 
     def test_valid_log_level_is_accepted(self):
         self.harness.set_leader(True)
-        valid_log_config = MINIMAL_CONFIG
+        valid_log_config = MINIMAL_CONFIG.copy()
         valid_log_config['log-level'] = 'warn'
         self.harness.update_config(valid_log_config)
         pod_spec = self.harness.get_pod_spec()
@@ -130,7 +130,7 @@ class TestCharm(unittest.TestCase):
                          None)
 
         # with web admin enabled
-        admin_api_config = MINIMAL_CONFIG
+        admin_api_config = MINIMAL_CONFIG.copy()
         admin_api_config['web-enable-admin-api'] = True
         self.harness.update_config(admin_api_config)
         pod_spec = self.harness.get_pod_spec()
@@ -139,7 +139,7 @@ class TestCharm(unittest.TestCase):
 
     def test_valid_tsdb_retention_times_can_be_set(self):
         self.harness.set_leader(True)
-        retention_time_config = MINIMAL_CONFIG
+        retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
         for unit in acceptable_units:
             retention_time = '{}{}'.format(1, unit)
@@ -151,7 +151,7 @@ class TestCharm(unittest.TestCase):
 
     def test_invalid_tsdb_retention_times_can_not_be_set(self):
         self.harness.set_leader(True)
-        retention_time_config = MINIMAL_CONFIG
+        retention_time_config = MINIMAL_CONFIG.copy()
 
         # invalid unit
         retention_time = '{}{}'.format(1, 'x')
