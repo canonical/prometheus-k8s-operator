@@ -30,12 +30,22 @@ class PrometheusCharm(CharmBase):
                                self.on_alertmanager_changed)
         self.framework.observe(self.on['alertmanager'].relation_departed,
                                self.on_alertmanager_departed)
+        self.framework.observe(self.on['grafana-source'].relation_changed,
+                               self.on_grafana_changed)
+        self.framework.observe(self.on['grafana-source'].relation_departed,
+                               self.on_grafana_departed)
 
     def _on_config_changed(self, _):
         self.configure_pod()
 
     def _on_stop(self, _):
         self.unit.status = MaintenanceStatus('Pod is terminating.')
+
+    def on_grafana_changed(self, _):
+        pass
+
+    def on_grafana_departed(self, _):
+        pass
 
     def on_alertmanager_changed(self, event):
         if not self.unit.is_leader():
