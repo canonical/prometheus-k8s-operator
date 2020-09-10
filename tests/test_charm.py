@@ -98,15 +98,14 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), str())
 
-    @unittest.skip('Bug in Operator Testing Framework or docstring ?')
     def test_grafana_is_provided_port_and_source(self):
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         rel_id = self.harness.add_relation('grafana-source', 'grafana')
         self.harness.add_relation_unit(rel_id, 'grafana/0')
         self.harness.update_relation_data(rel_id, 'grafana/0', {})
-        data = self.harness.get_relation_data(rel_id, 'grafana/0')
-        self.assertEqual(data['port'], MINIMAL_CONFIG['advertised-port'])
+        data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
+        self.assertEqual(int(data['port']), MINIMAL_CONFIG['advertised-port'])
         self.assertEqual(data['source-type'], 'prometheus')
 
     def test_default_cli_log_level_is_info(self):
