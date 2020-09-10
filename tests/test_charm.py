@@ -104,6 +104,7 @@ class TestCharm(unittest.TestCase):
         self.harness.update_config(MINIMAL_CONFIG)
         rel_id = self.harness.add_relation('grafana-source', 'grafana')
         self.harness.add_relation_unit(rel_id, 'grafana/0')
+        self.harness.update_relation_data(rel_id, 'grafana/0', {})
         data = self.harness.get_relation_data(rel_id, 'grafana/0')
         self.assertEqual(data['port'], MINIMAL_CONFIG['advertised-port'])
         self.assertEqual(data['source-type'], 'prometheus')
@@ -147,6 +148,32 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
                          '--web.enable-admin-api')
 
+    def test_web_page_title_can_be_set(self):
+        self.harness.set_leader(True)
+        web_config = MINIMAL_CONFIG.copy()
+        web_config['web-page-title'] = 'Prometheus Test Page'
+        self.harness.update_config(web_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--web.page-title')[1:-1],  # striping quotes
+                         web_config['web-page-title'])
+
+    def test_tsdb_compression_is_not_enabled_by_default(self):
+        self.harness.set_leader(True)
+        compress_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(compress_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.wal-compression'),
+                         None)
+
+    def test_tsdb_compression_can_be_enabled(self):
+        self.harness.set_leader(True)
+        compress_config = MINIMAL_CONFIG.copy()
+        compress_config['tsdb-wal-compression'] = True
+        self.harness.update_config(compress_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.wal-compression'),
+                         '--storage.tsdb.wal-compression')
+
     def test_valid_tsdb_retention_times_can_be_set(self):
         self.harness.set_leader(True)
         retention_time_config = MINIMAL_CONFIG.copy()
@@ -178,6 +205,15 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
+
+    def test_max_web_connections_can_be_set(self):
+        self.harness.set_leader(True)
+        maxcon_config = MINIMAL_CONFIG.copy()
+        maxcon_config['web-max-connections'] = 512
+        self.harness.update_config(maxcon_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(int(cli_arg(pod_spec, '--web.max-connections')),
+                         maxcon_config['web-max-connections'])
 
 
 def alerting_config(pod_spec):
