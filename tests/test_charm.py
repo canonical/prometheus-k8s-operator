@@ -3,6 +3,7 @@
 
 import unittest
 import yaml
+import json
 
 from ops.testing import Harness
 from charm import PrometheusCharm
@@ -269,6 +270,29 @@ class TestCharm(unittest.TestCase):
             gconfig = global_config(pod_spec)
             self.assertEqual(gconfig['evaluation_interval'],
                              evalint_config['evaluation-interval'])
+
+    def test_valid_external_labels_can_be_set(self):
+        self.harness.set_leader(True)
+        label_config = MINIMAL_CONFIG.copy()
+        labels = {'name1': 'value1',
+                  'name2': 'value2'}
+        label_config['external-labels'] = json.dumps(labels)
+        self.harness.update_config(label_config)
+        pod_spec = self.harness.get_pod_spec()
+        gconfig = global_config(pod_spec)
+        self.assertIsNotNone(gconfig['external_labels'])
+        self.assertEqual(labels, gconfig['external_labels'])
+
+    def test_invalid_external_labels_can_not_be_set(self):
+        self.harness.set_leader(True)
+        label_config = MINIMAL_CONFIG.copy()
+        # label value must be string
+        labels = {'name': 1}
+        label_config['external-labels'] = json.dumps(labels)
+        self.harness.update_config(label_config)
+        pod_spec = self.harness.get_pod_spec()
+        gconfig = global_config(pod_spec)
+        self.assertIsNone(gconfig.get('external_labels'))
 
     def test_default_scrape_config_is_always_set(self):
         self.harness.set_leader(True)
