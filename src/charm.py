@@ -141,7 +141,8 @@ class PrometheusCharm(CharmBase):
                 config['alertmanager-notification-queue-capacity']))
 
         # Set timeout for alerts
-        if config.get('alertmanager-timeout'):
+        if config.get('alertmanager-timeout') and self._is_valid_timespec(
+                config['alertmanager-timeout']):
             args.append('--alertmanager.timeout={}'.format(config['alertmanager-timeout']))
 
         logger.debug("CLI args: {0}".format(' '.join(args)))
