@@ -271,7 +271,7 @@ class PrometheusCharm(CharmBase):
             with open('config/prometheus-k8s.yml') as yaml_file:
                 k8s_scrape_configs = yaml.safe_load(yaml_file).get('scrape_configs', [])
             for k8s_config in k8s_scrape_configs:
-                scrape_config.append(k8s_config)
+                scrape_config['scrape_configs'].append(k8s_config)
 
         logger.debug('Prometheus config : {}'.format(scrape_config))
 
