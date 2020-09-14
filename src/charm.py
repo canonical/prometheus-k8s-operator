@@ -186,7 +186,7 @@ class PrometheusCharm(CharmBase):
             logger.error('Expected label dictionary but got : {}'.format(labels))
             return False
 
-        for key, value in labels:
+        for key, value in labels.items():
             if not isinstance(key, str) or not isinstance(value, str):
                 logger.error('External label keys/values must be strings')
                 return False
