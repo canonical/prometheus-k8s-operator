@@ -214,6 +214,62 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(int(cli_arg(pod_spec, '--web.max-connections')),
                          maxcon_config['web-max-connections'])
 
+    def test_alertmanager_queue_capacity_can_be_set(self):
+        self.harness.set_leader(True)
+        queue_config = MINIMAL_CONFIG.copy()
+        queue_config['alertmanager-notification-queue-capacity'] = 512
+        self.harness.update_config(queue_config)
+        pod_spec = self.harness.get_pod_spec()
+        self.assertEqual(int(cli_arg(pod_spec, '--alertmanager.notification-queue-capacity')),
+                         queue_config['alertmanager-notification-queue-capacity'])
+
+    def test_alertmanager_timeout_can_be_set(self):
+        self.harness.set_leader(True)
+        timeout_config = MINIMAL_CONFIG.copy()
+        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
+        for unit in acceptable_units:
+            timeout_config['alertmanager-timeout'] = '{}{}'.format(1, unit)
+            self.harness.update_config(timeout_config)
+            pod_spec = self.harness.get_pod_spec()
+            self.assertEqual(cli_arg(pod_spec, '--alertmanager.timeout'),
+                             timeout_config['alertmanager-timeout'])
+
+    def test_global_scrape_interval_can_be_set(self):
+        self.harness.set_leader(True)
+        scrapeint_config = MINIMAL_CONFIG.copy()
+        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
+        for unit in acceptable_units:
+            scrapeint_config['scrape-interval'] = '{}{}'.format(1, unit)
+            self.harness.update_config(scrapeint_config)
+            pod_spec = self.harness.get_pod_spec()
+            gconfig = global_config(pod_spec)
+            self.assertEqual(gconfig['scrape_interval'],
+                             scrapeint_config['scrape-interval'])
+
+    def test_global_scrape_timeout_can_be_set(self):
+        self.harness.set_leader(True)
+        scrapetime_config = MINIMAL_CONFIG.copy()
+        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
+        for unit in acceptable_units:
+            scrapetime_config['scrape-timeout'] = '{}{}'.format(1, unit)
+            self.harness.update_config(scrapetime_config)
+            pod_spec = self.harness.get_pod_spec()
+            gconfig = global_config(pod_spec)
+            self.assertEqual(gconfig['scrape_timeout'],
+                             scrapetime_config['scrape-timeout'])
+
+    def test_global_evaluation_interval_can_be_set(self):
+        self.harness.set_leader(True)
+        evalint_config = MINIMAL_CONFIG.copy()
+        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
+        for unit in acceptable_units:
+            evalint_config['evaluation-interval'] = '{}{}'.format(1, unit)
+            self.harness.update_config(evalint_config)
+            pod_spec = self.harness.get_pod_spec()
+            gconfig = global_config(pod_spec)
+            self.assertEqual(gconfig['evaluation_interval'],
+                             evalint_config['evaluation-interval'])
+
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
@@ -223,6 +279,12 @@ def alerting_config(pod_spec):
     if alerting_yaml:
         alerting = yaml.safe_load(alerting_yaml)
     return alerting
+
+
+def global_config(pod_spec):
+    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_dict = yaml.safe_load(config_yaml)
+    return config_dict['global']
 
 
 def cli_arg(pod_spec, cli_opt):
