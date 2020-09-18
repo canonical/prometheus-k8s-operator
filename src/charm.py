@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class PrometheusCharm(CharmBase):
-
+    """A Juju Charm for Prometheus
+    """
     stored = StoredState()
 
     def __init__(self, *args):
@@ -34,16 +35,24 @@ class PrometheusCharm(CharmBase):
                                self.on_grafana_changed)
 
     def _on_config_changed(self, _):
+        """Set a new Juju pod specification
+        """
         self.configure_pod()
 
     def _on_stop(self, _):
+        """Mark unit is inactive
+        """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def on_grafana_changed(self, event):
+        """Provide Grafan with data source information
+        """
         event.relation.data[self.unit]['port'] = str(self.model.config['advertised-port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
     def on_alertmanager_changed(self, event):
+        """Set an altermanager configuation
+        """
         if not self.unit.is_leader():
             logger.debug('{} is not leader. '
                          'Not handling alertmanager change.'.format(
@@ -68,6 +77,8 @@ class PrometheusCharm(CharmBase):
         self.configure_pod()
 
     def on_alertmanager_departed(self, event):
+        """Remove an altermanager configuration
+        """
         if not self.unit.is_leader():
             logger.debug('{} is not leader. '
                          'Not handling alertmanager departed.'.format(
@@ -78,6 +89,8 @@ class PrometheusCharm(CharmBase):
         self.configure_pod()
 
     def _cli_args(self):
+        """Consturct command line arguments for Prometheus
+        """
         config = self.model.config
         args = [
             '--config.file=/etc/prometheus/prometheus.yml',
@@ -150,12 +163,13 @@ class PrometheusCharm(CharmBase):
         return args
 
     def _is_valid_timespec(self, timeval):
+        """Is a time interval unit and value valid
+        """
         if not timeval:
             return False
 
         time, unit = timeval[:-1], timeval[-1]
 
-        # TODO 'ms' - bug in original charm ?
         if unit not in ['y', 'w', 'd', 'h', 'm', 's']:
             logger.error('Invalid unit {} in time spec'.format(unit))
             return False
@@ -173,6 +187,8 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _are_valid_labels(self, json_data):
+        """Are Prometheus external labels valid
+        """
         if not json_data:
             return False
 
@@ -194,6 +210,8 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _external_labels(self):
+        """Extract external labels for Prometheus from configuration
+        """
         config = self.model.config
         labels = {}
 
@@ -204,6 +222,8 @@ class PrometheusCharm(CharmBase):
         return labels
 
     def _prometheus_global_config(self):
+        """Construct Prometheus global configuration
+        """
         config = self.model.config
         global_config = {}
 
@@ -226,6 +246,8 @@ class PrometheusCharm(CharmBase):
         return global_config
 
     def _alerting_config(self):
+        """Construct Prometheus altering configuation
+        """
         alerting_config = ''
 
         if len(self.stored.alertmanagers) < 1:
@@ -241,6 +263,8 @@ class PrometheusCharm(CharmBase):
         return alerting_config
 
     def _prometheus_config(self):
+        """Construct Prometheus configuration
+        """
         config = self.model.config
 
         scrape_config = {'global': self._prometheus_global_config(),
@@ -278,6 +302,8 @@ class PrometheusCharm(CharmBase):
         return yaml.dump(scrape_config)
 
     def _build_pod_spec(self):
+        """Construct a Juju pod specification for Prometheus
+        """
         logger.debug('Building Pod Spec')
         config = self.model.config
         spec = {
@@ -345,6 +371,8 @@ class PrometheusCharm(CharmBase):
         return missing
 
     def configure_pod(self):
+        """Setup a new Prometheus pod specification
+        """
         logger.debug('Configuring Pod')
         missing_config = self._check_config()
         if missing_config:
