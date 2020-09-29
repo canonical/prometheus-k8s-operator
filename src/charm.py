@@ -357,8 +357,10 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         missing = []
 
-        if not config.get('prometheus-image-path'):
-            missing.append('prometheus-image-path')
+        if not config.get('prometheus-image-major-version'):
+            missing.append('prometheus-image-major-version')
+        if not config.get('prometheus-image-minor-version'):
+            missing.append('prometheus-image-minor-version')
 
         if config.get('prometheus-image-username') \
                 and not config.get('prometheus-image-password'):

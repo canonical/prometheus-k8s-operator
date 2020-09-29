@@ -1,18 +1,21 @@
 options:
-  prometheus-image-path:
+  prometheus-image-major-version:
     type: string
     description: |
-      The location of the image to use,
-      e.g. "registry.example.com/prometheus:v1".
-
-      This setting is required.
-    default: "prom/prometheus:latest"
+      The major version of the Prometheus image to use.
+      Patch versions will automatically be set to the latest version.
+    default: "2"
+  prometheus-image-minor-version:
+    type: string
+    description: |
+      The minor version of the Prometheus image to use.
+      Patch versions will automatically be set to the latest version.
+    default: "20"
   prometheus-image-username:
     type: string
     description: |
       The username for accessing the registry specified in
       prometheus-image-path.
-    default: ""
   prometheus-image-password:
     type: string
     description: |

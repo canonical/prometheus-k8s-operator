@@ -31,19 +31,21 @@ class TestCharm(unittest.TestCase):
 
     def test_image_path_is_required(self):
         missing_image_config = {
-            'prometheus-image-path': '',
+            'prometheus-image-major-version': '',
+            'prometheus-image-minor-version': '',
             'prometheus-image-username': '',
             'prometheus-image-password': ''
         }
         self.harness.update_config(missing_image_config)
 
         missing = self.harness.charm._check_config()
-        expected = ['prometheus-image-path']
+        expected = ['prometheus-image-major-version', 'prometheus-image-minor-version']
         self.assertEqual(missing, expected)
 
     def test_password_is_required_when_username_is_set(self):
         missing_password_config = {
-            'prometheus-image-path': 'prom/prometheus:latest',
+            'prometheus-image-major-version': '2',
+            'prometheus-image-minor-version': '20',
             'prometheus-image-username': 'some-user',
             'prometheus-image-password': '',
         }
