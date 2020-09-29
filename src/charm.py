@@ -3,8 +3,9 @@
 # See LICENSE file for licensing details.
 
 import logging
-import yaml
 import json
+import requests
+import yaml
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -301,16 +302,60 @@ class PrometheusCharm(CharmBase):
 
         return yaml.dump(scrape_config)
 
+    def _get_image_tag(self, api_tags=None) -> str:
+        """Get most recent patch of major and minor Prometheus version
+        """
+        # 1. get valid tags from URL (or directly from input)
+        # 2. clean tags data structure and filter out release candidates "rc"
+        # 3. filter out tags that don't match our major/minor specification
+        config = self.model.config
+        if not api_tags:
+            api_tags_resp = requests.get(config['image-tags-url'])
+            if not api_tags_resp.ok:
+                logger.error('No Prometheus image tag can be selected. Cannot access '
+                             '{} (defined in config.yaml).'.format(config['image-tags-url']))
+                self.unit.status = BlockedStatus('Cannot get container image path')
+                return ''
+            api_tags = json.loads(api_tags_resp.text)
+
+        major = config['prometheus-image-major-version']
+        minor = config['prometheus-image-minor-version']
+        tags = [tag['name'].split('.') for tag in api_tags if 'rc' not in tag['name']]
+        tags = [tag for tag in tags
+                if len(tag) >= 2 and tag[0].replace('v', '') == major and tag[1] == minor]
+
+        # if there is nothing in tags, we haven't found a valid set of tags
+        if not tags:
+            logger.error('Prometheus version cannot be verified: v{0}.{1}'.format(major, minor))
+            self.unit.status = BlockedStatus('Cannot verify prom v{0}.{1}'.format(major, minor))
+            return ''
+
+        # select the latest patch version for v{major}.{minor}
+        patched_tags = [tag for tag in tags if len(tag) == 3]
+        unpatched_tags = [tag for tag in tags if len(tag) == 2]
+        sorted_tags = sorted(patched_tags, key=lambda tag: tag[2], reverse=True)
+        if sorted_tags:
+            return '.'.join(sorted_tags[0])
+        elif unpatched_tags:
+            return '.'.join(unpatched_tags[0])
+        else:
+            logger.error('Cannot find valid Prometheus image tag.')
+            self.unit.status = BlockedStatus('Cannot find image tag')
+            return ''
+
     def _build_pod_spec(self):
         """Construct a Juju pod specification for Prometheus
         """
         logger.debug('Building Pod Spec')
         config = self.model.config
+        image_tag = self._get_image_tag()
+        if not image_tag:
+            return {}
         spec = {
             'containers': [{
                 'name': self.app.name,
                 'imageDetails': {
-                    'imagePath': config['prometheus-image-path'],
+                    'imagePath': '{}:{}'.format(config['image-registry-path'], image_tag),
                     'username': config.get('prometheus-image-username', ''),
                     'password': config.get('prometheus-image-password', '')
                 },
@@ -389,6 +434,8 @@ class PrometheusCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus('Setting pod spec.')
         pod_spec = self._build_pod_spec()
+        if not pod_spec:
+            return
 
         self.model.pod.set_spec(pod_spec)
         self.app.status = ActiveStatus('Prometheus Application is ready')

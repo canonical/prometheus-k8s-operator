@@ -1,4 +1,15 @@
 options:
+  image-tags-url:
+    type: string
+    description: |
+      URL at which all the tags for the Prometheus container images can
+      be viewed and verified.
+    default: "https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags"
+  image-registry-path:
+    type: string
+    description: |
+      Path from which to pull the Prometheus container image.
+    default: "prom/prometheus"
   prometheus-image-major-version:
     type: string
     description: |

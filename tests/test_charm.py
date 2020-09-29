@@ -5,12 +5,16 @@ import unittest
 import yaml
 import json
 
+from unittest.mock import patch
 from ops.testing import Harness
 from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
-    'prometheus-image-path': 'prom/prometheus',
-    'advertised-port': 9090
+    'image-registry-path': 'prom/prometheus',
+    'image-tags-url': 'https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags',
+    'advertised-port': 9090,
+    'prometheus-image-major-version': '2',
+    'prometheus-image-minor-version': '20'
 }
 
 SMTP_ALERTING_CONFIG = {
@@ -55,7 +59,9 @@ class TestCharm(unittest.TestCase):
         expected = ['prometheus-image-password']
         self.assertEqual(missing, expected)
 
-    def test_alerting_config_is_updated_by_alertmanager_relation(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_alerting_config_is_updated_by_alertmanager_relation(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
 
         # check alerting config is empty without alertmanager relation
@@ -78,7 +84,9 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), SMTP_ALERTING_CONFIG)
 
-    def test_alerting_config_is_removed_when_alertmanager_departs(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_alerting_config_is_removed_when_alertmanager_departs(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
 
         # ensure there is a non-empty alerting config
@@ -101,7 +109,9 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), str())
 
-    def test_grafana_is_provided_port_and_source(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_grafana_is_provided_port_and_source(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         rel_id = self.harness.add_relation('grafana-source', 'grafana')
@@ -111,13 +121,17 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(int(data['port']), MINIMAL_CONFIG['advertised-port'])
         self.assertEqual(data['source-type'], 'prometheus')
 
-    def test_default_cli_log_level_is_info(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_default_cli_log_level_is_info(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'info')
 
-    def test_invalid_log_level_defaults_to_debug(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_invalid_log_level_defaults_to_debug(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config['log-level'] = 'bad-level'
@@ -125,7 +139,9 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'debug')
 
-    def test_valid_log_level_is_accepted(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_valid_log_level_is_accepted(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         valid_log_config = MINIMAL_CONFIG.copy()
         valid_log_config['log-level'] = 'warn'
@@ -133,7 +149,9 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'warn')
 
-    def test_web_admin_api_can_be_enabled(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_web_admin_api_can_be_enabled(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
 
         # without web admin enabled
@@ -150,7 +168,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
                          '--web.enable-admin-api')
 
-    def test_web_page_title_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_web_page_title_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         web_config = MINIMAL_CONFIG.copy()
         web_config['web-page-title'] = 'Prometheus Test Page'
@@ -159,7 +179,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--web.page-title')[1:-1],  # striping quotes
                          web_config['web-page-title'])
 
-    def test_tsdb_compression_is_not_enabled_by_default(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_tsdb_compression_is_not_enabled_by_default(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
@@ -167,7 +189,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.wal-compression'),
                          None)
 
-    def test_tsdb_compression_can_be_enabled(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_tsdb_compression_can_be_enabled(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         compress_config = MINIMAL_CONFIG.copy()
         compress_config['tsdb-wal-compression'] = True
@@ -176,7 +200,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.wal-compression'),
                          '--storage.tsdb.wal-compression')
 
-    def test_valid_tsdb_retention_times_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_valid_tsdb_retention_times_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
@@ -188,7 +214,9 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                              retention_time)
 
-    def test_invalid_tsdb_retention_times_can_not_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_invalid_tsdb_retention_times_can_not_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         retention_time_config = MINIMAL_CONFIG.copy()
 
@@ -208,7 +236,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
 
-    def test_max_web_connections_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_max_web_connections_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         maxcon_config = MINIMAL_CONFIG.copy()
         maxcon_config['web-max-connections'] = 512
@@ -217,7 +247,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(int(cli_arg(pod_spec, '--web.max-connections')),
                          maxcon_config['web-max-connections'])
 
-    def test_alertmanager_queue_capacity_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_alertmanager_queue_capacity_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         queue_config = MINIMAL_CONFIG.copy()
         queue_config['alertmanager-notification-queue-capacity'] = 512
@@ -226,7 +258,9 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(int(cli_arg(pod_spec, '--alertmanager.notification-queue-capacity')),
                          queue_config['alertmanager-notification-queue-capacity'])
 
-    def test_alertmanager_timeout_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_alertmanager_timeout_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         timeout_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
@@ -237,7 +271,9 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(cli_arg(pod_spec, '--alertmanager.timeout'),
                              timeout_config['alertmanager-timeout'])
 
-    def test_global_scrape_interval_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_global_scrape_interval_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         scrapeint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
@@ -249,7 +285,9 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(gconfig['scrape_interval'],
                              scrapeint_config['scrape-interval'])
 
-    def test_global_scrape_timeout_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_global_scrape_timeout_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         scrapetime_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
@@ -261,7 +299,9 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(gconfig['scrape_timeout'],
                              scrapetime_config['scrape-timeout'])
 
-    def test_global_evaluation_interval_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_global_evaluation_interval_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         evalint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
@@ -273,7 +313,9 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(gconfig['evaluation_interval'],
                              evalint_config['evaluation-interval'])
 
-    def test_valid_external_labels_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_valid_external_labels_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         label_config = MINIMAL_CONFIG.copy()
         labels = {'name1': 'value1',
@@ -285,7 +327,9 @@ class TestCharm(unittest.TestCase):
         self.assertIsNotNone(gconfig['external_labels'])
         self.assertEqual(labels, gconfig['external_labels'])
 
-    def test_invalid_external_labels_can_not_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_invalid_external_labels_can_not_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         label_config = MINIMAL_CONFIG.copy()
         # label value must be string
@@ -296,14 +340,18 @@ class TestCharm(unittest.TestCase):
         gconfig = global_config(pod_spec)
         self.assertIsNone(gconfig.get('external_labels'))
 
-    def test_default_scrape_config_is_always_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_default_scrape_config_is_always_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         pod_spec = self.harness.get_pod_spec()
         prometheus_scrape_config = scrape_config(pod_spec, 'prometheus')
         self.assertIsNotNone(prometheus_scrape_config, 'No default config found')
 
-    def test_k8s_scrape_config_can_be_set(self):
+    @patch('charm.PrometheusCharm._get_image_tag')
+    def test_k8s_scrape_config_can_be_set(self, _get_image_tag_mock):
+        _get_image_tag_mock.return_value = 'v2.20.1'
         self.harness.set_leader(True)
         k8s_config = MINIMAL_CONFIG.copy()
         k8s_config['monitor-k8s'] = True
@@ -323,6 +371,33 @@ class TestCharm(unittest.TestCase):
         self.assertIsNotNone(k8s_in_scrape_config, 'No k8s ingress scrape config found')
         k8s_pod_scrape_config = scrape_config(pod_spec, 'kubernetes-pods')
         self.assertIsNotNone(k8s_pod_scrape_config, 'No k8s pods scrape config found')
+
+    def test_image_tags_with_patch_versions(self):
+        self.harness.set_leader(True)
+        k8s_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(k8s_config)
+        api_tags = [{'layer': '', 'name': 'latest'}, {'layer': '', 'name': 'v2.2.0-rc.0'}, {'layer': '', 'name': 'v2.2.0-rc.1'}, {'layer': '', 'name': 'v2.2.1'}, {'layer': '', 'name': 'v2.20'}, {'layer': '', 'name': 'v2.20.0'}, {'layer': '', 'name': 'v2.20.0-rc.0'}, {'layer': '', 'name': 'v2.20.0-rc.1'}, {'layer': '', 'name': 'v2.20.1'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
+        actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
+        expected_tag = 'v2.20.1'
+        self.assertEqual(actual_tag, expected_tag)
+
+    def test_image_tags_without_patch_versions(self):
+        self.harness.set_leader(True)
+        k8s_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(k8s_config)
+        api_tags = [{'layer': '', 'name': 'v2.20'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
+        actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
+        expected_tag = 'v2.20'
+        self.assertEqual(actual_tag, expected_tag)
+
+    def test_no_valid_tags(self):
+        self.harness.set_leader(True)
+        k8s_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(k8s_config)
+        api_tags = [{'layer': '', 'name': 'latest'}, {'layer': '', 'name': 'v2.2.0-rc.0'}, {'layer': '', 'name': 'v2.2.0-rc.1'}, {'layer': '', 'name': 'v2.2.1'}, {'layer': '', 'name': 'v2.20.0-rc.0'}, {'layer': '', 'name': 'v2.20.0-rc.1'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
+        actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
+        expected_tag = ''
+        self.assertEqual(actual_tag, expected_tag)
 
 
 def alerting_config(pod_spec):
