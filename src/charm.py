@@ -330,7 +330,7 @@ class PrometheusCharm(CharmBase):
 
         # semver doesn't like 'v' at the beginning of the version string
         # so we'll create a map of invalid semver strings to valid semver strings
-        tags_map = {tag['name']: tag['name'][1::] if tag['name'][0] == 'v' else tag['name']
+        tags_map = {tag['name']: tag['name'][1:] if tag['name'][0] == 'v' else tag['name']
                     for tag in api_tags}
 
         # get list of tuples of the structure [ (original_tag, parsed_version_object), ... ]
@@ -338,21 +338,21 @@ class PrometheusCharm(CharmBase):
         for tag in api_tags:
             try:
                 parsed_version = semver.VersionInfo.parse(tags_map[tag['name']])
+                tags.append((tag['name'], parsed_version))
             except ValueError:
                 logger.warning('Error parsing possible version tag: {}'.format(tag['name']))
-                continue
-            tags.append((tag['name'], parsed_version))
 
         # filter out only those tags with the specified major and minor versions
         tags = [(tag, parsed_version) for tag, parsed_version in tags
                 if str(parsed_version.major) == major and str(parsed_version.minor) == minor]
 
-        # if there is nothing in tags, we haven't found a valid set of tags
         if not tags:
+            # if there is nothing in tags, we haven't found a valid set of tags
             logger.error('Prometheus version cannot be verified: v{0}.{1}'.format(major, minor))
             self.unit.status = BlockedStatus('Cannot verify prom v{0}.{1}'.format(major, minor))
             return ''
         else:
+            # find the latest tag by sorting by the parsed version object and get first element
             latest_tag, _ = sorted(tags, key=lambda tag: tag[1], reverse=True)[0]
             return latest_tag
 
