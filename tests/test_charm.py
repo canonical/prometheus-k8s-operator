@@ -10,7 +10,6 @@ from ops.testing import Harness
 from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
-    'image-tags-url': 'https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags',
     'advertised-port': 9090,
     'prometheus-image-version': '2.20',
 }
