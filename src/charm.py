@@ -311,17 +311,18 @@ class PrometheusCharm(CharmBase):
         """
         # 0. check if version has already been stored in self.store
         # 1. get valid tags from URL (or directly from input)
-        # 2. clean tags data structure and filter out release candidates "rc"
-        # 3. filter out tags that don't match our major/minor specification
+        # 2. filter out tags that don't match our major/minor specification
+        # 3. sort by version using 'packaging' library and return latest
         if self.stored.prom_version:
+            logger.debug('Using cached Prometheus version: {}'.format(self.stored.prom_version))
             return self.stored.prom_version
 
         config = self.model.config
         if not api_tags:
             api_tags_resp = requests.get(IMAGE_TAGS_URL)
             if not api_tags_resp.ok:
-                logger.error('No Prometheus image tag can be selected. Cannot access '
-                             '{} (defined in config.yaml).'.format(IMAGE_TAGS_URL))
+                logger.error('No Prometheus image tag can be selected. '
+                             'Cannot access {}.'.format(IMAGE_TAGS_URL))
                 self.unit.status = BlockedStatus('Cannot get container image path')
                 return ''
             api_tags = json.loads(api_tags_resp.text)
@@ -350,9 +351,10 @@ class PrometheusCharm(CharmBase):
             self.unit.status = BlockedStatus('Cannot verify prom v{0}.{1}'.format(major, minor))
             return ''
         else:
-            # find the latest tag by sorting by the parsed version object and get first element
+            # find the latest tag by sorting by the parsed version objects
             _, latest_tag = sorted(tags, reverse=True)[0]
-            self.stored.prom_version = latest_tag  # cache this version
+            self.stored.prom_version = latest_tag  # cache this
+            logger.debug('Using Prometheus version: {}'.format(latest_tag))
             return latest_tag
 
     def _build_pod_spec(self):
