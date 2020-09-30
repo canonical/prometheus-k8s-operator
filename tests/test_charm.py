@@ -338,6 +338,27 @@ class TestCharm(unittest.TestCase):
         expected_tag = 'v2.20.1'
         self.assertEqual(actual_tag, expected_tag)
 
+    def test_image_tags_with_release_candidates(self):
+        k8s_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(k8s_config)
+        self._get_image_tag_mock.stop()
+        api_tags = [{'layer': '', 'name': 'latest'},
+                    {'layer': '', 'name': 'v2.2.0-rc.0'},
+                    {'layer': '', 'name': 'v2.2.0-rc.1'},
+                    {'layer': '', 'name': 'v2.2.1'},
+                    {'layer': '', 'name': 'v2.20.0-rc.0'},
+                    {'layer': '', 'name': 'v2.20.0-rc.1'},
+                    {'layer': '', 'name': 'v2.21.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.1'},
+                    {'layer': '', 'name': 'v2.3.0'},
+                    {'layer': '', 'name': 'v2.3.1'},
+                    {'layer': '', 'name': 'v2.3.2'},
+                    {'layer': '', 'name': 'v2.4.0'}]
+        actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
+        expected_tag = 'v2.20.0-rc.1'
+        self.assertEqual(actual_tag, expected_tag)
+
     def test_no_valid_tags(self):
         k8s_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(k8s_config)

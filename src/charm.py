@@ -334,17 +334,15 @@ class PrometheusCharm(CharmBase):
                     for tag in api_tags}
 
         # get list of tuples of the structure [ (original_tag, parsed_version_object), ... ]
+        # only append tags that have the specified {major}.{minor} versions
         tags = []
         for tag in api_tags:
             try:
                 parsed_version = semver.VersionInfo.parse(tags_map[tag['name']])
-                tags.append((tag['name'], parsed_version))
+                if str(parsed_version.major) == major and str(parsed_version.minor) == minor:
+                    tags.append((parsed_version, tag['name']))
             except ValueError:
                 logger.warning('Error parsing possible version tag: {}'.format(tag['name']))
-
-        # filter out only those tags with the specified major and minor versions
-        tags = [(tag, parsed_version) for tag, parsed_version in tags
-                if str(parsed_version.major) == major and str(parsed_version.minor) == minor]
 
         if not tags:
             # if there is nothing in tags, we haven't found a valid set of tags
@@ -353,7 +351,7 @@ class PrometheusCharm(CharmBase):
             return ''
         else:
             # find the latest tag by sorting by the parsed version object and get first element
-            latest_tag, _ = sorted(tags, key=lambda tag: tag[1], reverse=True)[0]
+            _, latest_tag = sorted(tags, reverse=True)[0]
             return latest_tag
 
     def _build_pod_spec(self):
