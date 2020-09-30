@@ -5,9 +5,9 @@
 import logging
 import json
 import requests
-import semver
 import yaml
 
+from packaging.version import parse, InvalidVersion
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -328,20 +328,15 @@ class PrometheusCharm(CharmBase):
             self.unit.status = BlockedStatus('Incorrect Prometheus version format')
             return ''
 
-        # semver doesn't like 'v' at the beginning of the version string
-        # so we'll create a map of invalid semver strings to valid semver strings
-        tags_map = {tag['name']: tag['name'][1:] if tag['name'][0] == 'v' else tag['name']
-                    for tag in api_tags}
-
         # get list of tuples of the structure [ (original_tag, parsed_version_object), ... ]
         # only append tags that have the specified {major}.{minor} versions
         tags = []
         for tag in api_tags:
             try:
-                parsed_version = semver.VersionInfo.parse(tags_map[tag['name']])
+                parsed_version = parse(tag['name'])
                 if str(parsed_version.major) == major and str(parsed_version.minor) == minor:
                     tags.append((parsed_version, tag['name']))
-            except ValueError:
+            except (InvalidVersion, AttributeError):
                 logger.warning('Error parsing possible version tag: {}'.format(tag['name']))
 
         if not tags:
