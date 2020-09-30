@@ -39,8 +39,7 @@ class TestCharm(unittest.TestCase):
 
     def test_image_path_is_required(self):
         missing_image_config = {
-            'prometheus-image-major-version': '',
-            'prometheus-image-minor-version': '',
+            'prometheus-image-version': '',
         }
         self.harness.update_config(missing_image_config)
 
