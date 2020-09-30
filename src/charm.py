@@ -28,6 +28,7 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
         self.stored.set_default(alertmanagers=dict())
+        self.stored.set_default(prom_version='')  # current prometheus image version
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
@@ -308,9 +309,13 @@ class PrometheusCharm(CharmBase):
     def _get_image_tag(self, api_tags=None) -> str:
         """Get most recent patch of major and minor Prometheus version
         """
+        # 0. check if version has already been stored in self.store
         # 1. get valid tags from URL (or directly from input)
         # 2. clean tags data structure and filter out release candidates "rc"
         # 3. filter out tags that don't match our major/minor specification
+        if self.stored.prom_version:
+            return self.stored.prom_version
+
         config = self.model.config
         if not api_tags:
             api_tags_resp = requests.get(IMAGE_TAGS_URL)
@@ -322,7 +327,7 @@ class PrometheusCharm(CharmBase):
             api_tags = json.loads(api_tags_resp.text)
 
         try:
-            major, minor = config['prometheus-image-version'].split('.')
+            major, minor = config['prometheus-version'].split('.')
         except ValueError:
             logger.error('Prometheus version must be in the form {major}.{minor}')
             self.unit.status = BlockedStatus('Incorrect Prometheus version format')
@@ -347,6 +352,7 @@ class PrometheusCharm(CharmBase):
         else:
             # find the latest tag by sorting by the parsed version object and get first element
             _, latest_tag = sorted(tags, reverse=True)[0]
+            self.stored.prom_version = latest_tag  # cache this version
             return latest_tag
 
     def _build_pod_spec(self):
@@ -406,8 +412,8 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         missing = []
 
-        if not config.get('prometheus-image-version'):
-            missing.append('prometheus-image-version')
+        if not config.get('prometheus-version'):
+            missing.append('prometheus-version')
 
         if missing:
             self.unit.status = \

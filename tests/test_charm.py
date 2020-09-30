@@ -11,7 +11,7 @@ from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
     'advertised-port': 9090,
-    'prometheus-image-version': '2.20',
+    'prometheus-version': '2.20',
 }
 
 SMTP_ALERTING_CONFIG = {
@@ -31,19 +31,19 @@ class TestCharm(unittest.TestCase):
         self.harness.begin()
         self._get_image_tag_mock = patch('charm.PrometheusCharm._get_image_tag')
         self._get_image_tag_mock.start()
-        self._get_image_tag_mock.return_value = 'v2.20.1'
+        self._get_image_tag_mock.return_value = 'v2.19.0'
 
     def tearDown(self):
         self._get_image_tag_mock.stop()
 
     def test_image_path_is_required(self):
         missing_image_config = {
-            'prometheus-image-version': '',
+            'prometheus-version': '',
         }
         self.harness.update_config(missing_image_config)
 
         missing = self.harness.charm._check_config()
-        expected = ['prometheus-image-version']
+        expected = ['prometheus-version']
         self.assertEqual(missing, expected)
 
     def test_alerting_config_is_updated_by_alertmanager_relation(self):
