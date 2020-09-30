@@ -378,6 +378,34 @@ class TestCharm(unittest.TestCase):
         expected_tag = ''
         self.assertEqual(actual_tag, expected_tag)
 
+    def test_cached_version(self):
+        k8s_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(k8s_config)
+        self._get_image_tag_mock.stop()
+
+        # in this first call, the image_tags should be cached
+        first_api_tags = [{'layer': '', 'name': 'latest'},
+                          {'layer': '', 'name': 'v2.20.0'},
+                          {'layer': '', 'name': 'v2.20.1'},
+                          {'layer': '', 'name': 'v2.4.0'}]
+        first_actual_tag = self.harness.charm._get_image_tag(api_tags=first_api_tags)
+        expected_tag = 'v2.20.1'
+        self.assertEqual(first_actual_tag, expected_tag)
+
+        # in the second call, the version should not change from the cached version
+        # even though there are later version available
+        second_api_tags = [{'layer': '', 'name': 'latest'},
+                           {'layer': '', 'name': 'v2.20.0'},
+                           {'layer': '', 'name': 'v2.20.1'},
+                           {'layer': '', 'name': 'v2.20.2'},
+                           {'layer': '', 'name': 'v2.20.3'},
+                           {'layer': '', 'name': 'v2.20.4'},
+                           {'layer': '', 'name': 'v2.20.5'},
+                           {'layer': '', 'name': 'v2.20.6'},
+                           {'layer': '', 'name': 'v2.4.0'}]
+        second_actual_tag = self.harness.charm._get_image_tag(api_tags=second_api_tags)
+        self.assertEqual(second_actual_tag, expected_tag)
+
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
