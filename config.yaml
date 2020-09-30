@@ -1,38 +1,11 @@
 options:
-  image-tags-url:
+  prometheus-image-version:
     type: string
     description: |
-      URL at which all the tags for the Prometheus container images can
-      be viewed and verified.
-    default: "https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags"
-  image-registry-path:
-    type: string
-    description: |
-      Path from which to pull the Prometheus container image.
-    default: "prom/prometheus"
-  prometheus-image-major-version:
-    type: string
-    description: |
-      The major version of the Prometheus image to use.
+      The version of the Prometheus image to use. This should be specified
+      in the format {major}.{minor}.
       Patch versions will automatically be set to the latest version.
-    default: "2"
-  prometheus-image-minor-version:
-    type: string
-    description: |
-      The minor version of the Prometheus image to use.
-      Patch versions will automatically be set to the latest version.
-    default: "20"
-  prometheus-image-username:
-    type: string
-    description: |
-      The username for accessing the registry specified in
-      prometheus-image-path.
-  prometheus-image-password:
-    type: string
-    description: |
-      The password associated with prometheus-image-username for
-      accessing the registry specified in prometheus-image-path.
-    default: ""
+    default: "2.20"
   advertised-port:
     description: The port prometheus will be listening on
     type: int

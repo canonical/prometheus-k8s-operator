@@ -10,11 +10,9 @@ from ops.testing import Harness
 from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
-    'image-registry-path': 'prom/prometheus',
     'image-tags-url': 'https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags',
     'advertised-port': 9090,
-    'prometheus-image-major-version': '2',
-    'prometheus-image-minor-version': '20'
+    'prometheus-image-version': '2.20',
 }
 
 SMTP_ALERTING_CONFIG = {
@@ -37,26 +35,11 @@ class TestCharm(unittest.TestCase):
         missing_image_config = {
             'prometheus-image-major-version': '',
             'prometheus-image-minor-version': '',
-            'prometheus-image-username': '',
-            'prometheus-image-password': ''
         }
         self.harness.update_config(missing_image_config)
 
         missing = self.harness.charm._check_config()
-        expected = ['prometheus-image-major-version', 'prometheus-image-minor-version']
-        self.assertEqual(missing, expected)
-
-    def test_password_is_required_when_username_is_set(self):
-        missing_password_config = {
-            'prometheus-image-major-version': '2',
-            'prometheus-image-minor-version': '20',
-            'prometheus-image-username': 'some-user',
-            'prometheus-image-password': '',
-        }
-        self.harness.update_config(missing_password_config)
-
-        missing = self.harness.charm._check_config()
-        expected = ['prometheus-image-password']
+        expected = ['prometheus-image-version']
         self.assertEqual(missing, expected)
 
     @patch('charm.PrometheusCharm._get_image_tag')
@@ -376,25 +359,40 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
         k8s_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(k8s_config)
-        api_tags = [{'layer': '', 'name': 'latest'}, {'layer': '', 'name': 'v2.2.0-rc.0'}, {'layer': '', 'name': 'v2.2.0-rc.1'}, {'layer': '', 'name': 'v2.2.1'}, {'layer': '', 'name': 'v2.20'}, {'layer': '', 'name': 'v2.20.0'}, {'layer': '', 'name': 'v2.20.0-rc.0'}, {'layer': '', 'name': 'v2.20.0-rc.1'}, {'layer': '', 'name': 'v2.20.1'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
+        api_tags = [{'layer': '', 'name': 'latest'},
+                    {'layer': '', 'name': 'v2.2.0-rc.0'},
+                    {'layer': '', 'name': 'v2.2.0-rc.1'},
+                    {'layer': '', 'name': 'v2.2.1'},
+                    {'layer': '', 'name': 'v2.20.0'},
+                    {'layer': '', 'name': 'v2.20.0-rc.0'},
+                    {'layer': '', 'name': 'v2.20.0-rc.1'},
+                    {'layer': '', 'name': 'v2.20.1'},
+                    {'layer': '', 'name': 'v2.21.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.1'},
+                    {'layer': '', 'name': 'v2.3.0'},
+                    {'layer': '', 'name': 'v2.3.1'},
+                    {'layer': '', 'name': 'v2.3.2'},
+                    {'layer': '', 'name': 'v2.4.0'}]
         actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
         expected_tag = 'v2.20.1'
-        self.assertEqual(actual_tag, expected_tag)
-
-    def test_image_tags_without_patch_versions(self):
-        self.harness.set_leader(True)
-        k8s_config = MINIMAL_CONFIG.copy()
-        self.harness.update_config(k8s_config)
-        api_tags = [{'layer': '', 'name': 'v2.20'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
-        actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
-        expected_tag = 'v2.20'
         self.assertEqual(actual_tag, expected_tag)
 
     def test_no_valid_tags(self):
         self.harness.set_leader(True)
         k8s_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(k8s_config)
-        api_tags = [{'layer': '', 'name': 'latest'}, {'layer': '', 'name': 'v2.2.0-rc.0'}, {'layer': '', 'name': 'v2.2.0-rc.1'}, {'layer': '', 'name': 'v2.2.1'}, {'layer': '', 'name': 'v2.20.0-rc.0'}, {'layer': '', 'name': 'v2.20.0-rc.1'}, {'layer': '', 'name': 'v2.21.0'}, {'layer': '', 'name': 'v2.21.0-rc.0'}, {'layer': '', 'name': 'v2.21.0-rc.1'}, {'layer': '', 'name': 'v2.3.0'}, {'layer': '', 'name': 'v2.3.1'}, {'layer': '', 'name': 'v2.3.2'}, {'layer': '', 'name': 'v2.4.0'}] # noqa
+        api_tags = [{'layer': '', 'name': 'latest'},
+                    {'layer': '', 'name': 'v2.2.0-rc.0'},
+                    {'layer': '', 'name': 'v2.2.0-rc.1'},
+                    {'layer': '', 'name': 'v2.2.1'},
+                    {'layer': '', 'name': 'v2.21.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.0'},
+                    {'layer': '', 'name': 'v2.21.0-rc.1'},
+                    {'layer': '', 'name': 'v2.3.0'},
+                    {'layer': '', 'name': 'v2.3.1'},
+                    {'layer': '', 'name': 'v2.3.2'},
+                    {'layer': '', 'name': 'v2.4.0'}]
         actual_tag = self.harness.charm._get_image_tag(api_tags=api_tags)
         expected_tag = ''
         self.assertEqual(actual_tag, expected_tag)

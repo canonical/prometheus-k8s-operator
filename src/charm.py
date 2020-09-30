@@ -5,6 +5,7 @@
 import logging
 import json
 import requests
+import semver
 import yaml
 
 from ops.charm import CharmBase
@@ -13,6 +14,8 @@ from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
 
 logger = logging.getLogger(__name__)
+IMAGE_REGISTRY_PATH = 'prom/prometheus'
+IMAGE_TAGS_URL = 'https://registry.hub.docker.com/v1/repositories/prom/prometheus/tags'
 
 
 class PrometheusCharm(CharmBase):
@@ -310,38 +313,48 @@ class PrometheusCharm(CharmBase):
         # 3. filter out tags that don't match our major/minor specification
         config = self.model.config
         if not api_tags:
-            api_tags_resp = requests.get(config['image-tags-url'])
+            api_tags_resp = requests.get(IMAGE_TAGS_URL)
             if not api_tags_resp.ok:
                 logger.error('No Prometheus image tag can be selected. Cannot access '
-                             '{} (defined in config.yaml).'.format(config['image-tags-url']))
+                             '{} (defined in config.yaml).'.format(IMAGE_TAGS_URL))
                 self.unit.status = BlockedStatus('Cannot get container image path')
                 return ''
             api_tags = json.loads(api_tags_resp.text)
 
-        major = config['prometheus-image-major-version']
-        minor = config['prometheus-image-minor-version']
-        tags = [tag['name'].split('.') for tag in api_tags if 'rc' not in tag['name']]
-        tags = [tag for tag in tags
-                if len(tag) >= 2 and tag[0].replace('v', '') == major and tag[1] == minor]
+        try:
+            major, minor = config['prometheus-image-version'].split('.')
+        except ValueError:
+            logger.error('Prometheus version must be in the form {major}.{minor}')
+            self.unit.status = BlockedStatus('Incorrect Prometheus version format')
+            return ''
+
+        # semver doesn't like 'v' at the beginning of the version string
+        # so we'll create a map of invalid semver strings to valid semver strings
+        tags_map = {tag['name']: tag['name'][1::] if tag['name'][0] == 'v' else tag['name']
+                    for tag in api_tags}
+
+        # get list of tuples of the structure [ (original_tag, parsed_version_object), ... ]
+        tags = []
+        for tag in api_tags:
+            try:
+                parsed_version = semver.VersionInfo.parse(tags_map[tag['name']])
+            except ValueError:
+                logger.warning('Error parsing possible version tag: {}'.format(tag['name']))
+                continue
+            tags.append((tag['name'], parsed_version))
+
+        # filter out only those tags with the specified major and minor versions
+        tags = [(tag, parsed_version) for tag, parsed_version in tags
+                if str(parsed_version.major) == major and str(parsed_version.minor) == minor]
 
         # if there is nothing in tags, we haven't found a valid set of tags
         if not tags:
             logger.error('Prometheus version cannot be verified: v{0}.{1}'.format(major, minor))
             self.unit.status = BlockedStatus('Cannot verify prom v{0}.{1}'.format(major, minor))
             return ''
-
-        # select the latest patch version for v{major}.{minor}
-        patched_tags = [tag for tag in tags if len(tag) == 3]
-        unpatched_tags = [tag for tag in tags if len(tag) == 2]
-        sorted_tags = sorted(patched_tags, key=lambda tag: tag[2], reverse=True)
-        if sorted_tags:
-            return '.'.join(sorted_tags[0])
-        elif unpatched_tags:
-            return '.'.join(unpatched_tags[0])
         else:
-            logger.error('Cannot find valid Prometheus image tag.')
-            self.unit.status = BlockedStatus('Cannot find image tag')
-            return ''
+            latest_tag, _ = sorted(tags, key=lambda tag: tag[1], reverse=True)[0]
+            return latest_tag
 
     def _build_pod_spec(self):
         """Construct a Juju pod specification for Prometheus
@@ -355,9 +368,7 @@ class PrometheusCharm(CharmBase):
             'containers': [{
                 'name': self.app.name,
                 'imageDetails': {
-                    'imagePath': '{}:{}'.format(config['image-registry-path'], image_tag),
-                    'username': config.get('prometheus-image-username', ''),
-                    'password': config.get('prometheus-image-password', '')
+                    'imagePath': '{}:{}'.format(IMAGE_REGISTRY_PATH, image_tag),
                 },
                 'args': self._cli_args(),
                 'readinessProbe': {
@@ -402,14 +413,8 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         missing = []
 
-        if not config.get('prometheus-image-major-version'):
-            missing.append('prometheus-image-major-version')
-        if not config.get('prometheus-image-minor-version'):
-            missing.append('prometheus-image-minor-version')
-
-        if config.get('prometheus-image-username') \
-                and not config.get('prometheus-image-password'):
-            missing.append('prometheus-image-password')
+        if not config.get('prometheus-image-version'):
+            missing.append('prometheus-image-version')
 
         if missing:
             self.unit.status = \
