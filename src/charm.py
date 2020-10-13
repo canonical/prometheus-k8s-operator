@@ -380,6 +380,7 @@ class PrometheusCharm(CharmBase):
                          'Application will be blocked.'.format(missing_config))
             self.unit.status = \
                 BlockedStatus('Missing configuration: {}'.format(missing_config))
+            return
 
         if not self.unit.is_leader():
             self.unit.status = ActiveStatus('Prometheus unit is ready')
