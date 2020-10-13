@@ -364,10 +364,6 @@ class PrometheusCharm(CharmBase):
                 and not config.get('prometheus-image-password'):
             missing.append('prometheus-image-password')
 
-        if missing:
-            self.unit.status = \
-                BlockedStatus('Missing configuration: {}'.format(missing))
-
         return missing
 
     def configure_pod(self):
