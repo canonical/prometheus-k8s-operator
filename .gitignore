@@ -1,2 +1,4 @@
 build
 prometheus.charm
+**/__pycache__
+venv
