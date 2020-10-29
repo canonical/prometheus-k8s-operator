@@ -45,13 +45,13 @@ class PrometheusCharm(CharmBase):
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def on_grafana_changed(self, event):
-        """Provide Grafan with data source information
+        """Provide Grafana with data source information
         """
         event.relation.data[self.unit]['port'] = str(self.model.config['advertised-port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
     def on_alertmanager_changed(self, event):
-        """Set an altermanager configuation
+        """Set an alertmanager configuation
         """
         if not self.unit.is_leader():
             logger.debug('{} is not leader. '
@@ -77,7 +77,7 @@ class PrometheusCharm(CharmBase):
         self.configure_pod()
 
     def on_alertmanager_departed(self, event):
-        """Remove an altermanager configuration
+        """Remove an alertmanager configuration
         """
         if not self.unit.is_leader():
             logger.debug('{} is not leader. '
@@ -89,7 +89,7 @@ class PrometheusCharm(CharmBase):
         self.configure_pod()
 
     def _cli_args(self):
-        """Consturct command line arguments for Prometheus
+        """Construct command line arguments for Prometheus
         """
         config = self.model.config
         args = [
