@@ -27,7 +27,7 @@ following commands
 
 Install the charmcraft tool
 
-    sudo snap install charmcraft --classic
+    sudo snap install charmcraft
 
 Build the charm in this git repository
 
