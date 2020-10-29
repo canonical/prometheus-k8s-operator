@@ -8,7 +8,7 @@ monitoring system and alerting toolkit.
 
 This repository contains a [Juju](https://jaas.ai/) Charm for
 deploying the monitoring component of Prometheus in a Kubernetes
-clusters. The alerting component of prometheus is offered through a
+cluster. The alerting component of prometheus is offered through a
 separate Charm.
 
 ## Setup
