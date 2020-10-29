@@ -35,7 +35,13 @@ class TestCharm(unittest.TestCase):
             'prometheus-image-username': '',
             'prometheus-image-password': ''
         }
-        self.harness.update_config(missing_image_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(missing_image_config)
+            expected_logs = [
+                "ERROR:charm:Incomplete Configuration : ['prometheus-image-path']. "
+                "Application will be blocked."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
 
         missing = self.harness.charm._check_config()
         expected = ['prometheus-image-path']
@@ -47,7 +53,13 @@ class TestCharm(unittest.TestCase):
             'prometheus-image-username': 'some-user',
             'prometheus-image-password': '',
         }
-        self.harness.update_config(missing_password_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(missing_password_config)
+            expected_logs = [
+                "ERROR:charm:Incomplete Configuration : ['prometheus-image-password']. "
+                "Application will be blocked."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
 
         missing = self.harness.charm._check_config()
         expected = ['prometheus-image-password']
@@ -119,7 +131,15 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config['log-level'] = 'bad-level'
-        self.harness.update_config(bad_log_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(bad_log_config)
+            expected_logs = [
+                "ERROR:root:Invalid loglevel: bad-level given, "
+                "debug/info/warn/error/fatal allowed. "
+                "defaulting to DEBUG loglevel."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'debug')
 
@@ -193,7 +213,11 @@ class TestCharm(unittest.TestCase):
         # invalid unit
         retention_time = '{}{}'.format(1, 'x')
         retention_time_config['tsdb-retention-time'] = retention_time
-        self.harness.update_config(retention_time_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(retention_time_config)
+            expected_logs = ["ERROR:charm:Invalid unit x in time spec"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
@@ -201,7 +225,11 @@ class TestCharm(unittest.TestCase):
         # invalid time value
         retention_time = '{}{}'.format(0, 'd')
         retention_time_config['tsdb-retention-time'] = retention_time
-        self.harness.update_config(retention_time_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(retention_time_config)
+            expected_logs = ["ERROR:charm:Expected positive time spec but got 0"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
@@ -289,7 +317,11 @@ class TestCharm(unittest.TestCase):
         # label value must be string
         labels = {'name': 1}
         label_config['external-labels'] = json.dumps(labels)
-        self.harness.update_config(label_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(label_config)
+            expected_logs = ["ERROR:charm:External label keys/values must be strings"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         gconfig = global_config(pod_spec)
         self.assertIsNone(gconfig.get('external_labels'))
