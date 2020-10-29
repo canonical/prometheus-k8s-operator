@@ -1,0 +1,6 @@
+*~
+*swp
+*.charm
+__pycache__
+build
+venv
