@@ -65,7 +65,7 @@ Currently supported relations are
 
 ## Developing
 
-Use your existing Python 3 developement environment or create and
+Use your existing Python 3 development environment or create and
 activate a Python 3 virtualenv
 
     virtualenv -p python3 venv
