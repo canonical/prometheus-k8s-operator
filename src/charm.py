@@ -60,7 +60,6 @@ class PrometheusCharm(CharmBase):
             return
 
         if event.unit is None:
-            self._stored.alertmanagers.pop(event.relation.id)
             logger.warning('Got null event unit on alertmanager changed')
             return
 
