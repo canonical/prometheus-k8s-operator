@@ -93,7 +93,7 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         args = [
             '--config.file=/etc/prometheus/prometheus.yml',
-            '--storage.tsdb.path=/prometheus',
+            '--storage.tsdb.path=/var/lib/prometheus',
             '--web.enable-lifecycle',
             '--web.console.templates=/usr/share/prometheus/consoles',
             '--web.console.libraries=/usr/share/prometheus/console_libraries'
