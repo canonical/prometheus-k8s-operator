@@ -278,27 +278,6 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(pod_spec, 'prometheus')
         self.assertIsNotNone(prometheus_scrape_config, 'No default config found')
 
-    def test_k8s_scrape_config_can_be_set(self):
-        self.harness.set_leader(True)
-        k8s_config = MINIMAL_CONFIG.copy()
-        k8s_config['monitor-k8s'] = True
-        self.harness.update_config(k8s_config)
-        pod_spec = self.harness.get_pod_spec()
-        k8s_api_scrape_config = scrape_config(pod_spec, 'kubernetes-apiservers')
-        self.assertIsNotNone(k8s_api_scrape_config, 'No k8s API server scrape config found')
-        k8s_node_scrape_config = scrape_config(pod_spec, 'kubernetes-nodes')
-        self.assertIsNotNone(k8s_node_scrape_config, 'No k8s nodes scrape config found')
-        k8s_ca_scrape_config = scrape_config(pod_spec, 'kubernetes-cadvisor')
-        self.assertIsNotNone(k8s_ca_scrape_config, 'No k8s cAdvisor scrape config found')
-        k8s_ep_scrape_config = scrape_config(pod_spec, 'kubernetes-service-endpoints')
-        self.assertIsNotNone(k8s_ep_scrape_config, 'No k8s service endpoints scrape config found')
-        k8s_svc_scrape_config = scrape_config(pod_spec, 'kubernetes-services')
-        self.assertIsNotNone(k8s_svc_scrape_config, 'No k8s services scrape config found')
-        k8s_in_scrape_config = scrape_config(pod_spec, 'kubernetes-ingresses')
-        self.assertIsNotNone(k8s_in_scrape_config, 'No k8s ingress scrape config found')
-        k8s_pod_scrape_config = scrape_config(pod_spec, 'kubernetes-pods')
-        self.assertIsNotNone(k8s_pod_scrape_config, 'No k8s pods scrape config found')
-
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']

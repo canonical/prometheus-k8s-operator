@@ -43,11 +43,6 @@ Deploy Prometheus using its default configuration.
 
     juju deploy ./prometheus.charm
 
-Alternatively deploy Prometheus with monitoring of a kubernetes cluster
-(such as microk8s) enabled
-
-    juju deploy ./prometheus.charm --config monitor-k8s=true
-
 View the Prometheus dashboard
 
 1. Use `juju status` to determine IP of the Prometheus unit
