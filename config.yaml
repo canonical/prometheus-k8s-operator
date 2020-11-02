@@ -19,7 +19,7 @@ options:
       The password associated with prometheus-image-username for
       accessing the registry specified in prometheus-image-path.
     default: ""
-  advertised-port:
+  port:
     description: The port prometheus will be listening on
     type: int
     default: 9090

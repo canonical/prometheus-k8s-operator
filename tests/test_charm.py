@@ -10,7 +10,7 @@ from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
     'prometheus-image-path': 'prom/prometheus',
-    'advertised-port': 9090
+    'port': 9090
 }
 
 SMTP_ALERTING_CONFIG = {
@@ -118,7 +118,7 @@ class TestCharm(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, 'grafana/0')
         self.harness.update_relation_data(rel_id, 'grafana/0', {})
         data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
-        self.assertEqual(int(data['port']), MINIMAL_CONFIG['advertised-port'])
+        self.assertEqual(int(data['port']), MINIMAL_CONFIG['port'])
         self.assertEqual(data['source-type'], 'prometheus')
 
     def test_default_cli_log_level_is_info(self):
