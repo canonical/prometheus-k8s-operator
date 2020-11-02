@@ -280,7 +280,7 @@ class TestCharm(unittest.TestCase):
 
 
 def alerting_config(pod_spec):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     alerting_yaml = config_dict.get('alerting')
     alerting = str()
@@ -290,13 +290,13 @@ def alerting_config(pod_spec):
 
 
 def global_config(pod_spec):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     return config_dict['global']
 
 
 def scrape_config(pod_spec, job_name):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     scrape_configs = config_dict['scrape_configs']
     for config in scrape_configs:

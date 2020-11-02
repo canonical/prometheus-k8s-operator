@@ -270,6 +270,7 @@ class PrometheusCharm(CharmBase):
         logger.debug('Building Pod Spec')
         config = self.model.config
         spec = {
+            'version': 3,
             'containers': [{
                 'name': self.app.name,
                 'imageDetails': {
@@ -278,33 +279,36 @@ class PrometheusCharm(CharmBase):
                     'password': config.get('prometheus-image-password', '')
                 },
                 'args': self._cli_args(),
-                'readinessProbe': {
-                    'httpGet': {
-                        'path': '/-/ready',
-                        'port': config['port']
+                'kubernetes': {
+                    'readinessProbe': {
+                        'httpGet': {
+                            'path': '/-/ready',
+                            'port': config['port']
+                        },
+                        'initialDelaySeconds': 10,
+                        'timeoutSeconds': 30
                     },
-                    'initialDelaySeconds': 10,
-                    'timeoutSeconds': 30
-                },
-                'livenessProbe': {
-                    'httpGet': {
-                        'path': '/-/healthy',
-                        'port': config['port']
-                    },
-                    'initialDelaySeconds': 30,
-                    'timeoutSeconds': 30
+                    'livenessProbe': {
+                        'httpGet': {
+                            'path': '/-/healthy',
+                            'port': config['port']
+                        },
+                        'initialDelaySeconds': 30,
+                        'timeoutSeconds': 30
+                    }
                 },
                 'ports': [{
                     'containerPort': config['port'],
                     'name': 'prometheus-http',
                     'protocol': 'TCP'
                 }],
-                'files': [{
+                'volumeConfig': [{
                     'name': 'prometheus-config',
                     'mountPath': '/etc/prometheus',
-                    'files': {
-                        'prometheus.yml': self._prometheus_config()
-                    }
+                    'files': [{
+                        'path': 'prometheus.yml',
+                        'content': self._prometheus_config()
+                    }]
                 }]
             }]
         }
