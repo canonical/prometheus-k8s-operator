@@ -122,19 +122,6 @@ class PrometheusCharm(CharmBase):
             '--log.level={0}'.format(log_level)
         )
 
-        # Expose Prometheus Adminstration API only if requested
-        if config.get('web-enable-admin-api'):
-            args.append('--web.enable-admin-api')
-
-        # User specified Prometheus web page title
-        if config.get('web-page-title'):
-            # TODO: Validate and sanitize input
-            args.append(
-                '--web.page-title="{0}"'.format(
-                    config['web-page-title']
-                )
-            )
-
         # Enable time series database compression
         if config.get('tsdb-wal-compression'):
             args.append('--storage.tsdb.wal-compression')
@@ -143,10 +130,6 @@ class PrometheusCharm(CharmBase):
         if config.get('tsdb-retention-time') and self._is_valid_timespec(
                 config['tsdb-retention-time']):
             args.append('--storage.tsdb.retention.time={}'.format(config['tsdb-retention-time']))
-
-        # Set maximum number of connections to prometheus server
-        if config.get('web-max-connections'):
-            args.append('--web.max-connections={}'.format(config['web-max-connections']))
 
         # Set maximum number of pending alerts
         if config.get('alertmanager-notification-queue-capacity'):
