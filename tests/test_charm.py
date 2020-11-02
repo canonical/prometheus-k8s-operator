@@ -151,32 +151,6 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'warn')
 
-    def test_web_admin_api_can_be_enabled(self):
-        self.harness.set_leader(True)
-
-        # without web admin enabled
-        self.harness.update_config(MINIMAL_CONFIG)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
-                         None)
-
-        # with web admin enabled
-        admin_api_config = MINIMAL_CONFIG.copy()
-        admin_api_config['web-enable-admin-api'] = True
-        self.harness.update_config(admin_api_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
-                         '--web.enable-admin-api')
-
-    def test_web_page_title_can_be_set(self):
-        self.harness.set_leader(True)
-        web_config = MINIMAL_CONFIG.copy()
-        web_config['web-page-title'] = 'Prometheus Test Page'
-        self.harness.update_config(web_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.page-title')[1:-1],  # striping quotes
-                         web_config['web-page-title'])
-
     def test_tsdb_compression_is_not_enabled_by_default(self):
         self.harness.set_leader(True)
         compress_config = MINIMAL_CONFIG.copy()
@@ -233,15 +207,6 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
-
-    def test_max_web_connections_can_be_set(self):
-        self.harness.set_leader(True)
-        maxcon_config = MINIMAL_CONFIG.copy()
-        maxcon_config['web-max-connections'] = 512
-        self.harness.update_config(maxcon_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(int(cli_arg(pod_spec, '--web.max-connections')),
-                         maxcon_config['web-max-connections'])
 
     def test_alertmanager_queue_capacity_can_be_set(self):
         self.harness.set_leader(True)
