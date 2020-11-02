@@ -131,18 +131,6 @@ class PrometheusCharm(CharmBase):
                 config['tsdb-retention-time']):
             args.append('--storage.tsdb.retention.time={}'.format(config['tsdb-retention-time']))
 
-        # Set maximum number of pending alerts
-        if config.get('alertmanager-notification-queue-capacity'):
-            args.append('--alertmanager.notification-queue-capacity={}'.format(
-                config['alertmanager-notification-queue-capacity']))
-
-        # Set timeout for alerts
-        if config.get('alertmanager-timeout') and self._is_valid_timespec(
-                config['alertmanager-timeout']):
-            args.append('--alertmanager.timeout={}'.format(config['alertmanager-timeout']))
-
-        logger.debug("CLI args: {0}".format(' '.join(args)))
-
         return args
 
     def _is_valid_timespec(self, timeval):
