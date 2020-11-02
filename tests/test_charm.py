@@ -70,7 +70,7 @@ class TestCharm(unittest.TestCase):
 
         # check alerting config is empty without alertmanager relation
         self.harness.update_config(MINIMAL_CONFIG)
-        self.assertEqual(self.harness.charm.stored.alertmanagers, {})
+        self.assertEqual(self.harness.charm._stored.alertmanagers, {})
         rel_id = self.harness.add_relation('alertmanager', 'smtp')
         self.assertIsInstance(rel_id, int)
         self.harness.add_relation_unit(rel_id, 'smtp/0')
