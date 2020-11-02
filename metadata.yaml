@@ -1,10 +1,19 @@
 name: prometheus
-summary: Alerting and Monitoring for Kubernetes Clusters
+summary: Prometheus for Kubernetes clusters
 maintainers:
     - Balbir Thomas <balbir.thomas@canonical.com>
 description: |
-  Deploys and operates Prometheus on Kubernetes
+  Prometheus is an open source monitoring solution. Prometheus
+  supports aggregating high dimensional data and exposes a powerful
+  query language PromQL. This charm deploys and operates Prometheus on
+  Kubernetes clusters. Prometheus can raise alerts through a relation
+  with the Altermanager charm. Alerting rules for Prometheus need to
+  be provided through a relation with the application that requires
+  alerting. Prometheus provides its own dashboard for data
+  visualization but a richer visualization interface may be obtained
+  through a relation with the Grafana charm.
 tags:
+    - observability
     - lma
     - prometheus
     - monitoring
@@ -12,14 +21,11 @@ tags:
     - grafana
 series:
     - kubernetes
-provides:
-    http-api:
-        interface: prometheus-http-api
 requires:
     grafana-source:
         interface: grafana-dashsource
     alertmanager:
-        interface: prometheus-alerting-config
+        interface: alertmanager
 storage:
   database:
     type: filesystem
