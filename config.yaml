@@ -64,16 +64,6 @@ options:
       halved with little extra cpu load.
     type: boolean
     default: false
-  alertmanager-notification-queue-capacity:
-    description: |
-      The capacity of the queue for pending alert manager notifications.
-    type: int
-    default: 10000
-  alertmanager-timeout:
-    description: |
-      Timeout for sending alerts to AlertManager.
-    type: string
-    default: 10s
   external-labels:
     description: |
       A JSON string of key-value pairs that specify the labels to

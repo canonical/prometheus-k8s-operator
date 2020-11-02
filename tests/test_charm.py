@@ -208,26 +208,6 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
 
-    def test_alertmanager_queue_capacity_can_be_set(self):
-        self.harness.set_leader(True)
-        queue_config = MINIMAL_CONFIG.copy()
-        queue_config['alertmanager-notification-queue-capacity'] = 512
-        self.harness.update_config(queue_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(int(cli_arg(pod_spec, '--alertmanager.notification-queue-capacity')),
-                         queue_config['alertmanager-notification-queue-capacity'])
-
-    def test_alertmanager_timeout_can_be_set(self):
-        self.harness.set_leader(True)
-        timeout_config = MINIMAL_CONFIG.copy()
-        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
-        for unit in acceptable_units:
-            timeout_config['alertmanager-timeout'] = '{}{}'.format(1, unit)
-            self.harness.update_config(timeout_config)
-            pod_spec = self.harness.get_pod_spec()
-            self.assertEqual(cli_arg(pod_spec, '--alertmanager.timeout'),
-                             timeout_config['alertmanager-timeout'])
-
     def test_global_scrape_interval_can_be_set(self):
         self.harness.set_leader(True)
         scrapeint_config = MINIMAL_CONFIG.copy()
