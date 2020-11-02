@@ -17,40 +17,40 @@ logger = logging.getLogger(__name__)
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus
     """
-    stored = StoredState()
+    _stored = StoredState()
 
     def __init__(self, *args):
         logger.debug('Initializing Charm')
 
         super().__init__(*args)
-        self.stored.set_default(alertmanagers=dict())
+        self._stored.set_default(alertmanagers=dict())
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
-                               self.on_alertmanager_changed)
+                               self._on_alertmanager_changed)
         self.framework.observe(self.on['alertmanager'].relation_departed,
-                               self.on_alertmanager_departed)
+                               self._on_alertmanager_departed)
         self.framework.observe(self.on['grafana-source'].relation_changed,
-                               self.on_grafana_changed)
+                               self._on_grafana_changed)
 
     def _on_config_changed(self, _):
         """Set a new Juju pod specification
         """
-        self.configure_pod()
+        self._configure_pod()
 
     def _on_stop(self, _):
         """Mark unit is inactive
         """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
-    def on_grafana_changed(self, event):
+    def _on_grafana_changed(self, event):
         """Provide Grafana with data source information
         """
         event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
-    def on_alertmanager_changed(self, event):
+    def _on_alertmanager_changed(self, event):
         """Set an alertmanager configuation
         """
         if not self.unit.is_leader():
@@ -60,7 +60,7 @@ class PrometheusCharm(CharmBase):
             return
 
         if event.unit is None:
-            self.stored.alertmanagers.pop(event.relation.id)
+            self._stored.alertmanagers.pop(event.relation.id)
             logger.warning('Got null event unit on alertmanager changed')
             return
 
@@ -72,11 +72,11 @@ class PrometheusCharm(CharmBase):
                 event.relation.id))
             return
 
-        self.stored.alertmanagers.update({event.relation.id: alerting_config})
+        self._stored.alertmanagers.update({event.relation.id: alerting_config})
 
-        self.configure_pod()
+        self._configure_pod()
 
-    def on_alertmanager_departed(self, event):
+    def _on_alertmanager_departed(self, event):
         """Remove an alertmanager configuration
         """
         if not self.unit.is_leader():
@@ -85,8 +85,8 @@ class PrometheusCharm(CharmBase):
                              self.unit.name))
             return
 
-        self.stored.alertmanagers.pop(event.relation.id)
-        self.configure_pod()
+        self._stored.alertmanagers.pop(event.relation.id)
+        self._configure_pod()
 
     def _cli_args(self):
         """Construct command line arguments for Prometheus
@@ -221,15 +221,15 @@ class PrometheusCharm(CharmBase):
         """
         alerting_config = ''
 
-        if len(self.stored.alertmanagers) < 1:
+        if len(self._stored.alertmanagers) < 1:
             logger.debug('No alertmanagers available')
             return alerting_config
 
-        if len(self.stored.alertmanagers) > 1:
+        if len(self._stored.alertmanagers) > 1:
             logger.warning('More than one altermanager found. Using first!')
 
-        manager = list(self.stored.alertmanagers.keys())[0]
-        alerting_config = self.stored.alertmanagers.get(manager, '')
+        manager = list(self._stored.alertmanagers.keys())[0]
+        alerting_config = self._stored.alertmanagers.get(manager, '')
 
         return alerting_config
 
@@ -330,7 +330,7 @@ class PrometheusCharm(CharmBase):
 
         return missing
 
-    def configure_pod(self):
+    def _configure_pod(self):
         """Setup a new Prometheus pod specification
         """
         logger.debug('Configuring Pod')
