@@ -342,15 +342,15 @@ class PrometheusCharm(CharmBase):
             return
 
         if not self.unit.is_leader():
-            self.unit.status = ActiveStatus('Prometheus unit is ready')
+            self.unit.status = ActiveStatus()
             return
 
         self.unit.status = MaintenanceStatus('Setting pod spec.')
         pod_spec = self._build_pod_spec()
 
         self.model.pod.set_spec(pod_spec)
-        self.app.status = ActiveStatus('Prometheus Application is ready')
-        self.unit.status = ActiveStatus('Prometheus leader unit is ready')
+        self.app.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
 
 if __name__ == "__main__":
