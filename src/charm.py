@@ -47,7 +47,7 @@ class PrometheusCharm(CharmBase):
     def on_grafana_changed(self, event):
         """Provide Grafana with data source information
         """
-        event.relation.data[self.unit]['port'] = str(self.model.config['advertised-port'])
+        event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
     def on_alertmanager_changed(self, event):
@@ -284,7 +284,7 @@ class PrometheusCharm(CharmBase):
             'scheme': 'http',
             'static_configs': [{
                 'targets': [
-                    'localhost:{}'.format(config['advertised-port'])
+                    'localhost:{}'.format(config['port'])
                 ]
             }]
         }
@@ -318,7 +318,7 @@ class PrometheusCharm(CharmBase):
                 'readinessProbe': {
                     'httpGet': {
                         'path': '/-/ready',
-                        'port': config['advertised-port']
+                        'port': config['port']
                     },
                     'initialDelaySeconds': 10,
                     'timeoutSeconds': 30
@@ -326,13 +326,13 @@ class PrometheusCharm(CharmBase):
                 'livenessProbe': {
                     'httpGet': {
                         'path': '/-/healthy',
-                        'port': config['advertised-port']
+                        'port': config['port']
                     },
                     'initialDelaySeconds': 30,
                     'timeoutSeconds': 30
                 },
                 'ports': [{
-                    'containerPort': config['advertised-port'],
+                    'containerPort': config['port'],
                     'name': 'prometheus-http',
                     'protocol': 'TCP'
                 }],
