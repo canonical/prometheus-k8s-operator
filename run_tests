@@ -12,5 +12,5 @@ else
     export PYTHONPATH="src:$PYTHONPATH"
 fi
 
-flake8
+black --diff
 python3 -m unittest -v "$@"
