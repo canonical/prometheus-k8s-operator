@@ -81,14 +81,6 @@ options:
       arbitrarily chosen as you see fit.
     type: string
     default: "{}"
-  monitor-k8s:
-    description: |
-      Adds additional scrape configs to the prometheus config file such that
-      it collects metrics about the k8s cluster it is deployed in. It's
-      important that metrics-server be running in the kube-system namespace
-      otherwise the charm will remain in the blocked status.
-    type: boolean
-    default: false
   scrape-interval:
     description: |
       How frequently to scrape targets by default.

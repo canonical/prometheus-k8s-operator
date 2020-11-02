@@ -261,13 +261,6 @@ class PrometheusCharm(CharmBase):
         }
         scrape_config['scrape_configs'].append(default_config)
 
-        # If monitoring of k8s is requested gather all scraping configuration for k8s
-        if config.get('monitor-k8s'):
-            with open('config/prometheus-k8s.yml') as yaml_file:
-                k8s_scrape_configs = yaml.safe_load(yaml_file).get('scrape_configs', [])
-            for k8s_config in k8s_scrape_configs:
-                scrape_config['scrape_configs'].append(k8s_config)
-
         logger.debug('Prometheus config : {}'.format(scrape_config))
 
         return yaml.dump(scrape_config)
