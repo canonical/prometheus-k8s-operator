@@ -23,7 +23,7 @@ class PrometheusCharm(CharmBase):
         logger.debug('Initializing Charm')
 
         super().__init__(*args)
-        self.stored.set_default(alertmanagers=dict())
+        self.stored.set_default(alertmanagers=[])
         self.stored.set_default(alertmanager_port='9093')
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -63,11 +63,11 @@ class PrometheusCharm(CharmBase):
             logger.warning('Got null event unit on alertmanager changed')
             return
 
-        ip_addr = event.relation.data[event.unit]['address']
+        addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
         port = event.relation.data[event.app]['port']
 
         self.stored.alertmanager_port = port
-        self.stored.alertmanagers[event.unit.name] = ip_addr
+        self.stored.alertmanagers = addrs
 
         self.configure_pod()
 
@@ -256,10 +256,9 @@ class PrometheusCharm(CharmBase):
             return alerting_config
 
         targets = []
-        for manager in self.stored.alertmanagers.keys():
+        for manager in self.stored.alertmanagers:
             port = self.stored.alertmanager_port
-            ip_addr = self.stored.alertmanagers[manager]
-            targets.append(f'{ip_addr}:{port}')
+            targets.append(f'{manager}:{port}')
 
         manager_config = {'static_configs': [{'targets': targets}]}
         alerting_config = {'alertmanagers': [manager_config]}
