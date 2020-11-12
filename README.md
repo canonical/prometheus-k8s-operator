@@ -8,7 +8,7 @@ monitoring system and alerting toolkit.
 
 This repository contains a [Juju](https://jaas.ai/) Charm for
 deploying the monitoring component of Prometheus in a Kubernetes
-clusters. The alerting component of prometheus is offered through a
+cluster. The alerting component of prometheus is offered through a
 separate Charm.
 
 ## Setup
@@ -27,7 +27,7 @@ following commands
 
 Install the charmcraft tool
 
-    sudo snap install charmcraft --classic
+    sudo snap install charmcraft
 
 Build the charm in this git repository
 
@@ -42,11 +42,6 @@ Create a Juju model for your monitoring operators
 Deploy Prometheus using its default configuration.
 
     juju deploy ./prometheus.charm
-
-Alternatively deploy Prometheus with monitoring of a kubernetes cluster
-(such as microk8s) enabled
-
-    juju deploy ./prometheus.charm --config monitor-k8s=true
 
 View the Prometheus dashboard
 
@@ -65,7 +60,7 @@ Currently supported relations are
 
 ## Developing
 
-Use your existing Python 3 developement environment or create and
+Use your existing Python 3 development environment or create and
 activate a Python 3 virtualenv
 
     virtualenv -p python3 venv

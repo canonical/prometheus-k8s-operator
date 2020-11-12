@@ -19,17 +19,10 @@ options:
       The password associated with prometheus-image-username for
       accessing the registry specified in prometheus-image-path.
     default: ""
-  advertised-port:
+  port:
     description: The port prometheus will be listening on
     type: int
     default: 9090
-  enforce-pod-restart:
-    type: boolean
-    default: false
-    description: |
-      If set to True, charm will forcibly shutdown and re-create the workload
-      pod(s), one by one. If there is only one pod - any config modification
-      will lead to the short service downtime.
   ssl-cert:
     type: string
     default:
@@ -47,17 +40,6 @@ options:
       If not set, the Prometheus default one (info) will be used.
     type: string
     default:
-  web-max-connections:
-    description: |
-      Maximum number of simultaneous connections.
-    type: int
-    default: 512
-  web-read-timeout:
-    description: |
-      Maximum duration before timing out read of the request, and
-      closing idle connections.
-    type: string
-    default: 5m
   web-external-url:
     description: |
       The URL under which Prometheus is externally reachable (for example,
@@ -69,30 +51,10 @@ options:
       If omitted, relevant URL components will be derived automatically.
     type: string
     default: ""
-  # TODO: After the nginx reverse proxy sidecar will be implemented,
-  # it will be a good idea to restrict this kind of access to some particular
-  # IP address range at least.
-  web-enable-admin-api:
-    description: |
-      Enable API endpoints for admin control actions.
-
-      As of Prometheus 2.0, this flag controls access to the
-      administrative HTTP API which includes functionality such as
-      deleting time series. This is disabled by default.
-
-      If enabled, administrative and mutating functionality will
-      be accessible under the /api/*/admin/ paths.
-    type: boolean
-    default: false
-  web-page-title:
-    description: |
-      Document title of Prometheus instance.
-    type: string
-    default: "Charmed LMA - Prometheus TSDB, Collection & Processing"
   tsdb-retention-time:
     description: |
       How long to retain samples in the storage.
-      Units Supported: y, w, d, h, m, s, ms.
+      Units Supported: y, w, d, h, m, s
     type: string
     default: 15d
   tsdb-wal-compression:
@@ -102,16 +64,6 @@ options:
       halved with little extra cpu load.
     type: boolean
     default: false
-  alertmanager-notification-queue-capacity:
-    description: |
-      The capacity of the queue for pending alert manager notifications.
-    type: int
-    default: 10000
-  alertmanager-timeout:
-    description: |
-      Timeout for sending alerts to AlertManager.
-    type: string
-    default: 10s
   external-labels:
     description: |
       A JSON string of key-value pairs that specify the labels to
@@ -129,14 +81,6 @@ options:
       arbitrarily chosen as you see fit.
     type: string
     default: "{}"
-  monitor-k8s:
-    description: |
-      Adds additional scrape configs to the prometheus config file such that
-      it collects metrics about the k8s cluster it is deployed in. It's
-      important that metrics-server be running in the kube-system namespace
-      otherwise the charm will remain in the blocked status.
-    type: boolean
-    default: false
   scrape-interval:
     description: |
       How frequently to scrape targets by default.

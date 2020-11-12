@@ -17,44 +17,47 @@ logger = logging.getLogger(__name__)
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus
     """
-    stored = StoredState()
+    _stored = StoredState()
 
     def __init__(self, *args):
         logger.debug('Initializing Charm')
 
         super().__init__(*args)
+
         self.stored.set_default(alertmanagers=[])
         self.stored.set_default(alertmanager_port='9093')
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
-        self.framework.observe(self.on['alerting'].relation_changed,
-                               self.on_alerting_changed)
-        self.framework.observe(self.on['alerting'].relation_departed,
-                               self.on_alerting_departed)
-        self.framework.observe(self.on['alerting'].relation_broken,
-                               self.on_alerting_broken)
+        self.framework.observe(self.on['alertmanager'].relation_changed,
+                               self._on_alertmanager_changed)
+        self.framework.observe(self.on['alertmanager'].relation_departed,
+                               self._on_alertmanager_departed)
+        self.framework.observe(self.on['alertmanager'].relation_broken,
+                               self._on_alertmanager_broken)
+
         self.framework.observe(self.on['grafana-source'].relation_changed,
-                               self.on_grafana_changed)
+                               self._on_grafana_changed)
 
     def _on_config_changed(self, _):
         """Set a new Juju pod specification
         """
-        self.configure_pod()
+        self._configure_pod()
 
     def _on_stop(self, _):
         """Mark unit is inactive
         """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
-    def on_grafana_changed(self, event):
-        """Provide Grafan with data source information
+    def _on_grafana_changed(self, event):
+        """Provide Grafana with data source information
         """
-        event.relation.data[self.unit]['port'] = str(self.model.config['advertised-port'])
+        event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
-    def on_alerting_changed(self, event):
-        """Set an altermanager configuation
+
+    def _on_alertmanager_changed(self, event):
+        """Set an alertmanager configuation
         """
         if not self.unit.is_leader():
             return
@@ -69,10 +72,12 @@ class PrometheusCharm(CharmBase):
         self.stored.alertmanager_port = port
         self.stored.alertmanagers = addrs
 
-        self.configure_pod()
 
-    def on_alerting_departed(self, event):
-        """Remove an altermanager configuration
+        self._configure_pod()
+
+
+    def _on_alertmanager_departed(self, event):
+        """Remove an alertmanager configuration
         """
         if not self.unit.is_leader():
             return
@@ -81,7 +86,7 @@ class PrometheusCharm(CharmBase):
             self.stored.alertmanagers.pop(event.unit.name)
         self.configure_pod()
 
-    def on_alerting_broken(self, event):
+    def _on_alertmanager_broken(self, event):
         """Remove all alertmanager configuration
         """
         if not self.unit.is_leader():
@@ -90,12 +95,12 @@ class PrometheusCharm(CharmBase):
         self.configure_pod()
 
     def _cli_args(self):
-        """Consturct command line arguments for Prometheus
+        """Construct command line arguments for Prometheus
         """
         config = self.model.config
         args = [
             '--config.file=/etc/prometheus/prometheus.yml',
-            '--storage.tsdb.path=/prometheus',
+            '--storage.tsdb.path=/var/lib/prometheus',
             '--web.enable-lifecycle',
             '--web.console.templates=/usr/share/prometheus/consoles',
             '--web.console.libraries=/usr/share/prometheus/console_libraries'
@@ -123,19 +128,6 @@ class PrometheusCharm(CharmBase):
             '--log.level={0}'.format(log_level)
         )
 
-        # Expose Prometheus Adminstration API only if requested
-        if config.get('web-enable-admin-api'):
-            args.append('--web.enable-admin-api')
-
-        # User specified Prometheus web page title
-        if config.get('web-page-title'):
-            # TODO: Validate and sanitize input
-            args.append(
-                '--web.page-title="{0}"'.format(
-                    config['web-page-title']
-                )
-            )
-
         # Enable time series database compression
         if config.get('tsdb-wal-compression'):
             args.append('--storage.tsdb.wal-compression')
@@ -144,22 +136,6 @@ class PrometheusCharm(CharmBase):
         if config.get('tsdb-retention-time') and self._is_valid_timespec(
                 config['tsdb-retention-time']):
             args.append('--storage.tsdb.retention.time={}'.format(config['tsdb-retention-time']))
-
-        # Set maximum number of connections to prometheus server
-        if config.get('web-max-connections'):
-            args.append('--web.max-connections={}'.format(config['web-max-connections']))
-
-        # Set maximum number of pending alerts
-        if config.get('alertmanager-notification-queue-capacity'):
-            args.append('--alertmanager.notification-queue-capacity={}'.format(
-                config['alertmanager-notification-queue-capacity']))
-
-        # Set timeout for alerts
-        if config.get('alertmanager-timeout') and self._is_valid_timespec(
-                config['alertmanager-timeout']):
-            args.append('--alertmanager.timeout={}'.format(config['alertmanager-timeout']))
-
-        logger.debug("CLI args: {0}".format(' '.join(args)))
 
         return args
 
@@ -251,7 +227,7 @@ class PrometheusCharm(CharmBase):
         """
         alerting_config = ''
 
-        if len(self.stored.alertmanagers) < 1:
+        if len(self._stored.alertmanagers) < 1:
             logger.debug('No alertmanagers available')
             return alerting_config
 
@@ -287,18 +263,11 @@ class PrometheusCharm(CharmBase):
             'scheme': 'http',
             'static_configs': [{
                 'targets': [
-                    'localhost:{}'.format(config['advertised-port'])
+                    'localhost:{}'.format(config['port'])
                 ]
             }]
         }
         scrape_config['scrape_configs'].append(default_config)
-
-        # If monitoring of k8s is requested gather all scraping configuration for k8s
-        if config.get('monitor-k8s'):
-            with open('config/prometheus-k8s.yml') as yaml_file:
-                k8s_scrape_configs = yaml.safe_load(yaml_file).get('scrape_configs', [])
-            for k8s_config in k8s_scrape_configs:
-                scrape_config['scrape_configs'].append(k8s_config)
 
         logger.debug('Prometheus config : {}'.format(scrape_config))
 
@@ -310,6 +279,7 @@ class PrometheusCharm(CharmBase):
         logger.debug('Building Pod Spec')
         config = self.model.config
         spec = {
+            'version': 3,
             'containers': [{
                 'name': self.app.name,
                 'imageDetails': {
@@ -318,33 +288,36 @@ class PrometheusCharm(CharmBase):
                     'password': config.get('prometheus-image-password', '')
                 },
                 'args': self._cli_args(),
-                'readinessProbe': {
-                    'httpGet': {
-                        'path': '/-/ready',
-                        'port': config['advertised-port']
+                'kubernetes': {
+                    'readinessProbe': {
+                        'httpGet': {
+                            'path': '/-/ready',
+                            'port': config['port']
+                        },
+                        'initialDelaySeconds': 10,
+                        'timeoutSeconds': 30
                     },
-                    'initialDelaySeconds': 10,
-                    'timeoutSeconds': 30
-                },
-                'livenessProbe': {
-                    'httpGet': {
-                        'path': '/-/healthy',
-                        'port': config['advertised-port']
-                    },
-                    'initialDelaySeconds': 30,
-                    'timeoutSeconds': 30
+                    'livenessProbe': {
+                        'httpGet': {
+                            'path': '/-/healthy',
+                            'port': config['port']
+                        },
+                        'initialDelaySeconds': 30,
+                        'timeoutSeconds': 30
+                    }
                 },
                 'ports': [{
-                    'containerPort': config['advertised-port'],
+                    'containerPort': config['port'],
                     'name': 'prometheus-http',
                     'protocol': 'TCP'
                 }],
-                'files': [{
+                'volumeConfig': [{
                     'name': 'prometheus-config',
                     'mountPath': '/etc/prometheus',
-                    'files': {
-                        'prometheus.yml': self._prometheus_config()
-                    }
+                    'files': [{
+                        'path': 'prometheus.yml',
+                        'content': self._prometheus_config()
+                    }]
                 }]
             }]
         }
@@ -369,7 +342,7 @@ class PrometheusCharm(CharmBase):
 
         return missing
 
-    def configure_pod(self):
+    def _configure_pod(self):
         """Setup a new Prometheus pod specification
         """
         logger.debug('Configuring Pod')
@@ -382,15 +355,15 @@ class PrometheusCharm(CharmBase):
             return
 
         if not self.unit.is_leader():
-            self.unit.status = ActiveStatus('Prometheus unit is ready')
+            self.unit.status = ActiveStatus()
             return
 
         self.unit.status = MaintenanceStatus('Setting pod spec.')
         pod_spec = self._build_pod_spec()
 
         self.model.pod.set_spec(pod_spec)
-        self.app.status = ActiveStatus('Prometheus Application is ready')
-        self.unit.status = ActiveStatus('Prometheus leader unit is ready')
+        self.app.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
 
 if __name__ == "__main__":

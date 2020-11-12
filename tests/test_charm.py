@@ -10,7 +10,7 @@ from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {
     'prometheus-image-path': 'prom/prometheus',
-    'advertised-port': 9090
+    'port': 9090
 }
 
 SAMPLE_ALERTING_CONFIG = {
@@ -34,7 +34,13 @@ class TestCharm(unittest.TestCase):
             'prometheus-image-username': '',
             'prometheus-image-password': ''
         }
-        self.harness.update_config(missing_image_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(missing_image_config)
+            expected_logs = [
+                "ERROR:charm:Incomplete Configuration : ['prometheus-image-path']. "
+                "Application will be blocked."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
 
         missing = self.harness.charm._check_config()
         expected = ['prometheus-image-path']
@@ -46,7 +52,13 @@ class TestCharm(unittest.TestCase):
             'prometheus-image-username': 'some-user',
             'prometheus-image-password': '',
         }
-        self.harness.update_config(missing_password_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(missing_password_config)
+            expected_logs = [
+                "ERROR:charm:Incomplete Configuration : ['prometheus-image-password']. "
+                "Application will be blocked."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
 
         missing = self.harness.charm._check_config()
         expected = ['prometheus-image-password']
@@ -57,8 +69,10 @@ class TestCharm(unittest.TestCase):
 
         # check alerting config is empty without alertmanager relation
         self.harness.update_config(MINIMAL_CONFIG)
+
         self.assertEqual(self.harness.charm.stored.alertmanagers, {})
-        rel_id = self.harness.add_relation('alerting', 'alertmanager')
+        rel_id = self.harness.add_relation('alertmanager', 'alertmanager')
+
         self.assertIsInstance(rel_id, int)
         self.harness.add_relation_unit(rel_id, 'alertmanager/0')
         pod_spec = self.harness.get_pod_spec()
@@ -114,8 +128,8 @@ class TestCharm(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, 'grafana/0')
         self.harness.update_relation_data(rel_id, 'grafana/0', {})
         data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
-        print(f'HELLOG: {data}')
-        self.assertEqual(int(data['port']), MINIMAL_CONFIG['advertised-port'])
+
+        self.assertEqual(int(data['port']), MINIMAL_CONFIG['port'])
         self.assertEqual(data['source-type'], 'prometheus')
 
     def test_default_cli_log_level_is_info(self):
@@ -128,7 +142,15 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config['log-level'] = 'bad-level'
-        self.harness.update_config(bad_log_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(bad_log_config)
+            expected_logs = [
+                "ERROR:root:Invalid loglevel: bad-level given, "
+                "debug/info/warn/error/fatal allowed. "
+                "defaulting to DEBUG loglevel."
+            ]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'debug')
 
@@ -139,32 +161,6 @@ class TestCharm(unittest.TestCase):
         self.harness.update_config(valid_log_config)
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--log.level'), 'warn')
-
-    def test_web_admin_api_can_be_enabled(self):
-        self.harness.set_leader(True)
-
-        # without web admin enabled
-        self.harness.update_config(MINIMAL_CONFIG)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
-                         None)
-
-        # with web admin enabled
-        admin_api_config = MINIMAL_CONFIG.copy()
-        admin_api_config['web-enable-admin-api'] = True
-        self.harness.update_config(admin_api_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.enable-admin-api'),
-                         '--web.enable-admin-api')
-
-    def test_web_page_title_can_be_set(self):
-        self.harness.set_leader(True)
-        web_config = MINIMAL_CONFIG.copy()
-        web_config['web-page-title'] = 'Prometheus Test Page'
-        self.harness.update_config(web_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(cli_arg(pod_spec, '--web.page-title')[1:-1],  # striping quotes
-                         web_config['web-page-title'])
 
     def test_tsdb_compression_is_not_enabled_by_default(self):
         self.harness.set_leader(True)
@@ -202,7 +198,11 @@ class TestCharm(unittest.TestCase):
         # invalid unit
         retention_time = '{}{}'.format(1, 'x')
         retention_time_config['tsdb-retention-time'] = retention_time
-        self.harness.update_config(retention_time_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(retention_time_config)
+            expected_logs = ["ERROR:charm:Invalid unit x in time spec"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
@@ -210,39 +210,14 @@ class TestCharm(unittest.TestCase):
         # invalid time value
         retention_time = '{}{}'.format(0, 'd')
         retention_time_config['tsdb-retention-time'] = retention_time
-        self.harness.update_config(retention_time_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(retention_time_config)
+            expected_logs = ["ERROR:charm:Expected positive time spec but got 0"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(cli_arg(pod_spec, '--storage.tsdb.retention.time'),
                          None)
-
-    def test_max_web_connections_can_be_set(self):
-        self.harness.set_leader(True)
-        maxcon_config = MINIMAL_CONFIG.copy()
-        maxcon_config['web-max-connections'] = 512
-        self.harness.update_config(maxcon_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(int(cli_arg(pod_spec, '--web.max-connections')),
-                         maxcon_config['web-max-connections'])
-
-    def test_alertmanager_queue_capacity_can_be_set(self):
-        self.harness.set_leader(True)
-        queue_config = MINIMAL_CONFIG.copy()
-        queue_config['alertmanager-notification-queue-capacity'] = 512
-        self.harness.update_config(queue_config)
-        pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(int(cli_arg(pod_spec, '--alertmanager.notification-queue-capacity')),
-                         queue_config['alertmanager-notification-queue-capacity'])
-
-    def test_alertmanager_timeout_can_be_set(self):
-        self.harness.set_leader(True)
-        timeout_config = MINIMAL_CONFIG.copy()
-        acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
-        for unit in acceptable_units:
-            timeout_config['alertmanager-timeout'] = '{}{}'.format(1, unit)
-            self.harness.update_config(timeout_config)
-            pod_spec = self.harness.get_pod_spec()
-            self.assertEqual(cli_arg(pod_spec, '--alertmanager.timeout'),
-                             timeout_config['alertmanager-timeout'])
 
     def test_global_scrape_interval_can_be_set(self):
         self.harness.set_leader(True)
@@ -298,7 +273,11 @@ class TestCharm(unittest.TestCase):
         # label value must be string
         labels = {'name': 1}
         label_config['external-labels'] = json.dumps(labels)
-        self.harness.update_config(label_config)
+        with self.assertLogs(level='ERROR') as logger:
+            self.harness.update_config(label_config)
+            expected_logs = ["ERROR:charm:External label keys/values must be strings"]
+            self.assertEqual(sorted(logger.output), expected_logs)
+
         pod_spec = self.harness.get_pod_spec()
         gconfig = global_config(pod_spec)
         self.assertIsNone(gconfig.get('external_labels'))
@@ -310,42 +289,21 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(pod_spec, 'prometheus')
         self.assertIsNotNone(prometheus_scrape_config, 'No default config found')
 
-    def test_k8s_scrape_config_can_be_set(self):
-        self.harness.set_leader(True)
-        k8s_config = MINIMAL_CONFIG.copy()
-        k8s_config['monitor-k8s'] = True
-        self.harness.update_config(k8s_config)
-        pod_spec = self.harness.get_pod_spec()
-        k8s_api_scrape_config = scrape_config(pod_spec, 'kubernetes-apiservers')
-        self.assertIsNotNone(k8s_api_scrape_config, 'No k8s API server scrape config found')
-        k8s_node_scrape_config = scrape_config(pod_spec, 'kubernetes-nodes')
-        self.assertIsNotNone(k8s_node_scrape_config, 'No k8s nodes scrape config found')
-        k8s_ca_scrape_config = scrape_config(pod_spec, 'kubernetes-cadvisor')
-        self.assertIsNotNone(k8s_ca_scrape_config, 'No k8s cAdvisor scrape config found')
-        k8s_ep_scrape_config = scrape_config(pod_spec, 'kubernetes-service-endpoints')
-        self.assertIsNotNone(k8s_ep_scrape_config, 'No k8s service endpoints scrape config found')
-        k8s_svc_scrape_config = scrape_config(pod_spec, 'kubernetes-services')
-        self.assertIsNotNone(k8s_svc_scrape_config, 'No k8s services scrape config found')
-        k8s_in_scrape_config = scrape_config(pod_spec, 'kubernetes-ingresses')
-        self.assertIsNotNone(k8s_in_scrape_config, 'No k8s ingress scrape config found')
-        k8s_pod_scrape_config = scrape_config(pod_spec, 'kubernetes-pods')
-        self.assertIsNotNone(k8s_pod_scrape_config, 'No k8s pods scrape config found')
-
 
 def alerting_config(pod_spec):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     return config_dict.get('alerting')
 
 
 def global_config(pod_spec):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     return config_dict['global']
 
 
 def scrape_config(pod_spec, job_name):
-    config_yaml = pod_spec[0]['containers'][0]['files'][0]['files']['prometheus.yml']
+    config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
     scrape_configs = config_dict['scrape_configs']
     for config in scrape_configs:

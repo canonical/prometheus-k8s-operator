@@ -1,4 +1,6 @@
+*~
+*swp
+*.charm
+__pycache__
 build
-prometheus.charm
-**/__pycache__
 venv
