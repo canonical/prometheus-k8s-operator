@@ -23,7 +23,9 @@ class PrometheusCharm(CharmBase):
         logger.debug('Initializing Charm')
 
         super().__init__(*args)
-        self._stored.set_default(alertmanagers=dict())
+
+        self.stored.set_default(alertmanagers=[])
+        self.stored.set_default(alertmanager_port='9093')
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
@@ -31,6 +33,9 @@ class PrometheusCharm(CharmBase):
                                self._on_alertmanager_changed)
         self.framework.observe(self.on['alertmanager'].relation_departed,
                                self._on_alertmanager_departed)
+        self.framework.observe(self.on['alertmanager'].relation_broken,
+                               self._on_alertmanager_broken)
+
         self.framework.observe(self.on['grafana-source'].relation_changed,
                                self._on_grafana_changed)
 
@@ -54,38 +59,39 @@ class PrometheusCharm(CharmBase):
         """Set an alertmanager configuation
         """
         if not self.unit.is_leader():
-            logger.debug('{} is not leader. '
-                         'Not handling alertmanager change.'.format(
-                             self.unit.name))
             return
 
         if event.unit is None:
             logger.warning('Got null event unit on alertmanager changed')
             return
 
-        alerting_config = event.relation.data[event.unit].get('alerting_config', {})
-        logger.debug('Received alerting config: {}'.format(alerting_config))
+        addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
+        port = event.relation.data[event.app]['port']
 
-        if not alerting_config:
-            logger.warning('Got empty alerting config for relation id {}'.format(
-                event.relation.id))
-            return
+        self.stored.alertmanager_port = port
+        self.stored.alertmanagers = addrs
 
-        self._stored.alertmanagers.update({event.relation.id: alerting_config})
 
         self._configure_pod()
+
 
     def _on_alertmanager_departed(self, event):
         """Remove an alertmanager configuration
         """
         if not self.unit.is_leader():
-            logger.debug('{} is not leader. '
-                         'Not handling alertmanager departed.'.format(
-                             self.unit.name))
             return
 
-        self._stored.alertmanagers.pop(event.relation.id)
-        self._configure_pod()
+        if event.unit.name in self.stored.alertmanagers:
+            self.stored.alertmanagers.pop(event.unit.name)
+        self.configure_pod()
+
+    def _on_alertmanager_broken(self, event):
+        """Remove all alertmanager configuration
+        """
+        if not self.unit.is_leader():
+            return
+        self.stored.alertmanagers.clear()
+        self.configure_pod()
 
     def _cli_args(self):
         """Construct command line arguments for Prometheus
@@ -224,11 +230,13 @@ class PrometheusCharm(CharmBase):
             logger.debug('No alertmanagers available')
             return alerting_config
 
-        if len(self._stored.alertmanagers) > 1:
-            logger.warning('More than one altermanager found. Using first!')
+        targets = []
+        for manager in self.stored.alertmanagers:
+            port = self.stored.alertmanager_port
+            targets.append("{}:{}".format(manager, port))
 
-        manager = list(self._stored.alertmanagers.keys())[0]
-        alerting_config = self._stored.alertmanagers.get(manager, '')
+        manager_config = {'static_configs': [{'targets': targets}]}
+        alerting_config = {'alertmanagers': [manager_config]}
 
         return alerting_config
 

@@ -13,13 +13,12 @@ MINIMAL_CONFIG = {
     'port': 9090
 }
 
-SMTP_ALERTING_CONFIG = {
-    'globals': {
-        'smtp_smarthost': 'localhost:25',
-        'smtp_from': 'alertmanager@example.org',
-        'smtp_auth_username': 'alertmanager',
-        'smtp_auth_password': 'password',
-    }
+SAMPLE_ALERTING_CONFIG = {
+    'alertmanagers': [{
+        'static_configs': [{
+            'targets': ['192.169.0.1:9093']
+        }]
+    }]
 }
 
 
@@ -70,46 +69,57 @@ class TestCharm(unittest.TestCase):
 
         # check alerting config is empty without alertmanager relation
         self.harness.update_config(MINIMAL_CONFIG)
-        self.assertEqual(self.harness.charm._stored.alertmanagers, {})
-        rel_id = self.harness.add_relation('alertmanager', 'smtp')
+
+        self.assertEqual(self.harness.charm.stored.alertmanagers, {})
+        rel_id = self.harness.add_relation('alertmanager', 'alertmanager')
+
         self.assertIsInstance(rel_id, int)
-        self.harness.add_relation_unit(rel_id, 'smtp/0')
+        self.harness.add_relation_unit(rel_id, 'alertmanager/0')
         pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(alerting_config(pod_spec), str())
+        self.assertEqual(alerting_config(pod_spec), None)
 
         # check alerting config is updated when a alertmanager joins
         self.harness.update_relation_data(rel_id,
-                                          'smtp/0',
+                                          'alertmanager',
                                           {
-                                              'alerting_config':
-                                              yaml.dump(SMTP_ALERTING_CONFIG)
+                                              'port':
+                                              '9093'
                                           })
-
+        self.harness.update_relation_data(rel_id, 'alertmanager/0',
+                                          {
+                                              'ingress-address':
+                                              '192.169.0.1'
+                                          })
         pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(alerting_config(pod_spec), SMTP_ALERTING_CONFIG)
+        self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
     def test_alerting_config_is_removed_when_alertmanager_departs(self):
         self.harness.set_leader(True)
 
         # ensure there is a non-empty alerting config
         self.harness.update_config(MINIMAL_CONFIG)
-        rel_id = self.harness.add_relation('alertmanager', 'smtp')
-        rel = self.harness.model.get_relation('alertmanager')
+        rel_id = self.harness.add_relation('alerting', 'alertmanager')
+        rel = self.harness.model.get_relation('alerting')
         self.assertIsInstance(rel_id, int)
-        self.harness.add_relation_unit(rel_id, 'smtp/0')
+        self.harness.add_relation_unit(rel_id, 'alertmanager/0')
         self.harness.update_relation_data(rel_id,
-                                          'smtp/0',
+                                          'alertmanager',
                                           {
-                                              'alerting_config':
-                                              yaml.dump(SMTP_ALERTING_CONFIG)
+                                              'port':
+                                              '9093'
+                                          })
+        self.harness.update_relation_data(rel_id, 'alertmanager/0',
+                                          {
+                                              'ingress-address':
+                                              '192.169.0.1'
                                           })
         pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(alerting_config(pod_spec), SMTP_ALERTING_CONFIG)
+        self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
         # check alerting config is removed when relation departs
-        self.harness.charm.on.alertmanager_relation_departed.emit(rel)
+        self.harness.charm.on.alerting_relation_departed.emit(rel)
         pod_spec = self.harness.get_pod_spec()
-        self.assertEqual(alerting_config(pod_spec), str())
+        self.assertEqual(alerting_config(pod_spec), None)
 
     def test_grafana_is_provided_port_and_source(self):
         self.harness.set_leader(True)
@@ -118,6 +128,7 @@ class TestCharm(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, 'grafana/0')
         self.harness.update_relation_data(rel_id, 'grafana/0', {})
         data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
+
         self.assertEqual(int(data['port']), MINIMAL_CONFIG['port'])
         self.assertEqual(data['source-type'], 'prometheus')
 
@@ -282,11 +293,7 @@ class TestCharm(unittest.TestCase):
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
     config_dict = yaml.safe_load(config_yaml)
-    alerting_yaml = config_dict.get('alerting')
-    alerting = str()
-    if alerting_yaml:
-        alerting = yaml.safe_load(alerting_yaml)
-    return alerting
+    return config_dict.get('alerting')
 
 
 def global_config(pod_spec):
