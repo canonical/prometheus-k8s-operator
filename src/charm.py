@@ -24,8 +24,8 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self.stored.set_default(alertmanagers=[])
-        self.stored.set_default(alertmanager_port='9093')
+        self._stored.set_default(alertmanagers=[])
+        self._stored.set_default(alertmanager_port='9093')
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
@@ -68,8 +68,8 @@ class PrometheusCharm(CharmBase):
         addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
         port = event.relation.data[event.app]['port']
 
-        self.stored.alertmanager_port = port
-        self.stored.alertmanagers = addrs
+        self._stored.alertmanager_port = port
+        self._stored.alertmanagers = addrs
 
 
         self._configure_pod()
@@ -81,8 +81,8 @@ class PrometheusCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        if event.unit.name in self.stored.alertmanagers:
-            self.stored.alertmanagers.pop(event.unit.name)
+        if event.unit.name in self._stored.alertmanagers:
+            self._stored.alertmanagers.pop(event.unit.name)
         self.configure_pod()
 
     def _on_alertmanager_broken(self, event):
@@ -90,7 +90,7 @@ class PrometheusCharm(CharmBase):
         """
         if not self.unit.is_leader():
             return
-        self.stored.alertmanagers.clear()
+        self._stored.alertmanagers.clear()
         self.configure_pod()
 
     def _cli_args(self):
@@ -231,8 +231,8 @@ class PrometheusCharm(CharmBase):
             return alerting_config
 
         targets = []
-        for manager in self.stored.alertmanagers:
-            port = self.stored.alertmanager_port
+        for manager in self._stored.alertmanagers:
+            port = self._stored.alertmanager_port
             targets.append("{}:{}".format(manager, port))
 
         manager_config = {'static_configs': [{'targets': targets}]}
