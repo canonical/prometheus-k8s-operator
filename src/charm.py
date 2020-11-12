@@ -233,7 +233,7 @@ class PrometheusCharm(CharmBase):
         targets = []
         for manager in self.stored.alertmanagers:
             port = self.stored.alertmanager_port
-            targets.append(f'{manager}:{port}')
+            targets.append("{}:{}".format(manager, port))
 
         manager_config = {'static_configs': [{'targets': targets}]}
         alerting_config = {'alertmanagers': [manager_config]}
