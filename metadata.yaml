@@ -23,7 +23,7 @@ series:
     - kubernetes
 requires:
     grafana-source:
-        interface: grafana-dashsource
+        interface: grafana-datasource
     alertmanager:
         interface: alertmanager
 storage:
