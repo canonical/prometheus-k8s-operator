@@ -31,8 +31,6 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
                                self._on_alertmanager_changed)
-        self.framework.observe(self.on['alertmanager'].relation_departed,
-                               self._on_alertmanager_departed)
         self.framework.observe(self.on['alertmanager'].relation_broken,
                                self._on_alertmanager_broken)
 
@@ -61,10 +59,6 @@ class PrometheusCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        if event.unit is None:
-            logger.warning('Got null event unit on alertmanager changed')
-            return
-
         addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
         port = event.relation.data[event.app]['port']
 
@@ -74,24 +68,13 @@ class PrometheusCharm(CharmBase):
 
         self._configure_pod()
 
-
-    def _on_alertmanager_departed(self, event):
-        """Remove an alertmanager configuration
-        """
-        if not self.unit.is_leader():
-            return
-
-        if event.unit.name in self._stored.alertmanagers:
-            self._stored.alertmanagers.pop(event.unit.name)
-        self.configure_pod()
-
     def _on_alertmanager_broken(self, event):
         """Remove all alertmanager configuration
         """
         if not self.unit.is_leader():
             return
         self._stored.alertmanagers.clear()
-        self.configure_pod()
+        self._configure_pod()
 
     def _cli_args(self):
         """Construct command line arguments for Prometheus

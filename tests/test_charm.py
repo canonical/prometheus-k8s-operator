@@ -64,7 +64,6 @@ class TestCharm(unittest.TestCase):
         expected = ['prometheus-image-password']
         self.assertEqual(missing, expected)
 
-    @unittest.skip('This test will not work until operator bug #452 is fixed')
     def test_alerting_config_is_updated_by_alertmanager_relation(self):
         self.harness.set_leader(True)
 
@@ -89,8 +88,7 @@ class TestCharm(unittest.TestCase):
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
-    @unittest.skip('This test will not work until operator bug #452 is fixed')
-    def test_alerting_config_is_removed_when_alertmanager_departs(self):
+    def test_alerting_config_is_removed_when_alertmanager_is_broken(self):
         self.harness.set_leader(True)
 
         # ensure there is a non-empty alerting config
@@ -109,7 +107,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
         # check alerting config is removed when relation departs
-        self.harness.charm.on.alerting_relation_departed.emit(rel)
+        self.harness.charm.on.alertmanager_relation_broken.emit(rel)
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), None)
 
