@@ -16,7 +16,7 @@ MINIMAL_CONFIG = {
 SAMPLE_ALERTING_CONFIG = {
     'alertmanagers': [{
         'static_configs': [{
-            'targets': ['192.169.0.1:9093']
+            'targets': ['192.168.0.1:9093']
         }]
     }]
 }
@@ -82,18 +82,13 @@ class TestCharm(unittest.TestCase):
         self.harness.update_relation_data(rel_id,
                                           'alertmanager',
                                           {
-                                              'port':
-                                              '9093'
-                                          })
-        self.harness.update_relation_data(rel_id, 'alertmanager/0',
-                                          {
-                                              'ingress-address':
-                                              '192.169.0.1'
+                                              'port': '9093',
+                                              'addrs': '["192.168.0.1"]'
                                           })
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
-    def test_alerting_config_is_removed_when_alertmanager_departs(self):
+    def test_alerting_config_is_removed_when_alertmanager_is_broken(self):
         self.harness.set_leader(True)
 
         # ensure there is a non-empty alerting config
@@ -105,19 +100,14 @@ class TestCharm(unittest.TestCase):
         self.harness.update_relation_data(rel_id,
                                           'alertmanager',
                                           {
-                                              'port':
-                                              '9093'
-                                          })
-        self.harness.update_relation_data(rel_id, 'alertmanager/0',
-                                          {
-                                              'ingress-address':
-                                              '192.169.0.1'
+                                              'port': '9093',
+                                              'addrs': '["192.168.0.1"]'
                                           })
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), SAMPLE_ALERTING_CONFIG)
 
         # check alerting config is removed when relation departs
-        self.harness.charm.on.alerting_relation_departed.emit(rel)
+        self.harness.charm.on.alertmanager_relation_broken.emit(rel)
         pod_spec = self.harness.get_pod_spec()
         self.assertEqual(alerting_config(pod_spec), None)
 
