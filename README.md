@@ -57,6 +57,7 @@ If required, remove the deployed monitoring model completely
 Currently supported relations are
 
 - [Grafana](https://github.com/canonical/grafana-operator)
+- [Alertmanager](https://github.com/canonical/alertmanager-operator)
 
 ## Developing
 
