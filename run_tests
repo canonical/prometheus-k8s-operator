@@ -7,9 +7,9 @@ if [ -z "$VIRTUAL_ENV" -a -d venv/ ]; then
 fi
 
 if [ -z "$PYTHONPATH" ]; then
-    export PYTHONPATH=src
+    export PYTHONPATH="src:lib"
 else
-    export PYTHONPATH="src:$PYTHONPATH"
+    export PYTHONPATH="src:lib:$PYTHONPATH"
 fi
 
 black --diff

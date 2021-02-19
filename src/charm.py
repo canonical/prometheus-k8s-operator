@@ -11,6 +11,8 @@ from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
 
+from charms.alertmanager.v1.alertmanager import get_relation_data
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,13 +61,9 @@ class PrometheusCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
-        port = event.relation.data[event.app]['port']
-
-        self._stored.alertmanager_port = port
-        self._stored.alertmanagers = addrs
-
-
+        data = get_relation_data(event)
+        self._stored.alertmanager_port = data['port']
+        self._stored.alertmanagers = data['addrs']
         self._configure_pod()
 
     def _on_alertmanager_broken(self, event):
