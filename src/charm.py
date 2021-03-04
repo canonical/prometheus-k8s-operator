@@ -234,6 +234,12 @@ class PrometheusCharm(CharmBase):
         if alerting_config:
             scrape_config['alerting'] = alerting_config
 
+        scrape_config_string = config.get('scrape-config')
+        if scrape_config_string:
+            scrape_config_yaml = yaml.safe_load(scrape_config_string)
+            for scrape_job in scrape_config_yaml['scrape_configs']:
+                scrape_config['scrape_configs'].append(scrape_job)
+
         # By default only monitor prometheus server itself
         default_config = {
             'job_name': 'prometheus',
