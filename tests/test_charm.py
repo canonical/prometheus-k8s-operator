@@ -279,6 +279,28 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(pod_spec, 'prometheus')
         self.assertIsNotNone(prometheus_scrape_config, 'No default config found')
 
+    def test_a_scrape_config_can_be_set(self):
+        self.harness.set_leader(True)
+        sconfig = MINIMAL_CONFIG.copy()
+        sconfig['scrape-config'] = """
+        scrape_configs:
+          - job_name: 'kubernetes-apiservers'
+            kubernetes_sd_configs:
+            - role: endpoints
+            scheme: https
+            tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            relabel_configs:
+            - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+        """
+        self.harness.update_config(sconfig)
+        pod_spec = self.harness.get_pod_spec()
+        job_config = scrape_config(pod_spec, 'kubernetes-apiservers')
+        self.assertIsNotNone(job_config, 'No default config found')
+
 
 def alerting_config(pod_spec):
     config_yaml = pod_spec[0]['containers'][0]['volumeConfig'][0]['files'][0]['content']
