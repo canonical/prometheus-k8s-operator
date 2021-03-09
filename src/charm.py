@@ -301,7 +301,44 @@ class PrometheusCharm(CharmBase):
                         'content': self._prometheus_config()
                     }]
                 }]
-            }]
+            }],
+            'serviceAccount': {
+                'roles': [{
+                    'global': True,
+                    # From: https://github.com/prometheus-community/helm-charts/blob/main/charts/prometheus/templates/server/clusterrole.yaml
+                    'rules': [
+                        {
+                            'apiGroups': [''],
+                            'resources': [
+                                'nodes',
+                                'nodes/proxy',
+                                'nodes/metrics',
+                                'services',
+                                'endpoints',
+                                'pods',
+                                'ingresses',
+                                'configmaps'
+                            ],
+                            'verbs': ['get', 'list', 'watch'],
+                        },
+                        {
+                            'apiGroups': [
+                                'extensions',
+                                'networking.k8s.io',
+                            ],
+                            'resources': [
+                                'ingresses',
+                                'ingresses/status',
+                            ],
+                            'verbs': ['get', 'list', 'watch'],
+                        },
+                        {
+                            'nonResourceURLs': ['/metrics'],
+                            'verbs': ['get'],
+                        },
+                    ]
+                }]
+            }
         }
 
         return spec
