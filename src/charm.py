@@ -65,7 +65,6 @@ class PrometheusCharm(CharmBase):
         self._stored.alertmanager_port = port
         self._stored.alertmanagers = addrs
 
-
         self._configure_pod()
 
     def _on_alertmanager_broken(self, event):
