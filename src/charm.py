@@ -10,6 +10,8 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
+from prometheus_provider import MonitoringProvider
+from prometheus_server import Prometheus
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +28,10 @@ class PrometheusCharm(CharmBase):
 
         self._stored.set_default(alertmanagers=[])
         self._stored.set_default(alertmanager_port='9093')
+        self._stored.set_default(provider_ready=False)
 
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.start, self._on_start)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
                                self._on_alertmanager_changed)
@@ -37,10 +41,32 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on['grafana-source'].relation_changed,
                                self._on_grafana_changed)
 
+        if self._stored.provider_ready:
+            self.prometheus_provider = MonitoringProvider(self, 'monitoring', self.provides)
+            self.framework.observe(self.prometheus_provider.on.targets_changed,
+                                   self._on_config_changed)
+
     def _on_config_changed(self, _):
         """Set a new Juju pod specification
         """
         self._configure_pod()
+
+    def _on_start(self, event):
+        if not self._stored.provider_ready:
+            try:
+                _ = self.ingress_address
+            except Exception:
+                event.defer()
+                return
+
+        provided = self.provides
+        if provided:
+            logger.debug("Prometheus provider is available")
+            logger.debug("Providing : {}".format(provided))
+            self.prometheus_provider = MonitoringProvider(self, 'monitoring', provided)
+            self._stored.provider_ready = True
+        else:
+            event.defer()
 
     def _on_stop(self, _):
         """Mark unit is inactive
@@ -255,6 +281,10 @@ class PrometheusCharm(CharmBase):
             }]
         }
         scrape_config['scrape_configs'].append(default_config)
+        if self._stored.provider_ready:
+            scrape_jobs = self.prometheus_provider.jobs()
+            for job in scrape_jobs:
+                scrape_config['scrape_configs'].append(job)
 
         logger.debug('Prometheus config : {}'.format(scrape_config))
 
@@ -351,6 +381,23 @@ class PrometheusCharm(CharmBase):
         self.model.pod.set_spec(pod_spec)
         self.app.status = ActiveStatus()
         self.unit.status = ActiveStatus()
+
+    @property
+    def ingress_address(self):
+        ingress = str(self.model.get_binding('prometheus').network.ingress_address)
+        return ingress
+
+    @property
+    def provides(self):
+        prometheus = Prometheus(self.ingress_address, str(self.model.config['port']))
+        info = prometheus.build_info()
+        if info:
+            provided = {
+                'provides': {'prometheus': info['version']}
+            }
+        else:
+            provided = {}
+        return provided
 
 
 if __name__ == "__main__":
