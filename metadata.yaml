@@ -21,11 +21,17 @@ tags:
     - grafana
 series:
     - kubernetes
+provides:
+  monitoring:
+    interface: prometheus
 requires:
     grafana-source:
         interface: grafana-datasource
     alertmanager:
         interface: alertmanager
+peers:
+  prometheus:
+    interface: prometheus
 storage:
   database:
     type: filesystem
