@@ -1,12 +1,4 @@
 options:
-  prometheus-image-path:
-    type: string
-    description: |
-      The location of the image to use,
-      e.g. "registry.example.com/prometheus:v1".
-
-      This setting is required.
-    default: "prom/prometheus:latest"
   prometheus-image-username:
     type: string
     description: |

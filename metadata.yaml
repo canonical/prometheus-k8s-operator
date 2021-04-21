@@ -19,8 +19,15 @@ tags:
     - monitoring
     - alerting
     - grafana
-series:
-    - kubernetes
+bases:
+    - name: ubuntu
+      channel: 20.04/stable
+containers:
+  prometheus:
+    resource: prometheus-image
+    mounts:
+      - storage: database
+        location: /var/lib/prometheus
 provides:
   monitoring:
     interface: prometheus
@@ -35,4 +42,8 @@ peers:
 storage:
   database:
     type: filesystem
-    location: /var/lib/prometheus
+resources:
+  prometheus-image:
+    type: oci-image
+    description: upstream docker image for prometheus
+    upstream-source: "prom/prometheus:latest"
