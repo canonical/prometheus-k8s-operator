@@ -10,8 +10,7 @@ import json
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus, ModelError
-from ops.pebble import ConnectionError
+from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
 from prometheus_provider import MonitoringProvider
 from prometheus_server import Prometheus
 
@@ -34,9 +33,9 @@ class PrometheusCharm(CharmBase):
         self._stored.set_default(provider_ready=False)
         self._stored.set_default(prometheus_config_hash=None)
 
-        self.framework.observe(self.on.prometheus_pebble_ready, self._setup_pebble_layers)
+        self.framework.observe(self.on.prometheus_pebble_ready, self._on_config_changed)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.framework.observe(self.on.start, self._on_start)
+        self.framework.observe(self.on.update_status, self._on_update_status)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
                                self._on_alertmanager_changed)
@@ -57,13 +56,12 @@ class PrometheusCharm(CharmBase):
         logger.info("Handling config changed")
         container = self.unit.get_container("prometheus")
 
-        try:
-            service = container.get_service("prometheus")
-        except ConnectionError:
-            logger.info("Pebble API is not yet ready")
-            return
-        except ModelError:
-            logger.info("Prometheus service is not yet ready")
+        missing_config = self._check_config()
+        if missing_config:
+            logger.error('Incomplete Configuration : {}. '
+                         'Application will be blocked.'.format(missing_config))
+            self.unit.status = \
+                BlockedStatus('Missing configuration: {}'.format(missing_config))
             return
 
         prometheus_config = self._prometheus_config()
@@ -71,25 +69,29 @@ class PrometheusCharm(CharmBase):
         if not self._stored.prometheus_config_hash == config_hash:
             self._stored.prometheus_config_hash = config_hash
             container.push(PROMETHEUS_CONFIG, prometheus_config)
-        else:
-            logger.info("No change in Prometheus configuration")
-            return
+            logger.info("Pushed new configuation")
 
-        if service.is_running():
-            container.stop("prometheus")
+        layer = self._prometheus_layer()
+        plan = container.get_plan()
+        if plan.services != layer["services"]:
+            container.add_layer("prometheus", layer, combine=True)
 
-        container.start("prometheus")
-        logger.info("Restarted Prometheus service")
+            if container.get_service("prometheus").is_running():
+                container.stop("prometheus")
 
-    def _on_start(self, event):
+            container.start("prometheus")
+            logger.info("Restarted prometheus container")
+
+        self.app.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
+
+    def _on_update_status(self, event):
         provided = self.provides
         if provided:
             logger.debug("Prometheus provider is available")
             logger.debug("Providing : {}".format(provided))
-            self.prometheus_provider = MonitoringProvider(self, 'monitoring', provided)
-            self._stored.provider_ready = True
-        else:
-            event.defer()
+            if not self._stored.provider_ready:
+                self._stored.provider_ready = True
 
     def _on_stop(self, _):
         """Mark unit is inactive
@@ -354,38 +356,6 @@ class PrometheusCharm(CharmBase):
             missing.append('prometheus-image-password')
 
         return missing
-
-    def _setup_pebble_layers(self, event):
-        """Setup a new Prometheus pod specification
-        """
-        logger.debug('Configuring Pod')
-        missing_config = self._check_config()
-        if missing_config:
-            logger.error('Incomplete Configuration : {}. '
-                         'Application will be blocked.'.format(missing_config))
-            self.unit.status = \
-                BlockedStatus('Missing configuration: {}'.format(missing_config))
-            return
-
-        if not self.unit.is_leader():
-            self.unit.status = ActiveStatus()
-            return
-
-        self.unit.status = MaintenanceStatus('Setting up containers.')
-        container = event.workload
-
-        prometheus_config = self._prometheus_config()
-        config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
-        if not self._stored.prometheus_config_hash == config_hash:
-            self._stored.prometheus_config_hash = config_hash
-            container.push(PROMETHEUS_CONFIG, prometheus_config)
-
-        layer = self._prometheus_layer()
-        container.add_layer("prometheus", layer, combine=True)
-        container.autostart()
-
-        self.app.status = ActiveStatus()
-        self.unit.status = ActiveStatus()
 
     @property
     def provides(self):
