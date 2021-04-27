@@ -2,7 +2,7 @@ import json
 import logging
 from ops.charm import CharmEvents
 from ops.framework import StoredState, EventSource, EventBase
-from ops.relation import Provider
+from ops.relation import ProviderBase
 logger = logging.getLogger(__name__)
 
 
@@ -22,12 +22,12 @@ class MonitoringEvents(CharmEvents):
     targets_changed = EventSource(TargetsChanged)
 
 
-class MonitoringProvider(Provider):
+class MonitoringProvider(ProviderBase):
     on = MonitoringEvents()
     _stored = StoredState()
 
-    def __init__(self, charm, name, provides):
-        super().__init__(charm, name, provides)
+    def __init__(self, charm, name, service, version=None):
+        super().__init__(charm, name, service, version)
         self.charm = charm
         self._stored.set_default(jobs={})
         events = self.charm.on[name]
