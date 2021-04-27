@@ -46,7 +46,8 @@ class PrometheusCharm(CharmBase):
                                self._on_grafana_changed)
 
         if self._stored.provider_ready:
-            self.prometheus_provider = MonitoringProvider(self, 'monitoring', self.provides)
+            self.prometheus_provider = MonitoringProvider(self,
+                                                          'monitoring', 'prometheus', self.version)
             self.framework.observe(self.prometheus_provider.on.targets_changed,
                                    self._on_config_changed)
 
@@ -86,7 +87,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_update_status(self, event):
-        provided = self.provides
+        provided = {'prometheus': self.version}
         if provided:
             logger.debug("Prometheus provider is available")
             logger.debug("Providing : {}".format(provided))
@@ -358,16 +359,13 @@ class PrometheusCharm(CharmBase):
         return missing
 
     @property
-    def provides(self):
+    def version(self):
+        """Prometheus version."""
         prometheus = Prometheus("localhost", str(self.model.config['port']))
         info = prometheus.build_info()
         if info:
-            provided = {
-                'provides': {'prometheus': info['version']}
-            }
-        else:
-            provided = {}
-        return provided
+            return info.get('version', None)
+        return None
 
 
 if __name__ == "__main__":
