@@ -125,6 +125,9 @@ class PrometheusCharm(CharmBase):
         """
         event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
+        event.relation.data[self.unit]['private-address'] = str(
+            self.model.get_binding(event.relation).network.bind_address
+        )
 
     def _on_alertmanager_changed(self, event):
         """Set an alertmanager configuration.
