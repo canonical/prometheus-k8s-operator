@@ -50,6 +50,9 @@ class PrometheusCharm(CharmBase):
     def _on_grafana_changed(self, event):
         """Provide Grafana with data source information
         """
+        event.relation.data[self.unit]['private-address'] = str(
+            self.model.get_binding(event.relation).network.bind_address
+        )
         event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
