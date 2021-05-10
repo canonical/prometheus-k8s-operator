@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# Copyright 2020 Balbir Thomas
+# Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 if [ -z "$VIRTUAL_ENV" -a -d venv/ ]; then
