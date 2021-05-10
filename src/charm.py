@@ -52,11 +52,17 @@ class PrometheusCharm(CharmBase):
                                    self._on_config_changed)
 
     def _on_config_changed(self, event):
-        """Set a new Juju pod specification
+        """Reconfigure and restart Prometheus.
+
+        In response to any configuration change, such as a new consumer
+        relation, or a new configuration set by the administrator, the
+        Prometheus config file is regenerated, pushed to the workload
+        container and Prometheus is restarted.
         """
         logger.info("Handling config changed")
         container = self.unit.get_container("prometheus")
 
+        # validate configuration options
         missing_config = self._check_config()
         if missing_config:
             logger.error('Incomplete Configuration : {}. '
@@ -65,13 +71,16 @@ class PrometheusCharm(CharmBase):
                 BlockedStatus('Missing configuration: {}'.format(missing_config))
             return
 
+        # check if configuration file has changed and if so push the
+        # new config file to the workload container
         prometheus_config = self._prometheus_config()
         config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
         if not self._stored.prometheus_config_hash == config_hash:
             self._stored.prometheus_config_hash = config_hash
             container.push(PROMETHEUS_CONFIG, prometheus_config)
-            logger.info("Pushed new configuation")
+            logger.info("Pushed new configuration")
 
+        # setup the workload (Prometheus) container and its services
         layer = self._prometheus_layer()
         plan = container.get_plan()
         if plan.services != layer["services"]:
@@ -87,6 +96,12 @@ class PrometheusCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_update_status(self, event):
+        """Check status of Prometheus server.
+
+        Status of the Prometheus services is checked by querying
+        Prometheus for its version information. If Prometheus responds
+        with valid information, its active status is recorded.
+        """
         provided = {'prometheus': self.version}
         if provided['prometheus']:
             logger.debug("Prometheus provider is available")
@@ -95,18 +110,29 @@ class PrometheusCharm(CharmBase):
                 self._stored.provider_ready = True
 
     def _on_stop(self, _):
-        """Mark unit is inactive
+        """Mark unit is inactive.
+
+        All units of the charm are set to maintenance status before
+        termination.
         """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def _on_grafana_changed(self, event):
-        """Provide Grafana with data source information
+        """Provide Grafana with data source information.
+
+        Grafana needs to know the port and name of an application in order
+        to form a relation with it. Hence this information is provided here.
         """
         event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
 
     def _on_alertmanager_changed(self, event):
-        """Set an alertmanager configuation
+        """Set an alertmanager configuration.
+
+        In response to any changes in relations with Alertmanager,
+        the list of currently available Alertmanagers is updated,
+        a new Prometheus configuration set and Prometheus is
+        restarted.
         """
         if not self.unit.is_leader():
             return
@@ -120,7 +146,11 @@ class PrometheusCharm(CharmBase):
         self._on_config_changed(event)
 
     def _on_alertmanager_broken(self, event):
-        """Remove all alertmanager configuration
+        """Remove all alertmanager configuration.
+
+        When an Alertmanager departs it is removed from the list
+        of currently available Alertmanagers, the Prometheus configuration
+        is updated and Prometheus is restarted.
         """
         if not self.unit.is_leader():
             return
@@ -128,7 +158,11 @@ class PrometheusCharm(CharmBase):
         self._on_config_changed(event)
 
     def _command(self):
-        """Construct command to launch Prometheus
+        """Construct command to launch Prometheus.
+
+        Returns:
+            a list consisting of Prometheus command and associated
+            command line options.
         """
         command = ["/bin/prometheus"]
         command.extend(self._cli_args())
@@ -136,7 +170,10 @@ class PrometheusCharm(CharmBase):
         return " ".join(command)
 
     def _cli_args(self):
-        """Construct command line arguments for Prometheus
+        """Construct command line arguments for Prometheus.
+
+        Returns:
+            a list consisting of Prometheus command line options.
         """
         config = self.model.config
         args = [
@@ -181,7 +218,13 @@ class PrometheusCharm(CharmBase):
         return args
 
     def _is_valid_timespec(self, timeval):
-        """Is a time interval unit and value valid
+        """Is a time interval unit and value valid.
+
+        Args:
+            timeval: a string representing a time specification.
+
+        Returns:
+            True if time specification is valid and False otherwise.
         """
         if not timeval:
             return False
@@ -205,7 +248,14 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _are_valid_labels(self, json_data):
-        """Are Prometheus external labels valid
+        """Are Prometheus external labels valid.
+
+        Args:
+            json_data: a JSON encoded string of external labels form
+                Prometheus.
+
+        Returns:
+            True if external labels are valid, False otherwise.
         """
         if not json_data:
             return False
@@ -228,7 +278,10 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _external_labels(self):
-        """Extract external labels for Prometheus from configuration
+        """Extract external labels for Prometheus from configuration.
+
+        Returns:
+            a dictionary of external lables for Prometheus configuration.
         """
         config = self.model.config
         labels = {}
@@ -240,7 +293,10 @@ class PrometheusCharm(CharmBase):
         return labels
 
     def _prometheus_global_config(self):
-        """Construct Prometheus global configuration
+        """Construct Prometheus global configuration.
+
+        Returns:
+            a dictionary consisting of global configuration for Prometheus.
         """
         config = self.model.config
         global_config = {}
@@ -264,7 +320,10 @@ class PrometheusCharm(CharmBase):
         return global_config
 
     def _alerting_config(self):
-        """Construct Prometheus altering configuation
+        """Construct Prometheus altering configuration.
+
+        Returns:
+            a dictionary consisting of the alerting configuration for Prometheus.
         """
         alerting_config = ''
 
@@ -283,7 +342,10 @@ class PrometheusCharm(CharmBase):
         return alerting_config
 
     def _prometheus_config(self):
-        """Construct Prometheus configuration
+        """Construct Prometheus configuration.
+
+        Returns:
+            Prometheus config file in YAML (string) format.
         """
         config = self.model.config
 
@@ -326,6 +388,10 @@ class PrometheusCharm(CharmBase):
 
     def _prometheus_layer(self):
         """Construct the pebble layer
+
+        Returns:
+            a dictionary consisting of the Pebble layer specification
+            for the Prometheus workload container.
         """
         logger.debug('Building pebble layer')
         layer = {
@@ -346,7 +412,8 @@ class PrometheusCharm(CharmBase):
     def _check_config(self):
         """Identify missing but required items in configuation
 
-        :returns: list of missing configuration items (configuration keys)
+        Returns:
+            a list of missing configuration items (configuration keys)
         """
         logger.debug('Checking Config')
         config = self.model.config
@@ -360,7 +427,12 @@ class PrometheusCharm(CharmBase):
 
     @property
     def version(self):
-        """Prometheus version."""
+        """Fetch Prometheus version.
+
+        Returns:
+            a string consisting of the Prometheus version information or
+            None if Prometheus server is not reachable.
+        """
         prometheus = Prometheus("localhost", str(self.model.config['port']))
         info = prometheus.build_info()
         if info:
