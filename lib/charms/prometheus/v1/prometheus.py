@@ -47,10 +47,10 @@ class PrometheusConsumer(ConsumerBase):
 
         """
         super().__init__(charm, name, consumes, multi)
-        self.charm = charm
-        self.relation_name = name
+        self._charm = charm
+        self._relation_name = name
         self._stored.set_default(targets={})
-        events = self.charm.on[self.relation_name]
+        events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined,
                                self._set_targets)
 
@@ -108,13 +108,13 @@ class PrometheusConsumer(ConsumerBase):
             return
 
         logger.debug("Setting scrape targets : %s", self._stored.targets[rel_id])
-        event.relation.data[self.charm.app]["targets"] = json.dumps(
+        event.relation.data[self._charm.app]["targets"] = json.dumps(
             list(self._stored.targets[rel_id]))
 
     def _update_targets(self, targets, rel_id):
         """Update the Prometheus scrape targets."""
         self._stored.targets[rel_id] = targets
-        rel = self.framework.model.get_relation(self.relation_name, rel_id)
+        rel = self.framework.model.get_relation(self._relation_name, rel_id)
 
         logger.debug("Updating scrape targets to : %s", targets)
-        rel.data[self.charm.app]["targets"] = json.dumps(list(targets))
+        rel.data[self._charm.app]["targets"] = json.dumps(list(targets))
