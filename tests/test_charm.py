@@ -99,16 +99,24 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(alerting_config(config), None)
 
     @patch('ops.testing._TestingPebbleClient.push')
-    def test_grafana_is_provided_port_and_source(self, _):
+    @patch('ops.testing._TestingModelBackend.network_get')
+    def test_grafana_is_provided_port_and_source(self, mock_net_get, _):
         self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
+        IP = "1.1.1.1"
+        net_info = {"bind-addresses": [{
+            "interface-name": "ens1",
+            "addresses": [{
+                "value": IP}]}]}
+        mock_net_get.return_value = net_info
+
         rel_id = self.harness.add_relation('grafana-source', 'grafana')
         self.harness.add_relation_unit(rel_id, 'grafana/0')
         self.harness.update_relation_data(rel_id, 'grafana/0', {})
         data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
-
         self.assertEqual(int(data['port']), MINIMAL_CONFIG['port'])
         self.assertEqual(data['source-type'], 'prometheus')
+        self.assertEqual(data['private-address'], IP)
 
     @patch('ops.testing._TestingPebbleClient.push')
     def test_default_cli_log_level_is_info(self, _):
