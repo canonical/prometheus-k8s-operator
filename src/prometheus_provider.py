@@ -28,16 +28,16 @@ class MonitoringProvider(ProviderBase):
 
     def __init__(self, charm, name, service, version=None):
         super().__init__(charm, name, service, version)
-        self.charm = charm
+        self._charm = charm
         self._stored.set_default(jobs={})
-        events = self.charm.on[name]
+        events = self._charm.on[name]
         self.framework.observe(events.relation_changed,
                                self._on_scrape_target_relation_changed)
         self.framework.observe(events.relation_broken,
                                self._on_scrape_target_relation_broken)
 
     def _on_scrape_target_relation_changed(self, event):
-        if not self.charm.unit.is_leader():
+        if not self._charm.unit.is_leader():
             return
 
         rel_id = event.relation.id
@@ -66,7 +66,7 @@ class MonitoringProvider(ProviderBase):
         self.on.targets_changed.emit()
 
     def _on_scrape_target_relation_broken(self, event):
-        if not self.charm.unit.is_leader():
+        if not self._charm.unit.is_leader():
             return
 
         rel_id = event.relation.id
