@@ -88,7 +88,7 @@ class PrometheusCharm(CharmBase):
 
     def _on_update_status(self, event):
         provided = {'prometheus': self.version}
-        if provided:
+        if provided['prometheus']:
             logger.debug("Prometheus provider is available")
             logger.debug("Providing : {}".format(provided))
             if not self._stored.provider_ready:
