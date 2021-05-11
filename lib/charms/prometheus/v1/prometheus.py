@@ -80,11 +80,14 @@ class PrometheusConsumer(ConsumerBase):
         targets.append(target)
         self._update_targets(targets, rel_id)
 
-    def remove_endpoint(self, address, rel_id=None):
+    def remove_endpoint(self, address, port=80, rel_id=None):
         """Remove an endpoint from the list of Prometheus scrape targets.
         Args:
             address: a string host address (usually IP) of the endpoint that
                 that must be excluded from being monitored by Prometheus.
+            port: an optional (default 80) integer providing the port
+                on which the scrapped endpoint exposes its Prometheus
+                metrics.
             rel_id: an optional integer providing the relation ID for
                 the related Prometheus monitoring service
                 provider. This is only necessary if the
@@ -95,10 +98,11 @@ class PrometheusConsumer(ConsumerBase):
             rel_id = self.relation_id
 
         targets = self._stored.targets.get(rel_id, [])
-        if address not in targets:
+        target = address + ":" + str(port)
+        if target not in targets:
             return
 
-        targets.remove(address)
+        targets.remove(target)
         self._update_targets(targets, rel_id)
 
     def _set_targets(self, event):
