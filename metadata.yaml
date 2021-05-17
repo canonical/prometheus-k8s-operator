@@ -19,9 +19,6 @@ tags:
     - monitoring
     - alerting
     - grafana
-bases:
-    - name: ubuntu
-      channel: 20.04/stable
 containers:
   prometheus:
     resource: prometheus-image
