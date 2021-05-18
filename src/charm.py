@@ -90,9 +90,11 @@ class PrometheusCharm(CharmBase):
                 container.stop("prometheus")
 
             container.start("prometheus")
-            logger.info("Restarted prometheus container")
+            logger.info("Restarted prometheus done")
 
-        self.app.status = ActiveStatus()
+        if self.unit.is_leader():
+            self.app.status = ActiveStatus()
+
         self.unit.status = ActiveStatus()
 
     def _on_update_status(self, event):

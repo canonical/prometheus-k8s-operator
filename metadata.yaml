@@ -33,9 +33,6 @@ requires:
         interface: grafana-datasource
     alertmanager:
         interface: alertmanager
-peers:
-  prometheus:
-    interface: prometheus
 storage:
   database:
     type: filesystem
