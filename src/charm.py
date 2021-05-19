@@ -90,7 +90,7 @@ class PrometheusCharm(CharmBase):
                 container.stop("prometheus")
 
             container.start("prometheus")
-            logger.info("Restarted prometheus done")
+            logger.info("Prometheus started")
 
         if self.unit.is_leader():
             self.app.status = ActiveStatus()
