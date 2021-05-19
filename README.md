@@ -12,22 +12,25 @@ cluster. The alerting component of prometheus is offered through a
 separate Charm.
 
 
-## Configuration and Usage
+## Usage
 
-By default the Prometheus Operator monitors itself. There are two ways
-to provide additional scrape targets to this Prometheus charm.
+By default the Prometheus Operator monitors itself, but it also
+accepts additional scrape targets over Juju relations with charms that
+support the `prometheus` interface and preferably use the Prometheus
+charm library. This charm library provides an `add_endpoint()` method
+that creates additional scrape targets. Each scrape target is expected
+to expose a `/metrics` HTTP path that exposes its metrics in a
+Prometheus compatible format.
 
-1. Using Juju the command line configuration option `scrape-config`.
-2. Using Juju relations with charms that support the `prometheus`
-   interface and preferably use the Prometheus charm library. This
-   charm library provides a `add_endpoint()` method to provide
-   additional scrape targets to Prometheus over relation data.
+At present it is expected that all relations the Prometheus Operator
+partakes in are within the same Juju model. Further development may
+extend this to allow cross model scrape targets.
 
 ## Dashboard
 
-The Prometheus dashboard may be accessed at port 9090 on the IP
-address of the Prometheus leader unit. This unit and its IP address
-may be determined using the `juju status` command.
+The Prometheus dashboard may be accessed at a selectable port (by
+default 9090) on the IP address of the Prometheus unit. This unit and
+its IP address may be determined using the `juju status` command.
 
 ## Relations
 
@@ -43,5 +46,5 @@ This charm by default uses the latest version of the Prometheus
 
 ## Contributing
 
-Please see the Juju [SDK docs](https://juju.is/docs/sdk) for guidlines
+Please see the Juju [SDK docs](https://juju.is/docs/sdk) for guidelines
 on developing enhancements to this charm following best practice guidelines.
