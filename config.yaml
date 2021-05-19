@@ -83,10 +83,6 @@ options:
       How long until a scrape request times out.
     type: string
     default: 10s
-  scrape-config:
-    description: |
-      Prometheus scrape configuration in YAML format
-    type: string
   evaluation-interval:
     description: |
       How frequently rules will be evaluated.
