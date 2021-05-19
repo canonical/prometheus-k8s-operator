@@ -69,8 +69,7 @@ class PrometheusConsumer(ConsumerBase):
                 :class:`PrometheusConsumer` has been instantiated in
                 `multi` mode.
         """
-        if rel_id is None:
-            rel_id = self.relation_id
+        rel_id = self.framework.model.get_relation(self._relation_name, rel_id).id
 
         targets = self._stored.targets.get(rel_id, [])
         if address in targets:
@@ -94,8 +93,7 @@ class PrometheusConsumer(ConsumerBase):
                 :class:`PrometheusConsumer` has been instantiated in
                 `multi` mode.
         """
-        if rel_id is None:
-            rel_id = self.relation_id
+        rel_id = self.framework.model.get_relation(self._relation_name, rel_id).id
 
         targets = self._stored.targets.get(rel_id, [])
         target = address + ":" + str(port)
