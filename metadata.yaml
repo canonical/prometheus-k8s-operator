@@ -40,4 +40,3 @@ resources:
   prometheus-image:
     type: oci-image
     description: upstream docker image for prometheus
-    upstream-source: "prom/prometheus:latest"
