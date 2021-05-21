@@ -68,8 +68,7 @@ class TestCharm(unittest.TestCase):
         self.harness.update_relation_data(rel_id,
                                           'alertmanager',
                                           {
-                                              'port': '9093',
-                                              'addrs': '["192.168.0.1"]'
+                                              'addrs': '["192.168.0.1:9093"]'
                                           })
         config = push.call_args[0]
         self.assertEqual(alerting_config(config), SAMPLE_ALERTING_CONFIG)
@@ -87,8 +86,7 @@ class TestCharm(unittest.TestCase):
         self.harness.update_relation_data(rel_id,
                                           'alertmanager',
                                           {
-                                              'port': '9093',
-                                              'addrs': '["192.168.0.1"]'
+                                              'addrs': '["192.168.0.1:9093"]'
                                           })
         config = push.call_args[0]
         self.assertEqual(alerting_config(config), SAMPLE_ALERTING_CONFIG)
