@@ -76,7 +76,7 @@ class PrometheusConsumer(ConsumerBase):
         if address in targets:
             return
 
-        target = address if port == 80 else address + ":" + str(port)
+        target = address + ":" + str(port)
         targets.append(target)
         self._update_targets(targets, rel_id)
 
