@@ -29,7 +29,6 @@ class PrometheusCharm(CharmBase):
         super().__init__(*args)
 
         self._stored.set_default(alertmanagers=[])
-        self._stored.set_default(alertmanager_port='9093')
         self._stored.set_default(provider_ready=False)
         self._stored.set_default(prometheus_config_hash=None)
 
@@ -143,9 +142,7 @@ class PrometheusCharm(CharmBase):
             return
 
         addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
-        port = event.relation.data[event.app]['port']
 
-        self._stored.alertmanager_port = port
         self._stored.alertmanagers = addrs
 
         self._on_config_changed(event)
@@ -336,11 +333,7 @@ class PrometheusCharm(CharmBase):
             logger.debug('No alertmanagers available')
             return alerting_config
 
-        targets = []
-        for manager in self._stored.alertmanagers:
-            port = self._stored.alertmanager_port
-            targets.append("{}:{}".format(manager, port))
-
+        targets = [manager for manager in self._stored.alertmanagers]
         manager_config = {'static_configs': [{'targets': targets}]}
         alerting_config = {'alertmanagers': [manager_config]}
 
