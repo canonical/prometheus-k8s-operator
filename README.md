@@ -14,6 +14,11 @@ separate Charm.
 
 ## Usage
 
+The Prometheus Operator may be deployed using the Juju commandline as
+in
+
+    juju deploy prometheus-k8s
+
 By default the Prometheus Operator monitors itself, but it also
 accepts additional scrape targets over Juju relations with charms that
 support the `prometheus` interface and preferably use the Prometheus
