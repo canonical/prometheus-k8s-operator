@@ -7,7 +7,7 @@ import logging
 import yaml
 import json
 
-from ops.charm import CharmBase
+from ops.charm import CharmBase, PebbleReadyEvent
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
@@ -29,12 +29,12 @@ class PrometheusCharm(CharmBase):
         super().__init__(*args)
 
         self._stored.set_default(alertmanagers=[])
-        self._stored.set_default(provider_ready=False)
+        self._stored.set_default(pebble_ready=False)
         self._stored.set_default(prometheus_config_hash=None)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_config_changed)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.framework.observe(self.on.update_status, self._on_update_status)
+        self.framework.observe(self.on.upgrade_charm, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
                                self._on_alertmanager_changed)
@@ -44,11 +44,10 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on['grafana-source'].relation_changed,
                                self._on_grafana_changed)
 
-        if self._stored.provider_ready:
-            self.prometheus_provider = MonitoringProvider(self,
-                                                          'monitoring', 'prometheus', self.version)
-            self.framework.observe(self.prometheus_provider.on.targets_changed,
-                                   self._on_config_changed)
+        self.prometheus_provider = MonitoringProvider(self,
+                                                      'monitoring', 'prometheus', self.version)
+        self.framework.observe(self.prometheus_provider.on.targets_changed,
+                               self._on_config_changed)
 
     def _on_config_changed(self, event):
         """Reconfigure and restart Prometheus.
@@ -58,6 +57,15 @@ class PrometheusCharm(CharmBase):
         Prometheus config file is regenerated, pushed to the workload
         container and Prometheus is restarted.
         """
+        if isinstance(event, PebbleReadyEvent):
+            self._stored.pebble_ready = True
+        if not self._stored.pebble_ready:
+            # Ignore all events before Pebble is ready. Prior to that,
+            # manipulating the services via Pebble will fail. Once the
+            # PebbleReadyEvent comes in, it will see the proper state of the
+            # world from whatever events had come in prior, and subsequent
+            # events will have the flag set.
+            return
         logger.info("Handling config changed")
         container = self.unit.get_container("prometheus")
 
@@ -74,7 +82,7 @@ class PrometheusCharm(CharmBase):
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
         config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
-        if not self._stored.prometheus_config_hash == config_hash:
+        if self._stored.prometheus_config_hash != config_hash:
             self._stored.prometheus_config_hash = config_hash
             container.push(PROMETHEUS_CONFIG, prometheus_config)
             logger.info("Pushed new configuration")
@@ -95,20 +103,6 @@ class PrometheusCharm(CharmBase):
             self.app.status = ActiveStatus()
 
         self.unit.status = ActiveStatus()
-
-    def _on_update_status(self, event):
-        """Check status of Prometheus server.
-
-        Status of the Prometheus services is checked by querying
-        Prometheus for its version information. If Prometheus responds
-        with valid information, its active status is recorded.
-        """
-        provided = {'prometheus': self.version}
-        if provided['prometheus']:
-            logger.debug("Prometheus provider is available")
-            logger.debug("Providing : {}".format(provided))
-            if not self._stored.provider_ready:
-                self._stored.provider_ready = True
 
     def _on_stop(self, _):
         """Mark unit is inactive.
@@ -369,10 +363,9 @@ class PrometheusCharm(CharmBase):
             }]
         }
         scrape_config['scrape_configs'].append(default_config)
-        if self._stored.provider_ready:
-            scrape_jobs = self.prometheus_provider.jobs()
-            for job in scrape_jobs:
-                scrape_config['scrape_configs'].append(job)
+        scrape_jobs = self.prometheus_provider.jobs()
+        for job in scrape_jobs:
+            scrape_config['scrape_configs'].append(job)
 
         logger.debug('Prometheus config : {}'.format(scrape_config))
 

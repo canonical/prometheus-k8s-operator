@@ -28,6 +28,7 @@ class TestCharm(unittest.TestCase):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
+        self.harness.charm._stored.pebble_ready = True
 
     @patch('ops.testing._TestingPebbleClient.push')
     def test_password_is_required_when_username_is_set(self, _):
@@ -235,6 +236,7 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(gconfig['scrape_interval'],
                              scrapeint_config['scrape-interval'])
             push.reset()
+            self.harness.charm._stored.prometheus_config_hash = None
 
     @patch('ops.testing._TestingPebbleClient.push')
     def test_global_scrape_timeout_can_be_set(self, push):
@@ -250,6 +252,7 @@ class TestCharm(unittest.TestCase):
             self.assertEqual(gconfig['scrape_timeout'],
                              scrapetime_config['scrape-timeout'])
             push.reset()
+            self.harness.charm._stored.prometheus_config_hash = None
 
     @patch('ops.testing._TestingPebbleClient.push')
     def test_global_evaluation_interval_can_be_set(self, push):
@@ -259,6 +262,7 @@ class TestCharm(unittest.TestCase):
         acceptable_units = ['y', 'w', 'd', 'h', 'm', 's']
         for unit in acceptable_units:
             push.reset()
+            self.harness.charm._stored.prometheus_config_hash = None
             evalint_config['evaluation-interval'] = '{}{}'.format(1, unit)
             self.harness.update_config(evalint_config)
             config = push.call_args[0]
