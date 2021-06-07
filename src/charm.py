@@ -11,6 +11,7 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
+from ops.pebble import ConnectionError
 from prometheus_provider import MonitoringProvider
 from prometheus_server import Prometheus
 
@@ -34,7 +35,6 @@ class PrometheusCharm(CharmBase):
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_config_changed)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.framework.observe(self.on.update_status, self._on_update_status)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
                                self._on_alertmanager_changed)
@@ -44,7 +44,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on['grafana-source'].relation_changed,
                                self._on_grafana_changed)
 
-        if self._stored.provider_ready:
+        if self.provider_ready:
             self.prometheus_provider = MonitoringProvider(self,
                                                           'monitoring', 'prometheus', self.version)
             self.framework.observe(self.prometheus_provider.on.targets_changed,
@@ -75,9 +75,13 @@ class PrometheusCharm(CharmBase):
         prometheus_config = self._prometheus_config()
         config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
         if not self._stored.prometheus_config_hash == config_hash:
-            self._stored.prometheus_config_hash = config_hash
-            container.push(PROMETHEUS_CONFIG, prometheus_config)
-            logger.info("Pushed new configuration")
+            try:
+                container.push(PROMETHEUS_CONFIG, prometheus_config)
+                self._stored.prometheus_config_hash = config_hash
+                logger.info("Pushed new configuration")
+            except ConnectionError:
+                logger.info("Ignoring config changed since pebble is not ready")
+                return
 
         # setup the workload (Prometheus) container and its services
         layer = self._prometheus_layer()
@@ -95,20 +99,6 @@ class PrometheusCharm(CharmBase):
             self.app.status = ActiveStatus()
 
         self.unit.status = ActiveStatus()
-
-    def _on_update_status(self, event):
-        """Check status of Prometheus server.
-
-        Status of the Prometheus services is checked by querying
-        Prometheus for its version information. If Prometheus responds
-        with valid information, its active status is recorded.
-        """
-        provided = {'prometheus': self.version}
-        if provided['prometheus']:
-            logger.debug("Prometheus provider is available")
-            logger.debug("Providing : {}".format(provided))
-            if not self._stored.provider_ready:
-                self._stored.provider_ready = True
 
     def _on_stop(self, _):
         """Mark unit is inactive.
@@ -430,6 +420,25 @@ class PrometheusCharm(CharmBase):
         if info:
             return info.get('version', None)
         return None
+
+    @property
+    def provider_ready(self):
+        """Check status of Prometheus server.
+
+        Status of the Prometheus services is checked by querying
+        Prometheus for its version information. If Prometheus responds
+        with valid information, its status is recorded.
+
+        Returns:
+            True if Prometheus is ready, False otherwise
+        """
+        provided = {'prometheus': self.version}
+        if not self._stored.provider_ready and provided['prometheus']:
+            logger.debug("Prometheus provider is available")
+            logger.debug("Providing : {}".format(provided))
+            self._stored.provider_ready = True
+
+        return self._stored.provider_ready
 
 
 if __name__ == "__main__":
