@@ -7,7 +7,7 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from lib.charms.prometheus.v1.prometheus import PrometheusConsumer
+from charms.prometheus_k8s.v1.prometheus import PrometheusConsumer
 
 
 class ConsumerCharm(CharmBase):
