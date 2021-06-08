@@ -33,7 +33,7 @@ class PrometheusCharm(CharmBase):
         self._stored.set_default(provider_ready=False)
         self._stored.set_default(prometheus_config_hash=None)
 
-        self.framework.observe(self.on.prometheus_pebble_ready, self._on_config_changed)
+        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
@@ -48,9 +48,24 @@ class PrometheusCharm(CharmBase):
             self.prometheus_provider = MonitoringProvider(self,
                                                           'monitoring', 'prometheus', self.version)
             self.framework.observe(self.prometheus_provider.on.targets_changed,
-                                   self._on_config_changed)
+                                   self._on_scrape_targets_changed)
+
+    def _on_pebble_ready(self, event):
+        """Setup workload container configuration.
+        """
+        self._configure()
 
     def _on_config_changed(self, event):
+        """Handle a configuration change.
+        """
+        self._configure()
+
+    def _on_scrape_targets_changed(self, event):
+        """Handle changes in scrape targets.
+        """
+        self._configure()
+
+    def _configure(self):
         """Reconfigure and restart Prometheus.
 
         In response to any configuration change, such as a new consumer
@@ -58,7 +73,7 @@ class PrometheusCharm(CharmBase):
         Prometheus config file is regenerated, pushed to the workload
         container and Prometheus is restarted.
         """
-        logger.info("Handling config changed")
+        logger.info("Configuring Prometheus")
         container = self.unit.get_container("prometheus")
 
         # validate configuration options
@@ -74,7 +89,7 @@ class PrometheusCharm(CharmBase):
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
         config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
-        if not self._stored.prometheus_config_hash == config_hash:
+        if self._stored.prometheus_config_hash != config_hash:
             try:
                 container.push(PROMETHEUS_CONFIG, prometheus_config)
                 self._stored.prometheus_config_hash = config_hash
@@ -135,7 +150,7 @@ class PrometheusCharm(CharmBase):
 
         self._stored.alertmanagers = addrs
 
-        self._on_config_changed(event)
+        self._configure()
 
     def _on_alertmanager_broken(self, event):
         """Remove all alertmanager configuration.
@@ -147,7 +162,7 @@ class PrometheusCharm(CharmBase):
         if not self.unit.is_leader():
             return
         self._stored.alertmanagers.clear()
-        self._on_config_changed(event)
+        self._configure()
 
     def _command(self):
         """Construct command to launch Prometheus.
