@@ -9,11 +9,11 @@ import json
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, MaintenanceStatus
+from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
-from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
+from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
@@ -35,12 +35,6 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
-        self.framework.observe(
-            self.on["alertmanager"].relation_changed, self._on_alertmanager_changed
-        )
-        self.framework.observe(
-            self.on["alertmanager"].relation_broken, self._on_alertmanager_broken
-        )
 
         self.grafana_source_consumer = GrafanaSourceConsumer(
             charm=self, name="grafana-source", consumes={"Grafana": ">=2.0.0"}
@@ -58,6 +52,11 @@ class PrometheusCharm(CharmBase):
                 self.prometheus_provider.on.targets_changed,
                 self._on_scrape_targets_changed,
             )
+        self.alertmanager_lib = AlertmanagerConsumer(self,
+                                                     relation_name="alertmanager",
+                                                     consumes={'alertmanager': '>0.0.0'})
+        self.framework.observe(self.alertmanager_lib.on.available,
+                               self._on_alertmanager_cluster_changed)
 
     def _on_pebble_ready(self, event):
         """Setup workload container configuration."""
@@ -129,33 +128,7 @@ class PrometheusCharm(CharmBase):
             str(self.model.config["port"]),
         )
 
-    def _on_alertmanager_changed(self, event):
-        """Set an alertmanager configuration.
-
-        In response to any changes in relations with Alertmanager,
-        the list of currently available Alertmanagers is updated,
-        a new Prometheus configuration set and Prometheus is
-        restarted.
-        """
-        if not self.unit.is_leader():
-            return
-
-        addrs = json.loads(event.relation.data[event.app].get("addrs", "[]"))
-
-        self._stored.alertmanagers = addrs
-
-        self._configure()
-
-    def _on_alertmanager_broken(self, event):
-        """Remove all alertmanager configuration.
-
-        When an Alertmanager departs it is removed from the list
-        of currently available Alertmanagers, the Prometheus configuration
-        is updated and Prometheus is restarted.
-        """
-        if not self.unit.is_leader():
-            return
-        self._stored.alertmanagers.clear()
+    def _on_alertmanager_cluster_changed(self, event):
         self._configure()
 
     def _command(self):
