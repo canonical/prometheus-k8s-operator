@@ -76,15 +76,6 @@ class PrometheusCharm(CharmBase):
         logger.info("Configuring Prometheus")
         container = self.unit.get_container("prometheus")
 
-        # validate configuration options
-        missing_config = self._check_config()
-        if missing_config:
-            logger.error('Incomplete Configuration : {}. '
-                         'Application will be blocked.'.format(missing_config))
-            self.unit.status = \
-                BlockedStatus('Missing configuration: {}'.format(missing_config))
-            return
-
         # check if configuration file has changed and if so push the
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
@@ -405,17 +396,6 @@ class PrometheusCharm(CharmBase):
         }
 
         return layer
-
-    def _check_config(self):
-        """Identify missing but required items in configuation
-
-        Returns:
-            a list of missing configuration items (configuration keys)
-        """
-        logger.debug('Checking Config')
-        missing = []
-
-        return missing
 
     @property
     def version(self):
