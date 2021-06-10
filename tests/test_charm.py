@@ -23,49 +23,6 @@ class TestCharm(unittest.TestCase):
         self.harness.begin()
 
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_alerting_config_is_updated_by_alertmanager_relation(self, push):
-        self.harness.set_leader(True)
-
-        # check alerting config is empty without alertmanager relation
-        self.harness.update_config(MINIMAL_CONFIG)
-        self.assertEqual(self.harness.charm._stored.alertmanagers, [])
-        rel_id = self.harness.add_relation("alertmanager", "alertmanager")
-
-        self.assertIsInstance(rel_id, int)
-        self.harness.add_relation_unit(rel_id, "alertmanager/0")
-        config = push.call_args[0]
-        self.assertEqual(alerting_config(config), None)
-        push.reset_mock()
-
-        # check alerting config is updated when a alertmanager joins
-        self.harness.update_relation_data(
-            rel_id, "alertmanager", {"addrs": '["192.168.0.1:9093"]'}
-        )
-        config = push.call_args[0]
-        self.assertEqual(alerting_config(config), SAMPLE_ALERTING_CONFIG)
-
-    @patch("ops.testing._TestingPebbleClient.push")
-    def test_alerting_config_is_removed_when_alertmanager_is_broken(self, push):
-        self.harness.set_leader(True)
-
-        # ensure there is a non-empty alerting config
-        self.harness.update_config(MINIMAL_CONFIG)
-        rel_id = self.harness.add_relation("alertmanager", "alertmanager")
-        rel = self.harness.model.get_relation("alertmanager")
-        self.assertIsInstance(rel_id, int)
-        self.harness.add_relation_unit(rel_id, "alertmanager/0")
-        self.harness.update_relation_data(
-            rel_id, "alertmanager", {"addrs": '["192.168.0.1:9093"]'}
-        )
-        config = push.call_args[0]
-        self.assertEqual(alerting_config(config), SAMPLE_ALERTING_CONFIG)
-
-        # check alerting config is removed when relation departs
-        self.harness.charm.on.alertmanager_relation_broken.emit(rel)
-        config = push.call_args[0]
-        self.assertEqual(alerting_config(config), None)
-
-    @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_grafana_is_provided_port_and_source(self, mock_net_get, _):
         self.harness.set_leader(True)
