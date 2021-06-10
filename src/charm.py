@@ -413,12 +413,7 @@ class PrometheusCharm(CharmBase):
             a list of missing configuration items (configuration keys)
         """
         logger.debug('Checking Config')
-        config = self.model.config
         missing = []
-
-        if config.get('prometheus-image-username') \
-                and not config.get('prometheus-image-password'):
-            missing.append('prometheus-image-password')
 
         return missing
 
