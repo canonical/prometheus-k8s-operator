@@ -30,26 +30,6 @@ class TestCharm(unittest.TestCase):
         self.harness.begin()
 
     @patch('ops.testing._TestingPebbleClient.push')
-    def test_password_is_required_when_username_is_set(self, _):
-        self.harness.set_leader(True)
-
-        missing_password_config = {
-            'prometheus-image-username': 'some-user',
-            'prometheus-image-password': '',
-        }
-        with self.assertLogs(level='ERROR') as logger:
-            self.harness.update_config(missing_password_config)
-            expected_logs = [
-                "ERROR:charm:Incomplete Configuration : ['prometheus-image-password']. "
-                "Application will be blocked."
-            ]
-            self.assertEqual(sorted(logger.output), expected_logs)
-
-        missing = self.harness.charm._check_config()
-        expected = ['prometheus-image-password']
-        self.assertEqual(missing, expected)
-
-    @patch('ops.testing._TestingPebbleClient.push')
     def test_alerting_config_is_updated_by_alertmanager_relation(self, push):
         self.harness.set_leader(True)
 

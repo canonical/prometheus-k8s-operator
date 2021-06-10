@@ -1,16 +1,4 @@
 options:
-  prometheus-image-username:
-    type: string
-    description: |
-      The username for accessing the registry specified in
-      prometheus-image-path.
-    default: ""
-  prometheus-image-password:
-    type: string
-    description: |
-      The password associated with prometheus-image-username for
-      accessing the registry specified in prometheus-image-path.
-    default: ""
   port:
     description: The port prometheus will be listening on
     type: int
