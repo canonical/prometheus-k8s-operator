@@ -88,7 +88,7 @@ class PrometheusCharm(CharmBase):
         # check if configuration file has changed and if so push the
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
-        config_hash = str(hashlib.md5(str(prometheus_config).encode('utf-8')))
+        config_hash = hashlib.md5(str(prometheus_config).encode('utf-8')).hexdigest()
         if self._stored.prometheus_config_hash != config_hash:
             try:
                 container.push(PROMETHEUS_CONFIG, prometheus_config)
