@@ -3,16 +3,6 @@ options:
     description: The port prometheus will be listening on
     type: int
     default: 9090
-  ssl-cert:
-    type: string
-    default:
-    description: |
-      SSL certificate to install and use for Prometheus endpoint.
-  ssl-key:
-    type: string
-    default:
-    description: |
-      SSL key to use with certificate specified as ssl-cert.
   log-level:
     description: |
       Prometheus server log level (only log messages with the given severity
