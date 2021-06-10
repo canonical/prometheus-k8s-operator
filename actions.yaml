@@ -1,3 +1,0 @@
-reload-config:
-  description: |
-    Tell Prometheus to reload its config from the ConfigMap.

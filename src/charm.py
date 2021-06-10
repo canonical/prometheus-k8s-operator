@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Copyright 2020 Balbir Thomas
+# Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import hashlib
 import logging
 import yaml
 import json
@@ -10,7 +11,11 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
+from ops.pebble import ConnectionError
+from prometheus_provider import MonitoringProvider
+from prometheus_server import Prometheus
 
+PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
 
 
@@ -25,8 +30,10 @@ class PrometheusCharm(CharmBase):
         super().__init__(*args)
 
         self._stored.set_default(alertmanagers=[])
-        self._stored.set_default(alertmanager_port='9093')
+        self._stored.set_default(provider_ready=False)
+        self._stored.set_default(prometheus_config_hash=None)
 
+        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on['alertmanager'].relation_changed,
@@ -37,49 +44,137 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on['grafana-source'].relation_changed,
                                self._on_grafana_changed)
 
-    def _on_config_changed(self, _):
-        """Set a new Juju pod specification
+        if self.provider_ready:
+            self.prometheus_provider = MonitoringProvider(self,
+                                                          'monitoring', 'prometheus', self.version)
+            self.framework.observe(self.prometheus_provider.on.targets_changed,
+                                   self._on_scrape_targets_changed)
+
+    def _on_pebble_ready(self, event):
+        """Setup workload container configuration.
         """
-        self._configure_pod()
+        self._configure()
+
+    def _on_config_changed(self, event):
+        """Handle a configuration change.
+        """
+        self._configure()
+
+    def _on_scrape_targets_changed(self, event):
+        """Handle changes in scrape targets.
+        """
+        self._configure()
+
+    def _configure(self):
+        """Reconfigure and restart Prometheus.
+
+        In response to any configuration change, such as a new consumer
+        relation, or a new configuration set by the administrator, the
+        Prometheus config file is regenerated, pushed to the workload
+        container and Prometheus is restarted.
+        """
+        logger.info("Configuring Prometheus")
+        container = self.unit.get_container("prometheus")
+
+        # check if configuration file has changed and if so push the
+        # new config file to the workload container
+        prometheus_config = self._prometheus_config()
+        config_hash = hashlib.md5(str(prometheus_config).encode('utf-8')).hexdigest()
+        if self._stored.prometheus_config_hash != config_hash:
+            try:
+                container.push(PROMETHEUS_CONFIG, prometheus_config)
+                self._stored.prometheus_config_hash = config_hash
+                logger.info("Pushed new configuration")
+            except ConnectionError:
+                logger.info("Ignoring config changed since pebble is not ready")
+                return
+
+        # setup the workload (Prometheus) container and its services
+        layer = self._prometheus_layer()
+        plan = container.get_plan()
+        if plan.services != layer["services"]:
+            container.add_layer("prometheus", layer, combine=True)
+
+            if container.get_service("prometheus").is_running():
+                container.stop("prometheus")
+
+            container.start("prometheus")
+            logger.info("Prometheus started")
+
+        if self.unit.is_leader():
+            self.app.status = ActiveStatus()
+
+        self.unit.status = ActiveStatus()
 
     def _on_stop(self, _):
-        """Mark unit is inactive
+        """Mark unit is inactive.
+
+        All units of the charm are set to maintenance status before
+        termination.
         """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
     def _on_grafana_changed(self, event):
-        """Provide Grafana with data source information
+        """Provide Grafana with data source information.
+
+        Grafana needs to know the port and name of an application in order
+        to form a relation with it. Hence this information is provided here.
         """
         event.relation.data[self.unit]['private-address'] = str(
             self.model.get_binding(event.relation).network.bind_address
         )
         event.relation.data[self.unit]['port'] = str(self.model.config['port'])
         event.relation.data[self.unit]['source-type'] = 'prometheus'
+        event.relation.data[self.unit]['private-address'] = str(
+            self.model.get_binding(event.relation).network.bind_address
+        )
 
     def _on_alertmanager_changed(self, event):
-        """Set an alertmanager configuation
+        """Set an alertmanager configuration.
+
+        In response to any changes in relations with Alertmanager,
+        the list of currently available Alertmanagers is updated,
+        a new Prometheus configuration set and Prometheus is
+        restarted.
         """
         if not self.unit.is_leader():
             return
 
         addrs = json.loads(event.relation.data[event.app].get('addrs', '[]'))
-        port = event.relation.data[event.app]['port']
 
-        self._stored.alertmanager_port = port
         self._stored.alertmanagers = addrs
 
-        self._configure_pod()
+        self._configure()
 
     def _on_alertmanager_broken(self, event):
-        """Remove all alertmanager configuration
+        """Remove all alertmanager configuration.
+
+        When an Alertmanager departs it is removed from the list
+        of currently available Alertmanagers, the Prometheus configuration
+        is updated and Prometheus is restarted.
         """
         if not self.unit.is_leader():
             return
         self._stored.alertmanagers.clear()
-        self._configure_pod()
+        self._configure()
+
+    def _command(self):
+        """Construct command to launch Prometheus.
+
+        Returns:
+            a list consisting of Prometheus command and associated
+            command line options.
+        """
+        command = ["/bin/prometheus"]
+        command.extend(self._cli_args())
+
+        return " ".join(command)
 
     def _cli_args(self):
-        """Construct command line arguments for Prometheus
+        """Construct command line arguments for Prometheus.
+
+        Returns:
+            a list consisting of Prometheus command line options.
         """
         config = self.model.config
         args = [
@@ -124,7 +219,13 @@ class PrometheusCharm(CharmBase):
         return args
 
     def _is_valid_timespec(self, timeval):
-        """Is a time interval unit and value valid
+        """Is a time interval unit and value valid.
+
+        Args:
+            timeval: a string representing a time specification.
+
+        Returns:
+            True if time specification is valid and False otherwise.
         """
         if not timeval:
             return False
@@ -148,7 +249,14 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _are_valid_labels(self, json_data):
-        """Are Prometheus external labels valid
+        """Are Prometheus external labels valid.
+
+        Args:
+            json_data: a JSON encoded string of external labels form
+                Prometheus.
+
+        Returns:
+            True if external labels are valid, False otherwise.
         """
         if not json_data:
             return False
@@ -171,7 +279,10 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _external_labels(self):
-        """Extract external labels for Prometheus from configuration
+        """Extract external labels for Prometheus from configuration.
+
+        Returns:
+            a dictionary of external lables for Prometheus configuration.
         """
         config = self.model.config
         labels = {}
@@ -183,7 +294,10 @@ class PrometheusCharm(CharmBase):
         return labels
 
     def _prometheus_global_config(self):
-        """Construct Prometheus global configuration
+        """Construct Prometheus global configuration.
+
+        Returns:
+            a dictionary consisting of global configuration for Prometheus.
         """
         config = self.model.config
         global_config = {}
@@ -207,7 +321,10 @@ class PrometheusCharm(CharmBase):
         return global_config
 
     def _alerting_config(self):
-        """Construct Prometheus altering configuation
+        """Construct Prometheus altering configuration.
+
+        Returns:
+            a dictionary consisting of the alerting configuration for Prometheus.
         """
         alerting_config = ''
 
@@ -215,18 +332,17 @@ class PrometheusCharm(CharmBase):
             logger.debug('No alertmanagers available')
             return alerting_config
 
-        targets = []
-        for manager in self._stored.alertmanagers:
-            port = self._stored.alertmanager_port
-            targets.append("{}:{}".format(manager, port))
-
+        targets = [manager for manager in self._stored.alertmanagers]
         manager_config = {'static_configs': [{'targets': targets}]}
         alerting_config = {'alertmanagers': [manager_config]}
 
         return alerting_config
 
     def _prometheus_config(self):
-        """Construct Prometheus configuration
+        """Construct Prometheus configuration.
+
+        Returns:
+            Prometheus config file in YAML (string) format.
         """
         config = self.model.config
 
@@ -236,12 +352,6 @@ class PrometheusCharm(CharmBase):
         alerting_config = self._alerting_config()
         if alerting_config:
             scrape_config['alerting'] = alerting_config
-
-        scrape_config_string = config.get('scrape-config')
-        if scrape_config_string:
-            scrape_config_yaml = yaml.safe_load(scrape_config_string)
-            for scrape_job in scrape_config_yaml['scrape_configs']:
-                scrape_config['scrape_configs'].append(scrape_job)
 
         # By default only monitor prometheus server itself
         default_config = {
@@ -258,102 +368,70 @@ class PrometheusCharm(CharmBase):
             }]
         }
         scrape_config['scrape_configs'].append(default_config)
+        if self._stored.provider_ready:
+            scrape_jobs = self.prometheus_provider.jobs()
+            for job in scrape_jobs:
+                scrape_config['scrape_configs'].append(job)
 
         logger.debug('Prometheus config : {}'.format(scrape_config))
 
         return yaml.dump(scrape_config)
 
-    def _build_pod_spec(self):
-        """Construct a Juju pod specification for Prometheus
+    def _prometheus_layer(self):
+        """Construct the pebble layer
+
+        Returns:
+            a dictionary consisting of the Pebble layer specification
+            for the Prometheus workload container.
         """
-        logger.debug('Building Pod Spec')
-        config = self.model.config
-        spec = {
-            'version': 3,
-            'containers': [{
-                'name': self.app.name,
-                'imageDetails': {
-                    'imagePath': config['prometheus-image-path'],
-                    'username': config.get('prometheus-image-username', ''),
-                    'password': config.get('prometheus-image-password', '')
-                },
-                'args': self._cli_args(),
-                'kubernetes': {
-                    'readinessProbe': {
-                        'httpGet': {
-                            'path': '/-/ready',
-                            'port': config['port']
-                        },
-                        'initialDelaySeconds': 10,
-                        'timeoutSeconds': 30
-                    },
-                    'livenessProbe': {
-                        'httpGet': {
-                            'path': '/-/healthy',
-                            'port': config['port']
-                        },
-                        'initialDelaySeconds': 30,
-                        'timeoutSeconds': 30
-                    }
-                },
-                'ports': [{
-                    'containerPort': config['port'],
-                    'name': 'prometheus-http',
-                    'protocol': 'TCP'
-                }],
-                'volumeConfig': [{
-                    'name': 'prometheus-config',
-                    'mountPath': '/etc/prometheus',
-                    'files': [{
-                        'path': 'prometheus.yml',
-                        'content': self._prometheus_config()
-                    }]
-                }]
-            }]
+        logger.debug('Building pebble layer')
+        layer = {
+            "summary": "Prometheus layer",
+            "description": "Pebble layer configuration for Prometheus",
+            "services": {
+                "prometheus": {
+                    "override": "replace",
+                    "summary": "prometheus daemon",
+                    "command": self._command(),
+                    "startup": "enabled",
+                }
+            },
         }
 
-        return spec
+        return layer
 
-    def _check_config(self):
-        """Identify missing but required items in configuation
+    @property
+    def version(self):
+        """Fetch Prometheus version.
 
-        :returns: list of missing configuration items (configuration keys)
+        Returns:
+            a string consisting of the Prometheus version information or
+            None if Prometheus server is not reachable.
         """
-        logger.debug('Checking Config')
-        config = self.model.config
-        missing = []
+        prometheus = Prometheus("localhost", str(self.model.config['port']))
+        info = prometheus.build_info()
+        if info:
+            return info.get('version', None)
+        return None
 
-        if not config.get('prometheus-image-path'):
-            missing.append('prometheus-image-path')
+    @property
+    def provider_ready(self):
+        """Check status of Prometheus server.
 
-        if config.get('prometheus-image-username') \
-                and not config.get('prometheus-image-password'):
-            missing.append('prometheus-image-password')
+        Status of the Prometheus services is checked by querying
+        Prometheus for its version information. If Prometheus responds
+        with valid information, its status is recorded.
 
-        return missing
-
-    def _configure_pod(self):
-        """Setup a new Prometheus pod specification
+        Returns:
+            True if Prometheus is ready, False otherwise
         """
-        logger.debug('Configuring Pod')
-        missing_config = self._check_config()
-        if missing_config:
-            logger.error('Incomplete Configuration : {}. '
-                         'Application will be blocked.'.format(missing_config))
-            self.unit.status = \
-                BlockedStatus('Missing configuration: {}'.format(missing_config))
-            return
+        provided = {'prometheus': self.version}
+        if not self._stored.provider_ready and provided['prometheus']:
+            logger.debug("Prometheus provider is available")
+            logger.debug("Providing : {}".format(provided))
+            self._stored.provider_ready = True
 
-        if not self.unit.is_leader():
-            self.unit.status = ActiveStatus()
-            return
-
-        self.unit.status = MaintenanceStatus('Setting pod spec.')
-        pod_spec = self._build_pod_spec()
-
-        self.model.pod.set_spec(pod_spec)
-        self.app.status = ActiveStatus()
-        self.unit.status = ActiveStatus()
+        return self._stored.provider_ready
 
 
 if __name__ == "__main__":

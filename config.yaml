@@ -1,38 +1,8 @@
 options:
-  prometheus-image-path:
-    type: string
-    description: |
-      The location of the image to use,
-      e.g. "registry.example.com/prometheus:v1".
-
-      This setting is required.
-    default: "prom/prometheus:latest"
-  prometheus-image-username:
-    type: string
-    description: |
-      The username for accessing the registry specified in
-      prometheus-image-path.
-    default: ""
-  prometheus-image-password:
-    type: string
-    description: |
-      The password associated with prometheus-image-username for
-      accessing the registry specified in prometheus-image-path.
-    default: ""
   port:
     description: The port prometheus will be listening on
     type: int
     default: 9090
-  ssl-cert:
-    type: string
-    default:
-    description: |
-      SSL certificate to install and use for Prometheus endpoint.
-  ssl-key:
-    type: string
-    default:
-    description: |
-      SSL key to use with certificate specified as ssl-cert.
   log-level:
     description: |
       Prometheus server log level (only log messages with the given severity
@@ -91,10 +61,6 @@ options:
       How long until a scrape request times out.
     type: string
     default: 10s
-  scrape-config:
-    description: |
-      Prometheus scrape configuration in YAML format
-    type: string
   evaluation-interval:
     description: |
       How frequently rules will be evaluated.

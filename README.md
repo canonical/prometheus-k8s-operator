@@ -11,46 +11,31 @@ deploying the monitoring component of Prometheus in a Kubernetes
 cluster. The alerting component of prometheus is offered through a
 separate Charm.
 
-## Setup
-
-A typical setup using [snaps](https://snapcraft.io/), for deployments
-to a [microk8s](https://microk8s.io/) cluster can be done using the
-following commands
-
-    sudo snap install microk8s --classic
-    microk8s.enable dns storage registry dashboard
-    sudo snap install juju --classic
-    juju bootstrap microk8s microk8s
-    juju create-storage-pool operator-storage kubernetes storage-class=microk8s-hostpath
-
-## Build
-
-Install the charmcraft tool
-
-    sudo snap install charmcraft
-
-Build the charm in this git repository
-
-    charmcraft build
 
 ## Usage
 
-Create a Juju model for your monitoring operators
+The Prometheus Operator may be deployed using the Juju commandline as
+in
 
-    juju add-model lma
+    juju deploy prometheus-k8s
 
-Deploy Prometheus using its default configuration.
+By default the Prometheus Operator monitors itself, but it also
+accepts additional scrape targets over Juju relations with charms that
+support the `prometheus` interface and preferably use the Prometheus
+charm library. This charm library provides an `add_endpoint()` method
+that creates additional scrape targets. Each scrape target is expected
+to expose a `/metrics` HTTP path that exposes its metrics in a
+Prometheus compatible format.
 
-    juju deploy ./prometheus.charm
+At present it is expected that all relations the Prometheus Operator
+partakes in are within the same Juju model. Further development may
+extend this to allow cross model scrape targets.
 
-View the Prometheus dashboard
+## Dashboard
 
-1. Use `juju status` to determine IP of the Prometheus unit
-2. Navigate to `http://<IP-Address>:9090` using your browser
-
-If required, remove the deployed monitoring model completely
-
-    juju destroy-model -y lma --no-wait --force --destroy-storage
+The Prometheus dashboard may be accessed at a selectable port (by
+default 9090) on the IP address of the Prometheus unit. This unit and
+its IP address may be determined using the `juju status` command.
 
 ## Relations
 
@@ -59,20 +44,12 @@ Currently supported relations are
 - [Grafana](https://github.com/canonical/grafana-operator)
 - [Alertmanager](https://github.com/canonical/alertmanager-operator)
 
-## Developing
+## OCI Images
 
-Use your existing Python 3 development environment or create and
-activate a Python 3 virtualenv
+This charm by default uses the latest version of the Prometheus
+[Docker image](https://registry.hub.docker.com/r/prom/prometheus).
 
-    virtualenv -p python3 venv
-    source venv/bin/activate
+## Contributing
 
-Install the development requirements
-
-    pip install -r requirements-dev.txt
-
-## Testing
-
-Just run `run_tests`:
-
-    ./run_tests
+Please see the Juju [SDK docs](https://juju.is/docs/sdk) for guidelines
+on developing enhancements to this charm following best practice guidelines.
