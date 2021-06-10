@@ -1,2 +1,0 @@
-#!/bin/sh
-kill -HUP 1 && echo "Sent SIGHUP to the Prometheus container, config reloaded"
