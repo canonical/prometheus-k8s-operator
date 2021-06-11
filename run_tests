@@ -13,4 +13,5 @@ else
 fi
 
 black --diff
-python3 -m unittest -v "$@"
+coverage run --branch --source=lib,src -m unittest -v "$@"
+coverage report -m
