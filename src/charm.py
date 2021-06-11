@@ -15,6 +15,7 @@ from ops.pebble import ConnectionError
 from prometheus_provider import MonitoringProvider
 from prometheus_server import Prometheus
 
+
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on['alertmanager'].relation_broken,
                                self._on_alertmanager_broken)
 
-        self.framework.observe(self.on['grafana-source'].relation_changed,
-                               self._on_grafana_changed)
+        self.framework.observe(
+            self.on['grafana-source'].relation_changed, self._on_grafana_changed
+        )
 
         if self.provider_ready:
             self.prometheus_provider = MonitoringProvider(self,
@@ -114,20 +116,25 @@ class PrometheusCharm(CharmBase):
         """
         self.unit.status = MaintenanceStatus('Pod is terminating.')
 
+
     def _on_grafana_changed(self, event):
         """Provide Grafana with data source information.
 
         Grafana needs to know the port and name of an application in order
         to form a relation with it. Hence this information is provided here.
         """
-        event.relation.data[self.unit]['private-address'] = str(
-            self.model.get_binding(event.relation).network.bind_address
-        )
-        event.relation.data[self.unit]['port'] = str(self.model.config['port'])
-        event.relation.data[self.unit]['source-type'] = 'prometheus'
-        event.relation.data[self.unit]['private-address'] = str(
-            self.model.get_binding(event.relation).network.bind_address
-        )
+        if not self.unit.is_leader():
+            return
+
+        source_data = {
+            "private-address": str(
+                self.model.get_binding(event.relation).network.bind_address
+            ),
+            "port": str(self.model.config["port"]),
+            "source-type": "prometheus"
+        }
+
+        event.relation.data[self.unit]["sources"] = json.dumps(source_data)
 
     def _on_alertmanager_changed(self, event):
         """Set an alertmanager configuration.
