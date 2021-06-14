@@ -2,6 +2,21 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+USAGE="usage: $0
+       -h    show help
+       -f    fix linting errors"
+
+
+# Parse command line options
+while getopts ":fh" opt
+do
+case $opt in
+ f) FIX="yes";;
+ h|\?) echo "$USAGE"
+       exit ;;
+esac
+done
+
 if [ -z "$VIRTUAL_ENV" -a -d venv/ ]; then
     . venv/bin/activate
 fi
@@ -12,5 +27,9 @@ else
     export PYTHONPATH="lib:src:$PYTHONPATH"
 fi
 
-black --diff
+flake8 || exit $?
+if [ -z "${FIX}" ]; then
+    BLACKARGS="--diff --check"
+fi
+black ${BLACKARGS} src tests lib/charms/prometheus_k8s || exit $?
 python3 -m unittest -v "$@"

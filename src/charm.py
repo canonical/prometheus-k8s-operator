@@ -10,7 +10,7 @@ import json
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
+from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_provider import MonitoringProvider
 from prometheus_server import Prometheus
