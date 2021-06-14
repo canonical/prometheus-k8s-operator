@@ -15,9 +15,7 @@ class ConsumerCharm(CharmBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
-        self.provider = PrometheusConsumer(self,
-                                           "monitoring",
-                                           {"prometheus": ">=2.0"})
+        self.provider = PrometheusConsumer(self, "monitoring", {"prometheus": ">=2.0"})
 
     def new_endpoint(self, ip, port):
         self.provider.add_endpoint(ip, port=port)
