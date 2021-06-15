@@ -1,4 +1,5 @@
 name: prometheus-k8s
+display-name: Prometheus
 summary: Prometheus for Kubernetes clusters
 maintainers:
     - Balbir Thomas <balbir.thomas@canonical.com>

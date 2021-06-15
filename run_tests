@@ -32,4 +32,5 @@ if [ -z "${FIX}" ]; then
     BLACKARGS="--diff --check"
 fi
 black ${BLACKARGS} src tests lib/charms/prometheus_k8s || exit $?
-python3 -m unittest -v "$@"
+coverage run --branch --source=src,lib/charms/prometheus_k8s -m unittest -v "$@"
+coverage report -m
