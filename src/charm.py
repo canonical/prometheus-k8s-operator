@@ -9,7 +9,7 @@ import json
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, MaintenanceStatus, BlockedStatus
+from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
@@ -52,11 +52,12 @@ class PrometheusCharm(CharmBase):
                 self.prometheus_provider.on.targets_changed,
                 self._on_scrape_targets_changed,
             )
-        self.alertmanager_lib = AlertmanagerConsumer(self,
-                                                     relation_name="alertmanager",
-                                                     consumes={'alertmanager': '>0.0.0'})
-        self.framework.observe(self.alertmanager_lib.on.available,
-                               self._on_alertmanager_cluster_changed)
+        self.alertmanager_lib = AlertmanagerConsumer(
+            self, relation_name="alertmanager", consumes={"alertmanager": ">=0.21.0"}
+        )
+        self.framework.observe(
+            self.alertmanager_lib.cluster_changed, self._on_alertmanager_cluster_changed
+        )
 
     def _on_pebble_ready(self, event):
         """Setup workload container configuration."""
