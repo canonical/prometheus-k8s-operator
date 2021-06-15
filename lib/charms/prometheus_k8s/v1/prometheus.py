@@ -51,8 +51,7 @@ class PrometheusConsumer(ConsumerBase):
         self._relation_name = name
         self._stored.set_default(targets={})
         events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_joined,
-                               self._set_targets)
+        self.framework.observe(events.relation_joined, self._set_targets)
 
     def add_endpoint(self, address, port=80, rel_id=None):
         """Add an additional scrape to the Prometheus monitroing service.
@@ -113,7 +112,8 @@ class PrometheusConsumer(ConsumerBase):
 
         logger.debug("Setting scrape targets : %s", self._stored.targets[rel_id])
         event.relation.data[self._charm.app]["targets"] = json.dumps(
-            list(self._stored.targets[rel_id]))
+            list(self._stored.targets[rel_id])
+        )
 
     def _update_targets(self, targets, rel_id):
         """Update the Prometheus scrape targets."""

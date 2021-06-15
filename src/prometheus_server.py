@@ -3,7 +3,6 @@ import urllib3
 
 
 class Prometheus:
-
     def __init__(self, host, port):
         """Utility to manage a Prometheus application.
         Args:
@@ -24,17 +23,14 @@ class Prometheus:
             returned.
         """
         api_path = "api/v1/status/buildinfo"
-        url = "http://{}:{}/{}".format(
-            self.host,
-            self.port,
-            api_path)
+        url = "http://{}:{}/{}".format(self.host, self.port, api_path)
 
         try:
             response = self.http.request("GET", url)
         except urllib3.exceptions.MaxRetryError:
             return {}
 
-        info = json.loads(response.data.decode('utf-8'))
+        info = json.loads(response.data.decode("utf-8"))
         if info["status"] == "success":
             return info["data"]
         else:

@@ -3,11 +3,13 @@ import logging
 from ops.charm import CharmEvents
 from ops.framework import StoredState, EventSource, EventBase
 from ops.relation import ProviderBase
+
 logger = logging.getLogger(__name__)
 
 
 class TargetsChanged(EventBase):
     """Event emitted when Prometheus scrape targets change."""
+
     def __init__(self, handle, data=None):
         super().__init__(handle)
         self.data = data
@@ -23,6 +25,7 @@ class TargetsChanged(EventBase):
 
 class MonitoringEvents(CharmEvents):
     """Event descriptor for events raised by :class:`MonitoringProvider`."""
+
     targets_changed = EventSource(TargetsChanged)
 
 
@@ -50,10 +53,12 @@ class MonitoringProvider(ProviderBase):
         self._charm = charm
         self._stored.set_default(jobs={})
         events = self._charm.on[name]
-        self.framework.observe(events.relation_changed,
-                               self._on_scrape_target_relation_changed)
-        self.framework.observe(events.relation_broken,
-                               self._on_scrape_target_relation_broken)
+        self.framework.observe(
+            events.relation_changed, self._on_scrape_target_relation_changed
+        )
+        self.framework.observe(
+            events.relation_broken, self._on_scrape_target_relation_broken
+        )
 
     def _on_scrape_target_relation_changed(self, event):
         """Handle changes in related consumers.
@@ -70,25 +75,20 @@ class MonitoringProvider(ProviderBase):
         rel_id = event.relation.id
         data = event.relation.data[event.app]
 
-        targets = json.loads(data.get('targets', '[]'))
+        targets = json.loads(data.get("targets", "[]"))
         if not targets:
             return
 
-        job_name = data.get('job_name', "")
+        job_name = data.get("job_name", "")
         unique_name = "relation_{}".format(rel_id)
         if job_name:
             job_name += "_{}".format(unique_name)
         else:
             job_name = unique_name
 
-        job_config = {
-            'job_name': job_name,
-            'static_configs': [{
-                'targets': targets
-            }]
-        }
+        job_config = {"job_name": job_name, "static_configs": [{"targets": targets}]}
 
-        self._stored.jobs['rel_id'] = json.dumps(job_config)
+        self._stored.jobs["rel_id"] = json.dumps(job_config)
         logger.debug("New job config on relation change : %s", job_config)
         self.on.targets_changed.emit()
 
