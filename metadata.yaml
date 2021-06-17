@@ -31,7 +31,7 @@ provides:
     interface: prometheus_scrape
 requires:
     grafana-source:
-        interface: grafana-datasource
+        interface: grafana_datasource
     alertmanager:
         interface: alertmanager
 storage:
