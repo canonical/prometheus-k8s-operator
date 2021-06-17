@@ -12,8 +12,8 @@ from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
-from prometheus_provider import MonitoringProvider
 from prometheus_server import Prometheus
+from charms.prometheus_k8s.v1.prometheus import MonitoringProvider
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)

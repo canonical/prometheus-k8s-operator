@@ -7,7 +7,7 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from prometheus_provider import MonitoringProvider
+from charms.prometheus_k8s.v1.prometheus import MonitoringProvider
 
 
 class PrometheusCharm(CharmBase):
