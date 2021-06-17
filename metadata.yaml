@@ -28,7 +28,7 @@ containers:
         location: /var/lib/prometheus
 provides:
   monitoring:
-    interface: prometheus
+    interface: prometheus_scrape
 requires:
     grafana-source:
         interface: grafana-datasource
