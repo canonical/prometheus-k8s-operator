@@ -1,4 +1,4 @@
-git+https://github.com/balbirthomas/operator/@provider-consumer-lib#egg=ops
+git+git://github.com/canonical/operator
 semantic_version
 pyaml
 urllib3
