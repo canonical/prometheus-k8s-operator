@@ -80,7 +80,11 @@ class MonitoringProvider(ProviderBase):
             return
 
         job_name = data.get("job_name", "")
-        unique_name = "relation_{}".format(rel_id)
+        unique_name = "juju_{}_{}_{}".format(
+            self._charm.model.name,
+            self._charm.app.name,
+            rel_id
+        )
         if job_name:
             job_name += "_{}".format(unique_name)
         else:
