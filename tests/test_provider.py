@@ -7,7 +7,7 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from charms.prometheus_k8s.v1.prometheus import MonitoringProvider
+from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
 
 
 class PrometheusCharm(CharmBase):
@@ -16,7 +16,7 @@ class PrometheusCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self._stored.set_default(num_events=0)
-        self.prometheus_provider = MonitoringProvider(
+        self.prometheus_provider = PrometheusProvider(
             self, "monitoring", "prometheus", self.version
         )
         self.framework.observe(

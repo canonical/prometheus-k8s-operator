@@ -13,7 +13,7 @@ from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
-from charms.prometheus_k8s.v1.prometheus import MonitoringProvider
+from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class PrometheusCharm(CharmBase):
         )
 
         if self.provider_ready:
-            self.prometheus_provider = MonitoringProvider(
+            self.prometheus_provider = PrometheusProvider(
                 self, "monitoring", "prometheus", self.version
             )
             self.framework.observe(

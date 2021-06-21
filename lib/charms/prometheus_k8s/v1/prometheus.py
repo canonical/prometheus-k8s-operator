@@ -27,12 +27,12 @@ class TargetsChanged(EventBase):
 
 
 class MonitoringEvents(CharmEvents):
-    """Event descriptor for events raised by :class:`MonitoringProvider`."""
+    """Event descriptor for events raised by :class:`PrometheusProvider`."""
 
     targets_changed = EventSource(TargetsChanged)
 
 
-class MonitoringProvider(ProviderBase):
+class PrometheusProvider(ProviderBase):
     on = MonitoringEvents()
     _stored = StoredState()
 
