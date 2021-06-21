@@ -1,3 +1,158 @@
+"""
+## Overview
+
+This document explains how to integrate with the Prometheus charm
+for the purposes of providing a metrics endpoint to Prometheus. It
+also explains how alternative implementations of the Prometheus charm
+may maintain the same interface and be backward compatible with all
+currently integrated charms. Finally this document is the
+authoritative reference on the structure of relation data that is
+shared between Prometheus charms and any other charm that intends to
+provide a scrape target for Prometheus.
+
+## Consumer Library Usage
+
+This Prometheus charm interacts with its scrape targets using this
+charm library This charm library is constructed using the [Provider
+and Consumer](https://ops.readthedocs.io/en/latest/#module-ops.relation)
+objects from the Operator Framework. This implies charms that would
+like to expose metric endpoints for the Prometheus charm must use the
+`PrometheusConsumer` object from the charm library to do so. Using the
+`PrometheusConsumer` object requires instantiating it, typically in
+the constructor of your charm (the one which exposes the metrics
+endpoint). The `PrometheusConsumer` constructor requires the name of
+the relation over which a scrape target (metrics endpoint) is exposed
+to the Promtheus charm. This relation must use the `prometheus_scrape`
+interface. In addition the constructor also requires a `consumes`
+specification, which is a dictionary with key `prometheus` (also see
+Provider Library Usage below) and a value that represents the minimum
+acceptable version of Prometheus. This version string can be in any
+format that is compatible with Python [Semantic Version
+module](https://pypi.org/project/semantic-version/).  For example,
+assuming your charm exposes a metrics endpoint over a relation named
+"monitoring", you may instantiate `PrometheusConsumer` as follows
+
+    from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        ...
+        self.prometheus = PrometheusConsumer(self, "monitoring", {"prometheus": ">=2.0"})
+        ...
+
+This example hard codes the consumes dictionary argument containing the
+minimal Prometheus version required, however you may want to consider
+generating this dictionary by some other means, such as a
+`self.consumes` property in your charm. This is because the minimum
+required Prometheus version may change when you upgrade your charm. Of
+course it is expected that you will keep this version string updated
+as you develop newer releases of you charm. If the version string can
+be determined at run time by inspecting the actual deployed version of
+your charmed application, this would be ideal.
+
+An instantiated `:class:PrometheusConsumer` object may be used to add
+or remove Prometheus scrape targets.  Adding and removing scrape
+targets may be done using the `add_endpoint()` and `remove_endpoint()`
+methods. Both these methods require the host address (usually IP) of
+the scrape target, but optionally also accept a port (default 80) on
+which the metrics endpoint is exposed. At present it is assumed that
+the metrics endpoint will be exposed with a URL path `/metrics` at the
+specified host and port. This is the default behaviour of Prometheus
+that most compatible metrics exporters confirm to. As an example to
+add a metrics endpoint using the instantiated `PrometheusConsumer`
+object in your charms `StartEvent` handler you may do
+
+    def _on_start(self, event):
+        self.prometheus.add_endpoint(my_ip)
+
+There is no reason that metrics endpoint need to be added in the start
+event handler. This may be done in any event handler or even the charm
+constructor. However this does require that the host address is known
+at that point in time. Both the `add_endpoint()` and
+`remove_endpoint()` methods are idempotent and invoking them multiple
+times with the same host address and port has no adverse effect, no
+exceptions are thrown and no events generated. The
+`PrometheusConsumer` object caches lists of unique scrape targets,
+indexed by relation IDs in its stored state. Both the methods exchange
+information with Prometheus charm application relation data. Hence
+both of these methods trigger `RelationChangedEvents` for the
+Prometheus charm when new scrape targets are added or old ones
+removed.
+
+## Provider Library Usage
+
+The `:class:PrometheusProvider` object may be used by Prometheus
+charms to manage relations with their scrape targets. For this
+purposes a Prometheus charm needs to do two things
+
+1. Instantiate the `:class:PrometheusProvider` object providing it
+with three key pieces of information
+
+- Name of the relation that the Prometheus charm uses to interact with
+  scrape targets. This relation must confirm to the
+  `prometheus_scrape` interface.
+
+- A service name. Although this is an arbitrary string, it must be the
+  same string that scrape targets will use as the key of their
+  `consumes` specification. Hence by convention it is recommended that
+  this key be `prometheus`.
+
+- The Prometheus application version. Since a system administrator may
+  choose to deploy the Prometheus charm with a non default version of
+  Prometheus, it is strongly recommended that the version string be
+  determined by actually querying the running instances of
+  Prometheus.
+
+For example a Prometheus charm may instantiate the
+`:class:PrometheusProvider` in its constructor as follows
+
+    from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        ...
+        self.prometheus_provider = PrometheusProvider(
+                self, "monitoring", "prometheus", self.version
+            )
+        ...
+
+2. A Prometheus charm also needs to respond to the
+`:class:TargetsChanged` event of the `:class:PrometheusProvider` by adding itself as
+and observer for these events, as in
+
+    self.framework.observe(
+        self.prometheus_provider.on.targets_changed,
+        self._on_scrape_targets_changed,
+    )
+
+In responding to the `:class:TargetsChanged` event the Prometheus
+charm must update the Prometheus configuration so that any new scrape
+targets are added and/or old ones removed from the list of scraped
+endpoints. For this purpose the `:class:PrometheusProvider` object
+exposes a `jobs()` method that returns a list of scrape jobs. Each
+element of this list is the Prometheus scrape configuration for that
+job. In order to the Prometheus configuration, the Prometheus charm
+needs to replace the current list of jobs with the list provided by
+`jobs()` as follows
+
+    def _on_scrape_targets_changed(self, event):
+        ...
+        scrape_jobs = self.prometheus_provider.jobs()
+        for job in scrape_jobs:
+            prometheus_scrape_config.append(job)
+        ...
+
+## Relation Data
+
+The Prometheus charm uses application relation data to obtain its list
+of scrape targets. For each relation there exists a key `targets` in
+application relation data whose value is a list encoded as a JSON
+string. Each element of this list provides the address (including
+port) of a scrape target. As an example the relation data may be
+
+    "targets": "['10.1.12.115:8080', '10.1.12.116:80']"
+"""
+
 import json
 import logging
 from ops.charm import CharmEvents
