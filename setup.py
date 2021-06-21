@@ -11,7 +11,7 @@ setuptools.setup(
     description="Kubernetes Charm/Operator for Prometheus",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/balbirthomas/prometheus-charm",
+    url="https://github.com/canonical/prometheus-operator",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
