@@ -87,10 +87,10 @@ own address and port. `PrometheusCharm` also validates most
 configurations options when provided before generating its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](INTEGRATION.md). Using this library requires that
-Prometheus informs it "Consumers" (scrape targets) of the actual
-Prometheus version that was deployed. In order to determine this
-version at runtime `PrometheuCharm` uses the
+[charm library](lib/charms/prometheus_k8s/v1/prometheus.py). Using this
+library requires that Prometheus informs it "Consumers" (scrape targets)
+of the actual Prometheus version that was deployed. In order to determine
+this version at runtime `PrometheuCharm` uses the
 [`Prometheus`](src/prometheus_server.py) object. The `Prometheus`
 object provides an interface to a running Prometheus instance. This
 interface is limited to only those aspects of Prometheus required by
