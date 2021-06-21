@@ -155,8 +155,7 @@ port) of a scrape target. As an example the relation data may be
 
 import json
 import logging
-from ops.charm import CharmEvents
-from ops.framework import StoredState, EventSource, EventBase
+from ops.framework import StoredState, EventSource, EventBase, ObjectEvents
 from ops.relation import ProviderBase, ConsumerBase
 
 LIBID = "1234"
@@ -181,7 +180,7 @@ class TargetsChanged(EventBase):
         self.data = snapshot["data"]
 
 
-class MonitoringEvents(CharmEvents):
+class MonitoringEvents(ObjectEvents):
     """Event descriptor for events raised by :class:`PrometheusProvider`."""
 
     targets_changed = EventSource(TargetsChanged)
