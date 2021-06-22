@@ -3,23 +3,24 @@
 This documents explains the processes and practices recommended for
 contributing enhancements to the Prometheus charm.
 
-- It is recommended that prior to developing enhancements to this charm
-  an issue explaining the use case is created at the official
-  Canonical [github repository](https://github.com/canonical/prometheus-operator).
-- Should you require any assistance in exploring use cases or
-  discussing proposed implementation you may directly engage with
-  other developers in the Canonical
-  [public channel](https://chat.charmhub.io/charmhub/channels/charm-dev) using
-  [Mattermost](https://mattermost.com/).
+- Generally, before developing enhancements to this charm, you should consider
+  [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
+  your the use case.
+- If you would like to chat with us about your use-cases or proposed
+  implementation, you can reach us at Canonical
+  [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev).
 - It is strongly recommended that prior to engaging in any enhancements
   to this charm you familiarise your self with the Juju
-  [SDK](https://juju.is/docs/sdk) and
-  [Operator Framework](https://ops.readthedocs.io/en/latest/) documentation.
-- All enhancements require a code review after creating a pull request
-  on Github. Pull requests may be merged after two approving reviews
-  are obtained. It is strongly recommended to maintain pull requests
-  rebased onto latest `main` branch so that merge commits are avoided
-  and this repository retains a linear commit history.
+- Familiarising yourself with the
+  [Juju Operator SDK](https://juju.is/docs/sdk) and the Python
+  [Operator Framework](https://ops.readthedocs.io/en/latest/)
+  library will help you a lot when working on PRs.
+- All enhancements require review before being merged. Besides the
+  code quality and test coverage, the review will also take into
+  account the resulting user experience for Juju administrators using
+  this charm. Please help us out in having easier reviews by rebasing
+  onto the main branch, avoid merge commits and enjoy a linear Git
+  history.
 
 ## Developing
 
@@ -58,6 +59,7 @@ Build the charm in this git repository
 ```bash
 $ charmcraft build
 ```
+
 ### Deploy
 
 ```bash
@@ -103,16 +105,16 @@ there is no visible use case for it. In the future should there be a
 use case for
 [federation](https://prometheus.io/docs/prometheus/latest/federation/),
 it may be enabled through the use of peer relations. As a result of
-this decision scaling Prometheus units only results in replication. By
-"replication" it is meant that each Prometheus unit will scrape exactly
-the same targets in the same way and interact with related charms
-identically. However Prometheus scaling is as yet
+this decision scaling Prometheus units only results in replication.
+Replicating units will lead to the standard Prometheus "share-nothing"
+replication, in which all units independently scrape all
+targets. However Prometheus scaling is as yet
 [untested](https://github.com/canonical/prometheus-operator/issues/59)
 and hence must be used with caution.
 
 ## Use Cases
 
-- Configure a new scrape target by adding a relation.
+- Configure scrape targets through Juju relations.
 - Enable alerting through a relation with Alertmanager.
 - Support metrics visualisation through Grafana.
 
