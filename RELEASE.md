@@ -13,14 +13,14 @@ available
 
 Guidelines on the creation of these versions are as follows.
 
-1. Edge versions are released at the developers discretion. This
-   process is automated in response to merge into master branch of
-   Canonical GitHub repository. Note that merging to master will be
-   blocked if any unit or integration fails.
+1. Stable releases are done in consultation with product owner and
+   engineering manager as and when the release candidate has been well
+   tested and deemed ready for production.
 
 2. Candidate releases are done when charm reaches a state of feature
    completion with respect to the next planned milestone.
 
-3. Stable releases are done in consultation with product owner and
-   engineering manager as and when the release candidate has been well
-   tested and deemed ready for production.
+3. Edge versions are released at the developers discretion. This
+   process is automated in response to merge into master branch of
+   Canonical GitHub repository. Note that merging to master will be
+   blocked if any unit or integration fails.
