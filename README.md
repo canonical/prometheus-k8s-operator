@@ -17,7 +17,9 @@ separate Charm.
 The Prometheus Operator may be deployed using the Juju command line as
 in
 
-    $ juju deploy prometheus-k8s
+```sh
+$ juju deploy prometheus-k8s
+```
 
 By default the Prometheus Operator monitors itself, but it also
 accepts additional scrape targets over Juju relations with charms that
@@ -31,8 +33,10 @@ example, the
 interoperates with the Prometheus K8S charm in a way that allows you
 import metrics about resources in a Kubernetes cluster by doing:
 
-    $ juju deploy kube-state-metrics
-    $ juju relate kube-state-metrics prometheus-k8s
+```sh
+$ juju deploy kube-state-metrics
+$ juju relate kube-state-metrics prometheus-k8s
+```
 
 In a similar manner any charm that exposes a scrape target may be
 related to the Prometheus charm.
@@ -67,10 +71,3 @@ Currently supported relations are
 
 This charm by default uses the latest version of the
 [ubuntu/prometheus](https://hub.docker.com/r/ubuntu/prometheus) image.
-
-## Contributing
-
-Please see the Juju [SDK docs](https://juju.is/docs/sdk) for
-guidelines on developing enhancements to this charm following best
-practice guidelines and [developer docs](CONTRIBUTING.md) for
-information specific to this charm.
