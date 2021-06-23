@@ -80,9 +80,10 @@ class TestCharm(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "grafana/0")
         self.harness.update_relation_data(rel_id, "grafana/0", {})
         data = json.loads(
-            self.harness.get_relation_data(rel_id, self.harness.model.unit.name)["sources"]
+            self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
+                "sources"
+            ]
         )
-        data = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)
         self.assertEqual(int(data["port"]), MINIMAL_CONFIG["port"])
         self.assertEqual(data["source-type"], "prometheus")
         self.assertEqual(data["private-address"], IP)

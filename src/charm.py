@@ -128,7 +128,7 @@ class PrometheusCharm(CharmBase):
                 self.model.get_binding(event.relation).network.bind_address
             ),
             "port": str(self.model.config["port"]),
-            "source-type": "prometheus"
+            "source-type": "prometheus",
         }
 
         event.relation.data[self.unit]["sources"] = json.dumps(source_data)
