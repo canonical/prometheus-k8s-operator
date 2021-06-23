@@ -5,7 +5,7 @@
 At any given time there are three versions of the Prometheus charm
 available
 
-1. `latest/Stable` - This is a well tested production ready version of the
+1. `latest/stable` - This is a well tested production ready version of the
    Charm.
 2. `latest/beta` - This is a feature ready next version of the stable
    release, currently in beta testing.
