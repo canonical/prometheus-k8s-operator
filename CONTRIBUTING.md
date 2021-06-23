@@ -34,24 +34,17 @@ $ pip install -r requirements-dev.txt
 ### Setup
 
 A typical setup using [snaps](https://snapcraft.io/), for deployments
-to a [microk8s](https://microk8s.io/) cluster can be achieved using the
-following commands
+to a [microk8s](https://microk8s.io/) cluster can be achieved by
+following instructions in the Juju SDK
+[development setup](https://juju.is/docs/sdk/dev-setup).
+
+It is also essential that a Juju storage pool is created as follows
 
 ```bash
-$ sudo snap install microk8s --classic
-$ microk8s.enable dns
-$ sudo snap install juju --classic
-$ juju bootstrap microk8s microk8s
 $ juju create-storage-pool operator-storage kubernetes storage-class=microk8s-hostpath
 ```
 
 ### Build
-
-Install the charmcraft tool
-
-```bash
-$ sudo snap install charmcraft
-```
 
 Build the charm in this git repository
 
