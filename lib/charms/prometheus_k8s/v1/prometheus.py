@@ -131,9 +131,9 @@ targets are added and/or old ones removed from the list of scraped
 endpoints. For this purpose the `PrometheusProvider` object
 exposes a `jobs()` method that returns a list of scrape jobs. Each
 element of this list is the Prometheus scrape configuration for that
-job. In order to the Prometheus configuration, the Prometheus charm
-needs to replace the current list of jobs with the list provided by
-`jobs()` as follows
+job. In order to update the Prometheus configuration, the Prometheus
+charm needs to replace the current list of jobs with the list provided
+by `jobs()` as follows
 
     def _on_scrape_targets_changed(self, event):
         ...
@@ -301,7 +301,7 @@ class PrometheusConsumer(ConsumerBase):
         scrape endpoints as follows
 
             self.prometheus = PrometheusConsumer(self, "monitoring", {"prometheus": ">=2.0"})
-            self.prometheus.add_endpoint(<ip-adderss>, port=8000)
+            self.prometheus.add_endpoint(<ip-address>, port=8000)
 
         Args:
 
