@@ -7,13 +7,12 @@ contributing enhancements to the Prometheus charm.
   [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
   your the use case.
 - If you would like to chat with us about your use-cases or proposed
-  implementation, you can reach us at Canonical
+  implementation, you can reach us at
   [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev).
 - It is strongly recommended that prior to engaging in any enhancements
-  to this charm you familiarise your self with the Juju
+  to this charm you familiarise your self with Juju.
 - Familiarising yourself with the
-  [Juju Operator SDK](https://juju.is/docs/sdk) and the Python
-  [Operator Framework](https://ops.readthedocs.io/en/latest/)
+  [Charmed Operator Framework](https://juju.is/docs/sdk).
   library will help you a lot when working on PRs.
 - All enhancements require review before being merged. Besides the
   code quality and test coverage, the review will also take into
@@ -35,7 +34,7 @@ $ pip install -r requirements-dev.txt
 ### Setup
 
 A typical setup using [snaps](https://snapcraft.io/), for deployments
-to a [microk8s](https://microk8s.io/) cluster can be done using the
+to a [microk8s](https://microk8s.io/) cluster can be achieved using the
 following commands
 
 ```bash
@@ -85,12 +84,12 @@ and any scrape target. In response to any change in its configuration,
 relations with Alertmanager or scrape target, `PrometheusCharm`
 regenerates its config file, and restarts itself. In response to a
 change in relation with Grafana `PrometheusCharm` provides Grafana its
-own address and port. `PrometheusCharm` also validates most
+own address and port. `PrometheusCharm` also validates all
 configurations options when provided before generating its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
 [charm library](lib/charms/prometheus_k8s/v1/prometheus.py). Using this
-library requires that Prometheus informs it "Consumers" (scrape targets)
+library requires that Prometheus informs its "Consumers" (scrape targets)
 of the actual Prometheus version that was deployed. In order to determine
 this version at runtime `PrometheuCharm` uses the
 [`Prometheus`](src/prometheus_server.py) object. The `Prometheus`
@@ -120,7 +119,10 @@ and hence must be used with caution.
 
 ## Road Map
 
+Roughly by order of priority
+
+- Support alerting rules.
 - Enhance configurability of scrape targets.
 - Enhance configurability of alerts.
-- Support aggregation using [Cortex](https://cortexmetrics.io/).
 - Support aggregation using [Loki](https://grafana.com/oss/loki/).
+- Support aggregation using [Cortex](https://cortexmetrics.io/).
