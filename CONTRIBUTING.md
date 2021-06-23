@@ -8,7 +8,8 @@ contributing enhancements to the Prometheus charm.
   your use case.
 - If you would like to chat with us about your use-cases or proposed
   implementation, you can reach us at
-  [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev).
+  [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
+  or [Discourse](https://discourse.charmhub.io/).
 - It is strongly recommended that prior to engaging in any enhancements
   to this charm you familiarise your self with Juju.
 - Familiarising yourself with the
@@ -33,7 +34,7 @@ $ pip install -r requirements-dev.txt
 
 ### Setup
 
-A typical setup using [snaps](https://snapcraft.io/), for deployments
+A typical setup using [Snap](https://snapcraft.io/), for deployments
 to a [microk8s](https://microk8s.io/) cluster can be achieved by
 following instructions in the Juju SDK
 [development setup](https://juju.is/docs/sdk/dev-setup).

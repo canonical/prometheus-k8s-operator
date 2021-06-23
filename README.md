@@ -64,7 +64,7 @@ Currently supported relations are
   receives alerts from Prometheus, aggregates and deduplicates them,
   then forwards them to specified targets. Prometheus relates to
   Alertmanager over the `alertmanager` interface.
-- In addition this Prometheus charm does allow relations with any
+- In addition this Prometheus charm allows relations with any
   charm that supports the `prometheus_scrape` relation.
 
 ## OCI Images
