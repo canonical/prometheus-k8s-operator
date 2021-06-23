@@ -79,13 +79,20 @@ $ ./run_tests
 
 The core implementation of this charm is represented by the
 [`PrometheusCharm`](src/charm.py) class. `PrometheusCharm` responds to
-configuation changes, changes in relations with Alertmanager, Grafana
-and any scrape target. In response to any change in its configuration,
-relations with Alertmanager or scrape target, `PrometheusCharm`
-regenerates its config file, and restarts itself. In response to a
-change in relation with Grafana `PrometheusCharm` provides Grafana its
-own address and port. `PrometheusCharm` also validates all
-configurations options when provided before generating its config file.
+
+- configuation changes,
+- changes in relations with Alertmanager,
+- changes in relations with Grafana
+- changes in relations with any scrape target.
+
+In response to any change in its configuration, relations with
+Alertmanager or scrape target, `PrometheusCharm` regenerates its
+config file, and restarts itself.
+
+In response to a change in relation with Grafana `PrometheusCharm`
+provides Grafana its own address and port. `PrometheusCharm` also
+validates all configurations options when provided before generating
+its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
 [charm library](lib/charms/prometheus_k8s/v1/prometheus.py). Using this
