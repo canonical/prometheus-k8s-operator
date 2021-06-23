@@ -5,7 +5,7 @@ contributing enhancements to the Prometheus charm.
 
 - Generally, before developing enhancements to this charm, you should consider
   [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
-  your the use case.
+  your use case.
 - If you would like to chat with us about your use-cases or proposed
   implementation, you can reach us at
   [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev).
@@ -18,7 +18,7 @@ contributing enhancements to the Prometheus charm.
   code quality and test coverage, the review will also take into
   account the resulting user experience for Juju administrators using
   this charm. Please help us out in having easier reviews by rebasing
-  onto the main branch, avoid merge commits and enjoy a linear Git
+  onto the `main` branch, avoid merge commits and enjoy a linear Git
   history.
 
 ## Developing
