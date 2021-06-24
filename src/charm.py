@@ -123,11 +123,15 @@ class PrometheusCharm(CharmBase):
         Grafana needs to know the port and name of an application in order
         to form a relation with it. Hence this information is provided here.
         """
-        event.relation.data[self.unit]["port"] = str(self.model.config["port"])
-        event.relation.data[self.unit]["source-type"] = "prometheus"
-        event.relation.data[self.unit]["private-address"] = str(
-            self.model.get_binding(event.relation).network.bind_address
-        )
+        source_data = {
+            "private-address": str(
+                self.model.get_binding(event.relation).network.bind_address
+            ),
+            "port": str(self.model.config["port"]),
+            "source-type": "prometheus",
+        }
+
+        event.relation.data[self.unit]["sources"] = json.dumps(source_data)
 
     def _on_alertmanager_changed(self, event):
         """Set an alertmanager configuration.
