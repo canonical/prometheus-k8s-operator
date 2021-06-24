@@ -23,6 +23,10 @@ class ConsumerCharm(CharmBase):
     def clear_endpoint(self, ip, port):
         self.provider.remove_endpoint(ip, port)
 
+    @property
+    def endpoints(self):
+        return self.provider.endpoints
+
 
 class TestLibrary(unittest.TestCase):
     def setUp(self):
@@ -56,3 +60,12 @@ class TestLibrary(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         target = json.loads(data["targets"])
         self.assertFalse(target)
+
+    def test_consumer_can_get_endpoints(self):
+        rel_id = self.harness.add_relation("monitoring", "provider")
+        ip_set = "1.1.1.1"
+        port_set = 8000
+        self.harness.charm.new_endpoint(ip_set, port_set)
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        targets = json.loads(data["targets"])
+        self.assertEqual(targets, self.harness.charm.endpoints)

@@ -380,6 +380,21 @@ class PrometheusConsumer(ConsumerBase):
         targets.remove(target)
         self._update_targets(targets, rel_id)
 
+    @property
+    def endpoints(self, rel_id=None):
+        """Returns a list of Prometheus scrape target endpoints.
+        Args:
+            rel_id: an optional integer providing the relation ID for
+                the related Prometheus monitoring service
+                provider. This is only necessary if the
+                `PrometheusConsumer` has been instantiated in
+                `multi` mode.
+        """
+
+        if rel_id is None:
+            rel_id = self.relation_id
+        return self._stored.targets.get(rel_id, [])
+
     def _set_targets(self, event):
         """Set the Prometheus scrape targets."""
         rel_id = event.relation.id
