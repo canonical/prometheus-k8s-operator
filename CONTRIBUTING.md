@@ -13,7 +13,7 @@ contributing enhancements to the Prometheus charm.
 - It is strongly recommended that prior to engaging in any enhancements
   to this charm you familiarise your self with Juju.
 - Familiarising yourself with the
-  [Charmed Operator Framework](https://juju.is/docs/sdk).
+  [Charmed Operator Framework](https://juju.is/docs/sdk)
   library will help you a lot when working on PRs.
 - All enhancements require review before being merged. Besides the
   code quality and test coverage, the review will also take into
