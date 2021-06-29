@@ -135,6 +135,7 @@ class PrometheusCharm(CharmBase):
         event.relation.data[self.unit]["sources"] = json.dumps(source_data)
 
     def _on_alertmanager_cluster_changed(self, event):
+        self._stored.alertmanagers = self.alertmanager_lib.get_cluster_info()
         self._configure()
 
     def _command(self):
