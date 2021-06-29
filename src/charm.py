@@ -130,6 +130,7 @@ class PrometheusCharm(CharmBase):
         )
 
     def _on_alertmanager_cluster_changed(self, event):
+        self._stored.alertmanagers = self.alertmanager_lib.get_cluster_info()
         self._configure()
 
     def _command(self):
