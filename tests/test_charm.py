@@ -78,15 +78,15 @@ class TestCharm(unittest.TestCase):
 
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
-        self.harness.update_relation_data(rel_id, "grafana/0", {})
+        print(self.harness.get_relation_data(rel_id, self.harness.model.unit.app.name))
         data = json.loads(
-            self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
+            self.harness.get_relation_data(rel_id, self.harness.model.unit.app.name)[
                 "sources"
             ]
         )
         self.assertEqual(int(data["port"]), MINIMAL_CONFIG["port"])
         self.assertEqual(data["source-type"], "prometheus")
-        self.assertEqual(data["private-address"], IP)
+        self.assertEqual(data["address"], IP)
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_default_cli_log_level_is_info(self, _):
