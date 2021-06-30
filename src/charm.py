@@ -30,7 +30,6 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self._stored.set_default(alertmanagers=[])
         self._stored.set_default(provider_ready=False)
         self._stored.set_default(prometheus_config_hash=None)
 
@@ -135,7 +134,6 @@ class PrometheusCharm(CharmBase):
         event.relation.data[self.unit]["sources"] = json.dumps(source_data)
 
     def _on_alertmanager_cluster_changed(self, event):
-        self._stored.alertmanagers = self.alertmanager_lib.get_cluster_info()
         self._configure()
 
     def _command(self):
@@ -313,12 +311,13 @@ class PrometheusCharm(CharmBase):
         """
         alerting_config = ""
 
-        if len(self._stored.alertmanagers) < 1:
+        alertmanagers = self.alertmanager_lib.get_cluster_info()
+
+        if len(alertmanagers) < 1:
             logger.debug("No alertmanagers available")
             return alerting_config
 
-        targets = [manager for manager in self._stored.alertmanagers]
-        manager_config = {"static_configs": [{"targets": targets}]}
+        manager_config = {"static_configs": [{"targets": alertmanagers}]}
         alerting_config = {"alertmanagers": [manager_config]}
 
         return alerting_config
