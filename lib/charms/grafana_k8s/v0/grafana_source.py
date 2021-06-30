@@ -65,7 +65,7 @@ def _validate(self, source: SourceData) -> dict:
     `False` is returned. If not, correct defaults are substituted.
 
     Args:
-        self: A :class:`GrafanaConsumer` or :class:`GrafanaProvider` object
+        self: A :class:`GrafanaSourceConsumer` or :class:`GrafanaSourceProvider` object
         source: A :dict: representing the source data
     """
 
@@ -305,7 +305,7 @@ class GrafanaSourceProvider(ProviderBase):
             name: string name of the relation that is provides the
                 Grafana source service.
             service: string name of service provided. This is used by
-                :class:`GrafanaProvider` to validate this service as
+                :class:`GrafanaSourceProvider` to validate this service as
                 acceptable. Hence the string name must match one of the
                 acceptable service names in the :class:`GrafanaSourceProvider`s
                 `consumes` argument. Typically this string is just "grafana".
