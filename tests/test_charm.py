@@ -78,7 +78,6 @@ class TestCharm(unittest.TestCase):
 
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
-        print(self.harness.get_relation_data(rel_id, self.harness.model.unit.app.name))
         data = json.loads(
             self.harness.get_relation_data(rel_id, self.harness.model.unit.app.name)[
                 "sources"

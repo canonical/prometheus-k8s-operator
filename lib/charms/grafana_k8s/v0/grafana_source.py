@@ -43,11 +43,11 @@ class GrafanaSourcesChanged(EventBase):
         super().__init__(handle)
         self.data = data
 
-    def snapshot(self):
+    def snapshot(self) -> Dict:
         """Save grafana source information"""
         return {"data": self.data}
 
-    def restore(self, snapshot):
+    def restore(self, snapshot) -> None:
         """Restore grafana source information"""
         self.data = snapshot["data"]
 
@@ -69,12 +69,12 @@ def _validate(self, source: SourceData) -> dict:
         source: A :dict: representing the source data
     """
 
-    def source_name_in_use(source_name):
+    def source_name_in_use(source_name) -> bool:
         return any(
             [s["source-name"] == source_name for s in self._stored.sources.values()]
         )
 
-    def check_required_fields(source_data: dict):
+    def check_required_fields(source_data: Dict) -> Dict:
         # dictionary of all the required/optional datasource field values
         # using this as a more generic way of getting data source fields
         validated_source = {
@@ -113,7 +113,7 @@ def _validate(self, source: SourceData) -> dict:
 
         return validated_source
 
-    def set_defaults(validated_source):
+    def set_defaults(validated_source) -> Dict:
         # specifically handle optional fields if necessary
         # check if source-name was not passed or if we have already saved the provided name
         if validated_source.get("source-name") is None or source_name_in_use(
@@ -153,15 +153,17 @@ class GrafanaSourceConsumer(ConsumerBase):
     ) -> None:
         """Construct a Grafana charm client.
 
-        The :class:`GrafanaConsumer` object provides an interface
+        The :class:`GrafanaSourceConsumer` object provides an interface
         to Grafana. This interface supports providing additional
         sources for Grafana to monitor. For example, if a charm
         exposes some metrics which are consumable by a dashboard
         (such as Prometheus), then an additional source can be added
-        by instantiating a :class:`GrafanaConsumer` object and
+        by instantiating a :class:`GrafanaSourceConsumer` object and
         adding its datasources as follows:
 
-            self.grafana = GrafanaConsumer(self, "grafana-source", {"grafana-source"}: ">=2.0"})
+            self.grafana = GrafanaSourceConsumer(
+                self, "grafana-source", {"grafana-source"}: ">=2.0"}
+            )
             self.grafana.add_source({
                 "source-type": <source-type>,
                 "address": <address>,
@@ -171,7 +173,7 @@ class GrafanaSourceConsumer(ConsumerBase):
         Args:
 
             charm: a :class:`CharmBase` object which manages this
-                :class:`GrafanaConsumer` object. Generally this is
+                :class:`GrafanaSourceConsumer` object. Generally this is
                 `self` in the instantiating class.
             name: a :string: name of the relation between `charm`
                 the Grafana charmed service.
@@ -209,7 +211,7 @@ class GrafanaSourceConsumer(ConsumerBase):
                 }
             rel_id: an optional integer specifying the relation ID
                 for the grafana source service, only required if the
-                :class:`GrafanaConsumer` has been instantiated in
+                :class:`GrafanaSourceConsumer` has been instantiated in
                 `multi` mode.
 
         """
@@ -239,7 +241,7 @@ class GrafanaSourceConsumer(ConsumerBase):
         Args:
             rel_id: an optional integer specifying the relation ID
                 for the grafana-k8s source service, only required if the
-                :class:`GrafanaConsumer` has been instantiated in
+                :class:`GrafanaSourceConsumer` has been instantiated in
                 `multi` mode.
         """
         rel = self.framework.model.get_relation(self.name, rel_id)
@@ -347,11 +349,13 @@ class GrafanaSourceProvider(ProviderBase):
             else None
         )
         if not data:
-            logger.debug("No data in grafana-source relation")
+            logger.info("NO DATA")
             return
 
-        # This is due to a double fire on relation_joined
-        # calling the consumer, which calls relation_changed
+        # This is due to a double fire on relation_joined calling
+        # the consumer, which calls relation_changed, and the actual data may be
+        # the same, but we'll see the source name in use later, try to set it again,
+        # and get double relation names
         if (
             self._stored.sources.get(rel.id, None)
             and len(set(data.items()) ^ set(self._stored.sources[rel.id].items())) == 0
@@ -367,6 +371,8 @@ class GrafanaSourceProvider(ProviderBase):
                 f"Missing data on added grafana-k8s source {e}", exc_info=True
             )
             return
+
+        logger.info("ADDING SOURCE: {}".format(data))
 
         self._stored.sources[rel.id] = data
         self.on.sources_changed.emit()
@@ -391,7 +397,7 @@ class GrafanaSourceProvider(ProviderBase):
         broken.
         """
 
-        logger.info("Removing all grafana-source data for relation: {}".format(rel_id))
+        logger.info("Removing all data for relation: {}".format(rel_id))
 
         try:
             removed_source = self._stored.sources.pop(rel_id, None)
