@@ -14,7 +14,7 @@ from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
-from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
+from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
@@ -130,8 +130,8 @@ class PrometheusCharm(CharmBase):
         """
 
         self.grafana_source_consumer.add_source(
-            self.model.get_binding(event.relation).network.bind_address,
-            str(self.model.config["port"])
+            str(self.model.get_binding(event.relation).network.bind_address),
+            str(self.model.config["port"]),
         )
 
     def _on_alertmanager_changed(self, event):
