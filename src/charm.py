@@ -130,13 +130,8 @@ class PrometheusCharm(CharmBase):
         """
 
         self.grafana_source_consumer.add_source(
-            {
-                "private-address": str(
-                    self.model.get_binding(event.relation).network.bind_address
-                ),
-                "port": str(self.model.config["port"]),
-                "source-type": "prometheus",
-            }
+            self.model.get_binding(event.relation).network.bind_address,
+            str(self.model.config["port"])
         )
 
     def _on_alertmanager_changed(self, event):
