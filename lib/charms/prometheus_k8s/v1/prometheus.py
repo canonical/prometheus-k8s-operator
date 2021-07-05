@@ -232,22 +232,12 @@ class PrometheusProvider(ProviderBase):
         rel_id = event.relation.id
         data = event.relation.data[event.app]
 
-        targets = json.loads(data.get("targets", "[]"))
-        if not targets:
+        job_config = data.get("jobs", None)
+        if job_config is None:
             return
 
-        job_name = data.get("job_name", "")
-        unique_name = "juju_{}_{}_{}".format(
-            self._charm.model.name, self._charm.app.name, rel_id
-        )
-        if job_name:
-            job_name += "_{}".format(unique_name)
-        else:
-            job_name = unique_name
+        self._stored.jobs[rel_id] = job_config
 
-        job_config = {"job_name": job_name, "static_configs": [{"targets": targets}]}
-
-        self._stored.jobs[rel_id] = json.dumps(job_config)
         logger.debug("New job config on relation change : %s", job_config)
         self.on.targets_changed.emit()
 
@@ -402,9 +392,9 @@ class PrometheusConsumer(ConsumerBase):
             return
 
         logger.debug("Setting scrape targets : %s", self._stored.targets[rel_id])
-        event.relation.data[self._charm.app]["targets"] = json.dumps(
-            list(self._stored.targets[rel_id])
-        )
+        event.relation.data[self._charm.app]["jobs"] = self._static_config(
+            self._stored.targets[rel_id],
+            rel_id)
 
     def _update_targets(self, targets, rel_id):
         """Update the Prometheus scrape targets."""
@@ -412,4 +402,30 @@ class PrometheusConsumer(ConsumerBase):
         rel = self.framework.model.get_relation(self._relation_name, rel_id)
 
         logger.debug("Updating scrape targets to : %s", targets)
-        rel.data[self._charm.app]["targets"] = json.dumps(list(targets))
+        rel.data[self._charm.app]["jobs"] = self._static_config(targets, rel_id)
+
+    def _static_config(self, targets, rel_id):
+        """Create a static scrape config
+
+        Args:
+            target - address of static scrape target
+            rel_id - relation id
+        """
+        name = "juju_prometheus_scrape_{}_{}_{}".format(
+            self._charm.model.name,
+            self._charm.model.app.name,
+            rel_id
+        )
+        config = {
+            "job_name": name,
+            "static_configs": [{
+                "targets": list(targets),
+                "labels": {
+                    "juju_model_name": "{}".format(self._charm.model.name),
+                    "juju_app_name": "{}".format(self._charm.model.app.name),
+                    "juju_relation_id": "{}".format(rel_id)
+                }
+            }]
+        }
+
+        return json.dumps(config)
