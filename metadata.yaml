@@ -33,7 +33,7 @@ requires:
     grafana-source:
         interface: grafana_datasource
     alertmanager:
-        interface: alertmanager
+        interface: alertmanager_dispatch
 storage:
   database:
     type: filesystem
