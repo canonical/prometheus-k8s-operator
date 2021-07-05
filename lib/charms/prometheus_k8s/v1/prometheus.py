@@ -498,8 +498,8 @@ class PrometheusConsumer(ConsumerBase):
             "static_configs": [{
                 "targets": list(targets),
                 "labels": {
-                    "juju_model_name": "{}".format(self._charm.model.name),
-                    "juju_app_name": "{}".format(self._charm.model.app.name),
+                    "juju_model": "{}".format(self._charm.model.name),
+                    "juju_application": "{}".format(self._charm.model.app.name),
                     "juju_relation_id": "{}".format(rel_id)
                 }
             }]
