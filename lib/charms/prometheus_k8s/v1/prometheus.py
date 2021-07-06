@@ -150,8 +150,7 @@ resembles the YAML structure of Prometheus [scrape configuration]
 
 import json
 import logging
-from ops.model import TooManyRelatedAppsError
-from ops.framework import StoredState, EventSource, EventBase, ObjectEvents
+from ops.framework import EventSource, EventBase, ObjectEvents
 from ops.relation import ProviderBase, ConsumerBase
 
 LIBID = "1234"
@@ -160,25 +159,20 @@ LIBPATCH = 0
 logger = logging.getLogger(__name__)
 
 
-class MissingPrometheusRelation(Exception):
-    """Exception raised when no Prometheus relation is found"""
-    pass
-
-
 class TargetsChanged(EventBase):
     """Event emitted when Prometheus scrape targets change."""
 
-    def __init__(self, handle, data=None):
+    def __init__(self, handle, relation_id):
         super().__init__(handle)
-        self.data = data
+        self.relation_id = relation_id
 
     def snapshot(self):
-        """Save scrape target information."""
-        return {"data": self.data}
+        """Save scrape target relation information."""
+        return {"relation_id": self.relation_id}
 
     def restore(self, snapshot):
-        """Restore scrape target information."""
-        self.data = snapshot["data"]
+        """Restore scrape target relation information."""
+        self.relation_id = snapshot["relation_id"]
 
 
 class MonitoringEvents(ObjectEvents):
@@ -189,7 +183,6 @@ class MonitoringEvents(ObjectEvents):
 
 class PrometheusProvider(ProviderBase):
     on = MonitoringEvents()
-    _stored = StoredState()
 
     def __init__(self, charm, name, service, version=None):
         """A Prometheus based Monitoring service provider.
@@ -209,7 +202,7 @@ class PrometheusProvider(ProviderBase):
         """
         super().__init__(charm, name, service, version)
         self._charm = charm
-        self._stored.set_default(jobs={})
+        self._relation_name = name
         events = self._charm.on[name]
         self.framework.observe(
             events.relation_changed, self._on_scrape_target_relation_changed
@@ -227,20 +220,9 @@ class PrometheusProvider(ProviderBase):
         `TargetsChanged` event. The Prometheus charm can then
         choose to update its scrape configuration.
         """
-        if not self._charm.unit.is_leader():
-            return
-
         rel_id = event.relation.id
-        data = event.relation.data[event.app]
 
-        job_config = data.get("jobs", None)
-        if job_config is None:
-            return
-
-        self._stored.jobs[rel_id] = job_config
-
-        logger.debug("New job config on relation change : %s", job_config)
-        self.on.targets_changed.emit()
+        self.on.targets_changed.emit(relation_id=rel_id)
 
     def _on_scrape_target_relation_broken(self, event):
         """Update job config when consumers depart.
@@ -250,15 +232,8 @@ class PrometheusProvider(ProviderBase):
         the Prometheus is informed through a `TargetsChanged`
         event.
         """
-        if not self._charm.unit.is_leader():
-            return
-
         rel_id = event.relation.id
-        try:
-            del self._stored.jobs[rel_id]
-            self.on.targets_changed.emit()
-        except KeyError:
-            pass
+        self.on.targets_changed.emit(relation_id=rel_id)
 
     def jobs(self):
         """Fetch the list of scrape jobs.
@@ -270,16 +245,62 @@ class PrometheusProvider(ProviderBase):
             its scrape targets.
         """
         scrape_jobs = []
-        for job in self._stored.jobs.values():
-            scrape_jobs.append(json.loads(job))
 
+        for relation in self._charm.model.relations[self._relation_name]:
+            job = self._static_scrape_config(relation)
+            if job:
+                scrape_jobs.append(job)
+
+        logger.debug("SCRAPE JOBS: %s", scrape_jobs)
         return scrape_jobs
+
+    def _static_scrape_config(self, relation):
+        scrape_metadata = json.loads(
+            relation.data[relation.app].get("prometheus_scrape_metadata"))
+
+        if not scrape_metadata:
+            return None
+
+        job_name = "juju_prometheus_scrape_{}_{}_{}".format(
+            scrape_metadata["model"],
+            scrape_metadata["application"],
+            relation.id
+        )
+
+        hosts = {}
+        for unit in relation.units:
+            host_address = relation.data[unit].get("prometheus_scrape_host")
+            if not host_address:
+                continue
+            hosts[unit.name] = host_address
+
+        scrape_config = {
+            "job_name": job_name,
+            "metrics_path": scrape_metadata["static_scrape_path"],
+            "static_configs": []
+        }
+
+        for host_name, host_address in hosts.items():
+            metrics_url = "{}:{}".format(host_address,
+                                         scrape_metadata["static_scrape_port"])
+
+            config = {
+                "targets": [metrics_url],
+                "labels": {
+                    "juju_model": "{}".format(scrape_metadata["model"]),
+                    "juju_application": "{}".format(scrape_metadata["application"]),
+                    "juju_unit": "{}".format(host_name),
+                    "juju_relation_id": "{}".format(relation.id)
+                }
+            }
+            scrape_config["static_configs"].append(config)
+
+        return scrape_config
 
 
 class PrometheusConsumer(ConsumerBase):
-    _stored = StoredState()
 
-    def __init__(self, charm, name, consumes, multi=False):
+    def __init__(self, charm, name, consumes, config={}, multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides an interface
@@ -314,195 +335,32 @@ class PrometheusConsumer(ConsumerBase):
 
         """
         super().__init__(charm, name, consumes, multi)
+
         self._charm = charm
         self._relation_name = name
+        self._static_scrape_port = config.get("static_scrape_port", 80)
+        self._static_scrape_path = config.get("static_scrape_path", "/metrics")
         self._multi_mode = multi
-        self._stored.set_default(multi_targets={})
-        self._stored.set_default(targets=[])
+
         events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_joined, self._update_scrape_targets)
-        self.framework.observe(events.relation_changed, self._update_scrape_targets)
+        self.framework.observe(events.relation_joined, self._set_scrape_metadata)
 
-    def _update_scrape_targets(self, event):
-        """Update the Prometheus scrape targets relation data.
+    def _set_scrape_metadata(self, event):
+        event.relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
+            self._charm.model.get_binding(event.relation).network.bind_address)
 
-        In response to any change in relation with the Prometheus provider,
-        this consumer object updates relation data that specifies the set
-        of scrape targets for Prometheus.
-        """
         if not self._charm.unit.is_leader():
             return
 
-        rel_id = event.relation.id
-        targets = self._targets(rel_id)
-        if not targets:
-            return
-
-        logger.debug("Changed scrape targets to %s for relation %s", targets, rel_id)
-        event.relation.data[self._charm.app]["jobs"] = self._static_config(targets, rel_id)
-
-    def add_endpoint(self, address, port=80, rel_id=None):
-        """Add an additional scrape to the Prometheus monitroing service.
-
-        Args:
-            address: a string host address (usually IP) of the endpoint that
-                that must be monitored by Prometheus.
-            port: an optional (default 80) integer providing the port
-                on which the scrapped endpoint exposes its Prometheus
-                metrics.
-            rel_id: an optional integer providing the relation ID for
-                the related Prometheus monitoring service
-                provider. This is only necessary if the
-                `PrometheusConsumer` has been instantiated in
-                `multi` mode.
-
-        Raises:
-            MissingPrometheusRelation if relation id is not specified but is
-            required.
-        """
-        targets = self._targets(rel_id)
-        target = address + ":" + str(port)
-        if target in targets:
-            return
-
-        targets.append(target)
-        self._update_targets(targets, rel_id)
-
-    def remove_endpoint(self, address, port=80, rel_id=None):
-        """Remove an endpoint from the list of Prometheus scrape targets.
-        Args:
-            address: a string host address (usually IP) of the endpoint that
-                that must be excluded from being monitored by Prometheus.
-            port: an optional (default 80) integer providing the port
-                on which the scrapped endpoint exposes its Prometheus
-                metrics.
-            rel_id: an optional integer providing the relation ID for
-                the related Prometheus monitoring service
-                provider. This is only necessary if the
-                `PrometheusConsumer` has been instantiated in
-                `multi` mode.
-
-        Raises:
-            MissingPrometheusRelation if relation id is not specified but is
-            required.
-        """
-        targets = self._targets(rel_id)
-        target = address + ":" + str(port)
-        if target not in targets:
-            return
-
-        targets.remove(target)
-        self._update_targets(targets, rel_id)
+        event.relation.data[self._charm.app][
+            "prometheus_scrape_metadata"] = json.dumps(self._scrape_metadata)
 
     @property
-    def endpoints(self, rel_id=None):
-        """Returns a list of Prometheus scrape target endpoints.
-        Args:
-            rel_id: an optional integer providing the relation ID for
-                the related Prometheus monitoring service
-                provider. This is only necessary if the
-                `PrometheusConsumer` has been instantiated in
-                `multi` mode.
-        """
-        return self._targets(rel_id)
-
-    def _update_targets(self, targets, rel_id=None):
-        """Update the stored Prometheus scrape targets.
-
-        Charm relation data is also updated if valid Prometheus relation
-        is found.
-
-        Args:
-            targets - list of targets that must be stored
-            rel_id - relation id for which targets must be stored. This is
-                a required argument, only in multi relation mode.
-
-        Raises:
-            MissingPrometheusRelation if relation id is not specified but is
-            required.
-        """
-        if self._multi_mode:
-            if rel_id is None:
-                raise MissingPrometheusRelation(
-                    "Can not update targets because Prometheus relation id not specified")
-            self._stored.multi_targets[rel_id] = targets
-        else:
-            self._stored.targets = targets
-
-        if not self._charm.unit.is_leader():
-            return
-
-        if rel_id is None:
-            rel_id = self.relation_id
-
-        try:
-            rel = self.framework.model.get_relation(self._relation_name, rel_id)
-        except TooManyRelatedAppsError:
-            raise MissingPrometheusRelation("Ambiguous Prometheus relation")
-
-        logger.debug("Updating scrape targets to %s for relation %s",
-                     targets, rel.id)
-        rel.data[self._charm.app]["jobs"] = self._static_config(targets, rel.id)
-
-    def _targets(self, rel_id=None):
-        """Fetch scrape targets
-
-        Args:
-            rel_id - relation id of relation for which targets are
-                required. This is an optional argument that is always
-                required when in multi relation mode.
-
-        Raises:
-            MissingPrometheusRelation if relation id is not specified but is
-            required.
-
-        Returns:
-            list of current scrape targets.
-        """
-        if self._multi_mode:
-            if rel_id is None:
-                raise MissingPrometheusRelation(
-                    "Can not fetch targets because Prometheus relation id not specified")
-            return self._stored.multi_targets.get(rel_id, [])
-        else:
-            return self._stored.targets
-
-    def _static_config(self, targets, rel_id):
-        """Create a static scrape config in JSON format
-
-        Args:
-            target - address of static scrape target
-            rel_id - relation id
-
-        Raises:
-            MissingPrometheusRelation if relation id is not specified but is
-            required.
-
-        Returns:
-            JSON string representation of static scrape configuration for
-            current scrape targets.
-        """
-        if not targets:
-            return json.dumps(None)
-
-        if rel_id is None:
-            raise MissingPrometheusRelation("Can not create scrape config for unknown relation")
-
-        name = "juju_prometheus_scrape_{}_{}_{}".format(
-            self._charm.model.name,
-            self._charm.model.app.name,
-            rel_id
-        )
-        config = {
-            "job_name": name,
-            "static_configs": [{
-                "targets": list(targets),
-                "labels": {
-                    "juju_model": "{}".format(self._charm.model.name),
-                    "juju_application": "{}".format(self._charm.model.app.name),
-                    "juju_relation_id": "{}".format(rel_id)
-                }
-            }]
+    def _scrape_metadata(self):
+        metadata = {
+            "model": "{}".format(self._charm.model.name),
+            "application": "{}".format(self._charm.model.app.name),
+            "static_scrape_port": self._static_scrape_port,
+            "static_scrape_path": self._static_scrape_path
         }
-
-        return json.dumps(config)
+        return metadata
