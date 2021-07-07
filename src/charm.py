@@ -2,7 +2,6 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import hashlib
 import logging
 import yaml
 import json
@@ -31,7 +30,6 @@ class PrometheusCharm(CharmBase):
 
         self._stored.set_default(alertmanagers=[])
         self._stored.set_default(provider_ready=False)
-        self._stored.set_default(prometheus_config_hash=None)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -82,15 +80,12 @@ class PrometheusCharm(CharmBase):
         # check if configuration file has changed and if so push the
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
-        config_hash = hashlib.md5(str(prometheus_config).encode("utf-8")).hexdigest()
-        if self._stored.prometheus_config_hash != config_hash:
-            try:
-                container.push(PROMETHEUS_CONFIG, prometheus_config)
-                self._stored.prometheus_config_hash = config_hash
-                logger.info("Pushed new configuration")
-            except ConnectionError:
-                logger.info("Ignoring config changed since pebble is not ready")
-                return
+        try:
+            container.push(PROMETHEUS_CONFIG, prometheus_config)
+            logger.info("Pushed new configuration")
+        except ConnectionError:
+            logger.info("Ignoring config changed since pebble is not ready")
+            return
 
         # setup the workload (Prometheus) container and its services
         layer = self._prometheus_layer()
