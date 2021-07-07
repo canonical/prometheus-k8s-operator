@@ -247,7 +247,7 @@ class PrometheusProvider(ProviderBase):
 
         job_config = {"job_name": job_name, "static_configs": [{"targets": targets}]}
 
-        self._stored.jobs["rel_id"] = json.dumps(job_config)
+        self._stored.jobs[rel_id] = json.dumps(job_config)
         logger.debug("New job config on relation change : %s", job_config)
         self.on.targets_changed.emit()
 
