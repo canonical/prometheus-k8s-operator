@@ -46,7 +46,7 @@ class TestProvider(unittest.TestCase):
         self.harness.update_relation_data(
             rel_id, "target", {"targets": json.dumps([target_ip])}
         )
-        jobs = self.harness.charm.prometheus_provider._stored.jobs["rel_id"]
+        jobs = self.harness.charm.prometheus_provider._stored.jobs[rel_id]
         jobs = json.loads(jobs)
         self.assertIsNotNone(jobs)
         static_configs = jobs.get("static_configs", None)
