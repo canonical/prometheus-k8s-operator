@@ -208,7 +208,7 @@ class PrometheusProvider(ProviderBase):
             events.relation_changed, self._on_scrape_target_relation_changed
         )
         self.framework.observe(
-            events.relation_broken, self._on_scrape_target_relation_broken
+            events.relation_departed, self._on_scrape_target_relation_departed
         )
 
     def _on_scrape_target_relation_changed(self, event):
@@ -224,7 +224,7 @@ class PrometheusProvider(ProviderBase):
 
         self.on.targets_changed.emit(relation_id=rel_id)
 
-    def _on_scrape_target_relation_broken(self, event):
+    def _on_scrape_target_relation_departed(self, event):
         """Update job config when consumers depart.
 
         When a Prometheus consumer departs the scrape configuration
