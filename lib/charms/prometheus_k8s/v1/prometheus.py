@@ -150,6 +150,7 @@ resembles the YAML structure of Prometheus [scrape configuration]
 
 import json
 import logging
+from subprocess import check_output
 from ops.framework import EventSource, EventBase, ObjectEvents
 from ops.relation import ProviderBase, ConsumerBase
 
@@ -300,7 +301,7 @@ class PrometheusProvider(ProviderBase):
 
 class PrometheusConsumer(ConsumerBase):
 
-    def __init__(self, charm, name, consumes, config={}, multi=False):
+    def __init__(self, charm, name, consumes, service, config={}, multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides an interface
@@ -337,6 +338,7 @@ class PrometheusConsumer(ConsumerBase):
         super().__init__(charm, name, consumes, multi)
 
         self._charm = charm
+        self._service = service
         self._relation_name = name
         self._static_scrape_port = config.get("static_scrape_port", 80)
         self._static_scrape_path = config.get("static_scrape_path", "/metrics")
@@ -344,6 +346,8 @@ class PrometheusConsumer(ConsumerBase):
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
+        self.framework.observe(self._charm.on[self._service].pebble_ready,
+                               self._set_unit_ip)
 
     def _set_scrape_metadata(self, event):
         event.relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
@@ -354,6 +358,11 @@ class PrometheusConsumer(ConsumerBase):
 
         event.relation.data[self._charm.app][
             "prometheus_scrape_metadata"] = json.dumps(self._scrape_metadata)
+
+    def _set_unit_ip(self, event):
+        for relation in self._charm.model.relations[self._relation_name]:
+            relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
+                self._charm.model.get_binding(relation).network.bind_address)
 
     @property
     def _scrape_metadata(self):
