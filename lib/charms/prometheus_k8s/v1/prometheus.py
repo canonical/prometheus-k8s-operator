@@ -150,7 +150,6 @@ resembles the YAML structure of Prometheus [scrape configuration]
 
 import json
 import logging
-from subprocess import check_output
 from ops.framework import EventSource, EventBase, ObjectEvents
 from ops.relation import ProviderBase, ConsumerBase
 
