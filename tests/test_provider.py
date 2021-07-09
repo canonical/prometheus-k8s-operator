@@ -9,6 +9,13 @@ from ops.framework import StoredState
 from ops.testing import Harness
 from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
 
+SCRAPE_METADATA = {
+    "model": "consumer-model",
+    "application": "consumer",
+    "static_scrape_port": "8000",
+    "static_scrape_path": "/metrics"
+}
+
 
 class PrometheusCharm(CharmBase):
     _stored = StoredState()
@@ -38,23 +45,49 @@ class TestProvider(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.begin()
 
-    def test_provider_notifies_on_new_scrape_targets(self):
-        self.assertEqual(len(self.harness.charm.prometheus_provider._stored.jobs), 0)
+    def test_provider_notifies_on_new_scrape_relation(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
-        rel_id = self.harness.add_relation("monitoring", "target")
-        target_ip = "1.1.1.1"
-        self.harness.update_relation_data(
-            rel_id, "target", {"targets": json.dumps([target_ip])}
-        )
-        jobs = self.harness.charm.prometheus_provider._stored.jobs[rel_id]
-        jobs = json.loads(jobs)
-        self.assertIsNotNone(jobs)
-        static_configs = jobs.get("static_configs", None)
-        self.assertIsNotNone(static_configs)
-        self.assertEqual(len(static_configs), 1)
-        targets = static_configs[0].get("targets", None)
-        self.assertIsNotNone(targets)
-        self.assertEqual(len(targets), 1)
-        target = targets[0]
-        self.assertEqual(target, target_ip)
+
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(rel_id, "consumer", {
+            "prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)
+        })
         self.assertEqual(self.harness.charm._stored.num_events, 1)
+
+    def test_provider_notifies_on_new_scrape_target(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(rel_id, "consumer/0", {
+            "prometheus_scrape_host": "1.1.1.1",
+        })
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+
+    def test_provider_returns_static_scrape_jobs(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(rel_id, "consumer", {
+            "prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)
+        })
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(rel_id, "consumer/0", {
+            "prometheus_scrape_host": "1.1.1.1",
+        })
+        self.assertEqual(self.harness.charm._stored.num_events, 2)
+        jobs = self.harness.charm.prometheus_provider.jobs()
+        self.assertEqual(len(jobs), 1)
+        job = jobs[0]
+        self.assertIn("job_name", job)
+        self.assertIn("metrics_path", job)
+        self.assertIn("static_configs", job)
+        static_configs = job["static_configs"]
+        self.assertEqual(len(static_configs), 1)
+        static_config = static_configs[0]
+        self.assertIn("targets", static_config)
+        self.assertIn("labels", static_config)
+        targets = static_config["targets"]
+        self.assertEqual(len(targets), 1)
+        labels = static_config["labels"]
+        self.assertIn("juju_model", labels)
+        self.assertIn("juju_application", labels)
+        self.assertIn("juju_unit", labels)
