@@ -1,13 +1,25 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import json
 import unittest
+from unittest.mock import patch
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
+# from ops.model import Network
 from ops.testing import Harness
 from charms.prometheus_k8s.v1.prometheus import PrometheusConsumer
+
+CONSUMES = {"prometheus": ">=2.0"}
+CONSUMER_SERVICE = "prometheus_tester"
+CONSUMER_META = """
+name: consumer-tester
+containers:
+  prometheus-tester:
+requires:
+  monitoring:
+    interface: prometheus_scrape
+"""
 
 
 class ConsumerCharm(CharmBase):
@@ -15,57 +27,72 @@ class ConsumerCharm(CharmBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
-        self.provider = PrometheusConsumer(self, "monitoring", {"prometheus": ">=2.0"})
-
-    def new_endpoint(self, ip, port):
-        self.provider.add_endpoint(ip, port=port)
-
-    def clear_endpoint(self, ip, port):
-        self.provider.remove_endpoint(ip, port)
-
-    @property
-    def endpoints(self):
-        return self.provider.endpoints
+        self.provider = PrometheusConsumer(self, "monitoring",
+                                           consumes=CONSUMES,
+                                           service=CONSUMER_SERVICE)
 
 
 class TestLibrary(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(ConsumerCharm)
+        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
 
-    def test_consumer_can_set_an_endpoint(self):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_consumer_sets_scrape_metadata(self, _):
         rel_id = self.harness.add_relation("monitoring", "provider")
-        ip_set = "1.1.1.1"
-        port_set = 8000
+        self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertFalse(data)
-        self.harness.charm.new_endpoint(ip_set, port_set)
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("targets", data)
-        target = json.loads(data["targets"])[0]
-        ip, port = target.split(":")
-        self.assertEqual(ip, ip_set)
-        self.assertEqual(int(port), port_set)
+        self.assertIn("prometheus_scrape_metadata", data)
+        scrape_metadata = data["prometheus_scrape_metadata"]
+        self.assertIn("model", scrape_metadata)
+        self.assertIn("application", scrape_metadata)
+        self.assertIn("static_scrape_port", scrape_metadata)
+        self.assertIn("static_scrape_path", scrape_metadata)
 
-    def test_consumer_can_remove_an_endpoint(self):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_consumer_unit_sets_bind_address_on_pebble_ready(self, mock_net_get):
+        bind_address = "192.0.8.2"
+        fake_network = {
+            "bind-addresses": [
+                {
+                    "interface-name": "eth0",
+                    "addresses": [
+                        {
+                            "hostname": "prometheus-tester-0",
+                            "value": bind_address,
+                        },
+                    ]
+                }
+            ],
+        }
+        mock_net_get.return_value = fake_network
         rel_id = self.harness.add_relation("monitoring", "provider")
-        ip_set = "1.1.1.1"
-        port_set = 8000
-        self.harness.charm.new_endpoint(ip_set, port_set)
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("targets", data)
-        self.harness.charm.clear_endpoint(ip_set, port_set)
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        target = json.loads(data["targets"])
-        self.assertFalse(target)
+        self.harness.container_pebble_ready("prometheus-tester")
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertIn("prometheus_scrape_host", data)
+        self.assertEqual(data["prometheus_scrape_host"], bind_address)
 
-    def test_consumer_can_get_endpoints(self):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_consumer_unit_sets_bind_address_on_relation_joined(self, mock_net_get):
+        bind_address = "192.0.8.2"
+        fake_network = {
+            "bind-addresses": [
+                {
+                    "interface-name": "eth0",
+                    "addresses": [
+                        {
+                            "hostname": "prometheus-tester-0",
+                            "value": bind_address,
+                        },
+                    ]
+                }
+            ],
+        }
+        mock_net_get.return_value = fake_network
         rel_id = self.harness.add_relation("monitoring", "provider")
-        ip_set = "1.1.1.1"
-        port_set = 8000
-        self.harness.charm.new_endpoint(ip_set, port_set)
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        targets = json.loads(data["targets"])
-        self.assertEqual(targets, self.harness.charm.endpoints)
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertIn("prometheus_scrape_host", data)
+        self.assertEqual(data["prometheus_scrape_host"], bind_address)
