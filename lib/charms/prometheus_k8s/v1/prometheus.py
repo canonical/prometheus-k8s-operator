@@ -11,8 +11,8 @@ provide a scrape target for Prometheus.
 
 ## Consumer Library Usage
 
-This Prometheus charm interacts with its scrape targets using this
-charm library This charm library is constructed using the [Provider
+This Prometheus charm interacts with its scrape targets using its
+charm library. This charm library is constructed using the [Provider
 and Consumer](https://ops.readthedocs.io/en/latest/#module-ops.relation)
 objects from the Operator Framework. This implies charms that would
 like to expose metric endpoints for the Prometheus charm must use the
@@ -49,33 +49,16 @@ as you develop newer releases of you charm. If the version string can
 be determined at run time by inspecting the actual deployed version of
 your charmed application, this would be ideal.
 
-An instantiated `PrometheusConsumer` object may be used to add
-or remove Prometheus scrape targets.  Adding and removing scrape
-targets may be done using the `add_endpoint()` and `remove_endpoint()`
-methods. Both these methods require the host address (usually IP) of
-the scrape target, but optionally also accept a port (default 80) on
-which the metrics endpoint is exposed. At present it is assumed that
-the metrics endpoint will be exposed with a URL path `/metrics` at the
-specified host and port. This is the default behaviour of Prometheus
-that most compatible metrics exporters confirm to. As an example to
-add a metrics endpoint using the instantiated `PrometheusConsumer`
-object in your charms `StartEvent` handler you may do
-
-    def _on_start(self, event):
-        self.prometheus.add_endpoint(my_ip)
-
-There is no reason that metrics endpoint need to be added in the start
-event handler. This may be done in any event handler or even the charm
-constructor. However this does require that the host address is known
-at that point in time. Both the `add_endpoint()` and
-`remove_endpoint()` methods are idempotent and invoking them multiple
-times with the same host address and port has no adverse effect, no
-events generated. `PrometheusConsumer` object caches lists of unique
-scrape targets, indexed in its stored state. Both the methods exchange
-information with Prometheus charm application relation data. Hence
-both of these methods trigger `RelationChangedEvents` for the
-Prometheus charm when new scrape targets are added or old ones
-removed.
+An instantiated `PrometheusConsumer` object will ensure that each unit
+of the consumer charm, is a scrape target for the
+`PrometheusProvider`. By default `PrometheusConsumer` assumes each
+unit of the consumer charm exports its metrics at a path given by
+`/metrics` on port 80. This is the default behaviour off most
+Prometheus metrics exporters so typically the defaults do not need to
+be changed. However if required the defaults may be changed by
+providing the `PrometheusConsumer` constructor an optional argument
+(`config`) that represents its configuration in Python dictionary
+format.
 
 ## Provider Library Usage
 
@@ -215,10 +198,9 @@ class PrometheusProvider(ProviderBase):
         """Handle changes in related consumers.
 
         Anytime there are changes in relations between Prometheus
-        provider and consumer charms the scrape job config is updated
-        and the Prometheus charm is informed, through a
-        `TargetsChanged` event. The Prometheus charm can then
-        choose to update its scrape configuration.
+        provider and consumer charms the Prometheus charm is informed,
+        through a `TargetsChanged` event. The Prometheus charm can
+        then choose to update its scrape configuration.
         """
         rel_id = event.relation.id
 
@@ -228,7 +210,7 @@ class PrometheusProvider(ProviderBase):
         """Update job config when consumers depart.
 
         When a Prometheus consumer departs the scrape configuration
-        for that consumer is remove from the list of scrape jobs and
+        for that consumer is removed from the list of scrape jobs and
         the Prometheus is informed through a `TargetsChanged`
         event.
         """
@@ -251,10 +233,18 @@ class PrometheusProvider(ProviderBase):
             if job:
                 scrape_jobs.append(job)
 
-        logger.debug("SCRAPE JOBS: %s", scrape_jobs)
         return scrape_jobs
 
     def _static_scrape_config(self, relation):
+        """Generate the static scrape configuration for a relation.
+
+        Args:
+            relation: an `ops.model.Relation` object whose static
+                scrape configuration is required.
+
+        Returns:
+            A static scrape configuration for a specific relation.
+        """
         scrape_metadata = json.loads(
             relation.data[relation.app].get("prometheus_scrape_metadata"))
 
@@ -303,18 +293,11 @@ class PrometheusConsumer(ConsumerBase):
     def __init__(self, charm, name, consumes, service, config={}, multi=False):
         """Construct a Prometheus charm client.
 
-        The `PrometheusConsumer` object provides an interface
-        to Prometheus. This interface supports providing additional
-        scrape targets to the Prometheus monitoring service. For
-        example suppose a charm's units exposes Prometheus metrics on
-        port 8000. This charm may then have its metrics aggregated by
-        a related Prometheus charm by instantiating a
-        `PrometheusConsumer` object and adding its units as
-        scrape endpoints as follows
-
+        The `PrometheusConsumer` object provides an interface to
+        Prometheus. Any charm instantiating this object has metrics
+        from each of its units aggregated by a related Prometheus
+        charm
             self.prometheus = PrometheusConsumer(self, "monitoring", {"prometheus": ">=2.0"})
-            self.prometheus.add_endpoint(<ip-address>, port=8000)
-
         Args:
 
             charm: a `CharmBase` object that manages this
@@ -329,10 +312,12 @@ class PrometheusConsumer(ConsumerBase):
                 dictionary are corresponding minimal acceptable
                 semantic version specfications for the monitoring
                 service.
+            config: a optional dictionary with keys that are
+                Prometheus scrape configuration options, for example
+                metrics path and port.
             multi: an optional (default False) flag to indicate if
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
-
         """
         super().__init__(charm, name, consumes, multi)
 
@@ -349,6 +334,14 @@ class PrometheusConsumer(ConsumerBase):
                                self._set_unit_ip)
 
     def _set_scrape_metadata(self, event):
+        """Ensure scrape targets metadata is made available to Prometheus.
+
+        When a consumer charm is related to a Prometheus provider, the
+        consumer sets metadata related to its own scrape
+        configutation.  This metadata is set using Juju application
+        data.  In addition each of the consumer units also sets its own
+        host address in Juju unit relation data.
+        """
         event.relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
             self._charm.model.get_binding(event.relation).network.bind_address)
 
@@ -359,12 +352,22 @@ class PrometheusConsumer(ConsumerBase):
             "prometheus_scrape_metadata"] = json.dumps(self._scrape_metadata)
 
     def _set_unit_ip(self, event):
+        """Set unit host address
+
+        Each time a consumer charm container is restarted it updates its own
+        host address in the unit relation data for the Prometheus provider.
+        """
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
                 self._charm.model.get_binding(relation).network.bind_address)
 
     @property
     def _scrape_metadata(self):
+        """Generate scrape metadata.
+
+        Returns:
+            Scrape configutation metadata for this Prometheus consumer charm.
+        """
         metadata = {
             "model": "{}".format(self._charm.model.name),
             "application": "{}".format(self._charm.model.app.name),
