@@ -13,7 +13,8 @@ provide a scrape target for Prometheus.
 
 This Prometheus charm interacts with its scrape targets using its
 charm library. This charm library is constructed using the [Provider
-and Consumer](https://ops.readthedocs.io/en/latest/#module-ops.relation)
+and
+Consumer](https://ops.readthedocs.io/en/latest/#module-ops.relation)
 objects from the Operator Framework. This implies charms that would
 like to expose metric endpoints for the Prometheus charm must use the
 `PrometheusConsumer` object from the charm library to do so. Using the
@@ -22,7 +23,10 @@ the constructor of your charm (the one which exposes the metrics
 endpoint). The `PrometheusConsumer` constructor requires the name of
 the relation over which a scrape target (metrics endpoint) is exposed
 to the Promtheus charm. This relation must use the `prometheus_scrape`
-interface. In addition the constructor also requires a `consumes`
+interface. The address of the metrics endpoint is set to the unit
+address, by each unit of the consumer charm. Hence instantiating the
+consumer also requires providing it the Pebble service name of the
+consumer. In addition the constructor also requires a `consumes`
 specification, which is a dictionary with key `prometheus` (also see
 Provider Library Usage below) and a value that represents the minimum
 acceptable version of Prometheus. This version string can be in any
@@ -310,6 +314,7 @@ class PrometheusConsumer(ConsumerBase):
                 dictionary are corresponding minimal acceptable
                 semantic version specfications for the monitoring
                 service.
+            service: string name of Pebble service of consumer charm.
             config: a optional dictionary with keys that are
                 Prometheus scrape configuration options, for example
                 metrics path and port.
