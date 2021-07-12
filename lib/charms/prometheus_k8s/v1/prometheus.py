@@ -279,8 +279,7 @@ class PrometheusProvider(ProviderBase):
                 "labels": {
                     "juju_model": "{}".format(scrape_metadata["model"]),
                     "juju_application": "{}".format(scrape_metadata["application"]),
-                    "juju_unit": "{}".format(host_name),
-                    "juju_relation_id": "{}".format(relation.id)
+                    "juju_unit": "{}".format(host_name)
                 }
             }
             scrape_config["static_configs"].append(config)
