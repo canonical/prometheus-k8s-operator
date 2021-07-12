@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
+
 # from ops.model import Network
 from ops.testing import Harness
 from charms.prometheus_k8s.v1.prometheus import PrometheusConsumer
@@ -27,9 +28,9 @@ class ConsumerCharm(CharmBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
-        self.provider = PrometheusConsumer(self, "monitoring",
-                                           consumes=CONSUMES,
-                                           service=CONSUMER_SERVICE)
+        self.provider = PrometheusConsumer(
+            self, "monitoring", consumes=CONSUMES, service=CONSUMER_SERVICE
+        )
 
 
 class TestLibrary(unittest.TestCase):
@@ -59,13 +60,10 @@ class TestLibrary(unittest.TestCase):
                 {
                     "interface-name": "eth0",
                     "addresses": [
-                        {
-                            "hostname": "prometheus-tester-0",
-                            "value": bind_address,
-                        },
-                    ]
+                        {"hostname": "prometheus-tester-0", "value": bind_address}
+                    ],
                 }
-            ],
+            ]
         }
         mock_net_get.return_value = fake_network
         rel_id = self.harness.add_relation("monitoring", "provider")
@@ -82,13 +80,10 @@ class TestLibrary(unittest.TestCase):
                 {
                     "interface-name": "eth0",
                     "addresses": [
-                        {
-                            "hostname": "prometheus-tester-0",
-                            "value": bind_address,
-                        },
-                    ]
+                        {"hostname": "prometheus-tester-0", "value": bind_address}
+                    ],
                 }
-            ],
+            ]
         }
         mock_net_get.return_value = fake_network
         rel_id = self.harness.add_relation("monitoring", "provider")
