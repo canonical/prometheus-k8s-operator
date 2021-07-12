@@ -13,7 +13,7 @@ SCRAPE_METADATA = {
     "model": "consumer-model",
     "application": "consumer",
     "static_scrape_port": "8000",
-    "static_scrape_path": "/metrics"
+    "static_scrape_path": "/metrics",
 }
 
 
@@ -49,30 +49,34 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation("monitoring", "consumer")
-        self.harness.update_relation_data(rel_id, "consumer", {
-            "prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)
-        })
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {"prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)},
+        )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
     def test_provider_notifies_on_new_scrape_target(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation("monitoring", "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
-        self.harness.update_relation_data(rel_id, "consumer/0", {
-            "prometheus_scrape_host": "1.1.1.1",
-        })
+        self.harness.update_relation_data(
+            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+        )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
     def test_provider_returns_static_scrape_jobs(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation("monitoring", "consumer")
-        self.harness.update_relation_data(rel_id, "consumer", {
-            "prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)
-        })
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {"prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)},
+        )
         self.harness.add_relation_unit(rel_id, "consumer/0")
-        self.harness.update_relation_data(rel_id, "consumer/0", {
-            "prometheus_scrape_host": "1.1.1.1",
-        })
+        self.harness.update_relation_data(
+            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+        )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
         jobs = self.harness.charm.prometheus_provider.jobs()
         self.assertEqual(len(jobs), 1)

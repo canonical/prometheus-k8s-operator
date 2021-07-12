@@ -246,15 +246,14 @@ class PrometheusProvider(ProviderBase):
             A static scrape configuration for a specific relation.
         """
         scrape_metadata = json.loads(
-            relation.data[relation.app].get("prometheus_scrape_metadata"))
+            relation.data[relation.app].get("prometheus_scrape_metadata")
+        )
 
         if not scrape_metadata:
             return None
 
         job_name = "juju_prometheus_scrape_{}_{}_{}".format(
-            scrape_metadata["model"],
-            scrape_metadata["application"],
-            relation.id
+            scrape_metadata["model"], scrape_metadata["application"], relation.id
         )
 
         hosts = {}
@@ -267,20 +266,21 @@ class PrometheusProvider(ProviderBase):
         scrape_config = {
             "job_name": job_name,
             "metrics_path": scrape_metadata["static_scrape_path"],
-            "static_configs": []
+            "static_configs": [],
         }
 
         for host_name, host_address in hosts.items():
-            metrics_url = "{}:{}".format(host_address,
-                                         scrape_metadata["static_scrape_port"])
+            metrics_url = "{}:{}".format(
+                host_address, scrape_metadata["static_scrape_port"]
+            )
 
             config = {
                 "targets": [metrics_url],
                 "labels": {
                     "juju_model": "{}".format(scrape_metadata["model"]),
                     "juju_application": "{}".format(scrape_metadata["application"]),
-                    "juju_unit": "{}".format(host_name)
-                }
+                    "juju_unit": "{}".format(host_name),
+                },
             }
             scrape_config["static_configs"].append(config)
 
@@ -288,7 +288,6 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
-
     def __init__(self, charm, name, consumes, service, config={}, multi=False):
         """Construct a Prometheus charm client.
 
@@ -329,8 +328,9 @@ class PrometheusConsumer(ConsumerBase):
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
-        self.framework.observe(self._charm.on[self._service].pebble_ready,
-                               self._set_unit_ip)
+        self.framework.observe(
+            self._charm.on[self._service].pebble_ready, self._set_unit_ip
+        )
 
     def _set_scrape_metadata(self, event):
         """Ensure scrape targets metadata is made available to Prometheus.
@@ -342,13 +342,15 @@ class PrometheusConsumer(ConsumerBase):
         host address in Juju unit relation data.
         """
         event.relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
-            self._charm.model.get_binding(event.relation).network.bind_address)
+            self._charm.model.get_binding(event.relation).network.bind_address
+        )
 
         if not self._charm.unit.is_leader():
             return
 
-        event.relation.data[self._charm.app][
-            "prometheus_scrape_metadata"] = json.dumps(self._scrape_metadata)
+        event.relation.data[self._charm.app]["prometheus_scrape_metadata"] = json.dumps(
+            self._scrape_metadata
+        )
 
     def _set_unit_ip(self, event):
         """Set unit host address
@@ -358,7 +360,8 @@ class PrometheusConsumer(ConsumerBase):
         """
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
-                self._charm.model.get_binding(relation).network.bind_address)
+                self._charm.model.get_binding(relation).network.bind_address
+            )
 
     @property
     def _scrape_metadata(self):
@@ -371,6 +374,6 @@ class PrometheusConsumer(ConsumerBase):
             "model": "{}".format(self._charm.model.name),
             "application": "{}".format(self._charm.model.app.name),
             "static_scrape_port": self._static_scrape_port,
-            "static_scrape_path": self._static_scrape_path
+            "static_scrape_path": self._static_scrape_path,
         }
         return metadata
