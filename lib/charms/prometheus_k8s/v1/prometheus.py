@@ -282,6 +282,7 @@ class PrometheusProvider(ProviderBase):
                 "targets": [metrics_url],
                 "labels": {
                     "juju_model": "{}".format(scrape_metadata["model"]),
+                    "juju_model_uuid": "{}".format(scrape_metadata["model_uuid"]),
                     "juju_application": "{}".format(scrape_metadata["application"]),
                     "juju_unit": "{}".format(host_name),
                 },
@@ -377,6 +378,7 @@ class PrometheusConsumer(ConsumerBase):
         """
         metadata = {
             "model": "{}".format(self._charm.model.name),
+            "model_uuid": "{}".format(self._charm.model.uuid),
             "application": "{}".format(self._charm.model.app.name),
             "static_scrape_port": self._static_scrape_port,
             "static_scrape_path": self._static_scrape_path,
