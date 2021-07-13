@@ -11,6 +11,7 @@ from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
 
 SCRAPE_METADATA = {
     "model": "consumer-model",
+    "model_uuid": "abcdef",
     "application": "consumer",
     "static_scrape_port": "8000",
     "static_scrape_path": "/metrics",
@@ -93,5 +94,6 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(len(targets), 1)
         labels = static_config["labels"]
         self.assertIn("juju_model", labels)
+        self.assertIn("juju_model_uuid", labels)
         self.assertIn("juju_application", labels)
         self.assertIn("juju_unit", labels)
