@@ -249,6 +249,9 @@ class PrometheusProvider(ProviderBase):
         Returns:
             A static scrape configuration for a specific relation.
         """
+        if len(relation.units) == 0:
+            return {}
+
         scrape_metadata = json.loads(
             relation.data[relation.app].get("prometheus_scrape_metadata")
         )
