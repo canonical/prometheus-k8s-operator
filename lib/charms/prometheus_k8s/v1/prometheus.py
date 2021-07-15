@@ -233,9 +233,9 @@ class PrometheusProvider(ProviderBase):
         scrape_jobs = []
 
         for relation in self._charm.model.relations[self._relation_name]:
-            job = self._static_scrape_config(relation)
-            if job:
-                scrape_jobs.append(job)
+            static_scrape_jobs = self._static_scrape_config(relation)
+            if static_scrape_jobs:
+                scrape_jobs.extend(static_scrape_jobs)
 
         return scrape_jobs
 
@@ -250,16 +250,20 @@ class PrometheusProvider(ProviderBase):
             A static scrape configuration for a specific relation.
         """
         if len(relation.units) == 0:
-            return {}
-
-        scrape_metadata = json.loads(
-            relation.data[relation.app].get("prometheus_scrape_metadata")
-        )
-
-        if not scrape_metadata:
             return None
 
-        job_name = "juju_prometheus_scrape_{}_{}_{}".format(
+        scrape_jobs = json.loads(
+            relation.data[relation.app].get("scrape_jobs")
+        )
+
+        if not scrape_jobs:
+            return None
+
+        scrape_metadata = json.loads(
+            relation.data[relation.app].get("scrape_metadata")
+        )
+
+        job_name_prefix = "juju_{}_{}_prometheus_{}_scrape".format(
             scrape_metadata["model"], scrape_metadata["application"], relation.id
         )
 
@@ -270,33 +274,45 @@ class PrometheusProvider(ProviderBase):
                 continue
             hosts[unit.name] = host_address
 
-        scrape_config = {
-            "job_name": job_name,
-            "metrics_path": scrape_metadata["static_scrape_path"],
-            "static_configs": [],
-        }
+        labeled_job_configs = [
+        ]
+        for job in scrape_jobs:
+            name = job.get("job_name")
+            job_name = "job_name_prefix_{}".format(name) if name else job_name_prefix
 
-        for host_name, host_address in hosts.items():
-            metrics_url = "{}:{}".format(
-                host_address, scrape_metadata["static_scrape_port"]
-            )
+            config = {"job_name": job_name}
 
-            config = {
-                "targets": [metrics_url],
-                "labels": {
-                    "juju_model": "{}".format(scrape_metadata["model"]),
-                    "juju_model_uuid": "{}".format(scrape_metadata["model_uuid"]),
-                    "juju_application": "{}".format(scrape_metadata["application"]),
-                    "juju_unit": "{}".format(host_name),
-                },
-            }
-            scrape_config["static_configs"].append(config)
+            static_configs = job.get("static_configs")
+            labels = static_configs[0].get("labels", {}) if static_configs else {}
+            config["static_configs"] = []
 
-        return scrape_config
+            for host_name, host_address in hosts.items():
+                juju_labels = labels.copy()  # deep copy not needed
+                juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
+                juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
+                juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+                juju_labels["juju_unit"] = "{}".format(host_name)
+
+                static_config = {"labels": juju_labels}
+
+                ports = job.get("metrics_ports", [])
+                if ports:
+                    targets = []
+                    for port in ports:
+                        targets.append("{}:{}".format(host_address, port))
+                    static_config["targets"] = targets
+                else:
+                    static_config["targets"] = [host_address]
+
+                config["static_configs"].append(static_config)
+
+            labeled_job_configs.append(config)
+
+        return labeled_job_configs
 
 
 class PrometheusConsumer(ConsumerBase):
-    def __init__(self, charm, name, consumes, service, config={}, multi=False):
+    def __init__(self, charm, name, consumes, service, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides an interface to
@@ -319,9 +335,7 @@ class PrometheusConsumer(ConsumerBase):
                 semantic version specfications for the monitoring
                 service.
             service: string name of Pebble service of consumer charm.
-            config: a optional dictionary with keys that are
-                Prometheus scrape configuration options, for example
-                metrics path and port.
+            jobs: an optional list of jobs along with their configuration
             multi: an optional (default False) flag to indicate if
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
@@ -331,8 +345,7 @@ class PrometheusConsumer(ConsumerBase):
         self._charm = charm
         self._service = service
         self._relation_name = name
-        self._static_scrape_port = config.get("static_scrape_port", 80)
-        self._static_scrape_path = config.get("static_scrape_path", "/metrics")
+        self._jobs = jobs
         self._multi_mode = multi
 
         events = self._charm.on[self._relation_name]
@@ -357,8 +370,11 @@ class PrometheusConsumer(ConsumerBase):
         if not self._charm.unit.is_leader():
             return
 
-        event.relation.data[self._charm.app]["prometheus_scrape_metadata"] = json.dumps(
+        event.relation.data[self._charm.app]["scrape_metadata"] = json.dumps(
             self._scrape_metadata
+        )
+        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(
+            self._scrape_jobs
         )
 
     def _set_unit_ip(self, event):
@@ -373,6 +389,15 @@ class PrometheusConsumer(ConsumerBase):
             )
 
     @property
+    def _scrape_jobs(self):
+        default_job = [
+            {
+                "metrics_path": "/metrics"
+            }
+        ]
+        return self._jobs if self._jobs else default_job
+
+    @property
     def _scrape_metadata(self):
         """Generate scrape metadata.
 
@@ -383,7 +408,5 @@ class PrometheusConsumer(ConsumerBase):
             "model": "{}".format(self._charm.model.name),
             "model_uuid": "{}".format(self._charm.model.uuid),
             "application": "{}".format(self._charm.model.app.name),
-            "static_scrape_port": self._static_scrape_port,
-            "static_scrape_path": self._static_scrape_path,
         }
         return metadata
