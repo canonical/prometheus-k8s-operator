@@ -283,8 +283,31 @@ class PrometheusProvider(ProviderBase):
             config = {"job_name": job_name}
 
             static_configs = job.get("static_configs")
-            labels = static_configs[0].get("labels", {}) if static_configs else {}
             config["static_configs"] = []
+
+            # TODO iterate over static_configs
+            labels = static_configs[0].get("labels", {}) if static_configs else {}
+            all_targets = static_configs[0].get("targets", [])
+
+            ports = []
+            unitless_targets = []
+            for target in all_targets:
+                host, port = target.split(":")
+                if host.strip() == "*":
+                    ports.append(port.strip())
+                else:
+                    unitless_targets.append(target)
+
+            if unitless_targets:
+                juju_labels = labels.copy()  # deep copy not needed
+                juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
+                juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
+                juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+                unitless_config = {
+                    "targets": unitless_targets,
+                    "labels": juju_labels
+                }
+                config["static_configs"].append(unitless_config)
 
             for host_name, host_address in hosts.items():
                 juju_labels = labels.copy()  # deep copy not needed
@@ -295,7 +318,6 @@ class PrometheusProvider(ProviderBase):
 
                 static_config = {"labels": juju_labels}
 
-                ports = job.get("metrics_ports", [])
                 if ports:
                     targets = []
                     for port in ports:
