@@ -352,7 +352,7 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
-    def __init__(self, charm, name, consumes, service, jobs=[], multi=False):
+    def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides an interface to
@@ -383,7 +383,7 @@ class PrometheusConsumer(ConsumerBase):
         super().__init__(charm, name, consumes, multi)
 
         self._charm = charm
-        self._service = service
+        self._service_event = service_event
         self._relation_name = name
         self._jobs = jobs
         self._multi_mode = multi
@@ -391,7 +391,7 @@ class PrometheusConsumer(ConsumerBase):
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
         self.framework.observe(
-            self._charm.on[self._service].pebble_ready, self._set_unit_ip
+            self._service_event, self._set_unit_ip
         )
 
     def _set_scrape_metadata(self, event):
