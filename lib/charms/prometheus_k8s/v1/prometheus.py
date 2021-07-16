@@ -263,31 +263,41 @@ class PrometheusProvider(ProviderBase):
             relation.data[relation.app].get("scrape_metadata")
         )
 
-        job_name_prefix = "juju_{}_{}_prometheus_{}_scrape".format(
-            scrape_metadata["model"], scrape_metadata["application"], relation.id
+        job_name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape".format(
+            scrape_metadata["model"], scrape_metadata["model_uuid"][:7],
+            scrape_metadata["application"], relation.id
         )
 
+        hosts = self._relation_hosts(relation)
+
+        labeled_job_configs = []
+        for job in scrape_jobs:
+            config = self._labeled_static_job_config(job, job_name_prefix, hosts, scrape_metadata)
+            labeled_job_configs.append(config)
+
+        return labeled_job_configs
+
+    def _relation_hosts(self, relation):
         hosts = {}
         for unit in relation.units:
             host_address = relation.data[unit].get("prometheus_scrape_host")
             if not host_address:
                 continue
             hosts[unit.name] = host_address
+        return hosts
 
-        labeled_job_configs = [
-        ]
-        for job in scrape_jobs:
-            name = job.get("job_name")
-            job_name = "job_name_prefix_{}".format(name) if name else job_name_prefix
+    def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
+        name = job.get("job_name")
+        job_name = "job_name_prefix_{}".format(name) if name else job_name_prefix
 
-            config = {"job_name": job_name}
+        config = {"job_name": job_name}
 
-            static_configs = job.get("static_configs")
-            config["static_configs"] = []
+        static_configs = job.get("static_configs")
+        config["static_configs"] = []
 
-            # TODO iterate over static_configs
-            labels = static_configs[0].get("labels", {}) if static_configs else {}
-            all_targets = static_configs[0].get("targets", [])
+        for static_config in static_configs:
+            labels = static_config.get("labels", {}) if static_configs else {}
+            all_targets = static_config.get("targets", [])
 
             ports = []
             unitless_targets = []
@@ -299,38 +309,46 @@ class PrometheusProvider(ProviderBase):
                     unitless_targets.append(target)
 
             if unitless_targets:
-                juju_labels = labels.copy()  # deep copy not needed
-                juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-                juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-                juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
-                unitless_config = {
-                    "targets": unitless_targets,
-                    "labels": juju_labels
-                }
+                unitless_config = self._labeled_unitless_config(unitless_targets,
+                                                                labels, scrape_metadata)
                 config["static_configs"].append(unitless_config)
 
             for host_name, host_address in hosts.items():
-                juju_labels = labels.copy()  # deep copy not needed
-                juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-                juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-                juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
-                juju_labels["juju_unit"] = "{}".format(host_name)
-
-                static_config = {"labels": juju_labels}
-
-                if ports:
-                    targets = []
-                    for port in ports:
-                        targets.append("{}:{}".format(host_address, port))
-                    static_config["targets"] = targets
-                else:
-                    static_config["targets"] = [host_address]
-
+                static_config = self._labeled_unit_config(host_name, host_address,
+                                                          ports, labels, scrape_metadata)
                 config["static_configs"].append(static_config)
 
-            labeled_job_configs.append(config)
+        return config
 
-        return labeled_job_configs
+    def _labeled_unitless_config(self, targets, labels, scrape_metadata):
+        juju_labels = labels.copy()  # deep copy not needed
+        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
+        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
+        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+        unitless_config = {
+            "targets": targets,
+            "labels": juju_labels
+        }
+        return unitless_config
+
+    def _labeled_unit_config(self, host_name, host_address, ports, labels, scrape_metadata):
+        juju_labels = labels.copy()  # deep copy not needed
+        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
+        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
+        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+        juju_labels["juju_unit"] = "{}".format(host_name)
+
+        static_config = {"labels": juju_labels}
+
+        if ports:
+            targets = []
+            for port in ports:
+                targets.append("{}:{}".format(host_address, port))
+            static_config["targets"] = targets
+        else:
+            static_config["targets"] = [host_address]
+
+        return static_config
 
 
 class PrometheusConsumer(ConsumerBase):
