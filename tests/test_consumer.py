@@ -29,7 +29,8 @@ class ConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self.provider = PrometheusConsumer(
-            self, "monitoring", consumes=CONSUMES, service=CONSUMER_SERVICE
+            self, "monitoring", consumes=CONSUMES,
+            service_event=self.on.prometheus_tester_pebble_ready
         )
 
 
@@ -45,12 +46,11 @@ class TestLibrary(unittest.TestCase):
         rel_id = self.harness.add_relation("monitoring", "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("prometheus_scrape_metadata", data)
-        scrape_metadata = data["prometheus_scrape_metadata"]
+        self.assertIn("scrape_metadata", data)
+        scrape_metadata = data["scrape_metadata"]
         self.assertIn("model", scrape_metadata)
+        self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
-        self.assertIn("static_scrape_port", scrape_metadata)
-        self.assertIn("static_scrape_path", scrape_metadata)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_unit_sets_bind_address_on_pebble_ready(self, mock_net_get):
