@@ -15,16 +15,7 @@ SCRAPE_METADATA = {
     "application": "consumer",
 }
 SCRAPE_JOBS = [
-    {
-        "static_configs": [
-            {
-                "targets": ["*:8000"],
-                "labels": {
-                    "status": "testing"
-                }
-            }
-        ]
-    }
+    {"static_configs": [{"targets": ["*:8000"], "labels": {"status": "testing"}}]}
 ]
 
 
@@ -61,9 +52,7 @@ class TestProvider(unittest.TestCase):
 
         rel_id = self.harness.add_relation("monitoring", "consumer")
         self.harness.update_relation_data(
-            rel_id,
-            "consumer",
-            {"scrape_metadata": json.dumps(SCRAPE_METADATA)},
+            rel_id, "consumer", {"scrape_metadata": json.dumps(SCRAPE_METADATA)}
         )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
@@ -84,7 +73,7 @@ class TestProvider(unittest.TestCase):
             "consumer",
             {
                 "scrape_metadata": json.dumps(SCRAPE_METADATA),
-                "scrape_jobs": json.dumps(SCRAPE_JOBS)
+                "scrape_jobs": json.dumps(SCRAPE_JOBS),
             },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")

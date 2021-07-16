@@ -377,27 +377,27 @@ class PrometheusProvider(ProviderBase):
         if len(relation.units) == 0:
             return []
 
-        scrape_jobs = json.loads(
-            relation.data[relation.app].get("scrape_jobs")
-        )
+        scrape_jobs = json.loads(relation.data[relation.app].get("scrape_jobs"))
 
         if not scrape_jobs:
             return []
 
-        scrape_metadata = json.loads(
-            relation.data[relation.app].get("scrape_metadata")
-        )
+        scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata"))
 
         job_name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape".format(
-            scrape_metadata["model"], scrape_metadata["model_uuid"][:7],
-            scrape_metadata["application"], relation.id
+            scrape_metadata["model"],
+            scrape_metadata["model_uuid"][:7],
+            scrape_metadata["application"],
+            relation.id,
         )
 
         hosts = self._relation_hosts(relation)
 
         labeled_job_configs = []
         for job in scrape_jobs:
-            config = self._labeled_static_job_config(job, job_name_prefix, hosts, scrape_metadata)
+            config = self._labeled_static_job_config(
+                job, job_name_prefix, hosts, scrape_metadata
+            )
             labeled_job_configs.append(config)
 
         return labeled_job_configs
@@ -467,13 +467,15 @@ class PrometheusProvider(ProviderBase):
                     unitless_targets.append(target)
 
             if unitless_targets:
-                unitless_config = self._labeled_unitless_config(unitless_targets,
-                                                                labels, scrape_metadata)
+                unitless_config = self._labeled_unitless_config(
+                    unitless_targets, labels, scrape_metadata
+                )
                 config["static_configs"].append(unitless_config)
 
             for host_name, host_address in hosts.items():
-                static_config = self._labeled_unit_config(host_name, host_address,
-                                                          ports, labels, scrape_metadata)
+                static_config = self._labeled_unit_config(
+                    host_name, host_address, ports, labels, scrape_metadata
+                )
                 config["static_configs"].append(static_config)
 
         return config
@@ -520,13 +522,12 @@ class PrometheusProvider(ProviderBase):
             for a list of fully qualified hosts.
         """
         juju_labels = self._set_juju_labels(labels, scrape_metadata)
-        unitless_config = {
-            "targets": targets,
-            "labels": juju_labels
-        }
+        unitless_config = {"targets": targets, "labels": juju_labels}
         return unitless_config
 
-    def _labeled_unit_config(self, host_name, host_address, ports, labels, scrape_metadata):
+    def _labeled_unit_config(
+        self, host_name, host_address, ports, labels, scrape_metadata
+    ):
         """Static scrape configuration for a wildcard host.
 
         Wildcard hosts are those scrape targets whose address is
@@ -607,9 +608,7 @@ class PrometheusConsumer(ConsumerBase):
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
-        self.framework.observe(
-            self._service_event, self._set_unit_ip
-        )
+        self.framework.observe(self._service_event, self._set_unit_ip)
 
     def _set_scrape_metadata(self, event):
         """Ensure scrape targets metadata is made available to Prometheus.
@@ -654,11 +653,7 @@ class PrometheusConsumer(ConsumerBase):
            A list of dictionaries, where each dictionary specifies a
            single scrape job for Prometheus.
         """
-        default_job = [
-            {
-                "metrics_path": "/metrics"
-            }
-        ]
+        default_job = [{"metrics_path": "/metrics"}]
         return self._jobs if self._jobs else default_job
 
     @property

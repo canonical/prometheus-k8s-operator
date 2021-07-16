@@ -29,8 +29,10 @@ class ConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self.provider = PrometheusConsumer(
-            self, "monitoring", consumes=CONSUMES,
-            service_event=self.on.prometheus_tester_pebble_ready
+            self,
+            "monitoring",
+            consumes=CONSUMES,
+            service_event=self.on.prometheus_tester_pebble_ready,
         )
 
 
