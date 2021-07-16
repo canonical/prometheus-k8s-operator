@@ -478,6 +478,27 @@ class PrometheusProvider(ProviderBase):
 
         return config
 
+    def _set_juju_labels(self, labels, scrape_metadata):
+        """Create a copy of metric labels with Juju topology information.
+
+        Args:
+
+            labels: a dictionary containing Prometheus metric labels.
+            scrape_metadata: scrape related metadata provied by
+                `PrometheusConsumer`.
+
+        Returns:
+
+            a copy of the `labels` dictionary augmented with Juju
+            topology information with the exception of unit name.
+        """
+        juju_labels = labels.copy()  # deep copy not needed
+        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
+        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
+        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+
+        return juju_labels
+
     def _labeled_unitless_config(self, targets, labels, scrape_metadata):
         """Static scrape configuration for fully qualified host addresses.
 
@@ -498,10 +519,7 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a list of fully qualified hosts.
         """
-        juju_labels = labels.copy()  # deep copy not needed
-        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+        juju_labels = self._set_juju_labels(labels, scrape_metadata)
         unitless_config = {
             "targets": targets,
             "labels": juju_labels
@@ -529,10 +547,7 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a single wildcard host.
         """
-        juju_labels = labels.copy()  # deep copy not needed
-        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+        juju_labels = self._set_juju_labels(labels, scrape_metadata)
         juju_labels["juju_unit"] = "{}".format(host_name)
 
         static_config = {"labels": juju_labels}
