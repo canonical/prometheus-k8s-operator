@@ -13,9 +13,19 @@ SCRAPE_METADATA = {
     "model": "consumer-model",
     "model_uuid": "abcdef",
     "application": "consumer",
-    "static_scrape_port": "8000",
-    "static_scrape_path": "/metrics",
 }
+SCRAPE_JOBS = [
+    {
+        "static_configs": [
+            {
+                "targets": ["*:8000"],
+                "labels": {
+                    "status": "testing"
+                }
+            }
+        ]
+    }
+]
 
 
 class PrometheusCharm(CharmBase):
@@ -53,7 +63,7 @@ class TestProvider(unittest.TestCase):
         self.harness.update_relation_data(
             rel_id,
             "consumer",
-            {"prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)},
+            {"scrape_metadata": json.dumps(SCRAPE_METADATA)},
         )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
@@ -72,7 +82,10 @@ class TestProvider(unittest.TestCase):
         self.harness.update_relation_data(
             rel_id,
             "consumer",
-            {"prometheus_scrape_metadata": json.dumps(SCRAPE_METADATA)},
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "scrape_jobs": json.dumps(SCRAPE_JOBS)
+            },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(
@@ -83,7 +96,6 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(len(jobs), 1)
         job = jobs[0]
         self.assertIn("job_name", job)
-        self.assertIn("metrics_path", job)
         self.assertIn("static_configs", job)
         static_configs = job["static_configs"]
         self.assertEqual(len(static_configs), 1)
