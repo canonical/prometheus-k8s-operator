@@ -4,18 +4,23 @@
 
 USAGE="usage: $0
        -h    show help
-       -f    fix linting errors"
+       -f    fix linting errors
+       -u    run using Ubunut host native packages"
 
 
 # Parse command line options
-while getopts ":fh" opt
+while getopts ":fhu" opt
 do
 case $opt in
- f) FIX="yes";;
+ f) FIX="yes"
+    shift;;
+ u) UBUNTU_NATIVE="yes"
+    shift;;
  h|\?) echo "$USAGE"
        exit ;;
 esac
 done
+
 
 if [ -z "$VIRTUAL_ENV" -a -d venv/ ]; then
     . venv/bin/activate
@@ -27,10 +32,16 @@ else
     export PYTHONPATH="lib:src:$PYTHONPATH"
 fi
 
+if [ -z "${UBUNTU_NATIVE}" ]; then
+    export COVERAGE="coverage"
+else
+    export COVERAGE="python3-coverage"
+fi
+
 flake8 || exit $?
 if [ -z "${FIX}" ]; then
     BLACKARGS="--diff --check"
 fi
 black ${BLACKARGS} src tests lib/charms/prometheus_k8s || exit $?
-coverage run --branch --source=src,lib/charms/prometheus_k8s -m unittest -v "$@"
-coverage report -m
+${COVERAGE} run --branch --source=src,lib/charms/prometheus_k8s -m unittest -v "$@"
+${COVERAGE} report -m
