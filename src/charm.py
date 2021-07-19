@@ -12,8 +12,8 @@ from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
-from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
+from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
