@@ -13,6 +13,7 @@ from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
+from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 logger = logging.getLogger(__name__)
@@ -41,8 +42,12 @@ class PrometheusCharm(CharmBase):
             self.on["alertmanager"].relation_broken, self._on_alertmanager_broken
         )
 
+        self.grafana_source_consumer = GrafanaSourceConsumer(
+            charm=self, name="grafana-source", consumes={"Grafana": ">=2.0.0"}
+        )
+
         self.framework.observe(
-            self.on["grafana-source"].relation_changed, self._on_grafana_changed
+            self.on["grafana-source"].relation_joined, self._on_grafana_source_joined
         )
 
         if self.provider_ready:
@@ -112,21 +117,17 @@ class PrometheusCharm(CharmBase):
         """
         self.unit.status = MaintenanceStatus("Pod is terminating.")
 
-    def _on_grafana_changed(self, event):
+    def _on_grafana_source_joined(self, event):
         """Provide Grafana with data source information.
 
         Grafana needs to know the port and name of an application in order
         to form a relation with it. Hence this information is provided here.
         """
-        source_data = {
-            "private-address": str(
-                self.model.get_binding(event.relation).network.bind_address
-            ),
-            "port": str(self.model.config["port"]),
-            "source-type": "prometheus",
-        }
 
-        event.relation.data[self.unit]["sources"] = json.dumps(source_data)
+        self.grafana_source_consumer.add_source(
+            str(self.model.get_binding(event.relation).network.bind_address),
+            str(self.model.config["port"]),
+        )
 
     def _on_alertmanager_changed(self, event):
         """Set an alertmanager configuration.

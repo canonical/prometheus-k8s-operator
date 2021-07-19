@@ -1,6 +1,7 @@
 [flake8]
 max-line-length = 99
 select: E,W,F,C,N
+ignore: W503
 exclude:
   venv
   .git
