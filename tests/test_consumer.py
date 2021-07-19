@@ -9,7 +9,7 @@ from ops.framework import StoredState
 
 # from ops.model import Network
 from ops.testing import Harness
-from charms.prometheus_k8s.v1.prometheus import PrometheusConsumer
+from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
 
 CONSUMES = {"prometheus": ">=2.0"}
 CONSUMER_SERVICE = "prometheus_tester"

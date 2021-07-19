@@ -7,7 +7,7 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from charms.prometheus_k8s.v1.prometheus import PrometheusProvider
+from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 
 SCRAPE_METADATA = {
     "model": "consumer-model",
