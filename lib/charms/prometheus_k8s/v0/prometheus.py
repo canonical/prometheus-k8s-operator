@@ -391,7 +391,7 @@ class PrometheusProvider(ProviderBase):
         if len(relation.units) == 0:
             return []
 
-        scrape_jobs = json.loads(relation.data[relation.app].get("scrape_jobs"))
+        scrape_jobs = json.loads(relation.data[relation.app].get("scrape_jobs", "[]"))
 
         if not scrape_jobs:
             return []
