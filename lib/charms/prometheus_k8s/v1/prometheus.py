@@ -44,7 +44,7 @@ assuming your charm exposes a metrics endpoint over a relation named
         super().__init__(*args)
         ...
         self.prometheus = PrometheusConsumer(self, "monitoring",
-                                             {"prometheus": ">=2.0"}
+                                             {"prometheus": ">=2.0"},
                                              self.on.my_service_pebble_ready)
         ...
 
@@ -64,21 +64,20 @@ An instantiated `PrometheusConsumer` object will ensure that each unit
 of the consumer charm, is a scrape target for the
 `PrometheusProvider`. By default `PrometheusConsumer` assumes each
 unit of the consumer charm exports its metrics at a path given by
-`/metrics` on port 80. This is the default behaviour of most
-Prometheus metrics exporters so typically the defaults do not need to
-be changed. However if required the defaults may be changed by
+`/metrics` on port 80. The defaults may be changed by
 providing the `PrometheusConsumer` constructor an optional argument
-(`jobs`) that represents a Prometheus job specification using Python
-standard data structures. This job specification is a rich subset of
-Prometheus' own [scrape
+(`jobs`) that represents list of Prometheus scrape job specification
+using Python standard data structures. This job specification is a
+subset of Prometheus' own [scrape
 configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)
 format but represented using Python data structures. More than one job
 may be provided using the `jobs` argument. Hence `jobs` accepts a list
 of dictionaries where each dictionary represents one `<scrape_config>`
-object as described in the Prometheus documentation. However service
-discovery configuration types are forbidden, and only static scrape
-configurations are enabled. Also authorisation, authentication and
-encryption related configurations are currently not supported.
+object as described in the Prometheus documentation. The current supported
+configuration subset is:
+* `job_name`
+* `metrics_path`
+* `static_configs`
 
 Suppose it is required to change the port on which scraped metrics are
 exposed to 8000. This may be done by providing the following data
@@ -89,7 +88,7 @@ structure as the value of `jobs`.
     {
         "static_configs": [
             {
-                "targets": ["*:8000"],
+                "targets": ["*:8000"]
             }
         ]
     }
@@ -162,7 +161,7 @@ each job must be given a unique name. For example
     },
     {
         "job_name": "my-second-job",
-        "metrics_path": "another-path"
+        "metrics_path": "another-path",
         "static_configs": [
             {
                 "targets": ["*:8000"],
@@ -265,6 +264,14 @@ LIBID = "1234"
 LIBAPI = 1
 LIBPATCH = 0
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_scrape_configuration(job):
+    return {
+        "job_name": job.get("job_name"),
+        "metrics_path": job.get("metrics_path"),
+        "static_configs": job.get("static_configs"),
+    }
 
 
 class TargetsChanged(EventBase):
@@ -396,7 +403,10 @@ class PrometheusProvider(ProviderBase):
         labeled_job_configs = []
         for job in scrape_jobs:
             config = self._labeled_static_job_config(
-                job, job_name_prefix, hosts, scrape_metadata
+                _sanitize_scrape_configuration(job),
+                job_name_prefix,
+                hosts,
+                scrape_metadata,
             )
             labeled_job_configs.append(config)
 
@@ -568,10 +578,16 @@ class PrometheusConsumer(ConsumerBase):
     def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
-        The `PrometheusConsumer` object provides an interface to
-        Prometheus. Any charm instantiating this object has metrics
-        from each of its units aggregated by a related Prometheus
-        charm
+        The `PrometheusConsumer` object provides scrape configurations
+        to a Prometheus charm. A charm instantiating this object has
+        metrics from each of its units scraped by the related Prometheus
+        charms. The scraped metrics are automatically tagged by the
+        Prometheus charms with Juju topology data via the
+        `juju_model_name`, `juju_model_uuid`, `juju_application_name`
+        and `juju_unit` labels.
+
+        The `PrometheusConsumer` can be instantiated as follows:
+
             self.prometheus = PrometheusConsumer(self, "monitoring",
                                                  {"prometheus": ">=2.0"}
                                                  self.my_service_pebble_ready)
@@ -592,18 +608,22 @@ class PrometheusConsumer(ConsumerBase):
             service: a `CharmEvent` in response to which each unit
                 must advertise its address.
             jobs: an optional list of dictionaries where each
-                dictionary represents the Prometheus scrape configuration
-                for a single job.
+                dictionary represents the Prometheus scrape
+                configuration for a single job. When not provided, a
+                default scrape configuration is provided for the
+                `/metrics` endpoint pooling using port `80`.
             multi: an optional (default False) flag to indicate if
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
+
         """
         super().__init__(charm, name, consumes, multi)
 
         self._charm = charm
         self._service_event = service_event
         self._relation_name = name
-        self._jobs = jobs
+        # Sanitize job configurations to the supported subset of parameters
+        self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
         self._multi_mode = multi
 
         events = self._charm.on[self._relation_name]
