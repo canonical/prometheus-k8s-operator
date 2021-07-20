@@ -1,6 +1,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +22,29 @@ requires:
   monitoring:
     interface: prometheus_scrape
 """
+JOBS = [
+    {
+        "global": {"scrape_interval": "1h"},
+        "rule_files": ["/some/file"],
+        "file_sd_configs": [{"files": "*some-files*"}],
+        "job_name": "my-first-job",
+        "metrics_path": "one-path",
+        "static_configs": [
+            {
+                "targets": ["10.1.238.1:6000", "*:7000"],
+                "labels": {"some-key": "some-value"},
+            }
+        ],
+    },
+    {
+        "job_name": "my-second-job",
+        "metrics_path": "another-path",
+        "static_configs": [
+            {"targets": ["*:8000"], "labels": {"some-other-key": "some-other-value"}}
+        ],
+    },
+]
+ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
 
 
 class ConsumerCharm(CharmBase):
@@ -33,6 +57,7 @@ class ConsumerCharm(CharmBase):
             "monitoring",
             consumes=CONSUMES,
             service_event=self.on.prometheus_tester_pebble_ready,
+            jobs=JOBS,
         )
 
 
@@ -93,3 +118,26 @@ class TestLibrary(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_host", data)
         self.assertEqual(data["prometheus_scrape_host"], bind_address)
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_consumer_supports_multiple_jobs(self, _):
+        rel_id = self.harness.add_relation("monitoring", "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        self.assertIn("scrape_jobs", data)
+        jobs = json.loads(data["scrape_jobs"])
+        self.assertEqual(len(jobs), len(JOBS))
+        names = [job["job_name"] for job in jobs]
+        job_names = [job["job_name"] for job in JOBS]
+        self.assertListEqual(names, job_names)
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_consumer_sanitizes_jobs(self, _):
+        rel_id = self.harness.add_relation("monitoring", "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        self.assertIn("scrape_jobs", data)
+        jobs = json.loads(data["scrape_jobs"])
+        for job in jobs:
+            keys = set(job.keys())
+            self.assertTrue(keys.issubset(ALLOWED_KEYS))
