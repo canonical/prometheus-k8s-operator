@@ -268,7 +268,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +463,7 @@ class PrometheusProvider(ProviderBase):
             for a single job.
         """
         name = job.get("job_name")
-        job_name = "job_name_prefix_{}".format(name) if name else job_name_prefix
+        job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
 
         config = {"job_name": job_name}
 
