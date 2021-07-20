@@ -466,6 +466,8 @@ class PrometheusProvider(ProviderBase):
         job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
 
         config = {"job_name": job_name}
+        if job.get("metrics_path"):
+            config["metrics_path"] = job["metrics_path"]
 
         static_configs = job.get("static_configs")
         config["static_configs"] = []
