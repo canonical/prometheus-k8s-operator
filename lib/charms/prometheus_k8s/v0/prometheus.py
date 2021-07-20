@@ -276,7 +276,7 @@ logger = logging.getLogger(__name__)
 def _sanitize_scrape_configuration(job):
     return {
         "job_name": job.get("job_name"),
-        "metrics_path": job.get("metrics_path"),
+        "metrics_path": job.get("metrics_path", "/metrics"),
         "static_configs": job.get("static_configs"),
     }
 
@@ -465,9 +465,7 @@ class PrometheusProvider(ProviderBase):
         name = job.get("job_name")
         job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
 
-        config = {"job_name": job_name}
-        if job.get("metrics_path"):
-            config["metrics_path"] = job["metrics_path"]
+        config = {"job_name": job_name, "metrics_path": job["metrics_path"]}
 
         static_configs = job.get("static_configs")
         config["static_configs"] = []

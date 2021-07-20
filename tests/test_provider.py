@@ -171,13 +171,17 @@ class TestProvider(unittest.TestCase):
                     self.assertIn("juju_unit", static_config.get("labels"))
 
     def test_provider_allows_custom_metrics_paths(self):
-        self.setup_charm_relations()
+        rel_ids = self.setup_charm_relations()
+        self.assertEqual(len(rel_ids), 1)
+        rel_id = rel_ids[0]
 
         jobs = self.harness.charm.prometheus_provider.jobs()
         for job in jobs:
             if job.get("metrics_path"):
-                name_suffix = job["job_name"].split("-")[-1]
-                path = named_job_attribute(name_suffix, "metrics_path")
+                name_suffix = job_name_suffix(
+                    job["job_name"], juju_job_labels(job), rel_id
+                )
+                path = named_job_attribute(name_suffix, "metrics_path", "/metrics")
                 self.assertEqual(job["metrics_path"], path)
 
     def test_provider_sanitizes_jobs(self):
@@ -207,20 +211,54 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(len(targets), len(ports) * len(consumers.units))
 
 
-def named_job_attribute(job_name, attribute, jobs=SCRAPE_JOBS):
+def juju_job_labels(job):
+    """Fetch job labels.
+
+    Args:
+        job: a list of static scrape jobs
+
+    Returns:
+        a dictionary of job labels for the first static job.
+    """
+    static_config = job["static_configs"][0]
+    return static_config["labels"]
+
+
+def job_name_suffix(job_name, labels, rel_id):
+    """Fetch consumer set job name.
+
+    Args:
+        job_name: Provider generated job name string.
+        labels: dictionary of juju static job labels
+        rel_id: id of relation for this job.
+
+    Returns:
+        string name of job as set by consumer (if any)
+    """
+    name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
+        labels["juju_model"],
+        labels["juju_model_uuid"][:7],
+        labels["juju_application"],
+        rel_id,
+    )
+    return job_name[len(name_prefix) :]
+
+
+def named_job_attribute(job_name, attribute, default=None, jobs=SCRAPE_JOBS):
     """Fetch and attribute of a named job_name.
 
     Args:
         job_name: string name suffix of job_name.
         attribute: string name of attribute.
+        default: optional default value to be returned if attribute is not found.
         jobs: optional list of jobs to search for job_name.
 
     Returns:
-        value of requested attribute if found or None.
+        value of requested attribute if found or default.
     """
     for job in jobs:
         if job["job_name"].endswith(job_name):
-            return job[attribute]
+            return job.get(attribute, default)
     return None
 
 
