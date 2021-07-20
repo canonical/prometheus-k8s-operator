@@ -57,9 +57,14 @@ class GrafanaSourceConsumer(ConsumerBase):
     _stored = StoredState()
 
     def __init__(
-        self, charm: CharmBase, name: str, consumes: dict, refresh_event: CharmEvents,
-            source_type: Optional[str] = "prometheus", source_port: Optional[str] = "9090",
-            multi: Optional[bool] = False
+        self,
+        charm: CharmBase,
+        name: str,
+        consumes: dict,
+        refresh_event: CharmEvents,
+        source_type: Optional[str] = "prometheus",
+        source_port: Optional[str] = "9090",
+        multi: Optional[bool] = False,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -121,7 +126,7 @@ class GrafanaSourceConsumer(ConsumerBase):
         """
         event.relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
             str(self.charm.model.get_binding(event.relation).network.bind_address),
-            self._source_port
+            self._source_port,
         )
 
         if not self.charm.unit.is_leader():
@@ -144,7 +149,7 @@ class GrafanaSourceConsumer(ConsumerBase):
             "model": str(self.charm.model.name),
             "model_uuid": str(self.charm.model.uuid),
             "application": str(self.charm.model.app.name),
-            "type": self._source_type
+            "type": self._source_type,
         }
         return data
 
@@ -157,7 +162,7 @@ class GrafanaSourceConsumer(ConsumerBase):
         for relation in self.charm.model.relations[self.name]:
             relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
                 str(self.charm.model.get_binding(relation).network.bind_address),
-                self._source_port
+                self._source_port,
             )
 
 
@@ -165,9 +170,9 @@ class GrafanaSourceProvider(ProviderBase):
     on = GrafanaSourceEvents()
     _stored = StoredState()
 
-    def __init__(self, charm: CharmBase, name: str, service: str,
-                 version: Optional[str] = None
-                 ) -> None:
+    def __init__(
+        self, charm: CharmBase, name: str, service: str, version: Optional[str] = None
+    ) -> None:
         """A Grafana based Monitoring service consumer
 
         Args:
@@ -241,8 +246,8 @@ class GrafanaSourceProvider(ProviderBase):
                 source_data["model"],
                 source_data["model_uuid"],
                 source_data["application"],
-                unit_name.split('/')[1],
-                rel.id
+                unit_name.split("/")[1],
+                rel.id,
             )
 
             host_data = {
