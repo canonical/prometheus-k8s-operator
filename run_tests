@@ -5,7 +5,7 @@
 USAGE="usage: $0
        -h    show help
        -f    fix linting errors
-       -u    run using Ubunut host native packages"
+       -u    run using Ubuntu host native packages"
 
 
 # Parse command line options
