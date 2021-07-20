@@ -43,8 +43,10 @@ class PrometheusCharm(CharmBase):
         )
 
         self.grafana_source_consumer = GrafanaSourceConsumer(
-            charm=self, name="grafana-source", consumes={"Grafana": ">=2.0.0"},
-            refresh_event=self.on.prometheus_pebble_ready
+            charm=self,
+            name="grafana-source",
+            consumes={"Grafana": ">=2.0.0"},
+            refresh_event=self.on.prometheus_pebble_ready,
         )
 
         if self.provider_ready:
