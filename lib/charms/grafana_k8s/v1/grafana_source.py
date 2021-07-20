@@ -8,7 +8,8 @@ from ops.charm import (
     RelationChangedEvent,
     RelationJoinedEvent,
 )
-from ops.framework import EventBase, EventSource, StoredState
+from ops.framework import EventBase, EventSource, ObjectEvents, StoredState
+from ops.model import Relation
 from ops.relation import ConsumerBase, ProviderBase
 from typing import Dict, List, Optional
 
@@ -40,7 +41,7 @@ class GrafanaSourcesChanged(EventBase):
         self.data = snapshot["data"]
 
 
-class GrafanaSourceEvents(CharmEvents):
+class GrafanaSourceEvents(ObjectEvents):
     """Events raised by :class:`GrafanaSourceEvents`"""
 
     # We are emitting multiple events for the same thing due to the way Grafana provisions
@@ -56,7 +57,9 @@ class GrafanaSourceConsumer(ConsumerBase):
     _stored = StoredState()
 
     def __init__(
-        self, charm: CharmBase, name: str, consumes: dict, multi=False
+        self, charm: CharmBase, name: str, consumes: dict, refresh_event: CharmEvents,
+            source_type: Optional[str] = "prometheus", source_port: Optional[str] = "9090",
+            multi: Optional[bool] = False
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -89,122 +92,82 @@ class GrafanaSourceConsumer(ConsumerBase):
                 this is `grafana-source`. The values of the dictionary
                 are corresponding minimal acceptable semantic versions
                 for the service.
+            refresh_event: a :class:`CharmEvents` event on which the IP
+                address should be refreshed in case of pod or
+                machine/VM restart.
+            source_type an optional (default `prometheus`) source type
+                required for Grafana configuration
+            source_port an optional (default `9090`) source port
+                required for Grafana configuration
             multi: an optional (default `False`) flag to indicate if
                 this object should support interacting with multiple
                 service providers.
-
         """
         super().__init__(charm, name, consumes, multi)
 
         self.charm = charm
-
-        self._stored.set_default(sources=dict())  # available data sources
-        self._stored.set_default(sources_to_delete=set())
         events = self.charm.on[name]
+
+        self._source_type = source_type
+        self._source_port = source_port
+
         self.framework.observe(events.relation_joined, self._set_sources)
-
-    def add_source(self, address: str, port: str,
-                   source_type: str = "prometheus", source_name: Optional[str] = None,
-                   rel_id: Optional[int] = None) -> None:
-        """Add an additional source to the Grafana source service.
-
-        Args:
-            address: a :str: which gives address of the target
-            port: a :str: which gives the port of the target
-            source_type: a :str: indicating the source type. Defaults to "prometheus"
-            source_name: a :str: specifying the source name. Otherwise this is calculated
-            rel_id: an optional integer specifying the relation ID
-                for the grafana source service, only required if the
-                :class:`GrafanaSourceConsumer` has been instantiated in
-                `multi` mode.
-
-        """
-        rel = self.framework.model.get_relation(self.name, rel_id)
-        rel_id = rel_id if rel_id is not None else rel.id
-
-        unique_source_name = "juju_{}_{}_{}".format(
-            self.charm.model.name,
-            self.charm.app.name,
-            rel_id
-        )
-        if not source_name or self._source_name_in_use(source_name):
-            logger.warning(
-                "'source-name' not specified' or provided name is already in use. "
-                "Using safe default: {}.".format(unique_source_name)
-            )
-            source_name = unique_source_name
-
-        data = {
-            "address": address,
-            "port": port,
-            "source-type": source_type,
-            "source-name": source_name
-        }
-
-        self._update_sources(data, rel_id)
-
-    def remove_source(self, rel_id=None) -> None:
-        """Removes a source relation.
-
-        Args:
-            rel_id: an optional integer specifying the relation ID
-                for the grafana-k8s source service, only required if the
-                :class:`GrafanaSourceConsumer` has been instantiated in
-                `multi` mode.
-        """
-        rel = self.framework.model.get_relation(self.name, rel_id)
-
-        if rel_id is None:
-            rel_id = rel.id
-
-        source = self._stored.sources.pop(rel_id)
-
-        if source is not None:
-            self._stored.sources_to_delete.add(source["source-name"])
-
-        self._update_sources({}, rel_id)
-
-    def list_sources(self) -> List[dict]:
-        """Returns an array of currently valid sources"""
-        sources = []
-        for source in self._stored.sources.values():
-            sources.append(source)
-
-        return sources
+        self.framework.observe(refresh_event, self._set_unit_ip)
 
     def _set_sources(self, event: RelationJoinedEvent):
         """
-        On a relation_joined event, check to see whether or not we already have stored data
-        and update the relation data bag if we know about anything
+        On a relation_joined event, inform the provider about the source
+        configuration
         """
-        rel_id = event.relation.id
-        if not self._stored.sources.get(rel_id, {}):
+        event.relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
+            str(self.charm.model.get_binding(event.relation).network.bind_address),
+            self._source_port
+        )
+
+        if not self.charm.unit.is_leader():
             return
 
-        logger.debug("Setting Grafana data sources: %s", self._stored.sources[rel_id])
-        event.relation.data[self.charm.app]["sources"] = json.dumps(
-            self._stored.sources[rel_id]
+        logger.debug("Setting Grafana data sources: %s", self._scrape_data)
+        event.relation.data[self.charm.app]["grafana_source_data"] = json.dumps(
+            self._scrape_data
         )
 
-    def _update_sources(self, data: Dict, rel_id: int) -> None:
-        """Updates the event data bucket with new data"""
-        self._stored.sources[rel_id] = data
-        rel = self.framework.model.get_relation(self.name, rel_id)
+    @property
+    def _scrape_data(self) -> Dict:
+        """Generate source metadata.
 
-        logger.debug("Updating Grafana source data to {}".format(data))
-        rel.data[self.charm.app]["sources"] = json.dumps(data)
+        Returns:
 
-    def _source_name_in_use(self, source_name) -> bool:
-        return any(
-            [s["source-name"] == source_name for s in self._stored.sources.values()]
-        )
+            Source configuration data for Grafana.
+        """
+        data = {
+            "model": str(self.charm.model.name),
+            "model_uuid": str(self.charm.model.uuid),
+            "application": str(self.charm.model.app.name),
+            "type": self._source_type
+        }
+        return data
+
+    def _set_unit_ip(self, event: CharmEvents):
+        """Set unit host address
+
+        Each time a consumer charm container is restarted it updates its own
+        host address in the unit relation data for the Prometheus provider.
+        """
+        for relation in self.charm.model.relations[self.name]:
+            relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
+                str(self.charm.model.get_binding(relation).network.bind_address),
+                self._source_port
+            )
 
 
 class GrafanaSourceProvider(ProviderBase):
     on = GrafanaSourceEvents()
     _stored = StoredState()
 
-    def __init__(self, charm: CharmBase, name: str, service: str, version=None) -> None:
+    def __init__(self, charm: CharmBase, name: str, service: str,
+                 version: Optional[str] = None
+                 ) -> None:
         """A Grafana based Monitoring service consumer
 
         Args:
@@ -225,61 +188,93 @@ class GrafanaSourceProvider(ProviderBase):
         self.charm = charm
         events = self.charm.on[name]
 
-        self._stored.set_default(sources=dict())  # available data sources
-        self._stored.set_default(sources_to_delete=set())
-
-        self.framework.observe(
-            events.relation_changed, self.on_grafana_source_relation_changed
-        )
-        self.framework.observe(
-            events.relation_broken, self.on_grafana_source_relation_broken
+        self._stored.set_default(
+            sources=dict(),
+            sources_to_delete=set(),
         )
 
-    def on_grafana_source_relation_changed(self, event: RelationChangedEvent) -> None:
+        self.framework.observe(
+            events.relation_changed, self._on_grafana_source_relation_changed
+        )
+        self.framework.observe(
+            events.relation_broken, self._on_grafana_source_relation_broken
+        )
+
+    def _on_grafana_source_relation_changed(self, event: RelationChangedEvent) -> None:
         """Handle relation changes in related consumers.
 
         If there are changes in relations between Grafana source providers
         and consumers, this event handler (if the unit is the leader) will
         get data for an incoming grafana-source relation through a
         :class:`GrafanaSourcesChanged` event, and make the relation data
-        is available in the app's datastore object. The Grafana charm can
-        then respond to the event to update its configuration
+        is available in the app's datastore object. This data is set using
+        Juju application topology.
+
+        The Grafana charm can then respond to the event to update its
+        configuration.
         """
-        if not self.charm.unit.is_leader():
-            return
+        sources = {}
 
-        rel = event.relation
-        data = (
-            json.loads(event.relation.data[event.app].get("sources", {}))
-            if event.relation.data[event.app].get("sources", {})
-            else None
-        )
-        if not data:
-            logger.debug("No grafana source data in relation data bag")
-            return
+        for rel in self.charm.model.relations[self.name]:
+            source = self._get_source_config(rel)
+            if source:
+                sources[rel.id] = source
 
-        # This is due to a double fire on relation_joined calling
-        # the consumer, which calls relation_changed, and the actual data may be
-        # the same, but we'll see the source name in use later, try to set it again,
-        # and get double relation names
-        if (
-            self._stored.sources.get(rel.id, None)
-            and len(set(data.items()) ^ set(self._stored.sources[rel.id].items())) == 0
-        ):
-            logger.debug("Relation data unchanged. Doing nothing")
-            return
+        self._stored.sources = sources
 
-        # Grafana expects the first datasource to have an "isDefault" field set, otherwise
-        # none of the ingestion will actually work
-
-        data["isDefault"] = (
-            "false" if dict(self._stored.sources) else "true"
-        )
-
-        self._stored.sources[rel.id] = data
         self.on.sources_changed.emit()
 
-    def on_grafana_source_relation_broken(self, event: RelationBrokenEvent) -> None:
+    def _get_source_config(self, rel: Relation):
+        """
+        Generate configuration from data stored in relation data by
+        consumers which we can pass back to the charm
+        """
+
+        source_data = json.loads(rel.data[rel.app].get("grafana_source_data", ""))
+        if not source_data:
+            return
+
+        data = []
+
+        for unit_name, host_addr in self._relation_hosts(rel).items():
+            unique_source_name = "juju_{}_{}_{}_{}_{}".format(
+                source_data["model"],
+                source_data["model_uuid"],
+                source_data["application"],
+                unit_name.split('/')[1],
+                rel.id
+            )
+
+            host_data = {
+                "source-name": unique_source_name,
+                "source-type": source_data["type"],
+                "url": "http://{}".format(host_addr),
+            }
+
+            data.append(host_data)
+
+        return data
+
+    def _relation_hosts(self, rel: Relation) -> Dict:
+        """Fetch host names and address of all consumer units for a single relation.
+
+        Args:
+            rel: An `ops.model.Relation` object for which the host name to
+                address mapping is required.
+        Returns:
+            A dictionary that maps unit names to unit addresses for
+            the specified relation.
+        """
+        hosts = {}
+        for unit in rel.units:
+            host_address = rel.data[unit].get("grafana_source_host")
+            if not host_address:
+                continue
+            hosts[unit.name] = host_address
+            logger.info("===== GOT HOST ADDRESS: {}".format(host_address))
+        return hosts
+
+    def _on_grafana_source_relation_broken(self, event: RelationBrokenEvent) -> None:
         """Update job config when consumers depart.
 
         When a Grafana source consumer departs, the configuration
@@ -304,17 +299,22 @@ class GrafanaSourceProvider(ProviderBase):
         try:
             removed_source = self._stored.sources.pop(rel_id, None)
             if removed_source:
-                self._stored.sources_to_delete.add(removed_source["source-name"])
+                for host in removed_source:
+                    self._remove_source(host["source-name"])
                 self.on.sources_to_delete_changed.emit()
         except KeyError:
             logger.warning("Could not remove source for relation: {}".format(rel_id))
+
+    def _remove_source(self, source_name: str) -> None:
+        """Remove a datasource by name"""
+        self._stored.sources_to_delete.add(source_name)
 
     @property
     def sources(self) -> List[dict]:
         """Returns an array of sources the source_provider knows about"""
         sources = []
         for source in self._stored.sources.values():
-            sources.append(source)
+            sources.extend([host for host in source])
 
         return sources
 
