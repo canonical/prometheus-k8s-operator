@@ -398,11 +398,10 @@ class PrometheusProvider(ProviderBase):
 
         scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata"))
 
-        job_name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape".format(
+        job_name_prefix = "juju_{}_{}_{}_prometheus_scrape".format(
             scrape_metadata["model"],
             scrape_metadata["model_uuid"][:7],
             scrape_metadata["application"],
-            relation.id,
         )
 
         hosts = self._relation_hosts(relation)
