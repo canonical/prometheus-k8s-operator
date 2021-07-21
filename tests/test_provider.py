@@ -64,7 +64,7 @@ OTHER_SCRAPE_METADATA = {
     "model_uuid": "hijklm",
     "application": "other-consumer",
 }
-ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
+ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs", "relabel_configs"}
 
 
 class PrometheusCharm(CharmBase):

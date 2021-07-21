@@ -37,11 +37,10 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.stop, self._on_stop)
 
         self.grafana_source_consumer = GrafanaSourceConsumer(
-            charm=self, name="grafana-source", consumes={"Grafana": ">=2.0.0"}
-        )
-
-        self.framework.observe(
-            self.on["grafana-source"].relation_joined, self._on_grafana_source_joined
+            charm=self,
+            name="grafana-source",
+            consumes={"Grafana": ">=2.0.0"},
+            refresh_event=self.on.prometheus_pebble_ready,
         )
 
         if self.provider_ready:
@@ -116,18 +115,6 @@ class PrometheusCharm(CharmBase):
         termination.
         """
         self.unit.status = MaintenanceStatus("Pod is terminating.")
-
-    def _on_grafana_source_joined(self, event):
-        """Provide Grafana with data source information.
-
-        Grafana needs to know the port and name of an application in order
-        to form a relation with it. Hence this information is provided here.
-        """
-
-        self.grafana_source_consumer.add_source(
-            str(self.model.get_binding(event.relation).network.bind_address),
-            str(self.model.config["port"]),
-        )
 
     def _on_alertmanager_cluster_changed(self, event):
         self._configure()
