@@ -277,7 +277,7 @@ def _sanitize_scrape_configuration(job):
     return {
         "job_name": job.get("job_name"),
         "metrics_path": job.get("metrics_path", "/metrics"),
-        "static_configs": job.get("static_configs"),
+        "static_configs": job.get("static_configs", [{"targets": ["*:80"]}]),
     }
 
 
