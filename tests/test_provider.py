@@ -9,6 +9,24 @@ from ops.framework import StoredState
 from ops.testing import Harness
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 
+DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
+BAD_JOBS = [
+    {
+        "metrics_path": "/metrics",
+        "static_configs": [
+            {
+                "targets": ["*:80"],
+                "labels": {
+                    "juju_model": "bad_model",
+                    "juju_application": "bad_application",
+                    "juju_model_uuid": "bad_uuid",
+                    "juju_unit": "bad_unit",
+                },
+            }
+        ],
+    }
+]
+
 SCRAPE_METADATA = {
     "model": "consumer-model",
     "model_uuid": "abcdef",
@@ -78,6 +96,12 @@ class TestProvider(unittest.TestCase):
         self.harness.begin()
 
     def setup_charm_relations(self, multi=False):
+        """Create relations used by test cases.
+
+        Args:
+            multi: a boolean indicating if multiple relations must be
+            created.
+        """
         rel_ids = []
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation("monitoring", "consumer")
@@ -115,6 +139,30 @@ class TestProvider(unittest.TestCase):
 
         return rel_ids
 
+    def validate_jobs(self, jobs):
+        """Valdiate that a list of jobs has the expected fields.
+
+        Existence for unit labels is not checked since these do not
+        exist for all jobs.
+
+        Args:
+            jobs: list of jobs where each job is a dictionary.
+
+        Raises:
+            assertion failures if any job is not as expected.
+        """
+        for job in jobs:
+            self.assertIn("job_name", job)
+            self.assertIn("static_configs", job)
+            static_configs = job["static_configs"]
+            for static_config in static_configs:
+                self.assertIn("targets", static_config)
+                self.assertIn("labels", static_config)
+                labels = static_config["labels"]
+                self.assertIn("juju_model", labels)
+                self.assertIn("juju_model_uuid", labels)
+                self.assertIn("juju_application", labels)
+
     def test_provider_notifies_on_new_scrape_relation(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
@@ -138,17 +186,7 @@ class TestProvider(unittest.TestCase):
 
         jobs = self.harness.charm.prometheus_provider.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
-        for job in jobs:
-            self.assertIn("job_name", job)
-            self.assertIn("static_configs", job)
-            static_configs = job["static_configs"]
-            for static_config in static_configs:
-                self.assertIn("targets", static_config)
-                self.assertIn("labels", static_config)
-                labels = static_config["labels"]
-                self.assertIn("juju_model", labels)
-                self.assertIn("juju_model_uuid", labels)
-                self.assertIn("juju_application", labels)
+        self.validate_jobs(jobs)
 
     def test_provider_does_not_unit_label_fully_qualified_targets(self):
         self.setup_charm_relations()
@@ -210,22 +248,71 @@ class TestProvider(unittest.TestCase):
         consumers = self.harness.charm.model.get_relation("monitoring", rel_id)
         self.assertEqual(len(targets), len(ports) * len(consumers.units))
 
+    def test_provider_handles_default_scrape_job(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
 
-def juju_job_labels(job):
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "scrape_jobs": json.dumps(DEFAULT_JOBS),
+            },
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(
+            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 2)
+
+        jobs = self.harness.charm.prometheus_provider.jobs()
+        self.validate_jobs(jobs)
+
+    def test_provider_overwrites_juju_topology_labels(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "scrape_jobs": json.dumps(BAD_JOBS),
+            },
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(
+            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 2)
+
+        jobs = self.harness.charm.prometheus_provider.jobs()
+        self.assertEqual(len(jobs), 1)
+        self.validate_jobs(jobs)
+        bad_labels = juju_job_labels(BAD_JOBS[0])
+        labels = juju_job_labels(jobs[0])
+        for label_name, label_value in labels.items():
+            self.assertNotEqual(label_value, bad_labels[label_name])
+
+
+def juju_job_labels(job, num=0):
     """Fetch job labels.
 
     Args:
         job: a list of static scrape jobs
+        num: index of static config for which labels must be extracted.
 
     Returns:
         a dictionary of job labels for the first static job.
     """
-    static_config = job["static_configs"][0]
+    static_config = job["static_configs"][num]
     return static_config["labels"]
 
 
 def job_name_suffix(job_name, labels, rel_id):
-    """Fetch consumer set job name.
+    """Construct consumer set job name.
 
     Args:
         job_name: Provider generated job name string.
