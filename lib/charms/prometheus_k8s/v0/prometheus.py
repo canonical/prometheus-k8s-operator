@@ -470,6 +470,17 @@ class PrometheusProvider(ProviderBase):
         static_configs = job.get("static_configs")
         config["static_configs"] = []
 
+        relabel_config = {
+            "source_labels": ['__address__'],
+            "target_label": "instance",
+            "regex": ".*",
+            "replacement": "{}_{}_{}".format(
+                scrape_metadata["model"],
+                scrape_metadata["model_uuid"],
+                scrape_metadata["application"]
+            )
+        }
+
         for static_config in static_configs:
             labels = static_config.get("labels", {}) if static_configs else {}
             all_targets = static_config.get("targets", [])
@@ -494,6 +505,9 @@ class PrometheusProvider(ProviderBase):
                     host_name, host_address, ports, labels, scrape_metadata
                 )
                 config["static_configs"].append(static_config)
+                relabel_config["replacement"] += "_{}".format(host_name)
+
+        config["relabel_configs"] = [relabel_config]
 
         return config
 

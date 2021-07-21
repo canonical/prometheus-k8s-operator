@@ -365,7 +365,7 @@ class PrometheusCharm(CharmBase):
 
         logger.debug("Prometheus config : {}".format(scrape_config))
 
-        return yaml.dump(scrape_config)
+        return yaml.dump(scrape_config, default_flow_style=True)
 
     def _prometheus_layer(self):
         """Construct the pebble layer
