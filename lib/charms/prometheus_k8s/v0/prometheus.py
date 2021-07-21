@@ -470,14 +470,10 @@ class PrometheusProvider(ProviderBase):
         config["static_configs"] = []
 
         relabel_config = {
-            "source_labels": ['__address__'],
+            "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
+            "separator": "_",
             "target_label": "instance",
-            "regex": ".*",
-            "replacement": "{}_{}_{}".format(
-                scrape_metadata["model"],
-                scrape_metadata["model_uuid"],
-                scrape_metadata["application"]
-            )
+            "regex": "(.*)",
         }
 
         for static_config in static_configs:
@@ -504,7 +500,7 @@ class PrometheusProvider(ProviderBase):
                     host_name, host_address, ports, labels, scrape_metadata
                 )
                 config["static_configs"].append(static_config)
-                relabel_config["replacement"] += "_{}".format(host_name)
+                relabel_config["source_labels"].append("juju_unit")
 
         config["relabel_configs"] = [relabel_config]
 
