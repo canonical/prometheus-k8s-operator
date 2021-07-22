@@ -494,14 +494,14 @@ class PrometheusProvider(ProviderBase):
                     unitless_targets, labels, scrape_metadata
                 )
                 config["static_configs"].append(unitless_config)
-            else:
-                relabel_config["source_labels"].append("juju_unit")
 
             for host_name, host_address in hosts.items():
                 static_config = self._labeled_unit_config(
                     host_name, host_address, ports, labels, scrape_metadata
                 )
                 config["static_configs"].append(static_config)
+                if "juju_unit" not in relabel_config["source_labels"]:
+                    relabel_config["source_labels"].append("juju_unit")
 
         config["relabel_configs"] = [relabel_config]
 
