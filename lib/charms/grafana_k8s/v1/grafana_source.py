@@ -276,7 +276,6 @@ class GrafanaSourceProvider(ProviderBase):
             if not host_address:
                 continue
             hosts[unit.name] = host_address
-            logger.info("===== GOT HOST ADDRESS: {}".format(host_address))
         return hosts
 
     def _on_grafana_source_relation_broken(self, event: RelationBrokenEvent) -> None:
