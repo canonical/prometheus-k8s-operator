@@ -473,7 +473,6 @@ class PrometheusProvider(ProviderBase):
             "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
             "separator": "_",
             "target_label": "instance",
-            "regex": "(.*)",
         }
 
         for static_config in static_configs:
@@ -494,13 +493,14 @@ class PrometheusProvider(ProviderBase):
                     unitless_targets, labels, scrape_metadata
                 )
                 config["static_configs"].append(unitless_config)
+            else:
+                relabel_config["source_labels"].append("juju_unit")
 
             for host_name, host_address in hosts.items():
                 static_config = self._labeled_unit_config(
                     host_name, host_address, ports, labels, scrape_metadata
                 )
                 config["static_configs"].append(static_config)
-                relabel_config["source_labels"].append("juju_unit")
 
         config["relabel_configs"] = [relabel_config]
 
@@ -575,7 +575,10 @@ class PrometheusProvider(ProviderBase):
             for a single wildcard host.
         """
         juju_labels = self._set_juju_labels(labels, scrape_metadata)
-        juju_labels["juju_unit"] = "{}".format(host_name)
+
+        # '/' is not allowed in Prometheus label names. It technically works,
+        # but complex queries silently fail
+        juju_labels["juju_unit"] = "{}".format(host_name.replace("/", "-"))
 
         static_config = {"labels": juju_labels}
 
