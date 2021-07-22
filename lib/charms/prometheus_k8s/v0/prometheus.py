@@ -502,7 +502,6 @@ class PrometheusProvider(ProviderBase):
                     host_name, host_address, ports, labels, scrape_metadata
                 )
                 config["static_configs"].append(static_config)
-                relabel_config["source_labels"].append("juju_unit")
 
         config["relabel_configs"] = [relabel_config]
 

@@ -163,6 +163,15 @@ class TestProvider(unittest.TestCase):
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
 
+            relabel_configs = job["relabel_configs"]
+            self.assertEqual(len(relabel_configs), 1)
+
+            relabel_config = relabel_configs[0]
+            self.assertEqual(
+                relabel_config.get("source_labels"),
+                ["juju_model", "juju_model_uuid", "juju_application", "juju_unit"],
+            )
+
     def test_provider_notifies_on_new_scrape_relation(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
