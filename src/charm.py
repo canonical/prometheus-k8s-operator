@@ -17,6 +17,8 @@ from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
+RULES_DIR = "/etc/prometheus/rules"
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,10 +88,12 @@ class PrometheusCharm(CharmBase):
         prometheus_config = self._prometheus_config()
         try:
             container.push(PROMETHEUS_CONFIG, prometheus_config)
-            logger.info("Pushed new configuration")
+            logger.info("Pushed new configuration and alerts")
         except ConnectionError:
             logger.info("Ignoring config changed since pebble is not ready")
             return
+
+        self._set_alerts(container)
 
         # setup the workload (Prometheus) container and its services
         layer = self._prometheus_layer()
@@ -107,6 +111,28 @@ class PrometheusCharm(CharmBase):
             self.app.status = ActiveStatus()
 
         self.unit.status = ActiveStatus()
+
+    def _set_alerts(self, container):
+        if not self.provider_ready:
+            return
+
+        with container.is_ready():
+            container.remove_path(RULES_DIR, recursive=True)
+
+        for rel_id, alerts in self.prometheus_provider.alerts().items():
+            filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
+                alerts["model"],
+                alerts["model_uuid"],
+                alerts["application"],
+                rel_id
+            )
+            try:
+                path = "{}/{}".format(RULES_DIR, filename)
+                rules = yaml.dump({"groups": alerts["groups"]})
+                logger.debug("Rules for relation %s : %s", rel_id, rules)
+                container.push(path, rules, make_dirs=True)
+            except ConnectionError:
+                logger.error("Failed to write alert rule %s", filename)
 
     def _on_stop(self, _):
         """Mark unit is inactive.
@@ -315,6 +341,7 @@ class PrometheusCharm(CharmBase):
 
         scrape_config = {
             "global": self._prometheus_global_config(),
+            "rule_files": os.path.join(RULES_DIR, "juju_*.rules"),
             "scrape_configs": [],
         }
 
