@@ -375,6 +375,27 @@ class PrometheusProvider(ProviderBase):
 
         return scrape_jobs
 
+    def alerts(self):
+        alerts = {}
+        for relation in self._charm.model.relations[self._relation_name]:
+            if len(relation.units) == 0:
+                continue
+
+            alert_groups = json.loads(relation.data[relation.app].get("alerting", "{}"))
+            logger.debug("Alerting Groups for %s : %s", relation.id, alert_groups)
+            scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
+            if not scrape_metadata:
+                continue
+
+            if alert_groups:
+                alerts[relation.id] = {
+                    "groups": alert_groups["groups"],
+                    "model": scrape_metadata["model"],
+                    "model_uuid": scrape_metadata["model_uuid"][:7],
+                    "application": scrape_metadata["application"]
+                }
+        return alerts
+
     def _static_scrape_config(self, relation):
         """Generate the static scrape configuration for a single relation.
 
@@ -595,7 +616,8 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
-    def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
+
+    def __init__(self, charm, name, consumes, service_event, jobs=[], alerts=[], multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides scrape configurations
@@ -645,6 +667,7 @@ class PrometheusConsumer(ConsumerBase):
         # Sanitize job configurations to the supported subset of parameters
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
         self._multi_mode = multi
+        self._alerts = alerts
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
@@ -671,6 +694,10 @@ class PrometheusConsumer(ConsumerBase):
         )
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(
             self._scrape_jobs
+        )
+
+        event.relation.data[self._charm.app]["alerting"] = json.dumps(
+            {"groups": self._alerts}
         )
 
     def _set_unit_ip(self, event):
