@@ -124,10 +124,7 @@ class GrafanaSourceConsumer(ConsumerBase):
         On a relation_joined event, inform the provider about the source
         configuration
         """
-        event.relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
-            str(self.charm.model.get_binding(event.relation).network.bind_address),
-            self._source_port,
-        )
+        self._set_unit_ip(event)
 
         if not self.charm.unit.is_leader():
             return
@@ -218,6 +215,9 @@ class GrafanaSourceProvider(ProviderBase):
         The Grafana charm can then respond to the event to update its
         configuration.
         """
+        if not self.charm.unit.is_leader():
+            return
+
         sources = {}
 
         for rel in self.charm.model.relations[self.name]:
@@ -235,19 +235,18 @@ class GrafanaSourceProvider(ProviderBase):
         consumers which we can pass back to the charm
         """
 
-        source_data = json.loads(rel.data[rel.app].get("grafana_source_data", ""))
+        source_data = json.loads(rel.data[rel.app].get("grafana_source_data", "{}"))
         if not source_data:
             return
 
         data = []
 
         for unit_name, host_addr in self._relation_hosts(rel).items():
-            unique_source_name = "juju_{}_{}_{}_{}_{}".format(
+            unique_source_name = "juju_{}_{}_{}_{}".format(
                 source_data["model"],
                 source_data["model_uuid"],
                 source_data["application"],
                 unit_name.split("/")[1],
-                rel.id,
             )
 
             host_data = {
@@ -257,7 +256,6 @@ class GrafanaSourceProvider(ProviderBase):
             }
 
             data.append(host_data)
-
         return data
 
     def _relation_hosts(self, rel: Relation) -> Dict:
@@ -297,17 +295,13 @@ class GrafanaSourceProvider(ProviderBase):
         name to the list of sources to remove when a relation is
         broken.
         """
-
         logger.debug("Removing all data for relation: {}".format(rel_id))
 
-        try:
-            removed_source = self._stored.sources.pop(rel_id, None)
-            if removed_source:
-                for host in removed_source:
-                    self._remove_source(host["source-name"])
-                self.on.sources_to_delete_changed.emit()
-        except KeyError:
-            logger.warning("Could not remove source for relation: {}".format(rel_id))
+        removed_source = self._stored.sources.pop(rel_id, None)
+        if removed_source:
+            for host in removed_source:
+                self._remove_source(host["source-name"])
+            self.on.sources_to_delete_changed.emit()
 
     def _remove_source(self, source_name: str) -> None:
         """Remove a datasource by name"""
