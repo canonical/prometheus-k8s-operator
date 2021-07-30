@@ -256,7 +256,9 @@ provide eponymous information.
 """
 
 import json
+import yaml
 import logging
+from pathlib import Path
 from ops.framework import EventSource, EventBase, ObjectEvents
 from ops.relation import ProviderBase, ConsumerBase
 
@@ -269,6 +271,8 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 LIBPATCH = 2
+
+ALERT_RULES_PATH = "prometheus_alert_rules"
 
 logger = logging.getLogger(__name__)
 
@@ -381,19 +385,19 @@ class PrometheusProvider(ProviderBase):
             if len(relation.units) == 0:
                 continue
 
-            alert_groups = json.loads(relation.data[relation.app].get("alerting", "{}"))
-            logger.debug("Alerting Groups for %s : %s", relation.id, alert_groups)
+            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
             scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
             if not scrape_metadata:
                 continue
 
-            if alert_groups:
+            if alert_rules:
                 alerts[relation.id] = {
-                    "groups": alert_groups["groups"],
+                    "groups": alert_rules["groups"],
                     "model": scrape_metadata["model"],
                     "model_uuid": scrape_metadata["model_uuid"][:7],
                     "application": scrape_metadata["application"]
                 }
+
         return alerts
 
     def _static_scrape_config(self, relation):
@@ -617,7 +621,7 @@ class PrometheusProvider(ProviderBase):
 
 class PrometheusConsumer(ConsumerBase):
 
-    def __init__(self, charm, name, consumes, service_event, jobs=[], alerts=[], multi=False):
+    def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides scrape configurations
@@ -667,7 +671,6 @@ class PrometheusConsumer(ConsumerBase):
         # Sanitize job configurations to the supported subset of parameters
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
         self._multi_mode = multi
-        self._alerts = alerts
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
@@ -696,9 +699,11 @@ class PrometheusConsumer(ConsumerBase):
             self._scrape_jobs
         )
 
-        event.relation.data[self._charm.app]["alerting"] = json.dumps(
-            {"groups": self._alerts}
-        )
+        alert_groups = self._labeled_alert_groups
+        if alert_groups:
+            event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                {"groups": alert_groups}
+            )
 
     def _set_unit_ip(self, event):
         """Set unit host address
@@ -710,6 +715,48 @@ class PrometheusConsumer(ConsumerBase):
             relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
                 self._charm.model.get_binding(relation).network.bind_address
             )
+
+    def _label_alert_topology(self, rule):
+        metadata = self._scrape_metadata
+        labels = rule.get("labels", {})
+        labels["juju_model"] = metadata["model"]
+        labels["juju_model_uuid"] = metadata["model_uuid"]
+        labels["juju_application"] = metadata["application"]
+        rule["labels"] = labels
+        return rule
+
+    def _label_alert_expression(self, rule):
+        metadata = self._scrape_metadata
+        topology = "juju_model={}, juju_model_uuid={}, juju_application={}".format(
+            metadata["model"], metadata["model_uuid"], metadata["application"]
+        )
+        expr = rule["expr"]  # a rule has to have an "expr"
+        expr = expr.replace("%%juju_topology%%", topology)
+        rule["expr"] = expr
+        return rule
+
+    @property
+    def _labeled_alert_groups(self):
+        alerts = []
+        for path in Path(ALERT_RULES_PATH).glob("*.rule"):
+            if path.is_file():
+                with path.open() as rule_file:
+                    rules = yaml.safe_load(rule_file)
+                    rule = rules[0]  # each file is list of one rule
+                    rule = self._label_alert_topology(rule)
+                    rule = self._label_alert_expression(rule)
+                    alerts.append(rule)
+        metadata = self._scrape_metadata
+        groups = []
+        if alerts:
+            group = {
+                "name": "{}_{}_{}_alerts".format(
+                    metadata["model"], metadata["model_uuid"], metadata["application"]
+                ),
+                "rules": alerts
+            }
+            groups.append(group)
+        return groups
 
     @property
     def _scrape_jobs(self):

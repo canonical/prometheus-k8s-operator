@@ -2,6 +2,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import os
 import logging
 import yaml
 import json
@@ -127,7 +128,7 @@ class PrometheusCharm(CharmBase):
                 rel_id
             )
             try:
-                path = "{}/{}".format(RULES_DIR, filename)
+                path = os.path.join(RULES_DIR, filename)
                 rules = yaml.dump({"groups": alerts["groups"]})
                 logger.debug("Rules for relation %s : %s", rel_id, rules)
                 container.push(path, rules, make_dirs=True)
