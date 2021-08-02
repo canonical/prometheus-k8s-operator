@@ -727,7 +727,7 @@ class PrometheusConsumer(ConsumerBase):
 
     def _label_alert_expression(self, rule):
         metadata = self._scrape_metadata
-        topology = "juju_model={}, juju_model_uuid={}, juju_application={}".format(
+        topology = "juju_model=\"{}\", juju_model_uuid=\"{}\", juju_application=\"{}\"".format(
             metadata["model"], metadata["model_uuid"], metadata["application"]
         )
         expr = rule["expr"]  # a rule has to have an "expr"
