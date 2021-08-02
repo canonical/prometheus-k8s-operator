@@ -385,8 +385,12 @@ class PrometheusProvider(ProviderBase):
             if len(relation.units) == 0:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
-            scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
+            alert_rules = json.loads(
+                relation.data[relation.app].get("alert_rules", "{}")
+            )
+            scrape_metadata = json.loads(
+                relation.data[relation.app].get("scrape_metadata", "{}")
+            )
             if not scrape_metadata:
                 continue
 
@@ -395,7 +399,7 @@ class PrometheusProvider(ProviderBase):
                     "groups": alert_rules["groups"],
                     "model": scrape_metadata["model"],
                     "model_uuid": scrape_metadata["model_uuid"][:7],
-                    "application": scrape_metadata["application"]
+                    "application": scrape_metadata["application"],
                 }
 
         return alerts
@@ -620,7 +624,6 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
-
     def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
@@ -727,8 +730,10 @@ class PrometheusConsumer(ConsumerBase):
 
     def _label_alert_expression(self, rule):
         metadata = self._scrape_metadata
-        topology = "juju_model=\"{}\", juju_model_uuid=\"{}\", juju_application=\"{}\"".format(
-            metadata["model"], metadata["model_uuid"], metadata["application"]
+        topology = (
+            'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
+                metadata["model"], metadata["model_uuid"], metadata["application"]
+            )
         )
         expr = rule["expr"]  # a rule has to have an "expr"
         expr = expr.replace("%%juju_topology%%", topology)
@@ -753,7 +758,7 @@ class PrometheusConsumer(ConsumerBase):
                 "name": "{}_{}_{}_alerts".format(
                     metadata["model"], metadata["model_uuid"], metadata["application"]
                 ),
-                "rules": alerts
+                "rules": alerts,
             }
             groups.append(group)
         return groups
