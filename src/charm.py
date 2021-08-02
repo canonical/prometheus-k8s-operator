@@ -122,10 +122,7 @@ class PrometheusCharm(CharmBase):
 
         for rel_id, alerts in self.prometheus_provider.alerts().items():
             filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                alerts["model"],
-                alerts["model_uuid"],
-                alerts["application"],
-                rel_id
+                alerts["model"], alerts["model_uuid"], alerts["application"], rel_id
             )
             try:
                 path = os.path.join(RULES_DIR, filename)
