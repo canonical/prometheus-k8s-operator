@@ -2,14 +2,15 @@
 # See LICENSE file for licensing details.
 
 import json
+import re
 import unittest
 from unittest.mock import patch
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
 
-# from ops.model import Network
 from ops.testing import Harness
+import charms.prometheus_k8s.v0.prometheus as prometheus_lib
 from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
 
 CONSUMES = {"prometheus": ">=2.0"}
@@ -52,6 +53,8 @@ class ConsumerCharm(CharmBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
+
+        prometheus_lib.ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
         self.provider = PrometheusConsumer(
             self,
             "monitoring",
@@ -61,7 +64,7 @@ class ConsumerCharm(CharmBase):
         )
 
 
-class TestLibrary(unittest.TestCase):
+class TestConsumer(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
@@ -141,3 +144,55 @@ class TestLibrary(unittest.TestCase):
         for job in jobs:
             keys = set(job.keys())
             self.assertTrue(keys.issubset(ALLOWED_KEYS))
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_each_alert_rule_is_topology_labeled(self, _):
+        rel_id = self.harness.add_relation("monitoring", "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        self.assertIn("alert_rules", data)
+        alerts = json.loads(data["alert_rules"])
+        self.assertIn("groups", alerts)
+        self.assertEqual(len(alerts["groups"]), 1)
+        group = alerts["groups"][0]
+        for rule in group["rules"]:
+            self.assertIn("labels", rule)
+            labels = rule["labels"]
+            self.assertIn("juju_model", labels)
+            self.assertIn("juju_application", labels)
+            self.assertIn("juju_model_uuid", labels)
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_each_alert_expression_is_topology_labeled(self, _):
+        rel_id = self.harness.add_relation("monitoring", "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        self.assertIn("alert_rules", data)
+        alerts = json.loads(data["alert_rules"])
+        self.assertIn("groups", alerts)
+        self.assertEqual(len(alerts["groups"]), 1)
+        group = alerts["groups"][0]
+        for rule in group["rules"]:
+            self.assertIn("expr", rule)
+            for labels in expression_labels(rule["expr"]):
+                self.assertIn("juju_model", labels)
+                self.assertIn("juju_model_uuid", labels)
+                self.assertIn("juju_application", labels)
+
+
+def expression_labels(expr):
+    """Extract labels from an alert rule expression.
+
+    Args:
+        expr: a string representing an alert expression.
+
+    Returns:
+        a generator which yields each set of labels in
+        in the expression.
+    """
+    pattern = re.compile(r"\{.*\}")
+    matches = pattern.findall(expr)
+    for match in matches:
+        match = match.replace("=", '":').replace("juju_", '"juju_')
+        labels = json.loads(match)
+        yield labels
