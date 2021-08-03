@@ -51,6 +51,52 @@ SCRAPE_JOBS = [
         ],
     },
 ]
+ALERT_RULES = {
+    "groups": [
+        {
+            "name": "None_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+            "rules": [
+                {
+                    "alert": "CPUOverUse",
+                    "expr": 'process_cpu_seconds_total{juju_model="None",'
+                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
+                    'juju_application="consumer-tester"} > 0.12',
+                    "for": "0m",
+                    "labels": {
+                        "severity": "Low",
+                        "juju_model": "None",
+                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_application": "consumer-tester",
+                    },
+                    "annotations": {
+                        "summary": "Instance {{ $labels.instance }} CPU over use",
+                        "description": "{{ $labels.instance }} of job "
+                        "{{ $labels.job }} has used too much CPU.",
+                    },
+                },
+                {
+                    "alert": "PrometheusTargetMissing",
+                    "expr": 'up{juju_model="None",'
+                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
+                    'juju_application="consumer-tester"} == 0',
+                    "for": "0m",
+                    "labels": {
+                        "severity": "critical",
+                        "juju_model": "None",
+                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_application": "consumer-tester",
+                    },
+                    "annotations": {
+                        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
+                        "description": "A Prometheus target has disappeared."
+                        "An exporter might be crashed.\n"
+                        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
+                    },
+                },
+            ],
+        }
+    ]
+}
 OTHER_SCRAPE_JOBS = [
     {
         "metrics_path": "/other-path",
@@ -304,6 +350,33 @@ class TestProvider(unittest.TestCase):
         labels = juju_job_labels(jobs[0])
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
+
+    def test_provider_returns_alerts_indexed_by_relation_id(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "alert_rules": json.dumps(ALERT_RULES),
+            },
+        )
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+
+        alerts = self.harness.charm.prometheus_provider.alerts()
+        self.assertEqual(len(alerts), 1)
+        self.assertIn(rel_id, alerts.keys())
+
+        alert = alerts[rel_id]
+        self.assertIn("groups", alert)
+        self.assertIn("model", alert)
+        self.assertIn("model_uuid", alert)
+        self.assertIn("application", alert)
+
+        self.assertListEqual(alert["groups"], ALERT_RULES["groups"])
 
 
 def juju_job_labels(job, num=0):
