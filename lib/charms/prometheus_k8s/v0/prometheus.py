@@ -380,6 +380,37 @@ class PrometheusProvider(ProviderBase):
         return scrape_jobs
 
     def alerts(self):
+        """Fetch alerts for all relations.
+
+        A Prometheus alert rules file consists of a list of "groups". Each
+        group consists of a list of alerts (`rules`) that are sequentially
+        executed. This method returns all the alert rules provided by each
+        related consumer charm. These rules may be used to generate a
+        separate alert rules file for each relation since the returned list
+        of alert groups are indexed by relation ID. Also for each relation ID
+        associated scrape metadata such as Juju model, UUID and application
+        name are provided so the a unique name may be generated for the rules
+        file. For each relation the structure of data returned is a dictionary
+        with four keys
+
+        - groups
+        - model
+        - model_uuid
+        - application
+
+        The value of the `groups` key is such that it may be used to generate
+        a Prometheus alert rules file directly using `yaml.dump` but the
+        `groups` key itself must be included as this is required by Prometheus,
+        for example as in `yaml.dump({"groups": alert["groups"]})`.
+
+        Currently the consumer charm only accepts a list of rules and these
+        rules are all placed into a single group, even though Prometheus itself
+        allows for multiple groups within a single alert rules file.
+
+        Returns:
+            a dictionary of alert rule groups and associated scrape
+            metadata indexed by relation ID.
+        """
         alerts = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if len(relation.units) == 0:
@@ -720,6 +751,15 @@ class PrometheusConsumer(ConsumerBase):
             )
 
     def _label_alert_topology(self, rule):
+        """Insert juju topology labels into an alert rule.
+
+        Args:
+            rule: a dictionary representing a Prometheus alert rule.
+
+        Returns:
+            a dictionary representing Prometheus alert rule with Juju
+            topology labels.
+        """
         metadata = self._scrape_metadata
         labels = rule.get("labels", {})
         labels["juju_model"] = metadata["model"]
@@ -729,6 +769,15 @@ class PrometheusConsumer(ConsumerBase):
         return rule
 
     def _label_alert_expression(self, rule):
+        """Insert juju topology filters into a Prometheus alert rule.
+
+        Args:
+            rule: a dictionary representing a Prometheus alert rule.
+
+        Returns:
+            a dictionary representing a Prometheus alert rule that filters based
+            on juju topology.
+        """
         metadata = self._scrape_metadata
         topology = (
             'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
@@ -742,6 +791,15 @@ class PrometheusConsumer(ConsumerBase):
 
     @property
     def _labeled_alert_groups(self):
+        """Load alert rules from rule files.
+
+        All rules from files for a consumer charm are loaded into a single
+        group. The generated name of this group includes Juju topology
+        prefixes.
+
+        Returns:
+            a list of Prometheus alert rule groups.
+        """
         alerts = []
         for path in Path(ALERT_RULES_PATH).glob("*.rule"):
             if path.is_file():

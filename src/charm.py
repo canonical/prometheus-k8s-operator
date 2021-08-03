@@ -114,6 +114,12 @@ class PrometheusCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
+        """Create alert rule files for all Prometheus consumers.
+
+        Args:
+            container: the Prometheus workload container into which
+                alert rule files need to be created.
+        """
         if not self.provider_ready:
             return
 
@@ -141,6 +147,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Pod is terminating.")
 
     def _on_alertmanager_cluster_changed(self, event):
+        """Handle changes in Alertmanager relations."""
         self._configure()
 
     def _command(self):
