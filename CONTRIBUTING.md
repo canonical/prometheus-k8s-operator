@@ -193,11 +193,3 @@ and hence must be used with caution.
 - Enable alert forwarding through a relation with Alertmanager.
 - Support metrics visualisation through Grafana.
 
-## Road Map
-
-Roughly by order of priority
-
-- Support integration with Openstack.
-- Support integration and monitoring of Charmed Kubernetes.
-- Support aggregation using [Loki](https://grafana.com/oss/loki/).
-- Support aggregation using [Cortex](https://cortexmetrics.io/).
