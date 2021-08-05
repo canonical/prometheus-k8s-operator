@@ -471,12 +471,15 @@ class PrometheusProvider(ProviderBase):
             )
 
             if alert_rules and scrape_metadata:
-                alerts[relation.id] = {
-                    "groups": alert_rules["groups"],
-                    "model": scrape_metadata["model"],
-                    "model_uuid": scrape_metadata["model_uuid"][:7],
-                    "application": scrape_metadata["application"],
-                }
+                try:
+                    alerts[relation.id] = {
+                        "groups": alert_rules["groups"],
+                        "model": scrape_metadata["model"],
+                        "model_uuid": scrape_metadata["model_uuid"][:7],
+                        "application": scrape_metadata["application"],
+                    }
+                except KeyError:
+                    logger.error("Relation %s has invalid data", relation.id)
 
         return alerts
 
