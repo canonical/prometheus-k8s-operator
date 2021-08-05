@@ -714,6 +714,17 @@ class PrometheusConsumer(ConsumerBase):
             self.prometheus = PrometheusConsumer(self, "monitoring",
                                                  {"prometheus": ">=2.0"}
                                                  self.my_service_pebble_ready)
+
+        In response to relation joined events this Prometheus consumer object
+        will set the following relation data required by the Prometheus provider.
+        - `scrape_metadata`
+        - `scrape_jobs`
+        - `alert_rules`
+
+        The `alert_rules` are ready from `*.rule` files in the `prometheus_alert_rules`
+        directory. If the syntax of these rules is invalid `PrometheusConsumer` logs
+        an error and does not load the particular rule.
+
         Args:
 
             charm: a `CharmBase` object that manages this
@@ -738,7 +749,6 @@ class PrometheusConsumer(ConsumerBase):
             multi: an optional (default False) flag to indicate if
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
-
         """
         super().__init__(charm, name, consumes, multi)
 
@@ -776,8 +786,7 @@ class PrometheusConsumer(ConsumerBase):
             self._scrape_jobs
         )
 
-        alert_groups = self._labeled_alert_groups
-        if alert_groups:
+        if alert_groups := self._labeled_alert_groups:
             event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
                 {"groups": alert_groups}
             )
@@ -827,9 +836,13 @@ class PrometheusConsumer(ConsumerBase):
                 metadata["model"], metadata["model_uuid"], metadata["application"]
             )
         )
-        expr = rule["expr"]  # a rule has to have an "expr"
-        expr = expr.replace("%%juju_topology%%", topology)
-        rule["expr"] = expr
+
+        if expr := rule.get("expr", None):
+            expr = expr.replace("%%juju_topology%%", topology)
+            rule["expr"] = expr
+        else:
+            logger.error("Invalid alert expression in %s", rule.get("alert"))
+
         return rule
 
     @property
@@ -845,20 +858,26 @@ class PrometheusConsumer(ConsumerBase):
         """
         alerts = []
         for path in Path(ALERT_RULES_PATH).glob("*.rule"):
-            if path.is_file():
-                with path.open() as rule_file:
-                    rules = yaml.safe_load(rule_file)
+            if not path.is_file():
+                continue
+
+            with path.open() as rule_file:
+                # Load a list of rules from file then add labels and filters
+                if rules := yaml.safe_load(rule_file):
                     rule = rules[0]  # each file is list of one rule
                     rule = self._label_alert_topology(rule)
                     rule = self._label_alert_expression(rule)
                     alerts.append(rule)
-        metadata = self._scrape_metadata
+                else:
+                    logger.error("Failed to read alert rules from %s", path.name)
+
+        # Gather all alerts into a list of one group since Prometheus
+        # requires alerts be part of some group
         groups = []
         if alerts:
+            metadata = self._scrape_metadata
             group = {
-                "name": "{}_{}_{}_alerts".format(
-                    metadata["model"], metadata["model_uuid"], metadata["application"]
-                ),
+                "name": "{model}_{model_uuid}_{application}_alerts".format(**metadata),
                 "rules": alerts,
             }
             groups.append(group)
