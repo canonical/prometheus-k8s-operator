@@ -459,19 +459,18 @@ class PrometheusProvider(ProviderBase):
         """
         alerts = {}
         for relation in self._charm.model.relations[self._relation_name]:
-            if len(relation.units) == 0:
+            if not relation.units:
                 continue
 
             alert_rules = json.loads(
                 relation.data[relation.app].get("alert_rules", "{}")
             )
+
             scrape_metadata = json.loads(
                 relation.data[relation.app].get("scrape_metadata", "{}")
             )
-            if not scrape_metadata:
-                continue
 
-            if alert_rules:
+            if alert_rules and scrape_metadata:
                 alerts[relation.id] = {
                     "groups": alert_rules["groups"],
                     "model": scrape_metadata["model"],
@@ -494,7 +493,7 @@ class PrometheusProvider(ProviderBase):
             valid Prometheus scrape configuration for that job,
             represented as a Python dictionary.
         """
-        if len(relation.units) == 0:
+        if not relation.units:
             return []
 
         scrape_jobs = json.loads(relation.data[relation.app].get("scrape_jobs", "[]"))
@@ -539,10 +538,8 @@ class PrometheusProvider(ProviderBase):
         """
         hosts = {}
         for unit in relation.units:
-            host_address = relation.data[unit].get("prometheus_scrape_host")
-            if not host_address:
-                continue
-            hosts[unit.name] = host_address
+            if host_address := relation.data[unit].get("prometheus_scrape_host"):
+                hosts[unit.name] = host_address
         return hosts
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
