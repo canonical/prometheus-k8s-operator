@@ -478,8 +478,12 @@ class PrometheusProvider(ProviderBase):
                         "model_uuid": scrape_metadata["model_uuid"][:7],
                         "application": scrape_metadata["application"],
                     }
-                except KeyError:
-                    logger.error("Relation %s has invalid data", relation.id)
+                except KeyError as e:
+                    logger.error(
+                        "Relation %s has invalid data: '%s' key is missing",
+                        relation.id,
+                        e,
+                    )
 
         return alerts
 
