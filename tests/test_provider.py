@@ -378,6 +378,29 @@ class TestProvider(unittest.TestCase):
 
         self.assertListEqual(alert["groups"], ALERT_RULES["groups"])
 
+    def test_provider_logs_an_error_on_missing_alerting_data(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+
+        BAD_METADATA = {"bad": "metadata"}
+        BAD_RULES = {"bad": "rule"}
+
+        rel_id = self.harness.add_relation("monitoring", "consumer")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "scrape_metadata": json.dumps(BAD_METADATA),
+                "alert_rules": json.dumps(BAD_RULES),
+            },
+        )
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+        with self.assertLogs(level="ERROR") as logger:
+            _ = self.harness.charm.prometheus_provider.alerts()
+            messages = sorted(logger.output)
+            self.assertEqual(len(messages), 1)
+            self.assertIn(f"Relation {rel_id} has invalid data", messages[0])
+
 
 def juju_job_labels(job, num=0):
     """Fetch job labels.
