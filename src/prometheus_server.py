@@ -27,14 +27,11 @@ class Prometheus:
 
         try:
             response = self.http.request("GET", url)
-        except urllib3.exceptions.MaxRetryError:
-            return {}
-
-        try:
             info = json.loads(response.data.decode("utf-8"))
             if info["status"] == "success":
                 return info["data"]
-            else:
-                return {}
-        except:
-            return {}
+        except Exception:
+            # Nothing worth logging, seriously
+            pass
+
+        return {}
