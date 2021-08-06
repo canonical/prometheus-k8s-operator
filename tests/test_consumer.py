@@ -13,6 +13,7 @@ from ops.testing import Harness
 import charms.prometheus_k8s.v0.prometheus as prometheus_lib
 from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
 
+
 CONSUMES = {"prometheus": ">=2.0"}
 CONSUMER_SERVICE = "prometheus_tester"
 CONSUMER_META = """
@@ -50,11 +51,14 @@ ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
 
 class ConsumerCharm(CharmBase):
     _stored = StoredState()
+    RULES_PATH = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        prometheus_lib.ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
+        prometheus_lib.ALERT_RULES_PATH = (
+            self.RULES_PATH if self.RULES_PATH else "./tests/prometheus_alert_rules"
+        )
         self.provider = PrometheusConsumer(
             self,
             "monitoring",
@@ -66,6 +70,7 @@ class ConsumerCharm(CharmBase):
 
 class TestConsumer(unittest.TestCase):
     def setUp(self):
+        ConsumerCharm.RULES_PATH = "./tests/prometheus_alert_rules"
         self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
@@ -178,6 +183,44 @@ class TestConsumer(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
+
+
+class TestBadConsumers(unittest.TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        ConsumerCharm.RULES_PATH = None
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_a_bad_alert_expression_logs_an_error(self, _):
+        ConsumerCharm.RULES_PATH = "./tests/bad_alert_expressions"
+        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin()
+
+        with self.assertLogs(level="ERROR") as logger:
+            rel_id = self.harness.add_relation("monitoring", "provider")
+            self.harness.add_relation_unit(rel_id, "provider/0")
+            messages = sorted(logger.output)
+            self.assertEqual(len(messages), 1)
+            self.assertIn(
+                "Invalid alert expression in PrometheusTargetMissing", messages[0]
+            )
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_a_bad_alert_rules_logs_an_error(self, _):
+        ConsumerCharm.RULES_PATH = "./tests/bad_alert_rules"
+        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin()
+
+        with self.assertLogs(level="ERROR") as logger:
+            rel_id = self.harness.add_relation("monitoring", "provider")
+            self.harness.add_relation_unit(rel_id, "provider/0")
+            messages = sorted(logger.output)
+            self.assertEqual(len(messages), 1)
+            self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
 
 
 def expression_labels(expr):
