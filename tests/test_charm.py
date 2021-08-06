@@ -71,6 +71,31 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--log.level"), "warn")
 
     @patch("ops.testing._TestingPebbleClient.push")
+    def test_ingress_relation_not_set(self, _):
+        self.harness.set_leader(True)
+
+        valid_log_config = MINIMAL_CONFIG.copy()
+        self.harness.update_config(valid_log_config)
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertIsNone(cli_arg(plan, "--web.external-url"))
+
+    @patch("ops.testing._TestingPebbleClient.push")
+    def test_ingress_relation_set(self, _):
+        self.harness.set_leader(True)
+
+        self.harness.update_config(MINIMAL_CONFIG.copy())
+
+        rel_id = self.harness.add_relation("ingress", "ingress")
+        self.harness.add_relation_unit(rel_id, "ingress/0")
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(
+            cli_arg(plan, "--web.external-url"),
+            "http://prometheus-k8s.juju:9090/prometheus-k8s",
+        )
+
+    @patch("ops.testing._TestingPebbleClient.push")
     def test_tsdb_compression_is_not_enabled_by_default(self, _):
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
