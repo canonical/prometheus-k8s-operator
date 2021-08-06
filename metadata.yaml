@@ -34,6 +34,8 @@ requires:
         interface: grafana_datasource
     alertmanager:
         interface: alertmanager_dispatch
+    ingress:
+        interface: ingress
 storage:
   database:
     type: filesystem
