@@ -71,6 +71,16 @@ class PrometheusCharm(CharmBase):
             },
         )
 
+        self.framework.observe(
+            self.on.ingress_relation_joined, self._on_ingress_changed
+        )
+        self.framework.observe(
+            self.on.ingress_relation_changed, self._on_ingress_changed
+        )
+        self.framework.observe(
+            self.on.ingress_relation_broken, self._on_ingress_changed
+        )
+
     @property
     def _external_hostname(self):
         """Return the external hostname to be passed to ingress via the relation."""
@@ -169,6 +179,9 @@ class PrometheusCharm(CharmBase):
         """Handle changes in Alertmanager relations."""
         self._configure()
 
+    def _on_ingress_changed(self, event):
+        self._configure()
+
     def _command(self):
         """Construct command to launch Prometheus.
 
@@ -195,6 +208,15 @@ class PrometheusCharm(CharmBase):
             "--web.console.templates=/usr/share/prometheus/consoles",
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
+
+        if self.model.get_relation("ingress"):
+            port = str(self.model.config["port"])
+            path = self.app.name  # Same as "service-name" in the ingress relation
+
+            # TODO The ingress should communicate the externally-visible scheme
+            external_url = f"http://{self._external_hostname}:{port}/{path}"
+
+            args.append(f"--web.external-url={external_url}")
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
@@ -230,6 +252,8 @@ class PrometheusCharm(CharmBase):
 
         return args
 
+    # TODO This should throw and be handled. RIght now, we just
+    # log the error and confinue with an incomplete configuration!
     def _is_valid_timespec(self, timeval):
         """Is a time interval unit and value valid.
 
