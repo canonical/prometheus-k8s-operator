@@ -30,8 +30,11 @@ class Prometheus:
         except urllib3.exceptions.MaxRetryError:
             return {}
 
-        info = json.loads(response.data.decode("utf-8"))
-        if info["status"] == "success":
-            return info["data"]
-        else:
+        try:
+            info = json.loads(response.data.decode("utf-8"))
+            if info["status"] == "success":
+                return info["data"]
+            else:
+                return {}
+        except:
             return {}
