@@ -14,6 +14,7 @@ from ops.model import ActiveStatus, MaintenanceStatus
 from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
+from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
@@ -60,6 +61,24 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(
             self.alertmanager_lib.cluster_changed, self._on_alertmanager_cluster_changed
         )
+        self.service_hostname = self._external_hostname
+        self.ingress = IngressRequires(
+            self,
+            {
+                "service-hostname": self.service_hostname,
+                "service-name": self.app.name,
+                "service-port": str(self.model.config["port"]),
+            },
+        )
+
+    @property
+    def _external_hostname(self):
+        """Return the external hostname to be passed to ingress via the relation."""
+        # It is recommended to default to `self.app.name` so that the external
+        # hostname will correspond to the deployed application name in the
+        # model, but allow it to be set to something specific via config.
+
+        return self.config["web-external-url"] or f"{self.app.name}.juju"
 
     def _on_pebble_ready(self, event):
         """Setup workload container configuration."""
