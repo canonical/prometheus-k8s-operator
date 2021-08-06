@@ -318,7 +318,6 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 2
 
-ALERT_RULES_PATH = "prometheus_alert_rules"
 
 logger = logging.getLogger(__name__)
 
@@ -705,6 +704,8 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
+    _ALERT_RULES_PATH = "prometheus_alert_rules"
+
     def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
         """Construct a Prometheus charm client.
 
@@ -864,7 +865,7 @@ class PrometheusConsumer(ConsumerBase):
             a list of Prometheus alert rule groups.
         """
         alerts = []
-        for path in Path(ALERT_RULES_PATH).glob("*.rule"):
+        for path in Path(self._ALERT_RULES_PATH).glob("*.rule"):
             if not path.is_file():
                 continue
 
