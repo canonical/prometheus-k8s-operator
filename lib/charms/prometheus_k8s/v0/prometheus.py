@@ -866,12 +866,13 @@ class PrometheusConsumer(ConsumerBase):
 
             with path.open() as rule_file:
                 # Load a list of rules from file then add labels and filters
-                if rules := yaml.safe_load(rule_file):
+                try:
+                    rules = yaml.safe_load(rule_file)
                     rule = rules[0]  # each file is list of one rule
                     rule = self._label_alert_topology(rule)
                     rule = self._label_alert_expression(rule)
                     alerts.append(rule)
-                else:
+                except Exception:
                     logger.error("Failed to read alert rules from %s", path.name)
 
         # Gather all alerts into a list of one group since Prometheus
