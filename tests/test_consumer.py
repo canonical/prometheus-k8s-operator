@@ -10,7 +10,6 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 
 from ops.testing import Harness
-import charms.prometheus_k8s.v0.prometheus as prometheus_lib
 from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
 
 
@@ -51,14 +50,10 @@ ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
 
 class ConsumerCharm(CharmBase):
     _stored = StoredState()
-    RULES_PATH = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        prometheus_lib.ALERT_RULES_PATH = (
-            self.RULES_PATH if self.RULES_PATH else "./tests/prometheus_alert_rules"
-        )
         self.provider = PrometheusConsumer(
             self,
             "monitoring",
@@ -66,11 +61,11 @@ class ConsumerCharm(CharmBase):
             service_event=self.on.prometheus_tester_pebble_ready,
             jobs=JOBS,
         )
+        self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
 
 
 class TestConsumer(unittest.TestCase):
     def setUp(self):
-        ConsumerCharm.RULES_PATH = "./tests/prometheus_alert_rules"
         self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
@@ -186,17 +181,15 @@ class TestConsumer(unittest.TestCase):
 
 
 class TestBadConsumers(unittest.TestCase):
-    @classmethod
-    def tearDownClass(cls):
-        ConsumerCharm.RULES_PATH = None
-
-    @patch("ops.testing._TestingModelBackend.network_get")
-    def test_a_bad_alert_expression_logs_an_error(self, _):
-        ConsumerCharm.RULES_PATH = "./tests/bad_alert_expressions"
+    def setUp(self):
         self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_a_bad_alert_expression_logs_an_error(self, _):
+        self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_expressions"
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation("monitoring", "provider")
@@ -209,11 +202,7 @@ class TestBadConsumers(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
-        ConsumerCharm.RULES_PATH = "./tests/bad_alert_rules"
-        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
-        self.addCleanup(self.harness.cleanup)
-        self.harness.set_leader(True)
-        self.harness.begin()
+        self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_rules"
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation("monitoring", "provider")
