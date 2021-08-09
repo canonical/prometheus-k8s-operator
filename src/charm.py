@@ -346,7 +346,7 @@ class PrometheusCharm(CharmBase):
 
         scrape_config = {
             "global": self._prometheus_global_config(),
-            "rule_files": os.path.join(RULES_DIR, "juju_*.rules"),
+            "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
             "scrape_configs": [],
         }
 
