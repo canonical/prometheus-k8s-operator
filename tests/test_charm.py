@@ -25,7 +25,6 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_grafana_is_provided_port_and_source(self, mock_net_get, _):
-        self.harness.set_leader(True)
         self.harness.update_config(MINIMAL_CONFIG)
         IP = "1.1.1.1"
         net_info = {
@@ -42,16 +41,12 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_default_cli_log_level_is_info(self, _):
-        self.harness.set_leader(True)
-
         self.harness.update_config(MINIMAL_CONFIG)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "info")
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_invalid_log_level_defaults_to_debug(self, _):
-        self.harness.set_leader(True)
-
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config["log-level"] = "bad-level"
         with self.assertLogs(level="ERROR") as logger:
@@ -68,8 +63,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_valid_log_level_is_accepted(self, _):
-        self.harness.set_leader(True)
-
         valid_log_config = MINIMAL_CONFIG.copy()
         valid_log_config["log-level"] = "warn"
         self.harness.update_config(valid_log_config)
@@ -79,8 +72,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_tsdb_compression_is_not_enabled_by_default(self, _):
-        self.harness.set_leader(True)
-
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
 
@@ -89,8 +80,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_tsdb_compression_can_be_enabled(self, _):
-        self.harness.set_leader(True)
-
         compress_config = MINIMAL_CONFIG.copy()
         compress_config["tsdb-wal-compression"] = True
         self.harness.update_config(compress_config)
@@ -103,8 +92,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_valid_tsdb_retention_times_can_be_set(self, _):
-        self.harness.set_leader(True)
-
         retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -119,8 +106,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_invalid_tsdb_retention_times_can_not_be_set(self, _):
-        self.harness.set_leader(True)
-
         retention_time_config = MINIMAL_CONFIG.copy()
 
         # invalid unit
@@ -147,8 +132,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_global_scrape_interval_can_be_set(self, push):
-        self.harness.set_leader(True)
-
         scrapeint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -163,8 +146,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_global_scrape_timeout_can_be_set(self, push):
-        self.harness.set_leader(True)
-
         scrapetime_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -179,8 +160,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_global_evaluation_interval_can_be_set(self, push):
-        self.harness.set_leader(True)
-
         evalint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -195,8 +174,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_valid_external_labels_can_be_set(self, push):
-        self.harness.set_leader(True)
-
         label_config = MINIMAL_CONFIG.copy()
         labels = {"name1": "value1", "name2": "value2"}
         label_config["external-labels"] = json.dumps(labels)
@@ -208,7 +185,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_invalid_external_labels_can_not_be_set(self, push):
-        self.harness.set_leader(True)
         label_config = MINIMAL_CONFIG.copy()
         # label value must be string
         labels = {"name": 1}
@@ -224,8 +200,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_default_scrape_config_is_always_set(self, push):
-        self.harness.set_leader(True)
-
         self.harness.update_config(MINIMAL_CONFIG)
         config = push.call_args[0]
         prometheus_scrape_config = scrape_config(config, "prometheus")

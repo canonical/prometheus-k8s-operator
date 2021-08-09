@@ -138,7 +138,6 @@ class TestProvider(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
-        self.harness.set_leader(True)
         self.harness.begin()
 
     def setup_charm_relations(self, multi=False):
