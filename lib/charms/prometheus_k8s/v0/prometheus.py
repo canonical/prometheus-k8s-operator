@@ -630,6 +630,21 @@ class PrometheusProvider(ProviderBase):
             a copy of the `labels` dictionary augmented with Juju
             topology information with the exception of unit name.
         """
+        juju_topology_labels = {
+            "juju_model",
+            "juju_model_uuid",
+            "juju_application",
+            "juju_unit",
+        }
+
+        if juju_topology_labels.intersection(labels.keys()):
+            logger.debug(
+                "Some Juju topology labels already found in the provided labels: "
+                f"{labels}\nWill not set any Juju topology label based on the "
+                f"following scrape metadata: {scrape_metadata}"
+            )
+            return labels.copy()  # defensive copy for good measure
+
         juju_labels = labels.copy()  # deep copy not needed
         juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
         juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
@@ -686,9 +701,10 @@ class PrometheusProvider(ProviderBase):
         """
         juju_labels = self._set_juju_labels(labels, scrape_metadata)
 
-        # '/' is not allowed in Prometheus label names. It technically works,
-        # but complex queries silently fail
-        juju_labels["juju_unit"] = "{}".format(host_name.replace("/", "-"))
+        if "juju_unit" not in juju_labels:
+            # '/' is not allowed in Prometheus label names. It technically works,
+            # but complex queries silently fail
+            juju_labels["juju_unit"] = "{}".format(host_name.replace("/", "-"))
 
         static_config = {"labels": juju_labels}
 

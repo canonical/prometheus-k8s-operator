@@ -10,17 +10,17 @@ from ops.testing import Harness
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
-BAD_JOBS = [
+JOBS_WITH_BUILT_IN_JUJU_TOPOLOGY = [
     {
         "metrics_path": "/metrics",
         "static_configs": [
             {
                 "targets": ["*:80"],
                 "labels": {
-                    "juju_model": "bad_model",
-                    "juju_application": "bad_application",
-                    "juju_model_uuid": "bad_uuid",
-                    "juju_unit": "bad_unit",
+                    "juju_model": "my_model",
+                    "juju_application": "my_application",
+                    "juju_model_uuid": "my_uuid",
+                    "juju_unit": "my_unit",
                 },
             }
         ],
@@ -324,7 +324,7 @@ class TestProvider(unittest.TestCase):
         jobs = self.harness.charm.prometheus_provider.jobs()
         self.validate_jobs(jobs)
 
-    def test_provider_overwrites_juju_topology_labels(self):
+    def test_provider_preserves_builtin_juju_topology_labels(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation("monitoring", "consumer")
         self.harness.update_relation_data(
@@ -332,7 +332,7 @@ class TestProvider(unittest.TestCase):
             "consumer",
             {
                 "scrape_metadata": json.dumps(SCRAPE_METADATA),
-                "scrape_jobs": json.dumps(BAD_JOBS),
+                "scrape_jobs": json.dumps(JOBS_WITH_BUILT_IN_JUJU_TOPOLOGY),
             },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
@@ -345,10 +345,10 @@ class TestProvider(unittest.TestCase):
         jobs = self.harness.charm.prometheus_provider.jobs()
         self.assertEqual(len(jobs), 1)
         self.validate_jobs(jobs)
-        bad_labels = juju_job_labels(BAD_JOBS[0])
+        original_labels = juju_job_labels(JOBS_WITH_BUILT_IN_JUJU_TOPOLOGY[0])
         labels = juju_job_labels(jobs[0])
         for label_name, label_value in labels.items():
-            self.assertNotEqual(label_value, bad_labels[label_name])
+            self.assertEqual(label_value, original_labels[label_name])
 
     def test_provider_returns_alerts_indexed_by_relation_id(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
