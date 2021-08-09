@@ -747,7 +747,7 @@ class PrometheusConsumer(ConsumerBase):
                 dictionary are corresponding minimal acceptable
                 semantic version specfications for the monitoring
                 service.
-            service: a `CharmEvent` in response to which each unit
+            service_event: a `CharmEvent` in response to which each unit
                 must advertise its address.
             jobs: an optional list of dictionaries where each
                 dictionary represents the Prometheus scrape
