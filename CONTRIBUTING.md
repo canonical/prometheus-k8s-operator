@@ -59,6 +59,14 @@ $ charmcraft build
 $ juju deploy ./prometheus-k8s.charm --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
+## Linting
+Flake8 and black linters may be run to check charm and test source code using the
+command
+
+```bash
+tox -e lint
+```
+
 ## Testing
 
 Unit tests are implemented using the Operator Framework test
@@ -66,7 +74,7 @@ Unit tests are implemented using the Operator Framework test
 tests may executed by doing
 
 ```bash
-$ ./run_tests
+$ tox -e unit
 ```
 
 ## Code Overview
