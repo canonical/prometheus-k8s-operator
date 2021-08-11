@@ -302,11 +302,12 @@ relation data provide eponymous information.
 """
 
 import json
-import yaml
 import logging
 from pathlib import Path
-from ops.framework import EventSource, EventBase, ObjectEvents
-from ops.relation import ProviderBase, ConsumerBase
+
+import yaml
+from ops.framework import EventBase, EventSource, ObjectEvents
+from ops.relation import ConsumerBase, ProviderBase
 
 # The unique Charmhub library identifier, never change it
 LIBID = "bc84295fef5f4049878f07b131968ee2"
@@ -419,6 +420,7 @@ class PrometheusProvider(ProviderBase):
 
         for relation in self._charm.model.relations[self._relation_name]:
             static_scrape_jobs = self._static_scrape_config(relation)
+
             if static_scrape_jobs:
                 scrape_jobs.extend(static_scrape_jobs)
 
@@ -457,6 +459,7 @@ class PrometheusProvider(ProviderBase):
             metadata indexed by relation ID.
         """
         alerts = {}
+
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units:
                 continue
@@ -518,6 +521,7 @@ class PrometheusProvider(ProviderBase):
         hosts = self._relation_hosts(relation)
 
         labeled_job_configs = []
+
         for job in scrape_jobs:
             config = self._labeled_static_job_config(
                 _sanitize_scrape_configuration(job),
@@ -543,9 +547,11 @@ class PrometheusProvider(ProviderBase):
             the specified relation.
         """
         hosts = {}
+
         for unit in relation.units:
             if host_address := relation.data[unit].get("prometheus_scrape_host"):
                 hosts[unit.name] = host_address
+
         return hosts
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
@@ -586,13 +592,16 @@ class PrometheusProvider(ProviderBase):
         }
 
         for static_config in static_configs:
+
             labels = static_config.get("labels", {}) if static_configs else {}
             all_targets = static_config.get("targets", [])
 
             ports = []
             unitless_targets = []
+
             for target in all_targets:
                 host, port = target.split(":")
+
                 if host.strip() == "*":
                     ports.append(port.strip())
                 else:
@@ -605,12 +614,18 @@ class PrometheusProvider(ProviderBase):
                 config["static_configs"].append(unitless_config)
 
             for host_name, host_address in hosts.items():
-                static_config = self._labeled_unit_config(
-                    host_name, host_address, ports, labels, scrape_metadata
-                )
-                config["static_configs"].append(static_config)
-                if "juju_unit" not in relabel_config["source_labels"]:
-                    relabel_config["source_labels"].append("juju_unit")
+                # Do not add a target for proxy applications
+
+                if not labels.get("juju_application") or scrape_metadata[
+                    "application"
+                ] == labels.get("juju_application"):
+                    static_config = self._labeled_unit_config(
+                        host_name, host_address, ports, labels, scrape_metadata
+                    )
+                    config["static_configs"].append(static_config)
+
+                    if "juju_unit" not in relabel_config["source_labels"]:
+                        relabel_config["source_labels"].append("juju_unit")
 
         config["relabel_configs"] = [relabel_config]
 
@@ -643,6 +658,7 @@ class PrometheusProvider(ProviderBase):
                 f"{labels}\nWill not set any Juju topology label based on the "
                 f"following scrape metadata: {scrape_metadata}"
             )
+
             return labels.copy()  # defensive copy for good measure
 
         juju_labels = labels.copy()  # deep copy not needed
@@ -674,6 +690,7 @@ class PrometheusProvider(ProviderBase):
         """
         juju_labels = self._set_juju_labels(labels, scrape_metadata)
         unitless_config = {"targets": targets, "labels": juju_labels}
+
         return unitless_config
 
     def _labeled_unit_config(
@@ -710,6 +727,7 @@ class PrometheusProvider(ProviderBase):
 
         if ports:
             targets = []
+
             for port in ports:
                 targets.append("{}:{}".format(host_address, port))
             static_config["targets"] = targets
@@ -842,6 +860,7 @@ class PrometheusConsumer(ConsumerBase):
         labels["juju_model_uuid"] = metadata["model_uuid"]
         labels["juju_application"] = metadata["application"]
         rule["labels"] = labels
+
         return rule
 
     def _label_alert_expression(self, rule):
@@ -881,6 +900,7 @@ class PrometheusConsumer(ConsumerBase):
             a list of Prometheus alert rule groups.
         """
         alerts = []
+
         for path in Path(self._ALERT_RULES_PATH).glob("*.rule"):
             if not path.is_file():
                 continue
@@ -899,6 +919,7 @@ class PrometheusConsumer(ConsumerBase):
         # Gather all alerts into a list of one group since Prometheus
         # requires alerts be part of some group
         groups = []
+
         if alerts:
             metadata = self._scrape_metadata
             group = {
@@ -906,6 +927,7 @@ class PrometheusConsumer(ConsumerBase):
                 "rules": alerts,
             }
             groups.append(group)
+
         return groups
 
     @property
@@ -918,6 +940,7 @@ class PrometheusConsumer(ConsumerBase):
            single scrape job for Prometheus.
         """
         default_job = [{"metrics_path": "/metrics"}]
+
         return self._jobs if self._jobs else default_job
 
     @property
@@ -933,4 +956,5 @@ class PrometheusConsumer(ConsumerBase):
             "model_uuid": "{}".format(self._charm.model.uuid),
             "application": "{}".format(self._charm.model.app.name),
         }
+
         return metadata

@@ -409,6 +409,7 @@ class PrometheusCharm(CharmBase):
         info = prometheus.build_info()
         if info:
             return info.get("version", None)
+        self.unit.status = MaintenanceStatus("Prometheus provider is not yet ready.")
         return None
 
     @property
