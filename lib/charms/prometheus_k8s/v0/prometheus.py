@@ -97,6 +97,7 @@ structure as the value of `jobs`.
 The wildcard ("*") host specification implies that the scrape targets
 will automatically be set to the host addresses advertised by each
 unit of the consumer charm.
+Whitespaces around the "*" character are not supported.
 
 It is also possible to change the metrics path and scrape multiple
 ports, for example
@@ -647,6 +648,8 @@ class PrometheusProvider(ProviderBase):
             ],
             "static_configs": static_configs,
         }
+
+
 
     def _is_aggregated_static_config(self, static_config, scrape_metadata):
         # Charms that forward scrape jobs on behalf of other charms
