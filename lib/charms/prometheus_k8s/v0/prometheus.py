@@ -616,9 +616,12 @@ class PrometheusProvider(ProviderBase):
                         )
                     )
 
+        return self._to_job_config(job_name, job["metrics_path"], static_configs)
+
+    def _to_job_config(self, job_name, metrics_path, static_configs):
         return {
             "job_name": job_name,
-            "metrics_path": job["metrics_path"],
+            "metrics_path": metrics_path,
             "relabel_configs": [
                 # This relabelling rule will match metrics that do not have the full Juju topology,
                 # and ensure that metrics without a juju_unit are still unique per instance
@@ -648,8 +651,6 @@ class PrometheusProvider(ProviderBase):
             ],
             "static_configs": static_configs,
         }
-
-
 
     def _is_aggregated_static_config(self, static_config, scrape_metadata):
         # Charms that forward scrape jobs on behalf of other charms
