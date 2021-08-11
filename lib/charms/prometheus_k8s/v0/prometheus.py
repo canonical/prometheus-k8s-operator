@@ -323,6 +323,14 @@ LIBPATCH = 3
 logger = logging.getLogger(__name__)
 
 
+JUJU_TOPOLOGY_LABEL_SET = {
+    "juju_model",
+    "juju_model_uuid",
+    "juju_application",
+    "juju_unit",
+}
+
+
 def _sanitize_scrape_configuration(job):
     return {
         "job_name": job.get("job_name"),
@@ -392,9 +400,7 @@ class PrometheusProvider(ProviderBase):
         through a `TargetsChanged` event. The Prometheus charm can
         then choose to update its scrape configuration.
         """
-        rel_id = event.relation.id
-
-        self.on.targets_changed.emit(relation_id=rel_id)
+        self.on.targets_changed.emit(relation_id=event.relation.id)
 
     def _on_scrape_target_relation_departed(self, event):
         """Update job config when consumers depart.
@@ -404,8 +410,7 @@ class PrometheusProvider(ProviderBase):
         the Prometheus is informed through a `TargetsChanged`
         event.
         """
-        rel_id = event.relation.id
-        self.on.targets_changed.emit(relation_id=rel_id)
+        self.on.targets_changed.emit(relation_id=event.relation.id)
 
     def jobs(self):
         """Fetch the list of scrape jobs.
@@ -520,18 +525,15 @@ class PrometheusProvider(ProviderBase):
 
         hosts = self._relation_hosts(relation)
 
-        labeled_job_configs = []
-
-        for job in scrape_jobs:
-            config = self._labeled_static_job_config(
+        return [
+            self._labeled_static_job_config(
                 _sanitize_scrape_configuration(job),
                 job_name_prefix,
                 hosts,
                 scrape_metadata,
             )
-            labeled_job_configs.append(config)
-
-        return labeled_job_configs
+            for job in scrape_jobs
+        ]
 
     def _relation_hosts(self, relation):
         """Fetch host names and address of all consumer units for a single relation.
@@ -546,13 +548,11 @@ class PrometheusProvider(ProviderBase):
             A dictionary that maps unit names to unit addresses for
             the specified relation.
         """
-        hosts = {}
-
-        for unit in relation.units:
-            if host_address := relation.data[unit].get("prometheus_scrape_host"):
-                hosts[unit.name] = host_address
-
-        return hosts
+        return {
+            unit.name: relation.data[unit].get("prometheus_scrape_host")
+            for unit in relation.units
+            if relation.data[unit].get("prometheus_scrape_host")
+        }
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
         """Construct labeled job configuration for a single job.
@@ -579,57 +579,91 @@ class PrometheusProvider(ProviderBase):
         name = job.get("job_name")
         job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
 
-        config = {"job_name": job_name, "metrics_path": job["metrics_path"]}
+        original_static_configs = job.get("static_configs")
+        static_configs = []
 
-        static_configs = job.get("static_configs")
-        config["static_configs"] = []
+        for static_config in original_static_configs:
+            labels = static_config.get("labels", {})
+            targets = static_config.get("targets", [])
 
-        relabel_config = {
-            "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
-            "separator": "_",
-            "target_label": "instance",
-            "regex": "(.*)",
+            if unitless_targets := [
+                target for target in targets if not target.startswith("*:")
+            ]:
+                static_configs.append(
+                    self._labeled_unitless_config(
+                        unitless_targets, labels, scrape_metadata
+                    )
+                )
+
+            if ports := [
+                target.split(":")[1] for target in targets if target.startswith("*:")
+            ]:
+                if self._is_aggregated_static_config(static_config, scrape_metadata):
+                    # Do not add targets for proxy applications that publish scrape
+                    # jobs with Juju labels that do not match the scrape metadata
+                    logger.error(
+                        "Received a static_config that uses the '*:<port>' target "
+                        "schema, and that has Juju topology labels that do not match "
+                        "the scrape_metadata"
+                    )
+                    continue
+
+                for host_name, host_address in hosts.items():
+                    static_configs.append(
+                        self._labeled_unit_config(
+                            host_name, host_address, ports, labels, scrape_metadata
+                        )
+                    )
+
+        return {
+            "job_name": job_name,
+            "metrics_path": job["metrics_path"],
+            "relabel_configs": [
+                # This relabelling rule will match metrics that do not have the full Juju topology,
+                # and ensure that metrics without a juju_unit are still unique per instance
+                {
+                    "source_labels": [
+                        "juju_model",
+                        "juju_model_uuid",
+                        "juju_application",
+                        "__address__",
+                    ],
+                    "separator": "_",
+                    "target_label": "instance",
+                    "regex": "(.*)",
+                },
+                # This relabelling rule will match all metrics with the full juju topology,
+                {
+                    "source_labels": [
+                        "juju_model",
+                        "juju_model_uuid",
+                        "juju_application",
+                        "juju_unit",
+                    ],
+                    "separator": "_",
+                    "target_label": "instance",
+                    "regex": "(.*)",
+                },
+            ],
+            "static_configs": static_configs,
         }
 
-        for static_config in static_configs:
+    def _is_aggregated_static_config(self, static_config, scrape_metadata):
+        # Charms that forward scrape jobs on behalf of other charms
+        # set the Juju topology labels in the jobs and the values of
+        # those Juju topology labels do not match the scrape metadata
 
-            labels = static_config.get("labels", {}) if static_configs else {}
-            all_targets = static_config.get("targets", [])
-
-            ports = []
-            unitless_targets = []
-
-            for target in all_targets:
-                host, port = target.split(":")
-
-                if host.strip() == "*":
-                    ports.append(port.strip())
-                else:
-                    unitless_targets.append(target)
-
-            if unitless_targets:
-                unitless_config = self._labeled_unitless_config(
-                    unitless_targets, labels, scrape_metadata
+        if labels := static_config.get("labels"):
+            if not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys()):
+                # The job is setting some Juju topology labels, check for drift
+                # from scrape metadata
+                return (
+                    scrape_metadata["model"] != labels.get("juju_model")
+                    or scrape_metadata["model_uuid"] != labels.get("juju_model_uuid")
+                    or scrape_metadata["application"] != labels.get("juju_application")
                 )
-                config["static_configs"].append(unitless_config)
 
-            for host_name, host_address in hosts.items():
-                # Do not add a target for proxy applications
-
-                if not labels.get("juju_application") or scrape_metadata[
-                    "application"
-                ] == labels.get("juju_application"):
-                    static_config = self._labeled_unit_config(
-                        host_name, host_address, ports, labels, scrape_metadata
-                    )
-                    config["static_configs"].append(static_config)
-
-                    if "juju_unit" not in relabel_config["source_labels"]:
-                        relabel_config["source_labels"].append("juju_unit")
-
-        config["relabel_configs"] = [relabel_config]
-
-        return config
+        return False
 
     def _set_juju_labels(self, labels, scrape_metadata):
         """Create a copy of metric labels with Juju topology information.
@@ -645,26 +679,12 @@ class PrometheusProvider(ProviderBase):
             a copy of the `labels` dictionary augmented with Juju
             topology information with the exception of unit name.
         """
-        juju_topology_labels = {
-            "juju_model",
-            "juju_model_uuid",
-            "juju_application",
-            "juju_unit",
-        }
-
-        if juju_topology_labels.intersection(labels.keys()):
-            logger.debug(
-                "Some Juju topology labels already found in the provided labels: "
-                f"{labels}\nWill not set any Juju topology label based on the "
-                f"following scrape metadata: {scrape_metadata}"
-            )
-
-            return labels.copy()  # defensive copy for good measure
-
         juju_labels = labels.copy()  # deep copy not needed
-        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+
+        if JUJU_TOPOLOGY_LABEL_SET.isdisjoint(juju_labels.keys()):
+            juju_labels["juju_model"] = scrape_metadata["model"]
+            juju_labels["juju_model_uuid"] = scrape_metadata["model_uuid"]
+            juju_labels["juju_application"] = scrape_metadata["application"]
 
         return juju_labels
 
@@ -688,10 +708,21 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a list of fully qualified hosts.
         """
-        juju_labels = self._set_juju_labels(labels, scrape_metadata)
-        unitless_config = {"targets": targets, "labels": juju_labels}
+        if not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys()):
+            logger.debug(
+                "Some Juju topology labels already found in the provided labels: "
+                f"{labels}; will not set any Juju topology label based on the "
+                f"following scrape metadata: {scrape_metadata}"
+            )
 
-        return unitless_config
+            juju_labels = labels
+        else:
+            juju_labels = self._set_juju_labels(labels, scrape_metadata)
+
+        return {
+            "targets": targets,
+            "labels": juju_labels,
+        }
 
     def _labeled_unit_config(
         self, host_name, host_address, ports, labels, scrape_metadata
@@ -721,20 +752,15 @@ class PrometheusProvider(ProviderBase):
         if "juju_unit" not in juju_labels:
             # '/' is not allowed in Prometheus label names. It technically works,
             # but complex queries silently fail
-            juju_labels["juju_unit"] = "{}".format(host_name.replace("/", "-"))
+            juju_labels["juju_unit"] = host_name.replace("/", "-")
 
-        static_config = {"labels": juju_labels}
+        targets = (
+            ["{}:{}".format(host_address, port) for port in ports]
+            if ports
+            else [host_address]
+        )
 
-        if ports:
-            targets = []
-
-            for port in ports:
-                targets.append("{}:{}".format(host_address, port))
-            static_config["targets"] = targets
-        else:
-            static_config["targets"] = [host_address]
-
-        return static_config
+        return {"labels": juju_labels, "targets": targets}
 
 
 class PrometheusConsumer(ConsumerBase):
