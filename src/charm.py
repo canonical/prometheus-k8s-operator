@@ -7,6 +7,8 @@ import logging
 import yaml
 import json
 
+from deepdiff import DeepDiff
+
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -32,6 +34,8 @@ class PrometheusCharm(CharmBase):
         logger.debug("Initializing Charm")
 
         super().__init__(*args)
+
+        self._prometheus = Prometheus("localhost", str(self.model.config["port"]))
 
         self._stored.set_default(provider_ready=False)
 
@@ -97,10 +101,20 @@ class PrometheusCharm(CharmBase):
         self._set_alerts(container)
 
         # setup the workload (Prometheus) container and its services
-        layer = self._prometheus_layer()
         plan = container.get_plan()
-        if plan.services != layer["services"]:
-            container.add_layer("prometheus", layer, combine=True)
+        current_layer = plan.services if plan else {}
+        new_layer = self._prometheus_layer()
+
+        # If the startup arguments are the same and we use the
+        # we lifecycle, sent the config reload HTTP request instead
+        if (
+            current_layer
+            and "services" in current_layer
+            and not DeepDiff(current_layer["services"], new_layer["services"])
+        ):
+            self._prometheus.trigger_configuration_reload()
+        else:
+            container.add_layer("prometheus", new_layer, combine=True)
 
             if container.get_service("prometheus").is_running():
                 container.stop("prometheus")
@@ -405,8 +419,7 @@ class PrometheusCharm(CharmBase):
             a string consisting of the Prometheus version information or
             None if Prometheus server is not reachable.
         """
-        prometheus = Prometheus("localhost", str(self.model.config["port"]))
-        info = prometheus.build_info()
+        info = self._prometheus.build_info()
         if info:
             return info.get("version", None)
         return None

@@ -1,3 +1,4 @@
 git+git://github.com/canonical/operator
 pyaml
-urllib3
+requests
+deepdiff

@@ -1,17 +1,37 @@
-import json
-import urllib3
+import logging
+from requests import get, post
+from requests.exceptions import ConnectionError, ConnectTimeout
+
+logger = logging.getLogger(__name__)
 
 
 class Prometheus:
-    def __init__(self, host, port):
+    def __init__(self, host, port, api_timeout=2.0):
         """Utility to manage a Prometheus application.
         Args:
             host: host address of Prometheus application.
             port: port on which Prometheus service is exposed.
         """
-        self.host = host
-        self.port = port
-        self.http = urllib3.PoolManager()
+        self.base_url = "http://{}:{}".format(host, port)
+        self.api_timeout = api_timeout
+
+    def trigger_configuration_reload(self):
+        """Send a POST request to to hot-reload the config.
+        This reduces down-time compared to restarting the service.
+        Returns:
+          True if reload succeeded (returned 200 OK); False otherwise.
+        """
+        url = "{}/-/reload".format(self.base_url)
+        try:
+            response = post(url, timeout=self.api_timeout)
+
+            if response.status_code == 200:
+                logger.debug("Configuration reloaded")
+                return True
+        except (ConnectionError, ConnectTimeout) as e:
+            logger.debug("config reload error via %s: %s", url, str(e))
+
+        return False
 
     def build_info(self):
         """Fetch build information from Prometheus.
@@ -22,14 +42,14 @@ class Prometheus:
             instance is not reachable then an empty dictionary is
             returned.
         """
-        api_path = "api/v1/status/buildinfo"
-        url = "http://{}:{}/{}".format(self.host, self.port, api_path)
+        url = "{}/api/v1/status/buildinfo".format(self.base_url)
 
         try:
-            response = self.http.request("GET", url)
-            info = json.loads(response.data.decode("utf-8"))
-            if info["status"] == "success":
-                return info["data"]
+            response = get(url, timeout=self.api_timeout)
+            if response.status_code == 200:
+                info = response.json()
+                if info and info["status"] == "success":
+                    return info["data"]
         except Exception:
             # Nothing worth logging, seriously
             pass
