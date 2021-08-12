@@ -587,18 +587,22 @@ class PrometheusProvider(ProviderBase):
             labels = static_config.get("labels", {})
             targets = static_config.get("targets", [])
 
-            if unitless_targets := [
+            unitless_targets = [
                 target for target in targets if not target.startswith("*:")
-            ]:
+            ]
+
+            if unitless_targets:
                 static_configs.append(
                     self._labeled_unitless_config(
                         unitless_targets, labels, scrape_metadata
                     )
                 )
 
-            if ports := [
+            ports = [
                 target.split(":")[1] for target in targets if target.startswith("*:")
-            ]:
+            ]
+
+            if ports:
                 if self._is_aggregated_static_config(static_config, scrape_metadata):
                     # Do not add targets for proxy applications that publish scrape
                     # jobs with Juju labels that do not match the scrape metadata
@@ -656,16 +660,17 @@ class PrometheusProvider(ProviderBase):
         # Charms that forward scrape jobs on behalf of other charms
         # set the Juju topology labels in the jobs and the values of
         # those Juju topology labels do not match the scrape metadata
+        labels = static_config.get("labels", {})
+        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
 
-        if labels := static_config.get("labels"):
-            if not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys()):
-                # The job is setting some Juju topology labels, check for drift
-                # from scrape metadata
-                return (
-                    scrape_metadata["model"] != labels.get("juju_model")
-                    or scrape_metadata["model_uuid"] != labels.get("juju_model_uuid")
-                    or scrape_metadata["application"] != labels.get("juju_application")
-                )
+        if labels and with_topology:
+            # The job is setting some Juju topology labels, check for drift
+            # from scrape metadata
+            return (
+                scrape_metadata["model"] != labels.get("juju_model")
+                or scrape_metadata["model_uuid"] != labels.get("juju_model_uuid")
+                or scrape_metadata["application"] != labels.get("juju_application")
+            )
 
         return False
 
