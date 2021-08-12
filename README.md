@@ -64,7 +64,13 @@ Currently supported relations are
   receives alerts from Prometheus, aggregates and deduplicates them,
   then forwards them to specified targets. Prometheus relates to
   Alertmanager over the `alertmanager` interface.
-- In addition this Prometheus charm allows relations with any
+- Access to Prometheus from outside the Kubernetes cluster can be
+  provided via `ingress` relation with the
+  [Nginx Ingress Integrator](https://charmhub.io/nginx-ingress-integrator).
+  This relation is **experimental**, and there is a chance the charm
+  will evolve to use some other mechanism to be reachable from the outside
+  of the hosting Kubernetes cluster.
+- In addition, this Prometheus charm allows relations with any
   charm that supports the `prometheus_scrape` relation.
 
 ## OCI Images
