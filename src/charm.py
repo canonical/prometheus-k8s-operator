@@ -109,7 +109,7 @@ class PrometheusCharm(CharmBase):
         # If the startup arguments are the same and we use the
         # web lifecycle, sent the config reload HTTP request instead
 
-        prometheus_service_changed = not current_services.get("prometheus") or DeepDiff(
+        prometheus_service_changed = "prometheus" not in current_services or DeepDiff(
             current_services.get("prometheus").to_dict(),
             new_layer.get("services", {}).get("prometheus", {}),
         )
