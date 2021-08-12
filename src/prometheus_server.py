@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class Prometheus:
-    def __init__(self, host, port, api_timeout=2.0):
+    def __init__(self, host: str, port: int, api_timeout=2.0):
         """Utility to manage a Prometheus application.
         Args:
             host: host address of Prometheus application.
@@ -15,7 +15,7 @@ class Prometheus:
         self.base_url = "http://{}:{}".format(host, port)
         self.api_timeout = api_timeout
 
-    def reload_configuration(self):
+    def reload_configuration(self) -> bool:
         """Send a POST request to to hot-reload the config.
         This reduces down-time compared to restarting the service.
         Returns:
@@ -32,7 +32,7 @@ class Prometheus:
 
         return False
 
-    def build_info(self):
+    def build_info(self) -> dict:
         """Fetch build information from Prometheus.
 
         Returns:
