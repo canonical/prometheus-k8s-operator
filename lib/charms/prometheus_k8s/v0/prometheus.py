@@ -689,8 +689,9 @@ class PrometheusProvider(ProviderBase):
             topology information with the exception of unit name.
         """
         juju_labels = labels.copy()  # deep copy not needed
+        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
 
-        if JUJU_TOPOLOGY_LABEL_SET.isdisjoint(juju_labels.keys()):
+        if not with_topology:
             juju_labels["juju_model"] = scrape_metadata["model"]
             juju_labels["juju_model_uuid"] = scrape_metadata["model_uuid"]
             juju_labels["juju_application"] = scrape_metadata["application"]
@@ -717,7 +718,9 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a list of fully qualified hosts.
         """
-        if not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys()):
+        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
+
+        if with_topology:
             logger.debug(
                 "Some Juju topology labels already found in the provided labels: "
                 f"{labels}; will not set any Juju topology label based on the "
