@@ -302,11 +302,12 @@ relation data provide eponymous information.
 """
 
 import json
-import yaml
 import logging
 from pathlib import Path
-from ops.framework import EventSource, EventBase, ObjectEvents
-from ops.relation import ProviderBase, ConsumerBase
+
+import yaml
+from ops.framework import EventBase, EventSource, ObjectEvents
+from ops.relation import ConsumerBase, ProviderBase
 
 # The unique Charmhub library identifier, never change it
 LIBID = "bc84295fef5f4049878f07b131968ee2"
@@ -316,7 +317,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 
 logger = logging.getLogger(__name__)
@@ -704,9 +705,16 @@ class PrometheusProvider(ProviderBase):
 
 
 class PrometheusConsumer(ConsumerBase):
-    _ALERT_RULES_PATH = "prometheus_alert_rules"
-
-    def __init__(self, charm, name, consumes, service_event, jobs=[], multi=False):
+    def __init__(
+        self,
+        charm,
+        name,
+        consumes,
+        service_event,
+        jobs=[],
+        multi=False,
+        alert_rules_path="prometheus_alert_rules",
+    ):
         """Construct a Prometheus charm client.
 
         The `PrometheusConsumer` object provides scrape configurations
@@ -757,10 +765,14 @@ class PrometheusConsumer(ConsumerBase):
             multi: an optional (default False) flag to indicate if
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
+            alert_rules_path: an optional path for the location of alert rules
+                files.  Defaults to "prometheus_alert_rules" at the top level of
+                the charm.
         """
         super().__init__(charm, name, consumes, multi)
 
         self._charm = charm
+        self._ALERT_RULES_PATH = alert_rules_path
         self._service_event = service_event
         self._relation_name = name
         # Sanitize job configurations to the supported subset of parameters
