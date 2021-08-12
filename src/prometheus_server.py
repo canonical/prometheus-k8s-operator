@@ -26,7 +26,6 @@ class Prometheus:
             response = post(url, timeout=self.api_timeout)
 
             if response.status_code == 200:
-                logger.debug("Configuration reloaded")
                 return True
         except (ConnectionError, ConnectTimeout) as e:
             logger.debug("config reload error via %s: %s", url, str(e))

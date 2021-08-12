@@ -107,20 +107,28 @@ class PrometheusCharm(CharmBase):
 
         # If the startup arguments are the same and we use the
         # we lifecycle, sent the config reload HTTP request instead
-        if (
-            current_layer
-            and "services" in current_layer
-            and not DeepDiff(current_layer["services"], new_layer["services"])
-        ):
+
+        services_changed = not DeepDiff(
+            current_layer.get("services", {}),
+            new_layer.get("services", {}),
+        )
+
+        if current_layer and not services_changed:
             self._prometheus.trigger_configuration_reload()
+            logger.info("Configuration reloaded")
         else:
             container.add_layer("prometheus", new_layer, combine=True)
 
-            if container.get_service("prometheus").is_running():
+            restart_needed = container.get_service("prometheus").is_running()
+            if restart_needed:
                 container.stop("prometheus")
 
             container.start("prometheus")
-            logger.info("Prometheus started")
+
+            if restart_needed:
+                logger.info("Prometheus restarted")
+            else:
+                logger.info("Prometheus started")
 
         if self.unit.is_leader():
             self.app.status = ActiveStatus()
