@@ -526,7 +526,7 @@ class PrometheusProvider(ProviderBase):
 
         hosts = self._relation_hosts(relation)
 
-        return [
+        scrape_config = [
             self._labeled_static_job_config(
                 _sanitize_scrape_configuration(job),
                 job_name_prefix,
@@ -535,6 +535,8 @@ class PrometheusProvider(ProviderBase):
             )
             for job in scrape_jobs
         ]
+
+        return scrape_config
 
     def _relation_hosts(self, relation):
         """Fetch host names and address of all consumer units for a single relation.
@@ -549,11 +551,13 @@ class PrometheusProvider(ProviderBase):
             A dictionary that maps unit names to unit addresses for
             the specified relation.
         """
-        return {
+        hosts = {
             unit.name: relation.data[unit].get("prometheus_scrape_host")
             for unit in relation.units
             if relation.data[unit].get("prometheus_scrape_host")
         }
+
+        return hosts
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
         """Construct labeled job configuration for a single job.
@@ -620,7 +624,9 @@ class PrometheusProvider(ProviderBase):
                         )
                     )
 
-        return self._to_job_config(job_name, job["metrics_path"], static_configs)
+        job_config = self._to_job_config(job_name, job["metrics_path"], static_configs)
+
+        return job_config
 
     def _to_job_config(self, job_name, metrics_path, static_configs):
         return {
@@ -733,10 +739,12 @@ class PrometheusProvider(ProviderBase):
         else:
             juju_labels = self._set_juju_labels(labels, scrape_metadata)
 
-        return {
+        static_config = {
             "targets": targets,
             "labels": juju_labels,
         }
+
+        return static_config
 
     def _labeled_unit_config(
         self, host_name, host_address, ports, labels, scrape_metadata
@@ -777,7 +785,9 @@ class PrometheusProvider(ProviderBase):
             else [host_address]
         )
 
-        return {"labels": juju_labels, "targets": targets}
+        static_config = {"labels": juju_labels, "targets": targets}
+
+        return static_config
 
 
 class PrometheusConsumer(ConsumerBase):
