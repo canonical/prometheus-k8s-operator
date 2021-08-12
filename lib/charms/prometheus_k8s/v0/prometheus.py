@@ -689,12 +689,14 @@ class PrometheusProvider(ProviderBase):
             topology information with the exception of unit name.
         """
         juju_labels = labels.copy()  # deep copy not needed
-        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
 
-        if not with_topology:
-            juju_labels["juju_model"] = scrape_metadata["model"]
-            juju_labels["juju_model_uuid"] = scrape_metadata["model_uuid"]
-            juju_labels["juju_application"] = scrape_metadata["application"]
+        juju_labels.update(
+            {
+                "juju_model": scrape_metadata["model"],
+                "juju_model_uuid": scrape_metadata["model_uuid"],
+                "juju_application": scrape_metadata["application"],
+            }
+        )
 
         return juju_labels
 
@@ -759,7 +761,10 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a single wildcard host.
         """
-        juju_labels = self._set_juju_labels(labels, scrape_metadata)
+        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
+
+        if not with_topology:
+            juju_labels = self._set_juju_labels(labels, scrape_metadata)
 
         if "juju_unit" not in juju_labels:
             # '/' is not allowed in Prometheus label names. It technically works,
