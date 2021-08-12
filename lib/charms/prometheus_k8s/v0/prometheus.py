@@ -667,20 +667,24 @@ class PrometheusProvider(ProviderBase):
         # set the Juju topology labels in the jobs and the values of
         # those Juju topology labels do not match the scrape metadata
         labels = static_config.get("labels", {})
-        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
+        full_topology = JUJU_TOPOLOGY_LABEL_SET.issubset(labels.keys())
 
-        if labels and with_topology:
+        is_aggregated = False
+
+        if full_topology:
             # The job is setting some Juju topology labels, check for drift
             # from scrape metadata
-            return (
+            is_aggregated = (
                 scrape_metadata["model"] != labels.get("juju_model")
                 or scrape_metadata["model_uuid"] != labels.get("juju_model_uuid")
                 or scrape_metadata["application"] != labels.get("juju_application")
             )
+        else:
+            self._check_not_partial_juju_topology(scrape_metadata, labels)
 
-        return False
+        return is_aggregated
 
-    def _set_juju_labels(self, labels, scrape_metadata):
+    def _ensure_juju_topology(self, labels, scrape_metadata):
         """Create a copy of metric labels with Juju topology information.
 
         Args:
@@ -696,15 +700,33 @@ class PrometheusProvider(ProviderBase):
         """
         juju_labels = labels.copy()  # deep copy not needed
 
-        juju_labels.update(
-            {
-                "juju_model": scrape_metadata["model"],
-                "juju_model_uuid": scrape_metadata["model_uuid"],
-                "juju_application": scrape_metadata["application"],
-            }
-        )
+        full_topology = JUJU_TOPOLOGY_LABEL_SET.issubset(juju_labels.keys())
+
+        if not full_topology:
+            self._check_not_partial_juju_topology(scrape_metadata, juju_labels)
+
+            juju_labels.update(
+                {
+                    "juju_model": scrape_metadata["model"],
+                    "juju_model_uuid": scrape_metadata["model_uuid"],
+                    "juju_application": scrape_metadata["application"],
+                }
+            )
 
         return juju_labels
+
+    def _check_not_partial_juju_topology(self, scrape_metadata, labels):
+        partial_topology = JUJU_TOPOLOGY_LABEL_SET.difference(labels.keys())
+
+        # If the missing Juju topology labels are a strict subset of the Juju
+        # topology labels, log an error
+        if partial_topology and partial_topology != JUJU_TOPOLOGY_LABEL_SET:
+            logger.error(
+                "The static_config with scrape_metadata %s has an incomplete "
+                "juju topology; the following juju topology labels are missing: %s",
+                scrape_metadata,
+                partial_topology,
+            )
 
     def _labeled_unitless_config(self, targets, labels, scrape_metadata):
         """Static scrape configuration for fully qualified host addresses.
@@ -726,18 +748,7 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a list of fully qualified hosts.
         """
-        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
-
-        if with_topology:
-            logger.debug(
-                "Some Juju topology labels already found in the provided labels: "
-                f"{labels}; will not set any Juju topology label based on the "
-                f"following scrape metadata: {scrape_metadata}"
-            )
-
-            juju_labels = labels
-        else:
-            juju_labels = self._set_juju_labels(labels, scrape_metadata)
+        juju_labels = self._ensure_juju_topology(labels, scrape_metadata)
 
         static_config = {
             "targets": targets,
@@ -769,10 +780,7 @@ class PrometheusProvider(ProviderBase):
             A dictionary containing the static scrape configuration
             for a single wildcard host.
         """
-        with_topology = not JUJU_TOPOLOGY_LABEL_SET.isdisjoint(labels.keys())
-
-        if not with_topology:
-            juju_labels = self._set_juju_labels(labels, scrape_metadata)
+        juju_labels = self._ensure_juju_topology(labels, scrape_metadata)
 
         if "juju_unit" not in juju_labels:
             # '/' is not allowed in Prometheus label names. It technically works,
