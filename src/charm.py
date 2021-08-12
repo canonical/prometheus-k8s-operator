@@ -107,7 +107,7 @@ class PrometheusCharm(CharmBase):
         new_layer = self._prometheus_layer()
 
         # If the startup arguments are the same and we use the
-        # we lifecycle, sent the config reload HTTP request instead
+        # web lifecycle, sent the config reload HTTP request instead
 
         prometheus_service_changed = not current_services.get("prometheus") or DeepDiff(
             current_services.get("prometheus").to_dict(),
