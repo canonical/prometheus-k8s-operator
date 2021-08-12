@@ -7,8 +7,6 @@ import logging
 import yaml
 import json
 
-from deepdiff import DeepDiff
-
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
@@ -109,9 +107,15 @@ class PrometheusCharm(CharmBase):
         # If the startup arguments are the same and we use the
         # web lifecycle, sent the config reload HTTP request instead
 
-        prometheus_service_changed = "prometheus" not in current_services or DeepDiff(
-            current_services.get("prometheus").to_dict(),
-            new_layer.get("services", {}).get("prometheus", {}),
+        current_prometheus_service = (
+            current_services.get("prometheus").to_dict()
+            if "prometheus" in current_services
+            else {}
+        )
+        new_prometheus_service = new_layer.get("services", {}).get("prometheus", {})
+
+        prometheus_service_changed = (
+            current_prometheus_service != new_prometheus_service
         )
 
         if not prometheus_service_changed:

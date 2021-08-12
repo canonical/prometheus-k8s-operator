@@ -1,4 +1,3 @@
 git+git://github.com/canonical/operator
 pyaml
 requests
-deepdiff
