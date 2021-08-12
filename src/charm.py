@@ -101,19 +101,20 @@ class PrometheusCharm(CharmBase):
         self._set_alerts(container)
 
         # setup the workload (Prometheus) container and its services
-        plan = container.get_plan()
-        current_layer = plan.services if plan else {}
+        current_plan = container.get_plan()
+
+        current_services = current_plan.services if current_plan else {}
         new_layer = self._prometheus_layer()
 
         # If the startup arguments are the same and we use the
         # we lifecycle, sent the config reload HTTP request instead
 
-        services_changed = DeepDiff(
-            current_layer.get("services", {}),
-            new_layer.get("services", {}),
+        prometheus_service_changed = not current_services.get("prometheus") or DeepDiff(
+            current_services.get("prometheus").to_dict(),
+            new_layer.get("services", {}).get("prometheus", {}),
         )
 
-        if current_layer and not services_changed:
+        if not prometheus_service_changed:
             self._prometheus.trigger_configuration_reload()
             logger.info("Configuration reloaded")
         else:
