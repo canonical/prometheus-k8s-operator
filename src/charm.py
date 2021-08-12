@@ -115,7 +115,7 @@ class PrometheusCharm(CharmBase):
         )
 
         if not prometheus_service_changed:
-            self._prometheus.trigger_configuration_reload()
+            self._prometheus.reload_configuration()
             logger.info("Configuration reloaded")
         else:
             container.add_layer("prometheus", new_layer, combine=True)

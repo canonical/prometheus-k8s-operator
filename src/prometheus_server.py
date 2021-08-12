@@ -15,7 +15,7 @@ class Prometheus:
         self.base_url = "http://{}:{}".format(host, port)
         self.api_timeout = api_timeout
 
-    def trigger_configuration_reload(self):
+    def reload_configuration(self):
         """Send a POST request to to hot-reload the config.
         This reduces down-time compared to restarting the service.
         Returns:

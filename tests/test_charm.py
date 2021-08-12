@@ -205,7 +205,7 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
 
-    @patch("prometheus_server.Prometheus.trigger_configuration_reload")
+    @patch("prometheus_server.Prometheus.reload_configuration")
     @patch("ops.testing._TestingPebbleClient.push")
     def test_configuration_reload(self, push, trigger_configuration_reload):
         self.harness.update_config(MINIMAL_CONFIG)

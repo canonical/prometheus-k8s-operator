@@ -37,7 +37,7 @@ class TestServer(unittest.TestCase):
             status=200,
         )
 
-        self.assertTrue(self.prometheus.trigger_configuration_reload())
+        self.assertTrue(self.prometheus.reload_configuration())
 
     @responses.activate
     def test_prometheus_server_reload_configuration_failure(self):
@@ -47,4 +47,4 @@ class TestServer(unittest.TestCase):
             status=500,
         )
 
-        self.assertFalse(self.prometheus.trigger_configuration_reload())
+        self.assertFalse(self.prometheus.reload_configuration())
