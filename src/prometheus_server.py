@@ -1,6 +1,7 @@
 import logging
 from requests import get, post
 from requests.exceptions import ConnectionError, ConnectTimeout
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class Prometheus:
 
         return False
 
-    def build_info(self) -> dict:
+    def build_info(self) -> Dict[str, Union[str, dict]]:
         """Fetch build information from Prometheus.
 
         Returns:
