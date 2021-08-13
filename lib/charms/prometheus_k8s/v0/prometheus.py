@@ -317,7 +317,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 
 logger = logging.getLogger(__name__)
@@ -781,6 +781,7 @@ class PrometheusConsumer(ConsumerBase):
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_metadata)
+        self.framework.observe(events.relation_changed, self._set_scrape_metadata)
         self.framework.observe(self._service_event, self._set_unit_ip)
 
     def _set_scrape_metadata(self, event):
@@ -881,6 +882,7 @@ class PrometheusConsumer(ConsumerBase):
             if not path.is_file():
                 continue
 
+            logger.debug("Reading alert rule from %s", path)
             with path.open() as rule_file:
                 # Load a list of rules from file then add labels and filters
                 try:
