@@ -1,7 +1,7 @@
 import logging
 from requests import get, post
 from requests.exceptions import ConnectionError, ConnectTimeout
-from typing import Dict
+from typing import Dict, Union
 
 logger = logging.getLogger(__name__)
 
