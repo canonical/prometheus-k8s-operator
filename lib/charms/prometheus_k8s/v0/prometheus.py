@@ -247,9 +247,9 @@ related consumer charms and enabling corresponding alerts within the
 provider charm.  Alert rules are automatically gathered by Consumer
 charms when using this library, from a directory conventionally named
 `prometheus_alert_rules`. This directory must reside at the top level
-in the Consumer charm. Each file in this directory is assumed to be a
-single alert rule in YAML format. The format of this alert rule
-conforms to [Prometheus
+in the `src` folder of the consumer charm. Each file in this directory
+is assumed to be a single alert rule in YAML format. The format of this
+alert rule conforms to [Prometheus
 documentation](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
 An example of the contents of one such file is shown below.
 
@@ -317,7 +317,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 
 logger = logging.getLogger(__name__)
@@ -713,7 +713,7 @@ class PrometheusConsumer(ConsumerBase):
         service_event,
         jobs=[],
         multi=False,
-        alert_rules_path="prometheus_alert_rules",
+        alert_rules_path="src/prometheus_alert_rules",
     ):
         """Construct a Prometheus charm client.
 
@@ -737,7 +737,7 @@ class PrometheusConsumer(ConsumerBase):
         - `scrape_jobs`
         - `alert_rules`
 
-        The `alert_rules` are ready from `*.rule` files in the `prometheus_alert_rules`
+        The `alert_rules` are ready from `*.rule` files in the `src/prometheus_alert_rules`
         directory. If the syntax of these rules is invalid `PrometheusConsumer` logs
         an error and does not load the particular rule.
 
@@ -766,8 +766,8 @@ class PrometheusConsumer(ConsumerBase):
                 this object must support interaction with multiple
                 Prometheus monitoring service providers.
             alert_rules_path: an optional path for the location of alert rules
-                files.  Defaults to "prometheus_alert_rules" at the top level of
-                the charm.
+                files.  Defaults to "src/prometheus_alert_rules" at the top level
+                of the charm repository.
         """
         super().__init__(charm, name, consumes, multi)
 
