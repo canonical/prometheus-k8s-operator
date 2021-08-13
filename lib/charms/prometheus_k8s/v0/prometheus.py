@@ -377,12 +377,8 @@ class PrometheusProvider(ProviderBase):
         self._charm = charm
         self._relation_name = name
         events = self._charm.on[name]
-        self.framework.observe(
-            events.relation_changed, self._on_scrape_target_relation_changed
-        )
-        self.framework.observe(
-            events.relation_departed, self._on_scrape_target_relation_departed
-        )
+        self.framework.observe(events.relation_changed, self._on_scrape_target_relation_changed)
+        self.framework.observe(events.relation_departed, self._on_scrape_target_relation_departed)
 
     def _on_scrape_target_relation_changed(self, event):
         """Handle changes in related consumers.
@@ -462,13 +458,9 @@ class PrometheusProvider(ProviderBase):
             if not relation.units:
                 continue
 
-            alert_rules = json.loads(
-                relation.data[relation.app].get("alert_rules", "{}")
-            )
+            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
 
-            scrape_metadata = json.loads(
-                relation.data[relation.app].get("scrape_metadata", "{}")
-            )
+            scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
 
             if alert_rules and scrape_metadata:
                 try:
@@ -662,9 +654,7 @@ class PrometheusProvider(ProviderBase):
         unitless_config = {"targets": targets, "labels": juju_labels}
         return unitless_config
 
-    def _labeled_unit_config(
-        self, host_name, host_address, ports, labels, scrape_metadata
-    ):
+    def _labeled_unit_config(self, host_name, host_address, ports, labels, scrape_metadata):
         """Static scrape configuration for a wildcard host.
 
         Wildcard hosts are those scrape targets whose address is
@@ -800,12 +790,8 @@ class PrometheusConsumer(ConsumerBase):
         if not self._charm.unit.is_leader():
             return
 
-        event.relation.data[self._charm.app]["scrape_metadata"] = json.dumps(
-            self._scrape_metadata
-        )
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(
-            self._scrape_jobs
-        )
+        event.relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
+        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
 
         if alert_groups := self._labeled_alert_groups:
             event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
@@ -852,10 +838,8 @@ class PrometheusConsumer(ConsumerBase):
             on juju topology.
         """
         metadata = self._scrape_metadata
-        topology = (
-            'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
-                metadata["model"], metadata["model_uuid"], metadata["application"]
-            )
+        topology = 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
+            metadata["model"], metadata["model_uuid"], metadata["application"]
         )
 
         if expr := rule.get("expr", None):

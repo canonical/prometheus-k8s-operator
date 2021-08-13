@@ -89,9 +89,7 @@ class TestConsumer(unittest.TestCase):
             "bind-addresses": [
                 {
                     "interface-name": "eth0",
-                    "addresses": [
-                        {"hostname": "prometheus-tester-0", "value": bind_address}
-                    ],
+                    "addresses": [{"hostname": "prometheus-tester-0", "value": bind_address}],
                 }
             ]
         }
@@ -109,9 +107,7 @@ class TestConsumer(unittest.TestCase):
             "bind-addresses": [
                 {
                     "interface-name": "eth0",
-                    "addresses": [
-                        {"hostname": "prometheus-tester-0", "value": bind_address}
-                    ],
+                    "addresses": [{"hostname": "prometheus-tester-0", "value": bind_address}],
                 }
             ]
         }
@@ -196,9 +192,7 @@ class TestBadConsumers(unittest.TestCase):
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn(
-                "Invalid alert expression in PrometheusTargetMissing", messages[0]
-            )
+            self.assertIn("Invalid alert expression in PrometheusTargetMissing", messages[0])
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):

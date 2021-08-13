@@ -100,9 +100,7 @@ ALERT_RULES = {
 OTHER_SCRAPE_JOBS = [
     {
         "metrics_path": "/other-path",
-        "static_configs": [
-            {"targets": ["*:9000"], "labels": {"other-key": "other-value"}}
-        ],
+        "static_configs": [{"targets": ["*:9000"], "labels": {"other-key": "other-value"}}],
     }
 ]
 OTHER_SCRAPE_METADATA = {
@@ -122,9 +120,7 @@ class PrometheusCharm(CharmBase):
         self.prometheus_provider = PrometheusProvider(
             self, "monitoring", "prometheus", self.version
         )
-        self.framework.observe(
-            self.prometheus_provider.on.targets_changed, self.record_events
-        )
+        self.framework.observe(self.prometheus_provider.on.targets_changed, self.record_events)
 
     def record_events(self, event):
         self._stored.num_events += 1
@@ -270,9 +266,7 @@ class TestProvider(unittest.TestCase):
         jobs = self.harness.charm.prometheus_provider.jobs()
         for job in jobs:
             if job.get("metrics_path"):
-                name_suffix = job_name_suffix(
-                    job["job_name"], juju_job_labels(job), rel_id
-                )
+                name_suffix = job_name_suffix(job["job_name"], juju_job_labels(job), rel_id)
                 path = named_job_attribute(name_suffix, "metrics_path", "/metrics")
                 self.assertEqual(job["metrics_path"], path)
 
