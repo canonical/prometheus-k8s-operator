@@ -17,11 +17,51 @@ from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+from ops.relation import ConsumerBase
+from ops.framework import EventSource, EventBase
+
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
 logger = logging.getLogger(__name__)
+
+
+class IngressConsumer(ConsumerBase):
+    class IngressChanged(EventBase):
+        pass
+
+    ingress_changed = EventSource(IngressChanged)
+
+    def __init__(self, charm: CharmBase, relation_name: str, consumes: dict, multi: bool = False):
+        super().__init__(charm, relation_name, consumes, multi)
+
+        # It is recommended to default to `self.app.name` so that the external
+        # hostname will correspond to the deployed application name in the
+        # model, but allow it to be set to something specific via config.
+        self._external_hostname = charm.config["web-external-url"] or f"{charm.app.name}.juju"
+
+        self.ingress = IngressRequires(
+            charm,
+            {
+                "service-hostname": self._external_hostname,
+                "service-name": charm.app.name,
+                "service-port": str(charm.model.config["port"]),
+            },
+        )
+
+        self.framework.observe(charm.on[relation_name].relation_joined, self._on_ingress_changed)
+        self.framework.observe(charm.on[relation_name].relation_changed, self._on_ingress_changed)
+        self.framework.observe(charm.on[relation_name].relation_broken, self._on_ingress_changed)
+
+    @property
+    def external_hostname(self):
+        """Return the external hostname to be passed to ingress via the relation."""
+        return self._external_hostname
+
+    def _on_ingress_changed(self, event):
+        if event.unit:
+            self.ingress_changed.emit()
 
 
 class PrometheusCharm(CharmBase):
@@ -63,28 +103,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(
             self.alertmanager_lib.cluster_changed, self._on_alertmanager_cluster_changed
         )
-        self.service_hostname = self._external_hostname
-        self.ingress = IngressRequires(
-            self,
-            {
-                "service-hostname": self.service_hostname,
-                "service-name": self.app.name,
-                "service-port": str(self.model.config["port"]),
-            },
-        )
 
-        self.framework.observe(self.on.ingress_relation_joined, self._on_ingress_changed)
-        self.framework.observe(self.on.ingress_relation_changed, self._on_ingress_changed)
-        self.framework.observe(self.on.ingress_relation_broken, self._on_ingress_changed)
-
-    @property
-    def _external_hostname(self):
-        """Return the external hostname to be passed to ingress via the relation."""
-        # It is recommended to default to `self.app.name` so that the external
-        # hostname will correspond to the deployed application name in the
-        # model, but allow it to be set to something specific via config.
-
-        return self.config["web-external-url"] or f"{self.app.name}.juju"
+        self.ingress_lib = IngressConsumer(self, "ingress", {"dummy-consumer": "0.0.0"})
+        self.framework.observe(self.ingress_lib.ingress_changed, self._on_ingress_changed)
 
     def _on_pebble_ready(self, event):
         """Setup workload container configuration."""
@@ -233,7 +254,7 @@ class PrometheusCharm(CharmBase):
             path = self.app.name  # Same as "service-name" in the ingress relation
 
             # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{port}/{path}"
+            external_url = f"http://{self.ingress_lib.external_hostname}:{port}/{path}"
 
             args.append(f"--web.external-url={external_url}")
 
