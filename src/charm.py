@@ -34,9 +34,7 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self._prometheus_server = Prometheus(
-            "localhost", str(self.model.config["port"])
-        )
+        self._prometheus_server = Prometheus("localhost", str(self.model.config["port"]))
 
         self._stored.set_default(provider_ready=False)
 
@@ -139,9 +137,7 @@ class PrometheusCharm(CharmBase):
         )
         new_prometheus_service = new_layer.get("services", {}).get("prometheus", {})
 
-        prometheus_service_changed = (
-            current_prometheus_service != new_prometheus_service
-        )
+        prometheus_service_changed = current_prometheus_service != new_prometheus_service
 
         if not prometheus_service_changed:
             self._prometheus_server.reload_configuration()
