@@ -33,7 +33,7 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self._prometheus_api = Prometheus("localhost", str(self.model.config["port"]))
+        self._prometheus_server = Prometheus("localhost", str(self.model.config["port"]))
 
         self._stored.set_default(provider_ready=False)
 
@@ -119,7 +119,7 @@ class PrometheusCharm(CharmBase):
         )
 
         if not prometheus_service_changed:
-            self._prometheus_api.reload_configuration()
+            self._prometheus_server.reload_configuration()
             logger.info("Configuration reloaded")
         else:
             container.add_layer("prometheus", new_layer, combine=True)
@@ -432,7 +432,7 @@ class PrometheusCharm(CharmBase):
             a string consisting of the Prometheus version information or
             None if Prometheus server is not reachable.
         """
-        info = self._prometheus_api.build_info()
+        info = self._prometheus_server.build_info()
         if info:
             return info.get("version", None)
         return None
