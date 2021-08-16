@@ -75,15 +75,9 @@ class PrometheusCharm(CharmBase):
             },
         )
 
-        self.framework.observe(
-            self.on.ingress_relation_joined, self._on_ingress_changed
-        )
-        self.framework.observe(
-            self.on.ingress_relation_changed, self._on_ingress_changed
-        )
-        self.framework.observe(
-            self.on.ingress_relation_broken, self._on_ingress_changed
-        )
+        self.framework.observe(self.on.ingress_relation_joined, self._on_ingress_changed)
+        self.framework.observe(self.on.ingress_relation_changed, self._on_ingress_changed)
+        self.framework.observe(self.on.ingress_relation_broken, self._on_ingress_changed)
 
     @property
     def _external_hostname(self):
@@ -258,9 +252,7 @@ class PrometheusCharm(CharmBase):
         if log_level not in allowed_log_levels:
             logging.error(
                 "Invalid loglevel: {0} given, {1} allowed. "
-                "defaulting to DEBUG loglevel.".format(
-                    log_level, "/".join(allowed_log_levels)
-                )
+                "defaulting to DEBUG loglevel.".format(log_level, "/".join(allowed_log_levels))
             )
             log_level = "debug"
 
@@ -275,9 +267,7 @@ class PrometheusCharm(CharmBase):
         if config.get("tsdb-retention-time") and self._is_valid_timespec(
             config["tsdb-retention-time"]
         ):
-            args.append(
-                "--storage.tsdb.retention.time={}".format(config["tsdb-retention-time"])
-            )
+            args.append("--storage.tsdb.retention.time={}".format(config["tsdb-retention-time"]))
 
         return args
 
@@ -352,9 +342,7 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         labels = {}
 
-        if config.get("external-labels") and self._are_valid_labels(
-            config["external-labels"]
-        ):
+        if config.get("external-labels") and self._are_valid_labels(config["external-labels"]):
             labels = json.loads(config["external-labels"])
 
         return labels
@@ -372,14 +360,10 @@ class PrometheusCharm(CharmBase):
         if labels:
             global_config["external_labels"] = labels
 
-        if config.get("scrape-interval") and self._is_valid_timespec(
-            config["scrape-interval"]
-        ):
+        if config.get("scrape-interval") and self._is_valid_timespec(config["scrape-interval"]):
             global_config["scrape_interval"] = config["scrape-interval"]
 
-        if config.get("scrape-timeout") and self._is_valid_timespec(
-            config["scrape-timeout"]
-        ):
+        if config.get("scrape-timeout") and self._is_valid_timespec(config["scrape-timeout"]):
             global_config["scrape_timeout"] = config["scrape-timeout"]
 
         if config.get("evaluation-interval") and self._is_valid_timespec(

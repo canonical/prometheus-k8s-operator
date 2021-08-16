@@ -27,16 +27,14 @@ class TestCharm(unittest.TestCase):
     def test_grafana_is_provided_port_and_source(self, mock_net_get, _):
         self.harness.update_config(MINIMAL_CONFIG)
         IP = "1.1.1.1"
-        net_info = {
-            "bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": IP}]}]
-        }
+        net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": IP}]}]}
         mock_net_get.return_value = net_info
 
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
-        grafana_host = self.harness.get_relation_data(
-            rel_id, self.harness.model.unit.name
-        )["grafana_source_host"]
+        grafana_host = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
+            "grafana_source_host"
+        ]
         self.assertEqual(grafana_host, "{}:{}".format(IP, "9090"))
 
     @patch("ops.testing._TestingPebbleClient.push")
@@ -125,9 +123,7 @@ class TestCharm(unittest.TestCase):
             self.harness.update_config(retention_time_config)
 
             plan = self.harness.get_container_pebble_plan("prometheus")
-            self.assertEqual(
-                cli_arg(plan, "--storage.tsdb.retention.time"), retention_time
-            )
+            self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), retention_time)
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_invalid_tsdb_retention_times_can_not_be_set(self, _):
@@ -164,9 +160,7 @@ class TestCharm(unittest.TestCase):
             self.harness.update_config(scrapeint_config)
             config = push.call_args[0]
             gconfig = global_config(config)
-            self.assertEqual(
-                gconfig["scrape_interval"], scrapeint_config["scrape-interval"]
-            )
+            self.assertEqual(gconfig["scrape_interval"], scrapeint_config["scrape-interval"])
             push.reset()
 
     @patch("ops.testing._TestingPebbleClient.push")
@@ -178,9 +172,7 @@ class TestCharm(unittest.TestCase):
             self.harness.update_config(scrapetime_config)
             config = push.call_args[0]
             gconfig = global_config(config)
-            self.assertEqual(
-                gconfig["scrape_timeout"], scrapetime_config["scrape-timeout"]
-            )
+            self.assertEqual(gconfig["scrape_timeout"], scrapetime_config["scrape-timeout"])
             push.reset()
 
     @patch("ops.testing._TestingPebbleClient.push")
@@ -193,9 +185,7 @@ class TestCharm(unittest.TestCase):
             self.harness.update_config(evalint_config)
             config = push.call_args[0]
             gconfig = global_config(config)
-            self.assertEqual(
-                gconfig["evaluation_interval"], evalint_config["evaluation-interval"]
-            )
+            self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation-interval"])
 
     @patch("ops.testing._TestingPebbleClient.push")
     def test_valid_external_labels_can_be_set(self, push):
