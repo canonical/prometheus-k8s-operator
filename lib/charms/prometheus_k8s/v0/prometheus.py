@@ -488,7 +488,10 @@ class MetricsEndpointConsumer(Object):
         if not scrape_jobs:
             return []
 
-        scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata"))
+        scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
+
+        if not scrape_metadata:
+            return scrape_jobs
 
         job_name_prefix = "juju_{}_{}_{}_prometheus_scrape".format(
             scrape_metadata["model"],
@@ -897,3 +900,112 @@ class MetricsEndpointProvider(Object):
             "application": f"{self._charm.model.app.name}",
         }
         return metadata
+
+
+class MetricsEndpointAggregator(ProviderBase):
+    """Aggregate metrics from multiple scrape targets
+
+    `MetricsEndpointAggregator` collects scrape target information from one
+    or more related charms and forwards this to a `MetricsEndpointConsumer`
+    charm, which may be in a different Juju model. However it is
+    essential that `MetricsEndpointAggregator` itself resides in the same
+    model as its scrape targets, as this is currently the only way to
+    ensure in Juju that the `MetricsEndpointAggregator` will be able to
+    determine the model name and uuid of the scrape targets.
+
+    `MetricsEndpointAggregator` should be used in place of
+    `MetricsEndpointProvider` in the following two use cases.
+
+    1. Integrating one or more scrape targets that do not support the
+    `prometheus_scrape` interface.
+
+    2. Integrating one or more scrape targets through cross model
+    relations.
+
+    Using `MetricsEndpointAggregator` to build a Prometheus charm client
+    only requires instantiating it. Instantiating
+    `PrometheusAggregator` is similar to `PrometheusConsumer`
+    except that it requires specifying the names of two
+    relations: the relation with scrape targets and that with the
+    Prometheus charms. For example
+
+    ```
+    self._aggregator = MetricsEndpointAggregator(
+        self,
+        {"prometheus": "monitoring", "scrape_target": "target"},
+    )
+    ```
+
+    `MetricsEndpointAggregator` assumes that each unit of a scrape target
+    sets in its unit-level relation data two entries with keys
+    "hostname" and "port". If it is required to integrate with charms
+    that do not honor these assumptions, it is always possible to
+    derive from `MetricsEndpointAggregator` overriding the `_get_targets()`
+    method, which is responsible for aggregating the unit name, host
+    address ("hostname") and port of the scrape target.
+    """
+
+    def __init__(self, charm, relation_names, multi=False):
+        super().__init__(charm, relation_names["prometheus"], "openmetrics", multi)
+
+        self._charm = charm
+        self._target_relation = relation_names["scrape_target"]
+        self._prometheus_relation = relation_names["prometheus"]
+        self._multi_mode = multi
+
+        target_events = self._charm.on[self._target_relation]
+        self.framework.observe(target_events.relation_changed, self._update_prometheus_jobs)
+        self.framework.observe(target_events.relation_departed, self._remove_prometheus_jobs)
+
+    def _update_prometheus_jobs(self, event):
+        if not (targets := self._get_targets(event.relation)):
+            return
+
+        updated_job = self._static_scrape_job(targets, event.relation.app.name)
+
+        for relation in self.model.relations[self._prometheus_relation]:
+            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            jobs = [job for job in jobs if updated_job["job_name"] != job["job_name"]]
+            jobs.append(updated_job)
+            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+
+    def _remove_prometheus_jobs(self, event):
+        job_name = self._job_name(event.relation.app.name)
+        for relation in self.model.relations[self._prometheus_relation]:
+            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            jobs = [job for job in jobs if job["job_name"] != job_name]
+            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+
+    def _get_targets(self, relation):
+        targets = {}
+        for unit in relation.units:
+            port = relation.data[unit].get("port", 80)
+            if hostname := relation.data[unit].get("hostname"):
+                targets.update({unit.name: {"hostname": hostname, "port": port}})
+
+        return targets
+
+    def _job_name(self, appname):
+        return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_prometheus_scrape"
+
+    def _static_scrape_job(self, targets, application_name):
+        juju_model = self.model.name
+        juju_model_uuid = self.model.uuid
+        job = {
+            "job_name": self._job_name(application_name),
+            "static_configs": [
+                {
+                    "targets": [f"{target['hostname']}:{target['port']}"],
+                    "labels": {
+                        "juju_model": juju_model,
+                        "juju_model_uuid": juju_model_uuid,
+                        "juju_application": application_name,
+                        "juju_unit": unit_name,
+                        "host": target["hostname"],
+                    },
+                }
+                for unit_name, target in targets.items()
+            ],
+        }
+
+        return job
