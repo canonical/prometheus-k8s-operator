@@ -33,7 +33,7 @@ class Prometheus:
 
         return False
 
-    def build_info(self) -> Dict[str, Union[str, dict]]:
+    def build_info(self):
         """Fetch build information from Prometheus.
 
         Returns:
