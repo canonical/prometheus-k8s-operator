@@ -34,6 +34,10 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
+        self._prometheus_server = Prometheus(
+            "localhost", str(self.model.config["port"])
+        )
+
         self._stored.set_default(provider_ready=False)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
@@ -126,16 +130,41 @@ class PrometheusCharm(CharmBase):
         self._set_alerts(container)
 
         # setup the workload (Prometheus) container and its services
-        layer = self._prometheus_layer()
-        plan = container.get_plan()
-        if plan.services != layer["services"]:
-            container.add_layer("prometheus", layer, combine=True)
+        current_plan = container.get_plan()
 
-            if container.get_service("prometheus").is_running():
+        current_services = current_plan.services if current_plan else {}
+        new_layer = self._prometheus_layer()
+
+        # If the startup arguments are the same and we use the
+        # web lifecycle, sent the config reload HTTP request instead
+
+        current_prometheus_service = (
+            current_services.get("prometheus").to_dict()
+            if "prometheus" in current_services
+            else {}
+        )
+        new_prometheus_service = new_layer.get("services", {}).get("prometheus", {})
+
+        prometheus_service_changed = (
+            current_prometheus_service != new_prometheus_service
+        )
+
+        if not prometheus_service_changed:
+            self._prometheus_server.reload_configuration()
+            logger.info("Configuration reloaded")
+        else:
+            container.add_layer("prometheus", new_layer, combine=True)
+
+            restart_needed = container.get_service("prometheus").is_running()
+            if restart_needed:
                 container.stop("prometheus")
 
             container.start("prometheus")
-            logger.info("Prometheus started")
+
+            if restart_needed:
+                logger.info("Prometheus restarted")
+            else:
+                logger.info("Prometheus started")
 
         if self.unit.is_leader():
             self.app.status = ActiveStatus()
@@ -448,8 +477,7 @@ class PrometheusCharm(CharmBase):
             a string consisting of the Prometheus version information or
             None if Prometheus server is not reachable.
         """
-        prometheus = Prometheus("localhost", str(self.model.config["port"]))
-        info = prometheus.build_info()
+        info = self._prometheus_server.build_info()
         if info:
             return info.get("version", None)
         return None

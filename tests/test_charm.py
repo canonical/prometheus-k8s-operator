@@ -230,6 +230,22 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
 
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("ops.testing._TestingPebbleClient.push")
+    def test_configuration_reload(self, push, trigger_configuration_reload):
+        self.harness.update_config(MINIMAL_CONFIG)
+
+        push.assert_called()
+        trigger_configuration_reload.assert_not_called()
+
+        label_config = MINIMAL_CONFIG.copy()
+        labels = {"name1": "value1", "name2": "value2"}
+        label_config["external-labels"] = json.dumps(labels)
+
+        self.harness.update_config(label_config)
+
+        trigger_configuration_reload.assert_called()
+
 
 def alerting_config(config):
     config_yaml = config[1]
