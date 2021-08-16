@@ -33,7 +33,9 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self._prometheus_server = Prometheus("localhost", str(self.model.config["port"]))
+        self._prometheus_server = Prometheus(
+            "localhost", str(self.model.config["port"])
+        )
 
         self._stored.set_default(provider_ready=False)
 
