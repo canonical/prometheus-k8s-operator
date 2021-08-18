@@ -17,7 +17,7 @@ from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
-from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
+from charms.prometheus_k8s.v0.prometheus import MetricsConsumer
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
@@ -46,6 +46,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
 
+        self._stored.set_default(prometheus_ready=False)
+
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.stop, self._on_stop)
@@ -57,12 +59,10 @@ class PrometheusCharm(CharmBase):
             refresh_event=self.on.prometheus_pebble_ready,
         )
 
-        if self.provider_ready:
-            self.prometheus_provider = PrometheusProvider(
-                self, "monitoring", "prometheus", self.version
-            )
+        if self.prometheus_ready:
+            self.metrics_consumer = MetricsConsumer(self, "metrics-endpoint")
             self.framework.observe(
-                self.prometheus_provider.on.targets_changed,
+                self.metrics_consumer.on.targets_changed,
                 self._on_scrape_targets_changed,
             )
         self.alertmanager_lib = AlertmanagerConsumer(
@@ -175,13 +175,13 @@ class PrometheusCharm(CharmBase):
             container: the Prometheus workload container into which
                 alert rule files need to be created.
         """
-        if not self.provider_ready:
+        if not self.prometheus_ready:
             return
 
         with container.is_ready():
             container.remove_path(RULES_DIR, recursive=True)
 
-        for rel_id, alerts in self.prometheus_provider.alerts().items():
+        for rel_id, alerts in self.metrics_consumer.alerts().items():
             filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
                 alerts["model"], alerts["model_uuid"], alerts["application"], rel_id
             )
@@ -421,8 +421,8 @@ class PrometheusCharm(CharmBase):
             "static_configs": [{"targets": ["localhost:{}".format(self.port)]}],
         }
         scrape_config["scrape_configs"].append(default_config)
-        if self._stored.provider_ready:
-            scrape_jobs = self.prometheus_provider.jobs()
+        if self._stored.prometheus_ready:
+            scrape_jobs = self.metrics_consumer.jobs()
             for job in scrape_jobs:
                 scrape_config["scrape_configs"].append(job)
 
@@ -495,7 +495,7 @@ class PrometheusCharm(CharmBase):
         return self.model.config["port"]
 
     @property
-    def provider_ready(self):
+    def prometheus_ready(self):
         """Check status of Prometheus server.
 
         Status of the Prometheus services is checked by querying
@@ -506,12 +506,12 @@ class PrometheusCharm(CharmBase):
             True if Prometheus is ready, False otherwise
         """
         provided = {"prometheus": self.version}
-        if not self._stored.provider_ready and provided["prometheus"]:
+        if not self._stored.prometheus_ready and provided["prometheus"]:
             logger.debug("Prometheus provider is available")
             logger.debug("Providing : {}".format(provided))
-            self._stored.provider_ready = True
+            self._stored.prometheus_ready = True
 
-        return self._stored.provider_ready
+        return self._stored.prometheus_ready
 
 
 if __name__ == "__main__":

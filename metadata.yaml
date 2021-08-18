@@ -27,11 +27,11 @@ containers:
       - storage: database
         location: /var/lib/prometheus
 provides:
-  monitoring:
-    interface: prometheus_scrape
-requires:
     grafana-source:
         interface: grafana_datasource
+requires:
+    metrics-endpoint:
+        interface: prometheus_scrape
     alertmanager:
         interface: alertmanager_dispatch
     ingress:
