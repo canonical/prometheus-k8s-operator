@@ -2,10 +2,12 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import os
-import logging
-import yaml
 import json
+import logging
+import os
+import yaml
+
+from kubernetes_service import K8sServicePatch, PatchFailed
 
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -34,9 +36,15 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
-        self._prometheus_server = Prometheus("localhost", str(self.model.config["port"]))
+        self._prometheus_server = Prometheus("localhost", str(self.port))
 
-        self._stored.set_default(provider_ready=False)
+        self._stored.set_default(
+            provider_ready=False,
+            k8s_service_patched=False,
+        )
+
+        self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -69,7 +77,7 @@ class PrometheusCharm(CharmBase):
             {
                 "service-hostname": self.service_hostname,
                 "service-name": self.app.name,
-                "service-port": str(self.model.config["port"]),
+                "service-port": str(self.port),
             },
         )
 
@@ -77,14 +85,13 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_changed, self._on_ingress_changed)
         self.framework.observe(self.on.ingress_relation_broken, self._on_ingress_changed)
 
-    @property
-    def _external_hostname(self):
-        """Return the external hostname to be passed to ingress via the relation."""
-        # It is recommended to default to `self.app.name` so that the external
-        # hostname will correspond to the deployed application name in the
-        # model, but allow it to be set to something specific via config.
+    def _on_install(self, _):
+        """Event handler for the install event during which we will update the K8s service"""
+        self._patch_k8s_service()
 
-        return self.config["web-external-url"] or f"{self.app.name}.juju"
+    def _on_upgrade_charm(self, _):
+        """Event handler for the upgrade_charm event during which we will update the K8s service"""
+        self._patch_k8s_service()
 
     def _on_pebble_ready(self, event):
         """Setup workload container configuration."""
@@ -229,11 +236,10 @@ class PrometheusCharm(CharmBase):
         ]
 
         if self.model.get_relation("ingress"):
-            port = str(self.model.config["port"])
             path = self.app.name  # Same as "service-name" in the ingress relation
 
             # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{port}/{path}"
+            external_url = f"http://{self._external_hostname}:{self.port}/{path}"
 
             args.append(f"--web.external-url={external_url}")
 
@@ -394,8 +400,6 @@ class PrometheusCharm(CharmBase):
         Returns:
             Prometheus config file in YAML (string) format.
         """
-        config = self.model.config
-
         scrape_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
@@ -414,7 +418,7 @@ class PrometheusCharm(CharmBase):
             "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",
-            "static_configs": [{"targets": ["localhost:{}".format(config["port"])]}],
+            "static_configs": [{"targets": ["localhost:{}".format(self.port)]}],
         }
         scrape_config["scrape_configs"].append(default_config)
         if self._stored.provider_ready:
@@ -449,6 +453,20 @@ class PrometheusCharm(CharmBase):
 
         return layer
 
+    def _patch_k8s_service(self):
+        """Fix the Kubernetes service that was setup by Juju with correct port numbers"""
+        if self.unit.is_leader() and not self._stored.k8s_service_patched:
+            service_ports = [
+                (f"{self.app.name}", self.port, self.port),
+            ]
+            try:
+                K8sServicePatch.set_ports(self.app.name, service_ports)
+            except PatchFailed as e:
+                logger.error("Unable to patch the Kubernetes service: %s", str(e))
+            else:
+                self._stored.k8s_service_patched = True
+                logger.info("Successfully patched the Kubernetes service!")
+
     @property
     def version(self):
         """Fetch Prometheus version.
@@ -461,6 +479,20 @@ class PrometheusCharm(CharmBase):
         if info:
             return info.get("version", None)
         return None
+
+    @property
+    def _external_hostname(self):
+        """Return the external hostname to be passed to ingress via the relation."""
+        # It is recommended to default to `self.app.name` so that the external
+        # hostname will correspond to the deployed application name in the
+        # model, but allow it to be set to something specific via config.
+
+        return self.config["web-external-url"] or f"{self.app.name}.juju"
+
+    @property
+    def port(self):
+        """Return the configured port for the Prometheus UI and API."""
+        return self.model.config["port"]
 
     @property
     def provider_ready(self):
