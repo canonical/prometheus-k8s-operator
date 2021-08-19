@@ -487,7 +487,7 @@ class PrometheusCharm(CharmBase):
         # hostname will correspond to the deployed application name in the
         # model, but allow it to be set to something specific via config.
 
-        return self.config["web-external-url"] or f"{self.app.name}.juju"
+        return self.config["web-external-url"] or f"{self.app.name}"
 
     @property
     def port(self):
