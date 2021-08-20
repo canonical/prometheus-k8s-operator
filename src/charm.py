@@ -236,10 +236,9 @@ class PrometheusCharm(CharmBase):
         ]
 
         if self.model.get_relation("ingress"):
-            path = self.app.name  # Same as "service-name" in the ingress relation
 
             # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{self.port}/{path}"
+            external_url = f"http://{self._external_hostname}:{self.port}"
 
             args.append(f"--web.external-url={external_url}")
 
