@@ -183,24 +183,24 @@ class PrometheusCharm(CharmBase):
             logger.debug("Abort processing alert rules: prometheus not ready")
             return
 
-        logger.debug("Processing alert rules")
+        with container.is_ready():
+            logger.debug("Processing alert rules")
 
-        container.remove_path(RULES_DIR, recursive=True)
+            container.remove_path(RULES_DIR, recursive=True)
 
-        alert_rules_by_rel_id = self.prometheus_provider.alerts()
+            alert_rules_by_rel_id = self.prometheus_provider.alerts()
 
-        if alert_rules_by_rel_id:
-            for rel_id, alert_rules in alert_rules_by_rel_id.items():
-                filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                    alert_rules["model"],
-                    alert_rules["model_uuid"],
-                    alert_rules["application"],
-                    rel_id,
-                )
+            if alert_rules_by_rel_id:
+                for rel_id, alert_rules in alert_rules_by_rel_id.items():
+                    filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
+                        alert_rules["model"],
+                        alert_rules["model_uuid"],
+                        alert_rules["application"],
+                        rel_id,
+                    )
 
-                with container.is_ready():
                     path = os.path.join(RULES_DIR, filename)
-                    rules = yaml.dump({"groups": alerts["groups"]})
+                    rules = yaml.dump({"groups": alert_rules["groups"]})
                     logger.debug("Rules for relation %s : %s", rel_id, rules)
 
                     container.push(path, rules, make_dirs=True)
