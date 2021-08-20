@@ -116,6 +116,10 @@ class PrometheusCharm(CharmBase):
         logger.info("Configuring Prometheus")
         container = self.unit.get_container("prometheus")
 
+        if not container.is_ready():
+            logger.debug('The "prometheus" container is not ready')
+            return
+
         # check if configuration file has changed and if so push the
         # new config file to the workload container
         prometheus_config = self._prometheus_config()
@@ -123,7 +127,7 @@ class PrometheusCharm(CharmBase):
             container.push(PROMETHEUS_CONFIG, prometheus_config)
             logger.info("Pushed new configuration and alerts")
         except ConnectionError:
-            logger.info("Ignoring config changed since pebble is not ready")
+            logger.info("Ignoring config and alert_rules changes since pebble is not ready")
             return
 
         self._set_alerts(container)
@@ -181,20 +185,24 @@ class PrometheusCharm(CharmBase):
 
         logger.debug("Processing alert rules")
 
-        with container.is_ready():
-            container.remove_path(RULES_DIR, recursive=True)
+        container.remove_path(RULES_DIR, recursive=True)
 
-        alert_rules = self.prometheus_provider.alerts()
+        alert_rules_by_rel_id = self.prometheus_provider.alerts()
 
-        if alert_rules:
-            for rel_id, alerts in alert_rules.items():
+        if alert_rules_by_rel_id:
+            for rel_id, alert_rules in alert_rules_by_rel_id.items():
                 filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                    alerts["model"], alerts["model_uuid"], alerts["application"], rel_id
+                    alert_rules["model"],
+                    alert_rules["model_uuid"],
+                    alert_rules["application"],
+                    rel_id,
                 )
 
                 with container.is_ready():
                     path = os.path.join(RULES_DIR, filename)
                     rules = yaml.dump({"groups": alerts["groups"]})
+                    logger.debug("Rules for relation %s : %s", rel_id, rules)
+
                     container.push(path, rules, make_dirs=True)
                     logger.debug("Pushed new alert rules '%s': %s", filename, rules)
 
