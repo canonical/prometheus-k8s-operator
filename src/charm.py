@@ -176,22 +176,30 @@ class PrometheusCharm(CharmBase):
                 alert rule files need to be created.
         """
         if not self.prometheus_ready:
+            logger.debug("Abort processing alert rules: prometheus not ready")
             return
+
+        logger.debug("Processing alert rules")
 
         with container.is_ready():
             container.remove_path(RULES_DIR, recursive=True)
 
-        for rel_id, alerts in self.metrics_consumer.alerts().items():
-            filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                alerts["model"], alerts["model_uuid"], alerts["application"], rel_id
-            )
-            try:
-                path = os.path.join(RULES_DIR, filename)
-                rules = yaml.dump({"groups": alerts["groups"]})
-                logger.debug("Rules for relation %s : %s", rel_id, rules)
-                container.push(path, rules, make_dirs=True)
-            except ConnectionError:
-                logger.error("Failed to write alert rule %s", filename)
+        alert_rules = self.prometheus_provider.alerts()
+
+        if alert_rules:
+            for rel_id, alerts in alert_rules.items():
+                filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
+                    alerts["model"], alerts["model_uuid"], alerts["application"], rel_id
+                )
+
+                with container.is_ready():
+                    path = os.path.join(RULES_DIR, filename)
+                    rules = yaml.dump({"groups": alerts["groups"]})
+                    container.push(path, rules, make_dirs=True)
+                    logger.debug("Pushed new alert rules '%s': %s", filename, rules)
+
+            self._prometheus_server.reload_configuration()
+            logger.info("Updated alert rules")
 
     def _on_stop(self, _):
         """Mark unit is inactive.
