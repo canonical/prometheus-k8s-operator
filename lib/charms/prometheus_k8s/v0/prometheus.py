@@ -231,21 +231,21 @@ related `MetricsEndpointProvider` charms and enabling corresponding alerts withi
 Prometheus charm.  Alert rules are automatically gathered by `MetricsEndpointProvider`
 charms when using this library, from a directory conventionally named
 `prometheus_alert_rules`. This directory must reside at the top level
-in the `src` folder of the provider charm. Each file in this directory
-is assumed to be a single alert rule in YAML format. The format of this
-alert rule conforms to [Prometheus
-documentation](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
+in the `src` folder of the consumer charm. Each file in this directory
+is assumed to be a single alert rule in YAML format. The file name must
+have the `.rule` extension. The format of this alert rule conforms to the
+[Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
 An example of the contents of one such file is shown below.
 
 ```
-- alert: HighRequestLatency
-  expr: job:request_latency_seconds:mean5m{my_key=my_value, %%juju_topology%%} > 0.5
-  for: 10m
-  labels:
-    severity: Medium
-    type: HighLatency
-  annotations:
-    summary: High request latency for {{ $labels.instance }}.
+alert: HighRequestLatency
+expr: job:request_latency_seconds:mean5m{my_key=my_value, %%juju_topology%%} > 0.5
+for: 10m
+labels:
+  severity: Medium
+  type: HighLatency
+annotations:
+  summary: High request latency for {{ $labels.instance }}.
 ```
 
 It is **very important** to note the `%%juju_topology%%` filter in the
@@ -840,8 +840,7 @@ class MetricsEndpointProvider(ProviderBase):
             with path.open() as rule_file:
                 # Load a list of rules from file then add labels and filters
                 try:
-                    rules = yaml.safe_load(rule_file)
-                    rule = rules[0]  # each file is list of one rule
+                    rule = yaml.safe_load(rule_file)
                     rule = self._label_alert_topology(rule)
                     rule = self._label_alert_expression(rule)
                     alerts.append(rule)
