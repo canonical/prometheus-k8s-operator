@@ -7,8 +7,9 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import PrometheusProvider
+from charms.prometheus_k8s.v0.prometheus import MetricsConsumer
 
+RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
 BAD_JOBS = [
     {
@@ -117,9 +118,7 @@ class PrometheusCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self._stored.set_default(num_events=0)
-        self.prometheus_provider = PrometheusProvider(
-            self, "monitoring", "prometheus", self.version
-        )
+        self.prometheus_provider = MetricsConsumer(self, RELATION_NAME)
         self.framework.observe(self.prometheus_provider.on.targets_changed, self.record_events)
 
     def record_events(self, event):
@@ -145,7 +144,7 @@ class TestProvider(unittest.TestCase):
         """
         rel_ids = []
         self.assertEqual(self.harness.charm._stored.num_events, 0)
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         rel_ids.append(rel_id)
         self.harness.update_relation_data(
             rel_id,
@@ -162,7 +161,7 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 2)
 
         if multi:
-            rel_id = self.harness.add_relation("monitoring", "other-consumer")
+            rel_id = self.harness.add_relation(RELATION_NAME, "other-consumer")
             rel_ids.append(rel_id)
             self.harness.update_relation_data(
                 rel_id,
@@ -216,7 +215,7 @@ class TestProvider(unittest.TestCase):
     def test_provider_notifies_on_new_scrape_relation(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id, "consumer", {"scrape_metadata": json.dumps(SCRAPE_METADATA)}
         )
@@ -224,7 +223,7 @@ class TestProvider(unittest.TestCase):
 
     def test_provider_notifies_on_new_scrape_target(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(
             rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
@@ -293,13 +292,13 @@ class TestProvider(unittest.TestCase):
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
         ports = wildcard_target_ports(SCRAPE_JOBS)
         targets = wildcard_targets(jobs, ports)
-        consumers = self.harness.charm.model.get_relation("monitoring", rel_id)
+        consumers = self.harness.charm.model.get_relation(RELATION_NAME, rel_id)
         self.assertEqual(len(targets), len(ports) * len(consumers.units))
 
     def test_provider_handles_default_scrape_job(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id,
             "consumer",
@@ -320,7 +319,7 @@ class TestProvider(unittest.TestCase):
 
     def test_provider_overwrites_juju_topology_labels(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id,
             "consumer",
@@ -347,7 +346,7 @@ class TestProvider(unittest.TestCase):
     def test_provider_returns_alerts_indexed_by_relation_id(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id,
             "consumer",
@@ -377,7 +376,7 @@ class TestProvider(unittest.TestCase):
         BAD_METADATA = {"bad": "metadata"}
         BAD_RULES = {"bad": "rule"}
 
-        rel_id = self.harness.add_relation("monitoring", "consumer")
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id,
             "consumer",
