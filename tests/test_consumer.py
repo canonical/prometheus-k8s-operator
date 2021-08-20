@@ -10,17 +10,17 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import PrometheusConsumer
+from charms.prometheus_k8s.v0.prometheus import MetricsProvider
 
 
-CONSUMES = {"prometheus": ">=2.0"}
+RELATION_NAME = "metrics-endpoint"
 CONSUMER_SERVICE = "prometheus_tester"
-CONSUMER_META = """
+CONSUMER_META = f"""
 name: consumer-tester
 containers:
   prometheus-tester:
 requires:
-  monitoring:
+  {RELATION_NAME}:
     interface: prometheus_scrape
 """
 JOBS = [
@@ -54,10 +54,9 @@ class ConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        self.provider = PrometheusConsumer(
+        self.provider = MetricsProvider(
             self,
-            "monitoring",
-            consumes=CONSUMES,
+            RELATION_NAME,
             service_event=self.on.prometheus_tester_pebble_ready,
             jobs=JOBS,
         )
@@ -73,7 +72,7 @@ class TestConsumer(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_sets_scrape_metadata(self, _):
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_metadata", data)
@@ -94,7 +93,7 @@ class TestConsumer(unittest.TestCase):
             ]
         }
         mock_net_get.return_value = fake_network
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_host", data)
@@ -112,7 +111,7 @@ class TestConsumer(unittest.TestCase):
             ]
         }
         mock_net_get.return_value = fake_network
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_host", data)
@@ -120,7 +119,7 @@ class TestConsumer(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_supports_multiple_jobs(self, _):
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_jobs", data)
@@ -132,7 +131,7 @@ class TestConsumer(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_sanitizes_jobs(self, _):
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_jobs", data)
@@ -143,7 +142,7 @@ class TestConsumer(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_rule_is_topology_labeled(self, _):
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
@@ -160,7 +159,7 @@ class TestConsumer(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_expression_is_topology_labeled(self, _):
-        rel_id = self.harness.add_relation("monitoring", "provider")
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
@@ -188,7 +187,7 @@ class TestBadConsumers(unittest.TestCase):
         self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_expressions"
 
         with self.assertLogs(level="ERROR") as logger:
-            rel_id = self.harness.add_relation("monitoring", "provider")
+            rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
@@ -199,7 +198,7 @@ class TestBadConsumers(unittest.TestCase):
         self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_rules"
 
         with self.assertLogs(level="ERROR") as logger:
-            rel_id = self.harness.add_relation("monitoring", "provider")
+            rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
