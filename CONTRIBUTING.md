@@ -101,6 +101,14 @@ The `PrometheusCharm` object interacts with its scrape targets using a
 
 ### Library Details
 
+The Prometheus charm library facilitates two things
+
+1. For metrics providers to forward configuration such as scrape jobs,
+   alert rules and related metadata to the Prometheus charm.
+2. For metrics consumers (the Prometheus charm) to assimilate information
+   provided by the scrape targets, so that it may be used to configure
+   Promtheus.
+
 The Prometheus charm library exposes a consumer and provider object -
 `MetricsEndpointConsumer` and `MetricsEndpointProvider` along with the custom
 charm event `TargetsChanged` within the `MonitoringEvents` event
