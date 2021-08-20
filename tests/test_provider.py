@@ -7,7 +7,7 @@ import unittest
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import MetricsConsumer
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 
 RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
@@ -118,7 +118,7 @@ class PrometheusCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self._stored.set_default(num_events=0)
-        self.prometheus_provider = MetricsConsumer(self, RELATION_NAME)
+        self.prometheus_provider = MetricsEndpointConsumer(self, RELATION_NAME)
         self.framework.observe(self.prometheus_provider.on.targets_changed, self.record_events)
 
     def record_events(self, event):
