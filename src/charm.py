@@ -17,7 +17,7 @@ from ops.pebble import ConnectionError
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
-from charms.prometheus_k8s.v0.prometheus import MetricsConsumer
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
@@ -60,7 +60,7 @@ class PrometheusCharm(CharmBase):
         )
 
         if self.prometheus_ready:
-            self.metrics_consumer = MetricsConsumer(self, "metrics-endpoint")
+            self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
             self.framework.observe(
                 self.metrics_consumer.on.targets_changed,
                 self._on_scrape_targets_changed,

@@ -10,7 +10,7 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import MetricsProvider
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointProvider
 
 
 RELATION_NAME = "metrics-endpoint"
@@ -54,7 +54,7 @@ class ConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        self.provider = MetricsProvider(
+        self.provider = MetricsEndpointProvider(
             self,
             RELATION_NAME,
             service_event=self.on.prometheus_tester_pebble_ready,

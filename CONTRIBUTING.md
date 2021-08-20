@@ -102,13 +102,13 @@ The `PrometheusCharm` object interacts with its scrape targets using a
 ### Library Details
 
 The Prometheus charm library exposes a consumer and provider object -
-`MetricsConsumer` and `MetricsProvider` along with the custom
+`MetricsEndpointConsumer` and `MetricsEndpointProvider` along with the custom
 charm event `TargetsChanged` within the `MonitoringEvents` event
-descriptor. `MetricsConsumer` emits the `TargetsChagned` event in
+descriptor. `MetricsEndpointConsumer` emits the `TargetsChanged` event in
 response to relation changed and departed events. It is expected that
 the Prometheus charm would respond to these events and regenerate the
 Prometheus configuration using information provided by the `jobs()`
-and `alerts()` methods of the `MetricsConsumer`.
+and `alerts()` methods of the `MetricsEndpointConsumer`.
 
 The `jobs()` method gathers a list of scrape jobs from all related
 scrape target charms. In doing so it invokes the `_static_scrape_config()`
@@ -124,7 +124,7 @@ common to both but `_labeled_unitless_config()` and
 automatically gathered host address is provided by
 `_relation_hosts()`.
 
-The `MetricsProvider` is responsible for forwarding scrape
+The `MetricsEndpointProvider` is responsible for forwarding scrape
 configuration, scrape target addresses, scrape metadata and alert
 rules to the Prometheus provider. In doing so it also ensures that the
 alert rules have Juju topology labels and filters injected into
@@ -161,7 +161,7 @@ functions which are invoked by `_prometheus_config()`.
   `_is_valid_timespec()` and `_are_valid_labels()`.
 - `_alerting_config()` generates configuration related to
   Alertmanager(s), using the Alertmanager charm library.
-- `jobs()` and `alerts()` methods of the `MetricsConsumer`
+- `jobs()` and `alerts()` methods of the `MetricsEndpointConsumer`
   object.
 
 ## Design Choices
