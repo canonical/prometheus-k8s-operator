@@ -97,28 +97,21 @@ validates all configurations options when provided before generating
 its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](lib/charms/prometheus_k8s/v1/prometheus.py). Using this
-library requires that Prometheus informs its "Consumers" (scrape targets)
-of the actual Prometheus version that was deployed. In order to determine
-this version at runtime `PrometheuCharm` uses the
-[`Prometheus`](src/prometheus_server.py) object. The `Prometheus`
-object provides an interface to a running Prometheus instance. This
-interface is limited to only those aspects of Prometheus required by
-this charm.
+[charm library](lib/charms/prometheus_k8s/v1/prometheus.py).
 
 ### Library Details
 
-The Prometheus charm library exposes a provider and consumer object -
-`PrometheusProvider` and `PrometheusConsumer` along with the custom
+The Prometheus charm library exposes a consumer and provider object -
+`MetricsConsumer` and `MetricsProvider` along with the custom
 charm event `TargetsChanged` within the `MonitoringEvents` event
-descriptor. `PrometheusProvider` emits the `TargetsChagned` event in
+descriptor. `MetricsConsumer` emits the `TargetsChagned` event in
 response to relation changed and departed events. It is expected that
-the provider charm would respond to this event and regenerate the
+the Prometheus charm would respond to these events and regenerate the
 Prometheus configuration using information provided by the `jobs()`
-and `alerts()` methods of the `PrometheusProvider`.
+and `alerts()` methods of the `MetricsConsumer`.
 
 The `jobs()` method gathers a list of scrape jobs from all related
-consumer charms. In doing so it invokes the `_static_scrape_config()`
+scrape target charms. In doing so it invokes the `_static_scrape_config()`
 method for each such relation. `_static_scrape_config()` generates a
 unique job name for each job, sanitizes the job and associates Juju
 topology labels with it. Labeling of Juju topology is done by
@@ -131,7 +124,7 @@ common to both but `_labeled_unitless_config()` and
 automatically gathered host address is provided by
 `_relation_hosts()`.
 
-The `PrometheusConsumer` is responsible for forwarding scrape
+The `MetricsProvider` is responsible for forwarding scrape
 configuration, scrape target addresses, scrape metadata and alert
 rules to the Prometheus provider. In doing so it also ensures that the
 alert rules have Juju topology labels and filters injected into
@@ -168,7 +161,7 @@ functions which are invoked by `_prometheus_config()`.
   `_is_valid_timespec()` and `_are_valid_labels()`.
 - `_alerting_config()` generates configuration related to
   Alertmanager(s), using the Alertmanager charm library.
-- `jobs()` and `alerts()` methods of the `PrometheusProvider`
+- `jobs()` and `alerts()` methods of the `MetricsConsumer`
   object.
 
 ## Design Choices
