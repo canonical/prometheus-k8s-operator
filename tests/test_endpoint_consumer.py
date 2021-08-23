@@ -112,7 +112,7 @@ OTHER_SCRAPE_METADATA = {
 ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs", "relabel_configs"}
 
 
-class PrometheusCharm(CharmBase):
+class EndpointConsumerCharm(CharmBase):
     _stored = StoredState()
 
     def __init__(self, *args, **kwargs):
@@ -129,9 +129,9 @@ class PrometheusCharm(CharmBase):
         return "1.0.0"
 
 
-class TestProvider(unittest.TestCase):
+class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(PrometheusCharm)
+        self.harness = Harness(EndpointConsumerCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
