@@ -188,7 +188,7 @@ class PrometheusCharm(CharmBase):
 
             container.remove_path(RULES_DIR, recursive=True)
 
-            for rel_id, alert_rules in self.prometheus_provider.alerts().items():
+            for rel_id, alert_rules in self.metrics_consumer.alerts().items():
                 filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
                     alert_rules["model"],
                     alert_rules["model_uuid"],
