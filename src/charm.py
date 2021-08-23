@@ -188,23 +188,20 @@ class PrometheusCharm(CharmBase):
 
             container.remove_path(RULES_DIR, recursive=True)
 
-            alert_rules_by_rel_id = self.prometheus_provider.alerts()
+            for rel_id, alert_rules in self.prometheus_provider.alerts().items():
+                filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
+                    alert_rules["model"],
+                    alert_rules["model_uuid"],
+                    alert_rules["application"],
+                    rel_id,
+                )
 
-            if alert_rules_by_rel_id:
-                for rel_id, alert_rules in alert_rules_by_rel_id.items():
-                    filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                        alert_rules["model"],
-                        alert_rules["model_uuid"],
-                        alert_rules["application"],
-                        rel_id,
-                    )
+                path = os.path.join(RULES_DIR, filename)
+                rules = yaml.dump({"groups": alert_rules["groups"]})
+                logger.debug("Rules for relation %s : %s", rel_id, rules)
 
-                    path = os.path.join(RULES_DIR, filename)
-                    rules = yaml.dump({"groups": alert_rules["groups"]})
-                    logger.debug("Rules for relation %s : %s", rel_id, rules)
-
-                    container.push(path, rules, make_dirs=True)
-                    logger.debug("Pushed new alert rules '%s': %s", filename, rules)
+                container.push(path, rules, make_dirs=True)
+                logger.debug("Pushed new alert rules '%s': %s", filename, rules)
 
             self._prometheus_server.reload_configuration()
             logger.info("Updated alert rules")
