@@ -48,7 +48,7 @@ JOBS = [
 ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
 
 
-class ConsumerCharm(CharmBase):
+class EndpointProviderCharm(CharmBase):
     _stored = StoredState()
 
     def __init__(self, *args, **kwargs):
@@ -63,9 +63,9 @@ class ConsumerCharm(CharmBase):
         self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
 
 
-class TestConsumer(unittest.TestCase):
+class TestEndpointProvider(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
@@ -177,7 +177,7 @@ class TestConsumer(unittest.TestCase):
 
 class TestBadConsumers(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(ConsumerCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
