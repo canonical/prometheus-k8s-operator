@@ -1,7 +1,0 @@
--r requirements.txt
-black
-coverage
-flake8
-pytest
-pytest-cov
-responses
