@@ -13,7 +13,7 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, MaintenanceStatus
-from ops.pebble import ConnectionError
+from ops.pebble import ConnectionError, Layer
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
@@ -36,17 +36,15 @@ class PrometheusCharm(CharmBase):
 
         super().__init__(*args)
 
+        self._name = "prometheus"
         self._prometheus_server = Prometheus("localhost", str(self.port))
 
         self._stored.set_default(
-            provider_ready=False,
             k8s_service_patched=False,
         )
 
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
-
-        self._stored.set_default(prometheus_ready=False)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -59,12 +57,11 @@ class PrometheusCharm(CharmBase):
             refresh_event=self.on.prometheus_pebble_ready,
         )
 
-        if self.prometheus_ready:
-            self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
-            self.framework.observe(
-                self.metrics_consumer.on.targets_changed,
-                self._on_scrape_targets_changed,
-            )
+        self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
+        self.framework.observe(
+            self.metrics_consumer.on.targets_changed,
+            self._on_scrape_targets_changed,
+        )
         self.alertmanager_lib = AlertmanagerConsumer(
             self, relation_name="alertmanager", consumes={"alertmanager": ">=0.21.0"}
         )
@@ -113,62 +110,42 @@ class PrometheusCharm(CharmBase):
         Prometheus config file is regenerated, pushed to the workload
         container and Prometheus is restarted.
         """
-        logger.info("Configuring Prometheus")
-        container = self.unit.get_container("prometheus")
+        container = self.unit.get_container(self._name)
 
         if not container.is_ready():
-            logger.debug('The "prometheus" container is not ready')
+            logger.debug(f"The {self._name} container is not ready")
             return
 
-        # check if configuration file has changed and if so push the
-        # new config file to the workload container
+        # push Prometheus config file to workload
         prometheus_config = self._prometheus_config()
         try:
             container.push(PROMETHEUS_CONFIG, prometheus_config)
-            logger.info("Pushed new configuration and alerts")
+            logger.info("Pushed new configuration")
         except ConnectionError:
-            logger.info("Ignoring config and alert_rules changes since pebble is not ready")
+            logger.info("Ignoring config changes since pebble is not ready")
             return
 
         self._set_alerts(container)
 
-        # setup the workload (Prometheus) container and its services
-        current_plan = container.get_plan()
-
-        current_services = current_plan.services if current_plan else {}
+        current_services = container.get_plan().services
         new_layer = self._prometheus_layer()
 
-        # If the startup arguments are the same and we use the
-        # web lifecycle, sent the config reload HTTP request instead
-
-        current_prometheus_service = (
-            current_services.get("prometheus").to_dict()
-            if "prometheus" in current_services
-            else {}
-        )
-        new_prometheus_service = new_layer.get("services", {}).get("prometheus", {})
-
-        prometheus_service_changed = current_prometheus_service != new_prometheus_service
-
-        if not prometheus_service_changed:
+        # Restart prometheus only if command line arguments have changed,
+        # otherwise just reload its configuration.
+        if current_services == new_layer.services:
             self._prometheus_server.reload_configuration()
-            logger.info("Configuration reloaded")
+            logger.info("Prometheus configuration reloaded")
         else:
-            container.add_layer("prometheus", new_layer, combine=True)
+            container.add_layer(self._name, new_layer, combine=True)
+            service = container.get_service(self._name)
 
-            restart_needed = container.get_service("prometheus").is_running()
-            if restart_needed:
-                container.stop("prometheus")
-
-            container.start("prometheus")
-
-            if restart_needed:
+            # TODO remove this check when restart() becomes idempotent
+            if service.is_running():
+                container.restart(self._name)
                 logger.info("Prometheus restarted")
             else:
+                container.start(self._name)
                 logger.info("Prometheus started")
-
-        if self.unit.is_leader():
-            self.app.status = ActiveStatus()
 
         self.unit.status = ActiveStatus()
 
@@ -179,10 +156,6 @@ class PrometheusCharm(CharmBase):
             container: the Prometheus workload container into which
                 alert rule files need to be created.
         """
-        if not self.prometheus_ready:
-            logger.debug("Abort processing alert rules: prometheus not ready")
-            return
-
         with container.is_ready():
             logger.debug("Processing alert rules")
 
@@ -433,10 +406,9 @@ class PrometheusCharm(CharmBase):
             "static_configs": [{"targets": ["localhost:{}".format(self.port)]}],
         }
         scrape_config["scrape_configs"].append(default_config)
-        if self._stored.prometheus_ready:
-            scrape_jobs = self.metrics_consumer.jobs()
-            for job in scrape_jobs:
-                scrape_config["scrape_configs"].append(job)
+        scrape_jobs = self.metrics_consumer.jobs()
+        for job in scrape_jobs:
+            scrape_config["scrape_configs"].append(job)
 
         logger.debug("Prometheus config : {}".format(scrape_config))
 
@@ -446,15 +418,14 @@ class PrometheusCharm(CharmBase):
         """Construct the pebble layer
 
         Returns:
-            a dictionary consisting of the Pebble layer specification
-            for the Prometheus workload container.
+            a Pebble layer specification for the Prometheus workload container.
         """
         logger.debug("Building pebble layer")
-        layer = {
+        layer_config = {
             "summary": "Prometheus layer",
             "description": "Pebble layer configuration for Prometheus",
             "services": {
-                "prometheus": {
+                self._name: {
                     "override": "replace",
                     "summary": "prometheus daemon",
                     "command": self._command(),
@@ -463,7 +434,7 @@ class PrometheusCharm(CharmBase):
             },
         }
 
-        return layer
+        return Layer(layer_config)
 
     def _patch_k8s_service(self):
         """Fix the Kubernetes service that was setup by Juju with correct port numbers"""
@@ -505,25 +476,6 @@ class PrometheusCharm(CharmBase):
     def port(self):
         """Return the configured port for the Prometheus UI and API."""
         return self.model.config["port"]
-
-    @property
-    def prometheus_ready(self):
-        """Check status of Prometheus server.
-
-        Status of the Prometheus services is checked by querying
-        Prometheus for its version information. If Prometheus responds
-        with valid information, its status is recorded.
-
-        Returns:
-            True if Prometheus is ready, False otherwise
-        """
-        provided = {"prometheus": self.version}
-        if not self._stored.prometheus_ready and provided["prometheus"]:
-            logger.debug("Prometheus provider is available")
-            logger.debug("Providing : {}".format(provided))
-            self._stored.prometheus_ready = True
-
-        return self._stored.prometheus_ready
 
 
 if __name__ == "__main__":
