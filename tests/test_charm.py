@@ -222,18 +222,20 @@ class TestCharm(unittest.TestCase):
 
     @patch("prometheus_server.Prometheus.reload_configuration")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_configuration_reload(self, push, trigger_configuration_reload):
-        self.harness.update_config(MINIMAL_CONFIG)
-
+    @patch("ops.testing._TestingPebbleClient.remove_path")
+    def test_configuration_reload(self, push, trigger_configuration_reload, _):
+        self.harness.container_pebble_ready("prometheus")
         push.assert_called()
-        trigger_configuration_reload.assert_not_called()
+
+        self.harness.update_config(MINIMAL_CONFIG)
+        push.assert_called()
+        trigger_configuration_reload.assert_called()
 
         label_config = MINIMAL_CONFIG.copy()
         labels = {"name1": "value1", "name2": "value2"}
         label_config["external-labels"] = json.dumps(labels)
 
         self.harness.update_config(label_config)
-
         trigger_configuration_reload.assert_called()
 
 
