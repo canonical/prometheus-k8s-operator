@@ -247,14 +247,16 @@ class PrometheusCharm(CharmBase):
         args.append("--log.level={0}".format(log_level))
 
         # Enable time series database compression
-        if config.get("tsdb-wal-compression"):
+        if config.get("metrics-wal-compression"):
             args.append("--storage.tsdb.wal-compression")
 
         # Set time series retention time
-        if config.get("tsdb-retention-time") and self._is_valid_timespec(
-            config["tsdb-retention-time"]
+        if config.get("metrics-retention-time") and self._is_valid_timespec(
+            config["metrics-retention-time"]
         ):
-            args.append("--storage.tsdb.retention.time={}".format(config["tsdb-retention-time"]))
+            args.append(
+                "--storage.tsdb.retention.time={}".format(config["metrics-retention-time"])
+            )
 
         return args
 
