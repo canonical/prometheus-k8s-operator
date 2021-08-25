@@ -255,11 +255,11 @@ class PrometheusCharm(CharmBase):
         try:
             labels = json.loads(json_data)
         except (ValueError, TypeError):
-            logger.error("Can not parse external labels : {}".format(json_data))
+            logger.error("Can not parse external labels : %s", json_data)
             return False
 
         if not isinstance(labels, dict):
-            logger.error("Expected label dictionary but got : {}".format(labels))
+            logger.error("Expected label dictionary but got : %s", labels)
             return False
 
         for key, value in labels.items():
@@ -352,14 +352,14 @@ class PrometheusCharm(CharmBase):
             "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",
-            "static_configs": [{"targets": ["localhost:{}".format(self.port)]}],
+            "static_configs": [{"targets": [f"localhost:{self.port}"]}],
         }
         scrape_config["scrape_configs"].append(default_config)
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             scrape_config["scrape_configs"].append(job)
 
-        logger.debug("Prometheus config : {}".format(scrape_config))
+        logger.debug("Prometheus config : %s", scrape_config)
 
         return yaml.dump(scrape_config)
 
