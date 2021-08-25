@@ -13,13 +13,6 @@ description: |
   alerting. Prometheus provides its own dashboard for data
   visualization but a richer visualization interface may be obtained
   through a relation with the Grafana charm.
-tags:
-    - observability
-    - lma
-    - prometheus
-    - monitoring
-    - alerting
-    - grafana
 containers:
   prometheus:
     resource: prometheus-image
@@ -42,4 +35,4 @@ storage:
 resources:
   prometheus-image:
     type: oci-image
-    description: upstream docker image for prometheus
+    description: Container image for Prometheus
