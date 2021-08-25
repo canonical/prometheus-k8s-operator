@@ -453,19 +453,6 @@ class PrometheusCharm(CharmBase):
                 logger.info("Successfully patched the Kubernetes service!")
 
     @property
-    def version(self):
-        """Fetch Prometheus version.
-
-        Returns:
-            a string consisting of the Prometheus version information or
-            None if Prometheus server is not reachable.
-        """
-        info = self._prometheus_server.build_info()
-        if info:
-            return info.get("version", None)
-        return None
-
-    @property
     def _external_hostname(self):
         """Return the external hostname to be passed to ingress via the relation."""
         # It is recommended to default to `self.app.name` so that the external
