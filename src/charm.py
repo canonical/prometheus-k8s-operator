@@ -12,7 +12,7 @@ from kubernetes_service import K8sServicePatch, PatchFailed
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, MaintenanceStatus
+from ops.model import ActiveStatus
 from ops.pebble import ConnectionError, Layer
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
@@ -71,44 +71,25 @@ class PrometheusCharm(CharmBase):
 
         # Event handlers
         self.framework.observe(self.on.install, self._on_install)
-        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
-        self.framework.observe(self.on.stop, self._on_stop)
-
-        self.framework.observe(self.on.ingress_relation_joined, self._on_ingress_changed)
-        self.framework.observe(self.on.ingress_relation_changed, self._on_ingress_changed)
-        self.framework.observe(self.on.ingress_relation_broken, self._on_ingress_changed)
-
-        self.framework.observe(
-            self.metrics_consumer.on.targets_changed,
-            self._on_scrape_targets_changed,
-        )
-        self.framework.observe(
-            self.alertmanager_consumer.cluster_changed, self._on_alertmanager_cluster_changed
-        )
+        self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
+        self.framework.observe(self.on.config_changed, self._configure)
+        self.framework.observe(self.on.upgrade_charm, self._configure)
+        self.framework.observe(self.on.ingress_relation_joined, self._configure)
+        self.framework.observe(self.on.ingress_relation_changed, self._configure)
+        self.framework.observe(self.on.ingress_relation_broken, self._configure)
+        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
+        self.framework.observe(self.alertmanager_consumer.cluster_changed, self._configure)
 
     def _on_install(self, _):
         """Event handler for the install event during which we will update the K8s service"""
         self._patch_k8s_service()
 
-    def _on_upgrade_charm(self, _):
+    def _on_upgrade_charm(self, event):
         """Event handler for the upgrade_charm event during which we will update the K8s service"""
         self._patch_k8s_service()
+        self._configure(event)
 
-    def _on_pebble_ready(self, event):
-        """Setup workload container configuration."""
-        self._configure()
-
-    def _on_config_changed(self, event):
-        """Handle a configuration change."""
-        self._configure()
-
-    def _on_scrape_targets_changed(self, event):
-        """Handle changes in scrape targets."""
-        self._configure()
-
-    def _configure(self):
+    def _configure(self, _):
         """Reconfigure and restart Prometheus.
 
         In response to any configuration change, such as a new consumer
@@ -184,21 +165,6 @@ class PrometheusCharm(CharmBase):
 
             self._prometheus_server.reload_configuration()
             logger.info("Updated alert rules")
-
-    def _on_stop(self, _):
-        """Mark unit is inactive.
-
-        All units of the charm are set to maintenance status before
-        termination.
-        """
-        self.unit.status = MaintenanceStatus("Pod is terminating.")
-
-    def _on_alertmanager_cluster_changed(self, event):
-        """Handle changes in Alertmanager relations."""
-        self._configure()
-
-    def _on_ingress_changed(self, event):
-        self._configure()
 
     def _command(self):
         """Construct command to launch Prometheus.
