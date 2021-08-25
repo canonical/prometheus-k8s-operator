@@ -140,24 +140,18 @@ class TestCharm(unittest.TestCase):
         retention_time_config = MINIMAL_CONFIG.copy()
 
         # invalid unit
-        retention_time = "{}{}".format(1, "x")
+        retention_time = "1x"
         retention_time_config["metrics-retention-time"] = retention_time
-        with self.assertLogs(level="ERROR") as logger:
-            self.harness.update_config(retention_time_config)
-            expected_logs = ["ERROR:charm:Invalid unit x in time spec"]
-            self.assertEqual(sorted(logger.output), expected_logs)
 
+        self.harness.update_config(retention_time_config)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
         # invalid time value
-        retention_time = "{}{}".format(0, "d")
+        retention_time = "0d"
         retention_time_config["metrics-retention-time"] = retention_time
-        with self.assertLogs(level="ERROR") as logger:
-            self.harness.update_config(retention_time_config)
-            expected_logs = ["ERROR:charm:Expected positive time spec but got 0"]
-            self.assertEqual(sorted(logger.output), expected_logs)
 
+        self.harness.update_config(retention_time_config)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
