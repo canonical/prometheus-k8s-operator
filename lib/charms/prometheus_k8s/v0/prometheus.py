@@ -555,7 +555,7 @@ class MetricsEndpointConsumer(ConsumerBase):
             for a single job.
         """
         name = job.get("job_name")
-        job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
+        job_name = f"{job_name_prefix}_{name}" if name else job_name_prefix
 
         config = {"job_name": job_name, "metrics_path": job["metrics_path"]}
 
@@ -613,9 +613,9 @@ class MetricsEndpointConsumer(ConsumerBase):
             topology information with the exception of unit name.
         """
         juju_labels = labels.copy()  # deep copy not needed
-        juju_labels["juju_model"] = "{}".format(scrape_metadata["model"])
-        juju_labels["juju_model_uuid"] = "{}".format(scrape_metadata["model_uuid"])
-        juju_labels["juju_application"] = "{}".format(scrape_metadata["application"])
+        juju_labels["juju_model"] = f"{scrape_metadata['model']}"
+        juju_labels["juju_model_uuid"] = f"{scrape_metadata['model_uuid']}"
+        juju_labels["juju_application"] = f"{format(scrape_metadata['application'])}"
 
         return juju_labels
 
@@ -664,14 +664,14 @@ class MetricsEndpointConsumer(ConsumerBase):
 
         # '/' is not allowed in Prometheus label names. It technically works,
         # but complex queries silently fail
-        juju_labels["juju_unit"] = "{}".format(host_name.replace("/", "-"))
+        juju_labels["juju_unit"] = f"{host_name.replace('/', '-')}"
 
         static_config = {"labels": juju_labels}
 
         if ports:
             targets = []
             for port in ports:
-                targets.append("{}:{}".format(host_address, port))
+                targets.append(f"{host_address}:{port}")
             static_config["targets"] = targets
         else:
             static_config["targets"] = [host_address]
@@ -887,8 +887,8 @@ class MetricsEndpointProvider(ProviderBase):
             Scrape configutation metadata for this metrics provider charm.
         """
         metadata = {
-            "model": "{}".format(self._charm.model.name),
-            "model_uuid": "{}".format(self._charm.model.uuid),
-            "application": "{}".format(self._charm.model.app.name),
+            "model": f"{self._charm.model.name}",
+            "model_uuid": f"{self._charm.model.uuid}",
+            "application": f"{self._charm.model.app.name}",
         }
         return metadata
