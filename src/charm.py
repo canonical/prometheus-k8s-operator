@@ -191,21 +191,19 @@ class PrometheusCharm(CharmBase):
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
-        if config.get("log-level"):
-            log_level = config["log-level"].lower()
-        else:
-            log_level = "info"
+        log_level = config["log-level"].lower()
 
         # If log level is invalid set it to debug
         if log_level not in allowed_log_levels:
             logging.error(
-                "Invalid loglevel: {0} given, {1} allowed. "
-                "defaulting to DEBUG loglevel.".format(log_level, "/".join(allowed_log_levels))
+                "Invalid loglevel: %s given, %s allowed. defaulting to DEBUG loglevel.",
+                log_level,
+                "/".join(allowed_log_levels),
             )
             log_level = "debug"
 
         # set log level
-        args.append("--log.level={0}".format(log_level))
+        args.append(f"--log.level={log_level}")
 
         # Enable time series database compression
         if config.get("metrics-wal-compression"):
@@ -215,9 +213,7 @@ class PrometheusCharm(CharmBase):
         if config.get("metrics-retention-time") and self._is_valid_timespec(
             config["metrics-retention-time"]
         ):
-            args.append(
-                "--storage.tsdb.retention.time={}".format(config["metrics-retention-time"])
-            )
+            args.append(f"--storage.tsdb.retention.time={config['metrics-retention-time']}")
 
         command = ["/bin/prometheus"]
         command.extend(args)

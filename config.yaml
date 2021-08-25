@@ -9,7 +9,7 @@ options:
       or above). Must be one of: [debug, info, warn, error, fatal].
       If not set, the Prometheus default one (info) will be used.
     type: string
-    default:
+    default: info
   web-external-url:
     description: |
       The URL under which Prometheus is externally reachable (for example,
