@@ -6,10 +6,10 @@ The Prometheus Operator provides a cluster monitoring solution using
 [Prometheus](https://prometheus.io), which is an open source
 monitoring system and alerting toolkit.
 
-This repository contains a [Juju](https://jaas.ai/) Charm for
+This repository contains a [Juju](https://juju.is/) Charm for
 deploying the monitoring component of Prometheus in a Kubernetes
-cluster. The alerting component of Prometheus is offered through a
-separate Charm.
+cluster. An [alerting service](https://charmhub.io/alertmanager-k8s)
+for Prometheus is offered through a separate Charm.
 
 
 ## Usage
@@ -30,7 +30,7 @@ targets. Each scrape target is expected to expose a `/metrics` HTTP
 path that exposes its metrics in a Prometheus compatible format. For
 example, the
 [kube-state-metrics](https://charmhub.io/kube-state-metrics) charm
-interoperates with the Prometheus K8S charm in a way that allows you
+integrates with the Prometheus K8S charm in a way that allows you
 import metrics about resources in a Kubernetes cluster by doing:
 
 ```sh
@@ -48,7 +48,7 @@ may extend this to allow cross model scrape targets.
 
 ## Dashboard
 
-The Prometheus dashboard may be accessed at a selectable port (by
+The Prometheus dashboard may be accessed at a configurable port (by
 default 9090) on the IP address of the Prometheus unit. This unit and
 its IP address may be determined using the `juju status` command.
 
@@ -72,6 +72,16 @@ Currently supported relations are
   of the hosting Kubernetes cluster.
 - In addition, this Prometheus charm allows relations with any
   charm that supports the `prometheus_scrape` relation.
+- This Prometheus charm does not as yet support federation. This
+  implies scaling the number of Prometheus units results in each unit
+  scrape the same targets.
+
+## Use Cases Supported
+
+- Configure scrape targets through Juju relations.
+- Configure alerting rules through relations with scrape target charms.
+- Enable alert forwarding through a relation with Alertmanager.
+- Support metrics visualisation through Grafana.
 
 ## OCI Images
 
