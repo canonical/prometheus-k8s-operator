@@ -1,4 +1,6 @@
-# Overview
+# Contributing
+
+## Overview
 
 This documents explains the processes and practices recommended for
 contributing enhancements to the Prometheus charm.
@@ -10,17 +12,20 @@ contributing enhancements to the Prometheus charm.
   implementation, you can reach us at
   [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
   or [Discourse](https://discourse.charmhub.io/).
-- It is strongly recommended that prior to engaging in any enhancements
-  to this charm you familiarise your self with Juju.
+  The primary author of this charm is available on the Mattermost channel as
+  `@balbir-thomas`.
 - Familiarising yourself with the
   [Charmed Operator Framework](https://juju.is/docs/sdk)
-  library will help you a lot when working on PRs.
-- All enhancements require review before being merged. Besides the
-  code quality and test coverage, the review will also take into
-  account the resulting user experience for Juju administrators using
-  this charm. Please help us out in having easier reviews by rebasing
-  onto the `main` branch, avoid merge commits and enjoy a linear Git
-  history.
+  library will help you a lot when working on new features or bug fixes.
+- All enhancements require review before being merged. Code review
+  typically examines
+  + code quality
+  + test coverage
+  + user experience for Juju administrators
+  this charm.
+- Please help us out in ensuring easy to review branches by rebasing
+  your pull request branch onto the `main` branch. This also avoid
+  merge commits and creates a linear Git commit history.
 
 ## Developing
 
@@ -29,10 +34,9 @@ Create and activate a virtualenv with the development requirements:
 ```bash
 $ virtualenv -p python3 venv
 $ source venv/bin/activate
-$ pip install -r requirements-dev.txt
 ```
 
-### Setup
+### Charm Specific Setup
 
 A typical setup using [Snap](https://snapcraft.io/), for deployments
 to a [microk8s](https://microk8s.io/) cluster can be achieved by
@@ -50,7 +54,7 @@ $ juju create-storage-pool operator-storage kubernetes storage-class=microk8s-ho
 Build the charm in this git repository
 
 ```bash
-$ charmcraft build
+$ charmcraft pack
 ```
 
 ### Deploy
@@ -76,6 +80,8 @@ tests may executed by doing
 ```bash
 $ tox -e unit
 ```
+
+It is expected that unit tests should provide at least 80% code coverage.
 
 ## Code Overview
 
@@ -159,7 +165,8 @@ events is by re-configuring itself through an invocation of the
 - Pushing the Pebble layer configuration generated using
   `_prometheus_layer()`. The Prometheus command line in this Pebble
   layer is generated using `_command()` and `_cli_args()`.
-- Restarting the workload container and setting charm status.
+- Restarting the workload container or reloading Prometheus
+  configuration and setting charm status.
 
 Generation of the Prometheus configuration is split across multiple
 functions which are invoked by `_prometheus_config()`.
@@ -178,7 +185,7 @@ This charm manages a [Prometheus](https://prometheus.io) workload and
 in doing so it obtains configuration data through its relations with
 other charms. The key design choice here was to ensure that the
 structure of this data exchanged closely mirrors the format of
-Prometheus' own configuration. This ensures that these relational data
+Prometheus' own configuration. This ensures that these relation data
 structures are at least as extensible as Prometheus' own
 configuration. Besides, these data structure would already be familiar
 to Prometheus domain experts.
@@ -194,11 +201,3 @@ replication, in which all units independently scrape all
 targets. However Prometheus scaling is as yet
 [untested](https://github.com/canonical/prometheus-operator/issues/59)
 and hence must be used with caution.
-
-## Use Cases
-
-- Configure scrape targets through Juju relations.
-- Configure alerting rules through relations with scrape target charms.
-- Enable alert forwarding through a relation with Alertmanager.
-- Support metrics visualisation through Grafana.
-
