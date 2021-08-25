@@ -115,7 +115,7 @@ class PrometheusCharm(CharmBase):
         self._set_alerts(container)
 
         current_services = container.get_plan().services
-        new_layer = self._prometheus_layer()
+        new_layer = self._prometheus_layer
 
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
@@ -388,6 +388,7 @@ class PrometheusCharm(CharmBase):
 
         return yaml.dump(scrape_config)
 
+    @property
     def _prometheus_layer(self):
         """Construct the pebble layer
 
