@@ -101,7 +101,7 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_tsdb_compression_is_not_enabled_by_default(self, *unused):
+    def test_metrics_wal_compression_is_not_enabled_by_default(self, *unused):
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
 
@@ -110,9 +110,9 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_tsdb_compression_can_be_enabled(self, *unused):
+    def test_metrics_wal_compression_can_be_enabled(self, *unused):
         compress_config = MINIMAL_CONFIG.copy()
-        compress_config["tsdb-wal-compression"] = True
+        compress_config["metrics-wal-compression"] = True
         self.harness.update_config(compress_config)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -123,12 +123,12 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_valid_tsdb_retention_times_can_be_set(self, *unused):
+    def test_valid_metrics_retention_times_can_be_set(self, *unused):
         retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
             retention_time = "{}{}".format(1, unit)
-            retention_time_config["tsdb-retention-time"] = retention_time
+            retention_time_config["metrics-retention-time"] = retention_time
             self.harness.update_config(retention_time_config)
 
             plan = self.harness.get_container_pebble_plan("prometheus")
@@ -136,12 +136,12 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_invalid_tsdb_retention_times_can_not_be_set(self, *unused):
+    def test_invalid_metrics_retention_times_can_not_be_set(self, *unused):
         retention_time_config = MINIMAL_CONFIG.copy()
 
         # invalid unit
         retention_time = "{}{}".format(1, "x")
-        retention_time_config["tsdb-retention-time"] = retention_time
+        retention_time_config["metrics-retention-time"] = retention_time
         with self.assertLogs(level="ERROR") as logger:
             self.harness.update_config(retention_time_config)
             expected_logs = ["ERROR:charm:Invalid unit x in time spec"]
@@ -152,7 +152,7 @@ class TestCharm(unittest.TestCase):
 
         # invalid time value
         retention_time = "{}{}".format(0, "d")
-        retention_time_config["tsdb-retention-time"] = retention_time
+        retention_time_config["metrics-retention-time"] = retention_time
         with self.assertLogs(level="ERROR") as logger:
             self.harness.update_config(retention_time_config)
             expected_logs = ["ERROR:charm:Expected positive time spec but got 0"]

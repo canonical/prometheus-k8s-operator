@@ -21,13 +21,13 @@ options:
       If omitted, relevant URL components will be derived automatically.
     type: string
     default: ""
-  tsdb-retention-time:
+  metrics-retention-time:
     description: |
       How long to retain samples in the storage.
       Units Supported: y, w, d, h, m, s
     type: string
     default: 15d
-  tsdb-wal-compression:
+  metrics-wal-compression:
     description: |
       This flag enables compression of the write-ahead log (WAL).
       Depending on your data, you can expect the WAL size to be
