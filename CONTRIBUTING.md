@@ -164,7 +164,7 @@ events is by re-configuring itself through an invocation of the
   `_set_alerts()`.
 - Pushing the Pebble layer configuration generated using
   `_prometheus_layer()`. The Prometheus command line in this Pebble
-  layer is generated using `_command()` and `_cli_args()`.
+  layer is generated using `_command()` method.
 - Restarting the workload container or reloading Prometheus
   configuration and setting charm status.
 
