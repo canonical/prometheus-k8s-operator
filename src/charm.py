@@ -332,7 +332,7 @@ class PrometheusCharm(CharmBase):
         Returns:
             Prometheus config file in YAML (string) format.
         """
-        scrape_config = {
+        prometheus_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
             "scrape_configs": [],
@@ -340,7 +340,7 @@ class PrometheusCharm(CharmBase):
 
         alerting_config = self._alerting_config()
         if alerting_config:
-            scrape_config["alerting"] = alerting_config
+            prometheus_config["alerting"] = alerting_config
 
         # By default only monitor prometheus server itself
         default_config = {
@@ -352,14 +352,12 @@ class PrometheusCharm(CharmBase):
             "scheme": "http",
             "static_configs": [{"targets": [f"localhost:{self.port}"]}],
         }
-        scrape_config["scrape_configs"].append(default_config)
+        prometheus_config["scrape_configs"].append(default_config)
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
-            scrape_config["scrape_configs"].append(job)
+            prometheus_config["scrape_configs"].append(job)
 
-        logger.debug("Prometheus config : %s", scrape_config)
-
-        return yaml.dump(scrape_config)
+        return yaml.dump(prometheus_config)
 
     @property
     def _prometheus_layer(self):
