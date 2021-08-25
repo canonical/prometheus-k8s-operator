@@ -167,7 +167,7 @@ class PrometheusCharm(CharmBase):
             self._prometheus_server.reload_configuration()
             logger.info("Updated alert rules")
 
-    def _command(self):
+    def _command(self) -> str:
         """Construct command to launch Prometheus.
 
         Returns:
@@ -221,7 +221,7 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
-    def _is_valid_timespec(self, timeval):
+    def _is_valid_timespec(self, timeval) -> bool:
         """Is a time interval unit and value valid.
 
         If time interval is not valid unit status is set to blocked.
@@ -239,7 +239,7 @@ class PrometheusCharm(CharmBase):
 
         return matched
 
-    def _are_valid_labels(self, json_data):
+    def _are_valid_labels(self, json_data) -> bool:
         """Are Prometheus external labels valid.
 
         Args:
@@ -269,7 +269,7 @@ class PrometheusCharm(CharmBase):
 
         return True
 
-    def _external_labels(self):
+    def _external_labels(self) -> dict:
         """Extract external labels for Prometheus from configuration.
 
         Returns:
@@ -283,7 +283,7 @@ class PrometheusCharm(CharmBase):
 
         return labels
 
-    def _prometheus_global_config(self):
+    def _prometheus_global_config(self) -> dict:
         """Construct Prometheus global configuration.
 
         Returns:
@@ -309,7 +309,7 @@ class PrometheusCharm(CharmBase):
 
         return global_config
 
-    def _alerting_config(self):
+    def _alerting_config(self) -> dict:
         """Construct Prometheus altering configuration.
 
         Returns:
@@ -326,7 +326,7 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _prometheus_config(self):
+    def _prometheus_config(self) -> dict:
         """Construct Prometheus configuration.
 
         Returns:
@@ -360,7 +360,7 @@ class PrometheusCharm(CharmBase):
         return yaml.dump(prometheus_config)
 
     @property
-    def _prometheus_layer(self):
+    def _prometheus_layer(self) -> Layer:
         """Construct the pebble layer
 
         Returns:
@@ -397,7 +397,7 @@ class PrometheusCharm(CharmBase):
                 logger.info("Successfully patched the Kubernetes service!")
 
     @property
-    def _external_hostname(self):
+    def _external_hostname(self) -> str:
         """Return the external hostname to be passed to ingress via the relation."""
         # It is recommended to default to `self.app.name` so that the external
         # hostname will correspond to the deployed application name in the
@@ -406,7 +406,7 @@ class PrometheusCharm(CharmBase):
         return self.config["web-external-url"] or f"{self.app.name}"
 
     @property
-    def port(self):
+    def port(self) -> int:
         """Return the configured port for the Prometheus UI and API."""
         return self.model.config["port"]
 
