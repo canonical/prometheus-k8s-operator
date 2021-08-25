@@ -32,8 +32,6 @@ class PrometheusCharm(CharmBase):
     _stored = StoredState()
 
     def __init__(self, *args):
-        logger.debug("Initializing Charm")
-
         super().__init__(*args)
 
         self._name = "prometheus"
@@ -43,13 +41,9 @@ class PrometheusCharm(CharmBase):
             k8s_service_patched=False,
         )
 
-        self.framework.observe(self.on.install, self._on_install)
-        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
+        # Relation handler objects
 
-        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.framework.observe(self.on.stop, self._on_stop)
-
+        # Allows Grafana to aggregate metrics
         self.grafana_source_consumer = GrafanaSourceConsumer(
             charm=self,
             name="grafana-source",
@@ -57,30 +51,42 @@ class PrometheusCharm(CharmBase):
             refresh_event=self.on.prometheus_pebble_ready,
         )
 
+        # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
-        self.framework.observe(
-            self.metrics_consumer.on.targets_changed,
-            self._on_scrape_targets_changed,
-        )
-        self.alertmanager_lib = AlertmanagerConsumer(
+
+        # Maintains list of Alertmanagers to which alerts are forwarded
+        self.alertmanager_consumer = AlertmanagerConsumer(
             self, relation_name="alertmanager", consumes={"alertmanager": ">=0.21.0"}
         )
-        self.framework.observe(
-            self.alertmanager_lib.cluster_changed, self._on_alertmanager_cluster_changed
-        )
-        self.service_hostname = self._external_hostname
+
+        # Manages ingress for this charm
         self.ingress = IngressRequires(
             self,
             {
-                "service-hostname": self.service_hostname,
+                "service-hostname": self._external_hostname,
                 "service-name": self.app.name,
                 "service-port": str(self.port),
             },
         )
 
+        # Event handlers
+        self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
+        self.framework.observe(self.on.stop, self._on_stop)
+
         self.framework.observe(self.on.ingress_relation_joined, self._on_ingress_changed)
         self.framework.observe(self.on.ingress_relation_changed, self._on_ingress_changed)
         self.framework.observe(self.on.ingress_relation_broken, self._on_ingress_changed)
+
+        self.framework.observe(
+            self.metrics_consumer.on.targets_changed,
+            self._on_scrape_targets_changed,
+        )
+        self.framework.observe(
+            self.alertmanager_consumer.cluster_changed, self._on_alertmanager_cluster_changed
+        )
 
     def _on_install(self, _):
         """Event handler for the install event during which we will update the K8s service"""
@@ -370,7 +376,7 @@ class PrometheusCharm(CharmBase):
         """
         alerting_config = ""
 
-        alertmanagers = self.alertmanager_lib.get_cluster_info()
+        alertmanagers = self.alertmanager_consumer.get_cluster_info()
 
         if len(alertmanagers) < 1:
             logger.debug("No alertmanagers available")
