@@ -569,10 +569,15 @@ class MetricsEndpointConsumer(ConsumerBase):
             "regex": "(.*)",
         }
 
+        # label all static configs in the Prometheus job
+        # labeling inserts Juju topology information and
+        # sets a relable config for instance labels
         for static_config in static_configs:
             labels = static_config.get("labels", {}) if static_configs else {}
             all_targets = static_config.get("targets", [])
 
+            # split all targets into those which will have unit labels
+            # and those which will not
             ports = []
             unitless_targets = []
             for target in all_targets:
@@ -582,12 +587,14 @@ class MetricsEndpointConsumer(ConsumerBase):
                 else:
                     unitless_targets.append(target)
 
+            # label scrape targets that do not have unit lables
             if unitless_targets:
                 unitless_config = self._labeled_unitless_config(
                     unitless_targets, labels, scrape_metadata
                 )
                 config["static_configs"].append(unitless_config)
 
+            # label scrape targets that do have unit labels
             for host_name, host_address in hosts.items():
                 static_config = self._labeled_unit_config(
                     host_name, host_address, ports, labels, scrape_metadata
