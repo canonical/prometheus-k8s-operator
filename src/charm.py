@@ -91,12 +91,15 @@ class PrometheusCharm(CharmBase):
         self._configure(event)
 
     def _configure(self, _):
-        """Reconfigure and restart Prometheus.
+        """Reconfigure and either reload or restart Prometheus.
 
         In response to any configuration change, such as a new consumer
         relation, or a new configuration set by the administrator, the
-        Prometheus config file is regenerated, pushed to the workload
-        container and Prometheus is restarted.
+        Prometheus config file is regenerated, and pushed to the workload
+        container. Prometheus configuration is reloaded if there has
+        been no change to the Pebble layer (such as Prometheus command
+        line arguments). If the Pebble layer has changed then Prometheus
+        is restarted.
         """
         container = self.unit.get_container(self._name)
 
@@ -125,15 +128,8 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
-            service = container.get_service(self._name)
-
-            # TODO remove this check when restart() becomes idempotent
-            if service.is_running():
-                container.restart(self._name)
-                logger.info("Prometheus restarted")
-            else:
-                container.start(self._name)
-                logger.info("Prometheus started")
+            container.restart(self._name)
+            logger.info("Prometheus (re)started")
 
         self.unit.status = ActiveStatus()
 
