@@ -170,23 +170,12 @@ class PrometheusCharm(CharmBase):
         """Construct command to launch Prometheus.
 
         Returns:
-            a list consisting of Prometheus command and associated
+            a sting consisting of Prometheus command and associated
             command line options.
-        """
-        command = ["/bin/prometheus"]
-        command.extend(self._cli_args())
-
-        return " ".join(command)
-
-    def _cli_args(self):
-        """Construct command line arguments for Prometheus.
-
-        Returns:
-            a list consisting of Prometheus command line options.
         """
         config = self.model.config
         args = [
-            "--config.file=/etc/prometheus/prometheus.yml",
+            f"--config.file={PROMETHEUS_CONFIG}",
             "--storage.tsdb.path=/var/lib/prometheus",
             "--web.enable-lifecycle",
             "--web.console.templates=/usr/share/prometheus/consoles",
@@ -230,7 +219,10 @@ class PrometheusCharm(CharmBase):
                 "--storage.tsdb.retention.time={}".format(config["metrics-retention-time"])
             )
 
-        return args
+        command = ["/bin/prometheus"]
+        command.extend(args)
+
+        return " ".join(command)
 
     # TODO This should throw and be handled. RIght now, we just
     # log the error and confinue with an incomplete configuration!
