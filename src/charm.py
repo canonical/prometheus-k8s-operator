@@ -5,6 +5,7 @@
 import json
 import logging
 import os
+import re
 import yaml
 
 from kubernetes_service import K8sServicePatch, PatchFailed
@@ -12,7 +13,7 @@ from kubernetes_service import K8sServicePatch, PatchFailed
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus
+from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import ConnectionError, Layer
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
@@ -220,10 +221,10 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
-    # TODO This should throw and be handled. RIght now, we just
-    # log the error and confinue with an incomplete configuration!
     def _is_valid_timespec(self, timeval):
         """Is a time interval unit and value valid.
+
+        If time interval is not valid unit status is set to blocked.
 
         Args:
             timeval: a string representing a time specification.
@@ -231,26 +232,12 @@ class PrometheusCharm(CharmBase):
         Returns:
             True if time specification is valid and False otherwise.
         """
-        if not timeval:
-            return False
+        matched = re.match(r"[1-9][0-9]*[ymwdhs]", timeval) is not None
 
-        time, unit = timeval[:-1], timeval[-1]
+        if not matched:
+            self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
-        if unit not in ["y", "w", "d", "h", "m", "s"]:
-            logger.error("Invalid unit {} in time spec".format(unit))
-            return False
-
-        try:
-            int(time)
-        except ValueError:
-            logger.error("Can not convert time {} to integer".format(time))
-            return False
-
-        if not int(time) > 0:
-            logger.error("Expected positive time spec but got {}".format(time))
-            return False
-
-        return True
+        return matched
 
     def _are_valid_labels(self, json_data):
         """Are Prometheus external labels valid.
