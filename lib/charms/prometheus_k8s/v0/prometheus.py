@@ -527,11 +527,11 @@ class MetricsEndpointConsumer(ConsumerBase):
             A dictionary that maps unit names to unit addresses for
             the specified relation.
         """
-        hosts = {}
-        for unit in relation.units:
-            if host_address := relation.data[unit].get("prometheus_scrape_host"):
-                hosts[unit.name] = host_address
-        return hosts
+        return {
+            unit.name: relation.data[unit].get("prometheus_scrape_host")
+            for unit in relation.units
+            if relation.data[unit].get("prometheus_scrape_host")
+        }
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata):
         """Construct labeled job configuration for a single job.
