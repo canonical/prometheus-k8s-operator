@@ -6,13 +6,13 @@ logger = logging.getLogger(__name__)
 
 
 class Prometheus:
-    def __init__(self, host: str, port: int, api_timeout=2.0):
+    def __init__(self, host: str = "localhost", port: int = 9090, api_timeout=2.0):
         """Utility to manage a Prometheus application.
         Args:
-            host: host address of Prometheus application.
-            port: port on which Prometheus service is exposed.
+            host: Optional; host address of Prometheus application.
+            port: Optional; port on which Prometheus service is exposed.
         """
-        self.base_url = "http://{}:{}".format(host, port)
+        self.base_url = f"http://{host}:{port}"
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
@@ -21,7 +21,7 @@ class Prometheus:
         Returns:
           True if reload succeeded (returned 200 OK); False otherwise.
         """
-        url = "{}/-/reload".format(self.base_url)
+        url = f"{self.base_url}/-/reload"
         try:
             response = post(url, timeout=self.api_timeout)
 
@@ -32,7 +32,7 @@ class Prometheus:
 
         return False
 
-    def build_info(self):
+    def _build_info(self) -> dict:
         """Fetch build information from Prometheus.
 
         Returns:
@@ -41,7 +41,7 @@ class Prometheus:
             instance is not reachable then an empty dictionary is
             returned.
         """
-        url = "{}/api/v1/status/buildinfo".format(self.base_url)
+        url = f"{self.base_url}/api/v1/status/buildinfo"
 
         try:
             response = get(url, timeout=self.api_timeout)
@@ -54,3 +54,13 @@ class Prometheus:
             pass
 
         return {}
+
+    def version(self) -> str:
+        """Fetch Prometheus server version.
+
+        Returns:
+            a string consisting of the Prometheus version information or
+            empty string if Prometheus server is not reachable.
+        """
+        info = self._build_info()
+        return info.get("version", "")

@@ -25,8 +25,7 @@ class TestServer(unittest.TestCase):
             status=200,
         )
 
-        build_info = self.prometheus.build_info()
-        got_version = build_info.get("version", None)
+        got_version = self.prometheus.version()
         self.assertEqual(got_version, version)
 
     @responses.activate
