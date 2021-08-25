@@ -199,7 +199,7 @@ For example a Prometheus charm may instantiate the
         ...
 
 2. A Prometheus charm also needs to respond to the
-`TargetsChanged` event of the `MetricsEndpointConsumer` by adding itself as
+`TargetsChangedEvent` event of the `MetricsEndpointConsumer` by adding itself as
 and observer for these events, as in
 
     self.framework.observe(
@@ -207,7 +207,7 @@ and observer for these events, as in
         self._on_scrape_targets_changed,
     )
 
-In responding to the `TargetsChanged` event the Prometheus
+In responding to the `TargetsChangedEvent` event the Prometheus
 charm must update the Prometheus configuration so that any new scrape
 targets are added and/or old ones removed from the list of scraped
 endpoints. For this purpose the `MetricsEndpointConsumer` object
@@ -308,6 +308,15 @@ logger = logging.getLogger(__name__)
 
 
 def _sanitize_scrape_configuration(job):
+    """Restrict permissible scrape configuration options.
+
+    Args:
+        job: a dict containing a single Prometheus job_name
+            specification.
+
+    Returns:
+        a dictionary containing a sanitized job specification.
+    """
     return {
         "job_name": job.get("job_name"),
         "metrics_path": job.get("metrics_path", "/metrics"),
@@ -315,7 +324,7 @@ def _sanitize_scrape_configuration(job):
     }
 
 
-class TargetsChanged(EventBase):
+class TargetsChangedEvent(EventBase):
     """Event emitted when Prometheus scrape targets change."""
 
     def __init__(self, handle, relation_id):
@@ -334,7 +343,7 @@ class TargetsChanged(EventBase):
 class MonitoringEvents(ConsumerEvents):
     """Event descriptor for events raised by `MetricsEndpointConsumer`."""
 
-    targets_changed = EventSource(TargetsChanged)
+    targets_changed = EventSource(TargetsChangedEvent)
 
 
 class MetricsEndpointConsumer(ConsumerBase):
@@ -364,7 +373,7 @@ class MetricsEndpointConsumer(ConsumerBase):
 
         Anytime there are changes in relations between Prometheus
         and metrics provider charms the Prometheus charm is informed,
-        through a `TargetsChanged` event. The Prometheus charm can
+        through a `TargetsChangedEvent` event. The Prometheus charm can
         then choose to update its scrape configuration.
 
         Args:
@@ -380,7 +389,7 @@ class MetricsEndpointConsumer(ConsumerBase):
 
         When a metrics provider departs the scrape configuration
         for that provider is removed from the list of scrape jobs and
-        the Prometheus is informed through a `TargetsChanged`
+        the Prometheus is informed through a `TargetsChangedEvent`
         event.
 
         Args:
