@@ -13,7 +13,7 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus
-from ops.pebble import ConnectionError, Layer
+from ops.pebble import Layer
 from prometheus_server import Prometheus
 from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
@@ -103,65 +103,54 @@ class PrometheusCharm(CharmBase):
         """
         container = self.unit.get_container(self._name)
 
-        if not container.is_ready():
-            logger.debug(f"The {self._name} container is not ready")
-            return
+        with container.is_ready():
 
-        # push Prometheus config file to workload
-        prometheus_config = self._prometheus_config()
-        try:
+            # push Prometheus config file to workload
+            prometheus_config = self._prometheus_config()
             container.push(PROMETHEUS_CONFIG, prometheus_config)
             logger.info("Pushed new configuration")
-        except ConnectionError:
-            logger.info("Ignoring config changes since pebble is not ready")
-            return
 
-        self._set_alerts(container)
+            # push alert rules if any
+            self._set_alerts(container)
 
-        current_services = container.get_plan().services
-        new_layer = self._prometheus_layer
+            current_services = container.get_plan().services
+            new_layer = self._prometheus_layer
 
-        # Restart prometheus only if command line arguments have changed,
-        # otherwise just reload its configuration.
-        if current_services == new_layer.services:
-            self._prometheus_server.reload_configuration()
-            logger.info("Prometheus configuration reloaded")
-        else:
-            container.add_layer(self._name, new_layer, combine=True)
-            container.restart(self._name)
-            logger.info("Prometheus (re)started")
+            # Restart prometheus only if command line arguments have changed,
+            # otherwise just reload its configuration.
+            if current_services == new_layer.services:
+                self._prometheus_server.reload_configuration()
+                logger.info("Prometheus configuration reloaded")
+            else:
+                container.add_layer(self._name, new_layer, combine=True)
+                container.restart(self._name)
+                logger.info("Prometheus (re)started")
 
-        self.unit.status = ActiveStatus()
+            self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
 
         Args:
             container: the Prometheus workload container into which
-                alert rule files need to be created.
+                alert rule files need to be created. This container
+                must be in a pebble ready state.
         """
-        with container.is_ready():
-            logger.debug("Processing alert rules")
+        container.remove_path(RULES_DIR, recursive=True)
 
-            container.remove_path(RULES_DIR, recursive=True)
+        for rel_id, alert_rules in self.metrics_consumer.alerts().items():
+            filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
+                alert_rules["model"],
+                alert_rules["model_uuid"],
+                alert_rules["application"],
+                rel_id,
+            )
 
-            for rel_id, alert_rules in self.metrics_consumer.alerts().items():
-                filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                    alert_rules["model"],
-                    alert_rules["model_uuid"],
-                    alert_rules["application"],
-                    rel_id,
-                )
+            path = os.path.join(RULES_DIR, filename)
+            rules = yaml.dump({"groups": alert_rules["groups"]})
 
-                path = os.path.join(RULES_DIR, filename)
-                rules = yaml.dump({"groups": alert_rules["groups"]})
-                logger.debug("Rules for relation %s : %s", rel_id, rules)
-
-                container.push(path, rules, make_dirs=True)
-                logger.debug("Pushed new alert rules '%s': %s", filename, rules)
-
-            self._prometheus_server.reload_configuration()
-            logger.info("Updated alert rules")
+            container.push(path, rules, make_dirs=True)
+            logger.debug("Updated alert rules file %s", filename)
 
     def _command(self) -> str:
         """Construct command to launch Prometheus.
