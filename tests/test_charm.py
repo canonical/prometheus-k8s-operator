@@ -9,7 +9,7 @@ from unittest.mock import patch
 from ops.testing import Harness
 from charm import PrometheusCharm
 
-MINIMAL_CONFIG = {"prometheus-image-path": "prom/prometheus", "port": 9090}
+MINIMAL_CONFIG = {"prometheus-image-path": "prom/prometheus"}
 
 SAMPLE_ALERTING_CONFIG = {
     "alertmanagers": [{"static_configs": [{"targets": ["192.168.0.1:9093"]}]}]
