@@ -24,7 +24,7 @@ contributing enhancements to the Prometheus charm.
   + user experience for Juju administrators
   this charm.
 - Please help us out in ensuring easy to review branches by rebasing
-  your pull request branch onto the `main` branch. This also avoid
+  your pull request branch onto the `main` branch. This also avoids
   merge commits and creates a linear Git commit history.
 
 ## Developing
