@@ -1,8 +1,4 @@
 options:
-  port:
-    description: The port prometheus will be listening on
-    type: int
-    default: 9090
   log-level:
     description: |
       Prometheus server log level (only log messages with the given severity

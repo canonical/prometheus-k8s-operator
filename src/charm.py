@@ -35,7 +35,8 @@ class PrometheusCharm(CharmBase):
         super().__init__(*args)
 
         self._name = "prometheus"
-        self._prometheus_server = Prometheus("localhost", str(self.port))
+        self._port = 9090
+        self._prometheus_server = Prometheus("localhost", self._port)
 
         self._stored.set_default(
             k8s_service_patched=False,
@@ -65,7 +66,7 @@ class PrometheusCharm(CharmBase):
             {
                 "service-hostname": self._external_hostname,
                 "service-name": self.app.name,
-                "service-port": str(self.port),
+                "service-port": str(self._port),
             },
         )
 
@@ -181,7 +182,7 @@ class PrometheusCharm(CharmBase):
         if self.model.get_relation("ingress"):
 
             # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{self.port}"
+            external_url = f"http://{self._external_hostname}:{self._port}"
 
             args.append(f"--web.external-url={external_url}")
 
@@ -291,7 +292,7 @@ class PrometheusCharm(CharmBase):
             "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",
-            "static_configs": [{"targets": [f"localhost:{self.port}"]}],
+            "static_configs": [{"targets": [f"localhost:{self._port}"]}],
         }
         prometheus_config["scrape_configs"].append(default_config)
         scrape_jobs = self.metrics_consumer.jobs()
@@ -327,7 +328,7 @@ class PrometheusCharm(CharmBase):
         """Fix the Kubernetes service that was setup by Juju with correct port numbers"""
         if self.unit.is_leader() and not self._stored.k8s_service_patched:
             service_ports = [
-                (f"{self.app.name}", self.port, self.port),
+                (f"{self.app.name}", self._port, self._port),
             ]
             try:
                 K8sServicePatch.set_ports(self.app.name, service_ports)
@@ -345,11 +346,6 @@ class PrometheusCharm(CharmBase):
         # model, but allow it to be set to something specific via config.
 
         return self.config["web-external-url"] or f"{self.app.name}"
-
-    @property
-    def port(self) -> int:
-        """Return the configured port for the Prometheus UI and API."""
-        return self.model.config["port"]
 
 
 if __name__ == "__main__":
