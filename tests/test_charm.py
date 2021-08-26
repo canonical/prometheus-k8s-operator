@@ -196,34 +196,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_valid_external_labels_can_be_set(self, push, _):
-        label_config = MINIMAL_CONFIG.copy()
-        labels = {"name1": "value1", "name2": "value2"}
-        label_config["external-labels"] = json.dumps(labels)
-        self.harness.update_config(label_config)
-        config = push.call_args[0]
-        gconfig = global_config(config)
-        self.assertIsNotNone(gconfig["external_labels"])
-        self.assertEqual(labels, gconfig["external_labels"])
-
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push")
-    def test_invalid_external_labels_can_not_be_set(self, push, _):
-        label_config = MINIMAL_CONFIG.copy()
-        # label value must be string
-        labels = {"name": 1}
-        label_config["external-labels"] = json.dumps(labels)
-        with self.assertLogs(level="ERROR") as logger:
-            self.harness.update_config(label_config)
-            expected_logs = ["ERROR:charm:External label keys/values must be strings"]
-            self.assertEqual(sorted(logger.output), expected_logs)
-
-        config = push.call_args[0]
-        gconfig = global_config(config)
-        self.assertIsNone(gconfig.get("external_labels"))
-
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push")
     def test_default_scrape_config_is_always_set(self, push, _):
         self.harness.update_config(MINIMAL_CONFIG)
         config = push.call_args[0]

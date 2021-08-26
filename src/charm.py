@@ -2,7 +2,6 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import json
 import logging
 import os
 import re
@@ -235,50 +234,6 @@ class PrometheusCharm(CharmBase):
 
         return matched
 
-    def _are_valid_labels(self, json_data) -> bool:
-        """Are Prometheus external labels valid.
-
-        Args:
-            json_data: a JSON encoded string of external labels form
-                Prometheus.
-
-        Returns:
-            True if external labels are valid, False otherwise.
-        """
-        if not json_data:
-            return False
-
-        try:
-            labels = json.loads(json_data)
-        except (ValueError, TypeError):
-            logger.error("Can not parse external labels : %s", json_data)
-            return False
-
-        if not isinstance(labels, dict):
-            logger.error("Expected label dictionary but got : %s", labels)
-            return False
-
-        for key, value in labels.items():
-            if not isinstance(key, str) or not isinstance(value, str):
-                logger.error("External label keys/values must be strings")
-                return False
-
-        return True
-
-    def _external_labels(self) -> dict:
-        """Extract external labels for Prometheus from configuration.
-
-        Returns:
-            a dictionary of external lables for Prometheus configuration.
-        """
-        config = self.model.config
-        labels = {}
-
-        if config.get("external-labels") and self._are_valid_labels(config["external-labels"]):
-            labels = json.loads(config["external-labels"])
-
-        return labels
-
     def _prometheus_global_config(self) -> dict:
         """Construct Prometheus global configuration.
 
@@ -287,10 +242,6 @@ class PrometheusCharm(CharmBase):
         """
         config = self.model.config
         global_config = {}
-
-        labels = self._external_labels()
-        if labels:
-            global_config["external_labels"] = labels
 
         if config.get("scrape-interval") and self._is_valid_timespec(config["scrape-interval"]):
             global_config["scrape_interval"] = config["scrape-interval"]
