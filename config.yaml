@@ -34,23 +34,6 @@ options:
       halved with little extra cpu load.
     type: boolean
     default: false
-  external-labels:
-    description: |
-      A JSON string of key-value pairs that specify the labels to
-      attach to metrics in this Prometheus instance when they get pulled
-      by an aggregating parent. This is useful in the case of federation
-      where, for example, you want each datacenter to have its own
-      Prometheus instance and then have a global instance that pulls from
-      each of these datacenter instances. By specifying a unique set of
-      external-labels for each datacenter instance, you can easily determine
-      in the aggregating Prometheus instance which datacenter a metric is
-      coming from. Note that you are not limited to one instance per
-      datacenter. The datacenter example here is arbitrary and you are free
-      to organize your federation's hierarchy as you see fit.
-      Ex. '{ "cluster": "datacenter1" }'. Both keys and values may be
-      arbitrarily chosen as you see fit.
-    type: string
-    default: "{}"
   scrape-interval:
     description: |
       How frequently to scrape targets by default.
