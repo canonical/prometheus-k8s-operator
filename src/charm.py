@@ -241,13 +241,7 @@ class PrometheusCharm(CharmBase):
             a dictionary consisting of global configuration for Prometheus.
         """
         config = self.model.config
-        global_config = {}
-
-        if config.get("scrape-interval") and self._is_valid_timespec(config["scrape-interval"]):
-            global_config["scrape_interval"] = config["scrape-interval"]
-
-        if config.get("scrape-timeout") and self._is_valid_timespec(config["scrape-timeout"]):
-            global_config["scrape_timeout"] = config["scrape-timeout"]
+        global_config = {"scrape_interval": "1m", "scrape_timeout": "10s"}
 
         if config.get("evaluation-interval") and self._is_valid_timespec(
             config["evaluation-interval"]
