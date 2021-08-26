@@ -218,7 +218,7 @@ class PrometheusCharm(CharmBase):
         """
         matched = re.match(r"[1-9][0-9]*[ymwdhs]", timeval) is not None
 
-        if not matched:
+        if not (matched := re.match(r"[1-9][0-9]*[ymwdhs]", timeval)):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return matched
