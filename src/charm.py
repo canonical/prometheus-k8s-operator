@@ -36,7 +36,7 @@ class PrometheusCharm(CharmBase):
 
         self._name = "prometheus"
         self._port = 9090
-        self._prometheus_server = Prometheus("localhost", self._port)
+        self._prometheus_server = Prometheus()
 
         self._stored.set_default(
             k8s_service_patched=False,
