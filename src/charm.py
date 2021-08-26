@@ -201,8 +201,7 @@ class PrometheusCharm(CharmBase):
         ):
             args.append(f"--storage.tsdb.retention.time={config['metrics-retention-time']}")
 
-        command = ["/bin/prometheus"]
-        command.extend(args)
+        command = ["/bin/prometheus"] + args
 
         return " ".join(command)
 
