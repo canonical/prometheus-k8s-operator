@@ -157,32 +157,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_global_scrape_interval_can_be_set(self, push, _):
-        scrapeint_config = MINIMAL_CONFIG.copy()
-        acceptable_units = ["y", "w", "d", "h", "m", "s"]
-        for unit in acceptable_units:
-            scrapeint_config["scrape-interval"] = "{}{}".format(1, unit)
-            self.harness.update_config(scrapeint_config)
-            config = push.call_args[0]
-            gconfig = global_config(config)
-            self.assertEqual(gconfig["scrape_interval"], scrapeint_config["scrape-interval"])
-            push.reset()
-
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push")
-    def test_global_scrape_timeout_can_be_set(self, push, _):
-        scrapetime_config = MINIMAL_CONFIG.copy()
-        acceptable_units = ["y", "w", "d", "h", "m", "s"]
-        for unit in acceptable_units:
-            scrapetime_config["scrape-timeout"] = "{}{}".format(1, unit)
-            self.harness.update_config(scrapetime_config)
-            config = push.call_args[0]
-            gconfig = global_config(config)
-            self.assertEqual(gconfig["scrape_timeout"], scrapetime_config["scrape-timeout"])
-            push.reset()
-
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push")
     def test_global_evaluation_interval_can_be_set(self, push, _):
         evalint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
