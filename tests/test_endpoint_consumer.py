@@ -343,7 +343,7 @@ class TestEndpointConsumer(unittest.TestCase):
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
 
-    def test_provider_returns_alerts_indexed_by_relation_id(self):
+    def test_provider_returns_alerts_indexed_by_group_name(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -360,15 +360,9 @@ class TestEndpointConsumer(unittest.TestCase):
 
         alerts = self.harness.charm.prometheus_provider.alerts()
         self.assertEqual(len(alerts), 1)
-        self.assertIn(rel_id, alerts.keys())
-
-        alert = alerts[rel_id]
-        self.assertIn("groups", alert)
-        self.assertIn("model", alert)
-        self.assertIn("model_uuid", alert)
-        self.assertIn("application", alert)
-
-        self.assertListEqual(alert["groups"], ALERT_RULES["groups"])
+        for name, alert_group in alerts.items():
+            group = next((group for group in ALERT_RULES["groups"] if group["name"] == name), None)
+            self.assertDictEqual(alert_group, group)
 
     def test_provider_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
