@@ -138,16 +138,10 @@ class PrometheusCharm(CharmBase):
         """
         container.remove_path(RULES_DIR, recursive=True)
 
-        for rel_id, alert_rules in self.metrics_consumer.alerts().items():
-            filename = "juju_{}_{}_{}_rel_{}_alert.rules".format(
-                alert_rules["model"],
-                alert_rules["model_uuid"],
-                alert_rules["application"],
-                rel_id,
-            )
-
+        for group_name, group in self.metrics_consumer.alerts().items():
+            filename = "juju_" + group_name + ".rules"
             path = os.path.join(RULES_DIR, filename)
-            rules = yaml.dump({"groups": alert_rules["groups"]})
+            rules = yaml.dump({"groups": [group]})
 
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
