@@ -924,15 +924,19 @@ class MetricsEndpointAggregator(ProviderBase):
 
     Using `MetricsEndpointAggregator` to build a Prometheus charm client
     only requires instantiating it. Instantiating
-    `PrometheusAggregator` is similar to `PrometheusConsumer`
-    except that it requires specifying the names of two
-    relations: the relation with scrape targets and that with the
-    Prometheus charms. For example
+    `MetricsEndpointAggregator` is similar to `MetricsEndpointProvider` except
+    that it requires specifying the names of three relations: the
+    relation with scrape targets, the relation for alert rules, and
+    that with the Prometheus charms. For example
 
     ```
     self._aggregator = MetricsEndpointAggregator(
         self,
-        {"prometheus": "monitoring", "scrape_target": "target"},
+        {
+            "prometheus": "monitoring",
+            "scrape_target": "prometheus-target",
+            "alert_rules": "prometheus-rules"
+        }
     )
     ```
 
@@ -951,11 +955,16 @@ class MetricsEndpointAggregator(ProviderBase):
         self._charm = charm
         self._target_relation = relation_names["scrape_target"]
         self._prometheus_relation = relation_names["prometheus"]
+        self._alert_rules_relation = relation_names["alert_rules"]
         self._multi_mode = multi
 
         target_events = self._charm.on[self._target_relation]
         self.framework.observe(target_events.relation_changed, self._update_prometheus_jobs)
         self.framework.observe(target_events.relation_departed, self._remove_prometheus_jobs)
+
+        alert_rule_events = self._charm.on[self._alert_rules_relation]
+        self.framework.observe(alert_rule_events.relation_changed, self._update_alert_rules)
+        self.framework.observe(alert_rule_events.relation_departed, self._remove_alert_rules)
 
     def _update_prometheus_jobs(self, event):
         if not (targets := self._get_targets(event.relation)):
@@ -976,6 +985,31 @@ class MetricsEndpointAggregator(ProviderBase):
             jobs = [job for job in jobs if job["job_name"] != job_name]
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
+    def _update_alert_rules(self, event):
+        if not (unit_rules := self._get_alert_rules(event.relation)):
+            return
+
+        appname = event.relation.app.name
+        unit_rules = self._label_alert_rules(unit_rules, appname)
+        updated_group = {"name": self._group_name(appname), "rules": unit_rules}
+
+        for relation in self.model.relations[self._prometheus_relation]:
+            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            groups = alert_rules.get("groups", [])
+            groups = [group for group in groups if updated_group["name"] != group["name"]]
+            groups.append(updated_group)
+            relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+
+    def _remove_alert_rules(self, event):
+        group_name = self._group_name(event.relation.app.name)
+        for relation in self.model.relations[self._prometheus_relation]:
+            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            groups = alert_rules.get("groups", [])
+            groups = [group for group in groups if group["name"] != group_name]
+            relation.data[self._charm.app]["alert_rules"] = (
+                json.dumps({"groups": groups}) if groups else "{}"
+            )
+
     def _get_targets(self, relation):
         targets = {}
         for unit in relation.units:
@@ -985,8 +1019,32 @@ class MetricsEndpointAggregator(ProviderBase):
 
         return targets
 
+    def _get_alert_rules(self, relation):
+        rules = []
+        for unit in relation.units:
+            if unit_rules := yaml.safe_load(relation.data[unit].get("groups", "")):
+                rules.extend(unit_rules)
+
+        return rules
+
     def _job_name(self, appname):
         return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_prometheus_scrape"
+
+    def _group_name(self, appname):
+        return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_alert_rules"
+
+    def _juju_topology(self, appname):
+        return {
+            "juju_model": self.model.name,
+            "juju_model_uuid": self.model.uuid[:7],
+            "juju_application": appname,
+        }
+
+    def _label_alert_rules(self, rules, appname):
+        for rule in rules:
+            rule["labels"].update(self._juju_topology(appname))
+
+        return rules
 
     def _static_scrape_job(self, targets, application_name):
         juju_model = self.model.name
