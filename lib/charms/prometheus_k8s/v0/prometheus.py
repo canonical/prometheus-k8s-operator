@@ -439,32 +439,27 @@ class MetricsEndpointConsumer(Object):
         allows for multiple groups within a single alert rules file.
 
         Returns:
-            a dictionary of alert rule groups and associated scrape
-            metadata indexed by relation ID.
+            a dictionary mapping the name of an alert rule group to the group.
         """
         alerts = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            if not (
+                alert_rules := json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            ):
+                continue
 
-            scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
-
-            if alert_rules and scrape_metadata:
-                try:
-                    alerts[relation.id] = {
-                        "groups": alert_rules["groups"],
-                        "model": scrape_metadata["model"],
-                        "model_uuid": scrape_metadata["model_uuid"][:7],
-                        "application": scrape_metadata["application"],
-                    }
-                except KeyError as e:
-                    logger.error(
-                        "Relation %s has invalid data: '%s' key is missing",
-                        relation.id,
-                        e,
-                    )
+            try:
+                for group in alert_rules["groups"]:
+                    alerts[group["name"]] = group
+            except KeyError as e:
+                logger.error(
+                    "Relation %s has invalid data : %s",
+                    relation.id,
+                    e,
+                )
 
         return alerts
 
