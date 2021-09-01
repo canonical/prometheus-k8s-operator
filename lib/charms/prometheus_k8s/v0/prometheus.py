@@ -953,6 +953,9 @@ class MetricsEndpointAggregator(ProviderBase):
         self._alert_rules_relation = relation_names["alert_rules"]
         self._multi_mode = multi
 
+        prometheus_events = self._charm.on[self._prometheus_relation]
+        self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
+
         target_events = self._charm.on[self._target_relation]
         self.framework.observe(target_events.relation_changed, self._update_prometheus_jobs)
         self.framework.observe(target_events.relation_departed, self._remove_prometheus_jobs)
@@ -960,6 +963,13 @@ class MetricsEndpointAggregator(ProviderBase):
         alert_rule_events = self._charm.on[self._alert_rules_relation]
         self.framework.observe(alert_rule_events.relation_changed, self._update_alert_rules)
         self.framework.observe(alert_rule_events.relation_departed, self._remove_alert_rules)
+
+    def _set_prometheus_data(self, event):
+        jobs = []
+        for relation in self.model.relations[self._target_relation]:
+            if targets := self._get_targets(relation):
+                jobs.append(self._static_scrape_job(targets, relation.app.name))
+        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
     def _update_prometheus_jobs(self, event):
         if not (targets := self._get_targets(event.relation)):
