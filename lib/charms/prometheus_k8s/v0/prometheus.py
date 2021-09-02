@@ -969,7 +969,17 @@ class MetricsEndpointAggregator(ProviderBase):
         for relation in self.model.relations[self._target_relation]:
             if targets := self._get_targets(relation):
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
+
+        groups = []
+        for relation in self.model.relations[self._alert_rules_relation]:
+            if unit_rules := self._get_alert_rules(relation):
+                appname = relation.app.name
+                unit_rules = self._label_alert_rules(unit_rules, appname)
+                group = {"name": self._group_name(appname), "rules": unit_rules}
+                groups.append(group)
+
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+        event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
     def _update_prometheus_jobs(self, event):
         if not (targets := self._get_targets(event.relation)):
