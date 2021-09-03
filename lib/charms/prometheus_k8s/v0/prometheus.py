@@ -974,8 +974,8 @@ class MetricsEndpointAggregator(ProviderBase):
         for relation in self.model.relations[self._alert_rules_relation]:
             if unit_rules := self._get_alert_rules(relation):
                 appname = relation.app.name
-                unit_rules = self._label_alert_rules(unit_rules, appname)
-                group = {"name": self._group_name(appname), "rules": unit_rules}
+                rules = self._label_alert_rules(unit_rules, appname)
+                group = {"name": self._group_name(appname), "rules": rules}
                 groups.append(group)
 
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
@@ -1026,8 +1026,8 @@ class MetricsEndpointAggregator(ProviderBase):
             return
 
         appname = event.relation.app.name
-        unit_rules = self._label_alert_rules(unit_rules, appname)
-        updated_group = {"name": self._group_name(appname), "rules": unit_rules}
+        rules = self._label_alert_rules(unit_rules, appname)
+        updated_group = {"name": self._group_name(appname), "rules": rules}
 
         for relation in self.model.relations[self._prometheus_relation]:
             alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
@@ -1056,10 +1056,10 @@ class MetricsEndpointAggregator(ProviderBase):
         return targets
 
     def _get_alert_rules(self, relation):
-        rules = []
+        rules = {}
         for unit in relation.units:
             if unit_rules := yaml.safe_load(relation.data[unit].get("groups", "")):
-                rules.extend(unit_rules)
+                rules.update({unit.name: unit_rules})
 
         return rules
 
@@ -1069,18 +1069,22 @@ class MetricsEndpointAggregator(ProviderBase):
     def _group_name(self, appname):
         return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_alert_rules"
 
-    def _juju_topology(self, appname):
+    def _juju_topology(self, unit_name, appname):
         return {
             "juju_model": self.model.name,
             "juju_model_uuid": self.model.uuid[:7],
             "juju_application": appname,
+            "juju_unit": unit_name,
         }
 
-    def _label_alert_rules(self, rules, appname):
-        for rule in rules:
-            rule["labels"].update(self._juju_topology(appname))
+    def _label_alert_rules(self, unit_rules, appname):
+        labeled_rules = []
+        for unit_name, rules in unit_rules.items():
+            for rule in rules:
+                rule["labels"].update(self._juju_topology(unit_name, appname))
+                labeled_rules.append(rule)
 
-        return rules
+        return labeled_rules
 
     def _static_scrape_job(self, targets, application_name):
         juju_model = self.model.name
