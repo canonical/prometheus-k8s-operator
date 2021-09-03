@@ -39,11 +39,11 @@ assuming your charm exposes a metrics endpoint over a relation named
         super().__init__(*args)
         ...
         self.metrics_endpoint = MetricsEndpointProvider(self, "metrics-endpoint",
-                                                self.on.my_service_pebble_ready)
+                                                self.on.container_name_pebble_ready)
         self.metrics_endpoint.ready()
         ...
 
-In this example `my_service_pebble_ready` is the `PebbleReady` event
+In this example `container_name_pebble_ready` is the `PebbleReady` event
 in response to which each unit will advertise its address. Also note
 that the first argument (`self`) to `MetricsEndpointProvider` is always a
 reference to the parent (scrape target) charm. Also note the
@@ -710,7 +710,7 @@ class MetricsEndpointProvider(ProviderBase):
         The `MetricsEndpointProvider` can be instantiated as follows:
 
             self.prometheus = MetricsEndpointProvider(self, "metrics-endpoint",
-                                                 self.my_service_pebble_ready)
+                                                 self.container_name_pebble_ready)
 
         In response to relation joined events this metrics provider object
         will set the following relation data required by the Prometheus charm.
@@ -862,8 +862,8 @@ class MetricsEndpointProvider(ProviderBase):
                     rule = self._label_alert_topology(rule)
                     rule = self._label_alert_expression(rule)
                     alerts.append(rule)
-                except Exception:
-                    logger.error("Failed to read alert rules from %s", path.name)
+                except Exception as e:
+                    logger.error("Failed to read alert rules from %s: %s", path.name, str(e))
 
         # Gather all alerts into a list of one group since Prometheus
         # requires alerts be part of some group
