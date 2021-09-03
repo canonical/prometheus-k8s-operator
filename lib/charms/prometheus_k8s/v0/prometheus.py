@@ -995,9 +995,30 @@ class MetricsEndpointAggregator(ProviderBase):
 
     def _remove_prometheus_jobs(self, event):
         job_name = self._job_name(event.relation.app.name)
+        unit_name = event.unit.name
+
         for relation in self.model.relations[self._prometheus_relation]:
-            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
-            jobs = [job for job in jobs if job["job_name"] != job_name]
+            if not (jobs := json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))):
+                continue
+
+            if not (
+                changed_job := list(filter(lambda job: job.get("job_name") == job_name, jobs))
+            ):
+                continue
+            changed_job = changed_job[0]
+
+            jobs = list(filter(lambda job: job.get("job_name") != job_name, jobs))
+
+            configs_kept = list(
+                filter(
+                    lambda config: config.get("labels", {}).get("juju_unit", "") != unit_name,
+                    changed_job["static_configs"],
+                )
+            )
+            if configs_kept:
+                changed_job["static_configs"] = configs_kept
+                jobs.append(changed_job)
+
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
     def _update_alert_rules(self, event):
