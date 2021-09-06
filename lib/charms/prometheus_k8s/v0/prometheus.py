@@ -1038,10 +1038,36 @@ class MetricsEndpointAggregator(ProviderBase):
 
     def _remove_alert_rules(self, event):
         group_name = self._group_name(event.relation.app.name)
+        unit_name = event.unit.name
+
         for relation in self.model.relations[self._prometheus_relation]:
-            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
-            groups = alert_rules.get("groups", [])
-            groups = [group for group in groups if group["name"] != group_name]
+            if not (
+                alert_rules := json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            ):
+                continue
+
+            if not (groups := alert_rules.get("groups", [])):
+                continue
+
+            if not (
+                changed_group := list(filter(lambda group: group["name"] == group_name, groups))
+            ):
+                continue
+            changed_group = changed_group[0]
+
+            groups = list(filter(lambda group: group["name"] != group_name, groups))
+
+            rules_kept = list(
+                filter(
+                    lambda rule: rule.get("labels").get("juju_unit") != unit_name,
+                    changed_group.get("rules"),
+                )
+            )
+
+            if rules_kept:
+                changed_group["rules"] = rules_kept
+                groups.append(changed_group)
+
             relation.data[self._charm.app]["alert_rules"] = (
                 json.dumps({"groups": groups}) if groups else "{}"
             )
