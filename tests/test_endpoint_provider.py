@@ -6,12 +6,10 @@ import re
 import unittest
 from unittest.mock import patch
 
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointProvider
 from ops.charm import CharmBase
 from ops.framework import StoredState
-
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointProvider
-
 
 RELATION_NAME = "metrics-endpoint"
 CONSUMER_SERVICE = "prometheus_tester"

@@ -4,10 +4,10 @@
 import json
 import unittest
 
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 
 RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
@@ -373,16 +373,16 @@ class TestEndpointConsumer(unittest.TestCase):
     def test_provider_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
-        BAD_METADATA = {"bad": "metadata"}
-        BAD_RULES = {"bad": "rule"}
+        bad_metadata = {"bad": "metadata"}
+        bad_rules = {"bad": "rule"}
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
             rel_id,
             "consumer",
             {
-                "scrape_metadata": json.dumps(BAD_METADATA),
-                "alert_rules": json.dumps(BAD_RULES),
+                "scrape_metadata": json.dumps(bad_metadata),
+                "alert_rules": json.dumps(bad_rules),
             },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")

@@ -1,7 +1,10 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
 import unittest
 from unittest.mock import patch
 
 import kubernetes
+
 from kubernetes_service import K8sServicePatch, PatchFailed
 
 
