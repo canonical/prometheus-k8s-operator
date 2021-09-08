@@ -2,23 +2,25 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+"""A Juju charm for Prometheus on Kubernetes."""
+
 import logging
 import os
 import re
+
 import yaml
-
-from kubernetes_service import K8sServicePatch, PatchFailed
-
+from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
+from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Layer
+
+from kubernetes_service import K8sServicePatch, PatchFailed
 from prometheus_server import Prometheus
-from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
-from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
-from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
@@ -82,11 +84,11 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.cluster_changed, self._configure)
 
     def _on_install(self, _):
-        """Event handler for the install event during which we will update the K8s service"""
+        """Handler for the install event during which we will update the K8s service."""
         self._patch_k8s_service()
 
     def _on_upgrade_charm(self, event):
-        """Event handler for the upgrade_charm event during which we will update the K8s service"""
+        """Handler for the upgrade_charm event during which we will update the K8s service."""
         self._patch_k8s_service()
         self._configure(event)
 
@@ -291,7 +293,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _prometheus_layer(self) -> Layer:
-        """Construct the pebble layer
+        """Construct the pebble layer.
 
         Returns:
             a Pebble layer specification for the Prometheus workload container.
@@ -313,7 +315,7 @@ class PrometheusCharm(CharmBase):
         return Layer(layer_config)
 
     def _patch_k8s_service(self):
-        """Fix the Kubernetes service that was setup by Juju with correct port numbers"""
+        """Fix the Kubernetes service that was setup by Juju with correct port numbers."""
         if self.unit.is_leader() and not self._stored.k8s_service_patched:
             service_ports = [
                 (f"{self.app.name}", self._port, self._port),

@@ -1,8 +1,10 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
 name: prometheus-k8s
 display-name: Prometheus
 summary: Prometheus for Kubernetes clusters
 maintainers:
-    - Balbir Thomas <balbir.thomas@canonical.com>
+  - Balbir Thomas <balbir.thomas@canonical.com>
 description: |
   Prometheus is an open source monitoring solution. Prometheus
   supports aggregating high dimensional data and exposes a powerful
@@ -20,15 +22,15 @@ containers:
       - storage: database
         location: /var/lib/prometheus
 provides:
-    grafana-source:
-        interface: grafana_datasource
+  grafana-source:
+    interface: grafana_datasource
 requires:
-    metrics-endpoint:
-        interface: prometheus_scrape
-    alertmanager:
-        interface: alertmanager_dispatch
-    ingress:
-        interface: ingress
+  metrics-endpoint:
+    interface: prometheus_scrape
+  alertmanager:
+    interface: alertmanager_dispatch
+  ingress:
+    interface: ingress
 storage:
   database:
     type: filesystem

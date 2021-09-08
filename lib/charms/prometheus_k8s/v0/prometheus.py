@@ -1,4 +1,6 @@
-"""## Overview
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+"""## Overview.
 
 This document explains how to integrate with the Prometheus charm
 for the purposes of providing a metrics endpoint to Prometheus. It
@@ -234,7 +236,7 @@ charms when using this library, from a directory conventionally named
 in the `src` folder of the consumer charm. Each file in this directory
 is assumed to be a single alert rule in YAML format. The file name must
 have the `.rule` extension. The format of this alert rule conforms to the
-[Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
+[Prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
 An example of the contents of one such file is shown below.
 
 ```
@@ -347,6 +349,8 @@ class MonitoringEvents(ConsumerEvents):
 
 
 class MetricsEndpointConsumer(ConsumerBase):
+    """A Prometheus based Monitoring service provider."""
+
     on = MonitoringEvents()
 
     def __init__(self, charm, name):
@@ -689,6 +693,8 @@ class MetricsEndpointConsumer(ConsumerBase):
 
 
 class MetricsEndpointProvider(ProviderBase):
+    """Construct a metrics provider for a Prometheus charm."""
+
     def __init__(
         self,
         charm,
@@ -783,7 +789,7 @@ class MetricsEndpointProvider(ProviderBase):
             )
 
     def _set_unit_ip(self, event):
-        """Set unit host address
+        """Set unit host address.
 
         Each time a metrics provider charm container is restarted it updates its own
         host address in the unit relation data for the Prometheus charm.

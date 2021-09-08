@@ -1,4 +1,10 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Helper for interacting with Prometheus throughout the charm's lifecycle."""
+
 import logging
+
 from requests import get, post
 from requests.exceptions import ConnectionError, ConnectTimeout
 
@@ -6,18 +12,24 @@ logger = logging.getLogger(__name__)
 
 
 class Prometheus:
+    """A class that represents a running instance of Prometheus."""
+
     def __init__(self, host: str = "localhost", port: int = 9090, api_timeout=2.0):
         """Utility to manage a Prometheus application.
+
         Args:
             host: Optional; host address of Prometheus application.
             port: Optional; port on which Prometheus service is exposed.
+            api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
         """
         self.base_url = f"http://{host}:{port}"
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
         """Send a POST request to to hot-reload the config.
+
         This reduces down-time compared to restarting the service.
+
         Returns:
           True if reload succeeded (returned 200 OK); False otherwise.
         """

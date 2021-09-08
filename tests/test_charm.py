@@ -1,12 +1,13 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import unittest
-import yaml
 import json
-
+import unittest
 from unittest.mock import patch
+
+import yaml
 from ops.testing import Harness
+
 from charm import PrometheusCharm
 
 MINIMAL_CONFIG = {"prometheus-image-path": "prom/prometheus"}
@@ -27,8 +28,8 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_grafana_is_provided_port_and_source(self, mock_net_get, *unused):
         self.harness.update_config(MINIMAL_CONFIG)
-        IP = "1.1.1.1"
-        net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": IP}]}]}
+        ip = "1.1.1.1"
+        net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
         mock_net_get.return_value = net_info
 
         rel_id = self.harness.add_relation("grafana-source", "grafana")
@@ -36,7 +37,7 @@ class TestCharm(unittest.TestCase):
         grafana_host = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
             "grafana_source_host"
         ]
-        self.assertEqual(grafana_host, "{}:{}".format(IP, "9090"))
+        self.assertEqual(grafana_host, "{}:{}".format(ip, "9090"))
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
