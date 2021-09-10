@@ -60,7 +60,7 @@ $ charmcraft pack
 ### Deploy
 
 ```bash
-$ juju deploy ./prometheus-k8s.charm --resource prometheus-image=ubuntu/prometheus:latest
+$ juju deploy ./prometheus-k8s_ubuntu-20.04-amd64.charm --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
 ## Linting
