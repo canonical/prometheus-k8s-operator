@@ -1,48 +1,53 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""A library for working with Grafana datasources for charm authors."""
+
 import json
 import logging
-
-from ops.charm import (
-    CharmBase,
-    CharmEvents,
-    RelationBrokenEvent,
-    RelationChangedEvent,
-    RelationJoinedEvent,
-)
-from ops.framework import EventBase, EventSource, ObjectEvents, StoredState
-from ops.model import Relation
-from ops.relation import ConsumerBase, ProviderBase
 from typing import Dict, List, Optional
 
+from ops.charm import CharmBase, CharmEvents, RelationDepartedEvent, RelationJoinedEvent
+from ops.framework import EventBase, EventSource, Object, ObjectEvents, StoredState
+from ops.model import Relation
 
-LIBID = "987654321"
-LIBAPI = 1
-LIBPATCH = 0
+# The unique Charmhub library identifier, never change it
+LIBID = "974705adb86f40228298156e34b460dc"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 logger = logging.getLogger(__name__)
 
 
 class SourceFieldsMissingError(Exception):
+    """An exception to indicate there a missing fields from a Grafana datsource definition."""
+
     pass
 
 
 class GrafanaSourcesChanged(EventBase):
-    """Event emitted when Grafana sources change"""
+    """Event emitted when Grafana sources change."""
 
     def __init__(self, handle, data=None):
         super().__init__(handle)
         self.data = data
 
     def snapshot(self) -> Dict:
-        """Save grafana source information"""
+        """Save grafana source information."""
         return {"data": self.data}
 
     def restore(self, snapshot) -> None:
-        """Restore grafana source information"""
+        """Restore grafana source information."""
         self.data = snapshot["data"]
 
 
 class GrafanaSourceEvents(ObjectEvents):
-    """Events raised by :class:`GrafanaSourceEvents`"""
+    """Events raised by :class:`GrafanaSourceEvents."""
 
     # We are emitting multiple events for the same thing due to the way Grafana provisions
     # datasources. There is no "convenient" way to tell Grafana to remove them outside of
@@ -53,18 +58,18 @@ class GrafanaSourceEvents(ObjectEvents):
     sources_to_delete_changed = EventSource(GrafanaSourcesChanged)
 
 
-class GrafanaSourceConsumer(ConsumerBase):
+class GrafanaSourceConsumer(Object):
+    """A consumer object for Grafana datasources."""
+
     _stored = StoredState()
 
     def __init__(
         self,
         charm: CharmBase,
         name: str,
-        consumes: dict,
         refresh_event: CharmEvents,
         source_type: Optional[str] = "prometheus",
         source_port: Optional[str] = "9090",
-        multi: Optional[bool] = False,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -85,32 +90,22 @@ class GrafanaSourceConsumer(ConsumerBase):
             )
 
         Args:
-
             charm: a :class:`CharmBase` object which manages this
                 :class:`GrafanaSourceConsumer` object. Generally this is
                 `self` in the instantiating class.
             name: a :string: name of the relation between `charm`
                 the Grafana charmed service.
-            consumes: a :dict: of acceptable monitoring service
-                providers. The keys of the dictionary are :string:
-                names of grafana source service providers. Typically,
-                this is `grafana-source`. The values of the dictionary
-                are corresponding minimal acceptable semantic versions
-                for the service.
             refresh_event: a :class:`CharmEvents` event on which the IP
                 address should be refreshed in case of pod or
                 machine/VM restart.
-            source_type an optional (default `prometheus`) source type
+            source_type: an optional (default `prometheus`) source type
                 required for Grafana configuration
-            source_port an optional (default `9090`) source port
+            source_port: an optional (default `9090`) source port
                 required for Grafana configuration
-            multi: an optional (default `False`) flag to indicate if
-                this object should support interacting with multiple
-                service providers.
         """
-        super().__init__(charm, name, consumes, multi)
-
+        super().__init__(charm, name)
         self.charm = charm
+        self.name = name
         events = self.charm.on[name]
 
         self._source_type = source_type
@@ -120,26 +115,20 @@ class GrafanaSourceConsumer(ConsumerBase):
         self.framework.observe(refresh_event, self._set_unit_ip)
 
     def _set_sources(self, event: RelationJoinedEvent):
-        """
-        On a relation_joined event, inform the provider about the source
-        configuration
-        """
+        """Inform the provider about the source configuration."""
         self._set_unit_ip(event)
 
         if not self.charm.unit.is_leader():
             return
 
         logger.debug("Setting Grafana data sources: %s", self._scrape_data)
-        event.relation.data[self.charm.app]["grafana_source_data"] = json.dumps(
-            self._scrape_data
-        )
+        event.relation.data[self.charm.app]["grafana_source_data"] = json.dumps(self._scrape_data)
 
     @property
     def _scrape_data(self) -> Dict:
         """Generate source metadata.
 
         Returns:
-
             Source configuration data for Grafana.
         """
         data = {
@@ -151,10 +140,10 @@ class GrafanaSourceConsumer(ConsumerBase):
         return data
 
     def _set_unit_ip(self, event: CharmEvents):
-        """Set unit host address
+        """Set unit host address.
 
-        Each time a consumer charm container is restarted it updates its own
-        host address in the unit relation data for the Prometheus provider.
+        Each time a consumer charm container is restarted it updates its own host address in the
+        unit relation data for the Prometheus provider.
         """
         for relation in self.charm.model.relations[self.name]:
             relation.data[self.charm.unit]["grafana_source_host"] = "{}:{}".format(
@@ -163,30 +152,23 @@ class GrafanaSourceConsumer(ConsumerBase):
             )
 
 
-class GrafanaSourceProvider(ProviderBase):
+class GrafanaSourceProvider(Object):
+    """A provider object for working with Grafana datasources."""
+
     on = GrafanaSourceEvents()
     _stored = StoredState()
 
-    def __init__(
-        self, charm: CharmBase, name: str, service: str, version: Optional[str] = None
-    ) -> None:
-        """A Grafana based Monitoring service consumer
+    def __init__(self, charm: CharmBase, name: str) -> None:
+        """A Grafana based Monitoring service consumer.
 
         Args:
             charm: a :class:`CharmBase` instance that manages this
                 instance of the Grafana source service.
             name: string name of the relation that is provides the
                 Grafana source service.
-            service: string name of service provided. This is used by
-                :class:`GrafanaSourceProvider` to validate this service as
-                acceptable. Hence the string name must match one of the
-                acceptable service names in the :class:`GrafanaSourceProvider`s
-                `consumes` argument. Typically this string is just "grafana".
-            version: a string providing the semantic version of the Grafana
-                source being provided.
-
         """
-        super().__init__(charm, name, service, version)
+        super().__init__(charm, name)
+        self.name = name
         self.charm = charm
         events = self.charm.on[name]
 
@@ -195,14 +177,10 @@ class GrafanaSourceProvider(ProviderBase):
             sources_to_delete=set(),
         )
 
-        self.framework.observe(
-            events.relation_changed, self._on_grafana_source_relation_changed
-        )
-        self.framework.observe(
-            events.relation_broken, self._on_grafana_source_relation_broken
-        )
+        self.framework.observe(events.relation_changed, self._on_grafana_source_relation_changed)
+        self.framework.observe(events.relation_departed, self._on_grafana_source_relation_departed)
 
-    def _on_grafana_source_relation_changed(self, event: RelationChangedEvent) -> None:
+    def _on_grafana_source_relation_changed(self, event: CharmEvents) -> None:
         """Handle relation changes in related consumers.
 
         If there are changes in relations between Grafana source providers
@@ -230,11 +208,7 @@ class GrafanaSourceProvider(ProviderBase):
         self.on.sources_changed.emit()
 
     def _get_source_config(self, rel: Relation):
-        """
-        Generate configuration from data stored in relation data by
-        consumers which we can pass back to the charm
-        """
-
+        """Generate configuration from data stored in relation data by consumers."""
         source_data = json.loads(rel.data[rel.app].get("grafana_source_data", "{}"))
         if not source_data:
             return
@@ -250,10 +224,14 @@ class GrafanaSourceProvider(ProviderBase):
             )
 
             host_data = {
+                "unit": unit_name,
                 "source-name": unique_source_name,
                 "source-type": source_data["type"],
                 "url": "http://{}".format(host_addr),
             }
+
+            if host_data["source-name"] in self._stored.sources_to_delete:
+                self._stored.sources_to_delete.remove(host_data["source-name"])
 
             data.append(host_data)
         return data
@@ -264,6 +242,7 @@ class GrafanaSourceProvider(ProviderBase):
         Args:
             rel: An `ops.model.Relation` object for which the host name to
                 address mapping is required.
+
         Returns:
             A dictionary that maps unit names to unit addresses for
             the specified relation.
@@ -276,7 +255,7 @@ class GrafanaSourceProvider(ProviderBase):
             hosts[unit.name] = host_address
         return hosts
 
-    def _on_grafana_source_relation_broken(self, event: RelationBrokenEvent) -> None:
+    def _on_grafana_source_relation_departed(self, event: RelationDepartedEvent) -> None:
         """Update job config when consumers depart.
 
         When a Grafana source consumer departs, the configuration
@@ -287,29 +266,40 @@ class GrafanaSourceProvider(ProviderBase):
         if not self.charm.unit.is_leader():
             return
 
-        rel_id = event.relation.id
-        self._remove_source_from_datastore(rel_id)
+        self._remove_source_from_datastore(event)
 
-    def _remove_source_from_datastore(self, rel_id: int) -> None:
-        """Remove the grafana-source from the datastore. and add the
-        name to the list of sources to remove when a relation is
-        broken.
+    def _remove_source_from_datastore(self, event: RelationDepartedEvent) -> None:
+        """Remove the grafana-source from the datastore.
+
+        Add the name to the list of sources to remove when a relation is broken.
         """
+        rel_id = event.relation.id
         logger.debug("Removing all data for relation: {}".format(rel_id))
 
         removed_source = self._stored.sources.pop(rel_id, None)
         if removed_source:
-            for host in removed_source:
-                self._remove_source(host["source-name"])
+            if event.unit:
+                # Remove one unit only
+                dead_unit = [s for s in removed_source if s["unit"] == event.unit.name][0]
+                self._remove_source(dead_unit["source-name"])
+
+                # Re-update the list of stored sources
+                self._stored.sources[rel_id] = [
+                    dict(s) for s in removed_source if s["unit"] != event.unit.name
+                ]
+            else:
+                for host in removed_source:
+                    self._remove_source(host["source-name"])
+
             self.on.sources_to_delete_changed.emit()
 
     def _remove_source(self, source_name: str) -> None:
-        """Remove a datasource by name"""
+        """Remove a datasource by name."""
         self._stored.sources_to_delete.add(source_name)
 
     @property
     def sources(self) -> List[dict]:
-        """Returns an array of sources the source_provider knows about"""
+        """Returns an array of sources the source_provider knows about."""
         sources = []
         for source in self._stored.sources.values():
             sources.extend([host for host in source])
@@ -317,7 +307,7 @@ class GrafanaSourceProvider(ProviderBase):
         return sources
 
     def update_port(self, relation_name: str, port: int) -> None:
-        """Updates the port grafana-k8s is listening on"""
+        """Updates the port grafana-k8s is listening on."""
         if self.charm.unit.is_leader():
             for relation in self.charm.model.relations[relation_name]:
                 logger.debug("Setting grafana-k8s address data for relation", relation)
@@ -326,7 +316,7 @@ class GrafanaSourceProvider(ProviderBase):
 
     @property
     def sources_to_delete(self) -> List[str]:
-        """Returns an array of source names which have been removed"""
+        """Returns an array of source names which have been removed."""
         sources_to_delete = []
         for source in self._stored.sources_to_delete:
             sources_to_delete.append(source)
