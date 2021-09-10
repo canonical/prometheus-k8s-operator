@@ -10,7 +10,7 @@ import re
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
-from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
+from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 from ops.charm import CharmBase
@@ -50,7 +50,6 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_consumer = GrafanaSourceConsumer(
             charm=self,
             name="grafana-source",
-            consumes={"Grafana": ">=2.0.0"},
             refresh_event=self.on.prometheus_pebble_ready,
         )
 
