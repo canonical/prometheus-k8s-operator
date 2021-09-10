@@ -898,7 +898,7 @@ class MetricsEndpointProvider(Object):
 
 
 class MetricsEndpointAggregator(Object):
-    """Aggregate metrics from multiple scrape targets
+    """Aggregate metrics from multiple scrape targets.
 
     `MetricsEndpointAggregator` collects scrape target information from one
     or more related charms and forwards this to a `MetricsEndpointConsumer`

@@ -4,11 +4,9 @@
 import json
 import unittest
 
+from charms.prometheus_k8s.v0.prometheus import MetricsEndpointAggregator
 from ops.charm import CharmBase
 from ops.testing import Harness
-
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointAggregator
-
 
 PROMETHEUS_RELATION = "metrics-endpoint"
 SCRAPE_TARGET_RELATION = "prometheus-target"
