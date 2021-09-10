@@ -14,26 +14,25 @@ provide a scrape target for Prometheus.
 ## Provider Library Usage
 
 This Prometheus charm interacts with its scrape targets using its
-charm library. This charm library is constructed using the [Provider
-and Consumer](https://ops.readthedocs.io/en/latest/#module-ops.relation)
-objects from the Operator Framework. This implies charms seeking to
-expose a metric endpoints for the Prometheus charm, must do so using
-the `MetricsEndpointProvider` object from this charm library. For the simplest
-use cases, using the `MetricsEndpointProvider` object only requires
-instantiating it, typically in the constructor of your charm (the one
-which exposes a metrics endpoint). The `MetricsEndpointProvider` constructor
-requires the name of the relation over which a scrape target (metrics
-endpoint) is exposed to the Prometheus charm. This relation must use
-the `prometheus_scrape` interface. The address of the metrics endpoint
-is set to the unit address, by each unit of the `MetricsEndpointProvider`
+charm library. Charms seeking to expose a metric endpoints for the
+Prometheus charm, must do so using the `MetricsEndpointProvider`
+object from this charm library. For the simplest use cases, using the
+`MetricsEndpointProvider` object only requires instantiating it,
+typically in the constructor of your charm (the one which exposes a
+metrics endpoint). The `MetricsEndpointProvider` constructor requires
+the name of the relation over which a scrape target (metrics endpoint)
+is exposed to the Prometheus charm. This relation must use the
+`prometheus_scrape` interface. The address of the metrics endpoint is
+set to the unit address, by each unit of the `MetricsEndpointProvider`
 charm. These units set their address in response to a specific
-`CharmEvent`. Hence instantiating the `MetricsEndpointProvider` also requires
-a `CharmEvent` object in response to which each unit will post its
-address into the unit's relation data for the Prometheus charm. Since
-container restarts of Kubernetes charms can result in change of IP
-addresses, this event is typically `PebbleReady`. For example,
-assuming your charm exposes a metrics endpoint over a relation named
-"metrics_endpoint", you may instantiate `MetricsEndpointProvider` as follows
+`CharmEvent`. Hence instantiating the `MetricsEndpointProvider` also
+requires a `CharmEvent` object in response to which each unit will
+post its address into the unit's relation data for the Prometheus
+charm. Since container restarts of Kubernetes charms can result in
+change of IP addresses, this event is typically `PebbleReady`. For
+example, assuming your charm exposes a metrics endpoint over a
+relation named "metrics_endpoint", you may instantiate
+`MetricsEndpointProvider` as follows
 
     from charms.prometheus_k8s.v0.prometheus import MetricsEndpointProvider
 
@@ -42,19 +41,12 @@ assuming your charm exposes a metrics endpoint over a relation named
         ...
         self.metrics_endpoint = MetricsEndpointProvider(self, "metrics-endpoint",
                                                 self.on.container_name_pebble_ready)
-        self.metrics_endpoint.ready()
         ...
 
 In this example `container_name_pebble_ready` is the `PebbleReady` event
 in response to which each unit will advertise its address. Also note
 that the first argument (`self`) to `MetricsEndpointProvider` is always a
-reference to the parent (scrape target) charm. Also note the
-invocation of the `ready()` method on `MetricsEndpointProvider`. This signals
-to the Prometheus charm that the metrics endpoint is active and can be
-scraped. It is not necessary to invoke `ready()` immediately after
-instantiating `MetricsEndpointProvider`. There is also a corresponding
-`unready()` that can be used to signal temporary suspension of
-scrapping by the Prometheus charm.
+reference to the parent (scrape target) charm.
 
 An instantiated `MetricsEndpointProvider` object will ensure that each unit of
 its parent charm, is a scrape target for the `MetricsEndpointConsumer`
