@@ -356,7 +356,6 @@ class MetricsEndpointConsumer(Object):
         super().__init__(charm, name)
         self._charm = charm
         self._relation_name = name
-        # TODO: use ConsumerBase events when ProviderAvailable exposes relation ID
         events = self._charm.on[name]
         self.framework.observe(events.relation_changed, self._on_metrics_provider_relation_changed)
         self.framework.observe(
