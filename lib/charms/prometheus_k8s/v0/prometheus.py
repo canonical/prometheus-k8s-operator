@@ -292,8 +292,7 @@ import logging
 from pathlib import Path
 
 import yaml
-from ops.framework import EventBase, EventSource
-from ops.relation import ConsumerBase, ConsumerEvents, ProviderBase
+from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 # The unique Charmhub library identifier, never change it
 LIBID = "bc84295fef5f4049878f07b131968ee2"
@@ -342,13 +341,13 @@ class TargetsChangedEvent(EventBase):
         self.relation_id = snapshot["relation_id"]
 
 
-class MonitoringEvents(ConsumerEvents):
+class MonitoringEvents(ObjectEvents):
     """Event descriptor for events raised by `MetricsEndpointConsumer`."""
 
     targets_changed = EventSource(TargetsChangedEvent)
 
 
-class MetricsEndpointConsumer(ConsumerBase):
+class MetricsEndpointConsumer(Object):
     """A Prometheus based Monitoring service provider."""
 
     on = MonitoringEvents()
@@ -362,7 +361,7 @@ class MetricsEndpointConsumer(ConsumerBase):
             name: string name of the relation over which scrape target
                 information is gathered by the Prometheus charm.
         """
-        super().__init__(charm, name, {"openmetrics": None}, multi=True)
+        super().__init__(charm, name)
         self._charm = charm
         self._relation_name = name
         # TODO: use ConsumerBase events when ProviderAvailable exposes relation ID
@@ -692,7 +691,7 @@ class MetricsEndpointConsumer(ConsumerBase):
         return static_config
 
 
-class MetricsEndpointProvider(ProviderBase):
+class MetricsEndpointProvider(Object):
     """Construct a metrics provider for a Prometheus charm."""
 
     def __init__(
@@ -745,7 +744,7 @@ class MetricsEndpointProvider(ProviderBase):
                 files.  Defaults to "src/prometheus_alert_rules" at the top level
                 of the charm repository.
         """
-        super().__init__(charm, name, "openmetrics")
+        super().__init__(charm, name)
 
         self._charm = charm
         self._ALERT_RULES_PATH = alert_rules_path
