@@ -87,16 +87,14 @@ class AlertmanagerConsumer(RelationManagerBase):
         super().__init__(charm, relation_name)
         self.charm = charm
 
-        self.charm.framework.observe(
+        self.framework.observe(
             self.charm.on[self.name].relation_changed, self._on_relation_changed
         )
-        self.charm.framework.observe(
+        self.framework.observe(
             self.charm.on[self.name].relation_departed,
             self._on_relation_departed,
         )
-        self.charm.framework.observe(
-            self.charm.on[self.name].relation_broken, self._on_relation_broken
-        )
+        self.framework.observe(self.charm.on[self.name].relation_broken, self._on_relation_broken)
 
     def _on_relation_changed(self, event: ops.charm.RelationChangedEvent):
         """This hook notifies the charm that there may have been changes to the cluster."""
@@ -149,7 +147,7 @@ class AlertmanagerProvider(RelationManagerBase):
 
         # No need to observe `relation_departed` or `relation_broken`: data bags are auto-updated
         # so both events are address on the consumer side.
-        self.charm.framework.observe(events.relation_joined, self._on_relation_joined)
+        self.framework.observe(events.relation_joined, self._on_relation_joined)
 
     @property
     def api_port(self):
