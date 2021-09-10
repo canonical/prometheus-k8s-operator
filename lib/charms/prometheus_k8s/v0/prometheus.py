@@ -897,7 +897,7 @@ class MetricsEndpointProvider(Object):
         return metadata
 
 
-class MetricsEndpointAggregator(ProviderBase):
+class MetricsEndpointAggregator(Object):
     """Aggregate metrics from multiple scrape targets
 
     `MetricsEndpointAggregator` collects scrape target information from one
@@ -945,7 +945,7 @@ class MetricsEndpointAggregator(ProviderBase):
     """
 
     def __init__(self, charm, relation_names, multi=False):
-        super().__init__(charm, relation_names["prometheus"], "openmetrics", multi)
+        super().__init__(charm, relation_names["prometheus"])
 
         self._charm = charm
         self._target_relation = relation_names["scrape_target"]
