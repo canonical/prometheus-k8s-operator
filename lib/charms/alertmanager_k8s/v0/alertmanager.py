@@ -29,18 +29,6 @@ class ClusterChanged(EventBase):
     then a :class:`ClusterChanged` event should be emitted.
     """
 
-    def __init__(self, handle, data=None):
-        super().__init__(handle)
-        self.data = data
-
-    def snapshot(self):
-        """Save relation data."""
-        return {"data": self.data}
-
-    def restore(self, snapshot):
-        """Restore relation data."""
-        self.data = snapshot["data"]
-
 
 class AlertmanagerConsumerEvents(ObjectEvents):
     """Event descriptor for events raised by `AlertmanagerConsumer`."""
@@ -49,7 +37,10 @@ class AlertmanagerConsumerEvents(ObjectEvents):
 
 
 class RelationManagerBase(Object):
-    """TODO.
+    """Base class that represents relation ends ("provides" and "requires").
+
+    :class:`RelationManagerBase` is used to create a relation manager. This is done by inheriting
+    from :class:`RelationManagerBase` and customising the sub class as required.
 
     Attributes:
         name (str): consumer's relation name
@@ -61,13 +52,36 @@ class RelationManagerBase(Object):
 
 
 class AlertmanagerConsumer(RelationManagerBase):
-    """A "consumer" handler to be used by charms that relate to Alertmanager.
+    """A "consumer" handler to be used by charms that relate to Alertmanager (the 'requires' side).
+
+    To have your charm consume alertmanager cluster data, declare the interface's use in your
+    charm's metadata.yaml file:
+
+    ```yaml
+    requires:
+      alertmanager:
+        interface: alertmanager_dispatch
+    ```
+
+    A typical example of importing this library might be
+
+    ```python
+    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+    ```
+
+    In your charm's `__init__` method:
+
+    ```python
+    self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
+    ```
 
     Every change in the alertmanager cluster emits a :class:`ClusterChanged` event that the
     consumer charm can register and handle, for example:
 
-        self.framework.observe(self.alertmanager_lib.cluster_changed,
-                               self._on_alertmanager_cluster_changed)
+    ```
+    self.framework.observe(self.alertmanager_consumer.on.cluster_changed,
+                           self._on_alertmanager_cluster_changed)
+    ```
 
     The updated alertmanager cluster can then be obtained via the `get_cluster_info` method
 
@@ -123,7 +137,34 @@ class AlertmanagerConsumer(RelationManagerBase):
 
 
 class AlertmanagerProvider(RelationManagerBase):
-    """An alertmanager "provider" handler for abstracting away communication with consumers.
+    """A "provider" handler to be used by charms that relate to Alertmanager (the 'provides' side).
+
+    To have your charm provide alertmanager cluster data, declare the interface's use in your
+    charm's metadata.yaml file:
+
+    ```yaml
+    provides:
+      alerting:
+        interface: alertmanager_dispatch
+    ```
+
+    A typical example of importing this library might be
+
+    ```python
+    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerProvider
+    ```
+
+    In your charm's `__init__` method:
+
+    ```python
+    self.alertmanager_provider = AlertmanagerProvider(self, self._relation_name, self._api_port)
+    ```
+
+    Then inform consumers on any update to alertmanager cluster data via
+
+    ```python
+    self.alertmanager_provider.update_relation_data()
+    ```
 
     This provider auto-registers relation events on behalf of the main Alertmanager charm.
 
