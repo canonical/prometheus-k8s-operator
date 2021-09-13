@@ -57,9 +57,7 @@ class PrometheusCharm(CharmBase):
         self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
 
         # Maintains list of Alertmanagers to which alerts are forwarded
-        self.alertmanager_consumer = AlertmanagerConsumer(
-            self, relation_name="alertmanager", consumes={"alertmanager": ">=0.21.0"}
-        )
+        self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
         # Manages ingress for this charm
         self.ingress = IngressRequires(
@@ -80,7 +78,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
-        self.framework.observe(self.alertmanager_consumer.cluster_changed, self._configure)
+        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
     def _on_install(self, _):
         """Handler for the install event during which we will update the K8s service."""

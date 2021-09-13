@@ -12,9 +12,8 @@ from typing import List
 
 import ops
 from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent
-from ops.framework import EventBase, EventSource
+from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
-from ops.relation import ConsumerBase, ProviderBase
 
 LIBID = "abcdef1234"  # Unique ID that refers to the library forever
 LIBAPI = 0  # Must match the major version in the import path.
@@ -30,27 +29,59 @@ class ClusterChanged(EventBase):
     then a :class:`ClusterChanged` event should be emitted.
     """
 
-    def __init__(self, handle, data=None):
-        super().__init__(handle)
-        self.data = data
 
-    def snapshot(self):
-        """Save relation data."""
-        return {"data": self.data}
+class AlertmanagerConsumerEvents(ObjectEvents):
+    """Event descriptor for events raised by `AlertmanagerConsumer`."""
 
-    def restore(self, snapshot):
-        """Restore relation data."""
-        self.data = snapshot["data"]
+    cluster_changed = EventSource(ClusterChanged)
 
 
-class AlertmanagerConsumer(ConsumerBase):
-    """A "consumer" handler to be used by charms that relate to Alertmanager.
+class RelationManagerBase(Object):
+    """Base class that represents relation ends ("provides" and "requires").
+
+    :class:`RelationManagerBase` is used to create a relation manager. This is done by inheriting
+    from :class:`RelationManagerBase` and customising the sub class as required.
+
+    Attributes:
+        name (str): consumer's relation name
+    """
+
+    def __init__(self, charm: CharmBase, relation_name):
+        super().__init__(charm, relation_name)
+        self.name = relation_name
+
+
+class AlertmanagerConsumer(RelationManagerBase):
+    """A "consumer" handler to be used by charms that relate to Alertmanager (the 'requires' side).
+
+    To have your charm consume alertmanager cluster data, declare the interface's use in your
+    charm's metadata.yaml file:
+
+    ```yaml
+    requires:
+      alertmanager:
+        interface: alertmanager_dispatch
+    ```
+
+    A typical example of importing this library might be
+
+    ```python
+    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+    ```
+
+    In your charm's `__init__` method:
+
+    ```python
+    self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
+    ```
 
     Every change in the alertmanager cluster emits a :class:`ClusterChanged` event that the
     consumer charm can register and handle, for example:
 
-        self.framework.observe(self.alertmanager_lib.cluster_changed,
-                               self._on_alertmanager_cluster_changed)
+    ```
+    self.framework.observe(self.alertmanager_consumer.on.cluster_changed,
+                           self._on_alertmanager_cluster_changed)
+    ```
 
     The updated alertmanager cluster can then be obtained via the `get_cluster_info` method
 
@@ -59,41 +90,36 @@ class AlertmanagerConsumer(ConsumerBase):
     Arguments:
             charm (CharmBase): consumer charm
             relation_name (str): from consumer's metadata.yaml
-            consumes (dict): provider specifications
-            multi (bool): multiple relations flag
 
     Attributes:
             charm (CharmBase): consumer charm
     """
 
-    cluster_changed = EventSource(ClusterChanged)
+    on = AlertmanagerConsumerEvents()
 
-    def __init__(self, charm: CharmBase, relation_name: str, consumes: dict, multi: bool = False):
-        super().__init__(charm, relation_name, consumes, multi)
+    def __init__(self, charm: CharmBase, relation_name: str):
+        super().__init__(charm, relation_name)
         self.charm = charm
-        self._consumer_relation_name = relation_name  # from consumer's metadata.yaml
 
         self.framework.observe(
-            self.charm.on[self._consumer_relation_name].relation_changed, self._on_relation_changed
+            self.charm.on[self.name].relation_changed, self._on_relation_changed
         )
         self.framework.observe(
-            self.charm.on[self._consumer_relation_name].relation_departed,
+            self.charm.on[self.name].relation_departed,
             self._on_relation_departed,
         )
-        self.framework.observe(
-            self.charm.on[self._consumer_relation_name].relation_broken, self._on_relation_broken
-        )
+        self.framework.observe(self.charm.on[self.name].relation_broken, self._on_relation_broken)
 
     def _on_relation_changed(self, event: ops.charm.RelationChangedEvent):
         """This hook notifies the charm that there may have been changes to the cluster."""
         if event.unit:  # event.unit may be `None` in the case of app data change
             # inform consumer about the change
-            self.cluster_changed.emit()
+            self.on.cluster_changed.emit()
 
     def get_cluster_info(self) -> List[str]:
         """Returns a list of ip addresses of all the alertmanager units."""
         alertmanagers: List[str] = []
-        if not (relation := self.charm.model.get_relation(self._consumer_relation_name)):
+        if not (relation := self.charm.model.get_relation(self.name)):
             return alertmanagers
         for unit in relation.units:
             if address := relation.data[unit].get("public_address"):
@@ -102,24 +128,49 @@ class AlertmanagerConsumer(ConsumerBase):
 
     def _on_relation_departed(self, _):
         """This hook notifies the charm that there may have been changes to the cluster."""
-        self.cluster_changed.emit()
+        self.on.cluster_changed.emit()
 
     def _on_relation_broken(self, _):
         """This hook notifies the charm that a relation has been completely removed."""
         # inform consumer about the change
-        self.cluster_changed.emit()
+        self.on.cluster_changed.emit()
 
 
-class AlertmanagerProvider(ProviderBase):
-    """An alertmanager "provider" handler for abstracting away communication with consumers.
+class AlertmanagerProvider(RelationManagerBase):
+    """A "provider" handler to be used by charms that relate to Alertmanager (the 'provides' side).
+
+    To have your charm provide alertmanager cluster data, declare the interface's use in your
+    charm's metadata.yaml file:
+
+    ```yaml
+    provides:
+      alerting:
+        interface: alertmanager_dispatch
+    ```
+
+    A typical example of importing this library might be
+
+    ```python
+    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerProvider
+    ```
+
+    In your charm's `__init__` method:
+
+    ```python
+    self.alertmanager_provider = AlertmanagerProvider(self, self._relation_name, self._api_port)
+    ```
+
+    Then inform consumers on any update to alertmanager cluster data via
+
+    ```python
+    self.alertmanager_provider.update_relation_data()
+    ```
 
     This provider auto-registers relation events on behalf of the main Alertmanager charm.
 
     Arguments:
             charm (CharmBase): consumer charm
             relation_name (str): relation name (not interface name)
-            service_name (str): a name for the provided service
-            consumes (dict): provider specifications
             api_port (int): alertmanager server's api port; this is needed here to avoid accessing
                             charm constructs directly
 
@@ -127,17 +178,9 @@ class AlertmanagerProvider(ProviderBase):
             charm (CharmBase): the Alertmanager charm
     """
 
-    def __init__(
-        self,
-        charm,
-        relation_name: str,
-        service_name: str,
-        version: str = None,
-        api_port: int = 9093,
-    ):
-        super().__init__(charm, relation_name, service_name, version)
+    def __init__(self, charm, relation_name: str, api_port: int = 9093):
+        super().__init__(charm, relation_name)
         self.charm = charm
-        self._service_name = service_name
 
         self._api_port = api_port
 
@@ -162,7 +205,9 @@ class AlertmanagerProvider(ProviderBase):
 
     def _generate_relation_data(self, relation: Relation):
         """Helper function to generate relation data in the correct format."""
-        public_address = f"{self.model.get_binding(relation).network.bind_address}:{self.api_port}"
+        public_address = (
+            f"{self.charm.model.get_binding(relation).network.bind_address}:{self.api_port}"
+        )
         return {"public_address": public_address}
 
     def update_relation_data(self, event: RelationEvent = None):
