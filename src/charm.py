@@ -12,7 +12,7 @@ import yaml
 from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main

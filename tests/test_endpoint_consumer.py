@@ -4,7 +4,7 @@
 import json
 import unittest
 
-from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness

@@ -103,7 +103,7 @@ validates all configurations options when provided before generating
 its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](lib/charms/prometheus_k8s/v1/prometheus.py).
+[charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py).
 
 ### Library Details
 
