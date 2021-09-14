@@ -446,9 +446,8 @@ class MetricsEndpointConsumer(Object):
             if not relation.units:
                 continue
 
-            if not (
-                alert_rules := json.loads(relation.data[relation.app].get("alert_rules", "{}"))
-            ):
+            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            if not alert_rules:
                 continue
 
             try:
@@ -1056,22 +1055,20 @@ class MetricsEndpointAggregator(Object):
             if not (jobs := json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))):
                 continue
 
-            if not (
-                changed_job := list(filter(lambda job: job.get("job_name") == job_name, jobs))
-            ):
+            if not (changed_job := [j for j in jobs if j.get("job_name") == job_name]):
                 continue
             changed_job = changed_job[0]
 
             # list of scrape jobs that have not changed
-            jobs = list(filter(lambda job: job.get("job_name") != job_name, jobs))
+            jobs = [job for job in jobs if job.get("job_name") != job_name]
 
             # list of scrape jobs for units of the same application that still exist
-            configs_kept = list(
-                filter(
-                    lambda config: config.get("labels", {}).get("juju_unit", "") != unit_name,
-                    changed_job["static_configs"],
-                )
-            )
+            configs_kept = [
+                config
+                for config in changed_job["static_configs"]
+                if config.get("labels", {}).get("juju_unit") != unit_name
+            ]
+
             if configs_kept:
                 changed_job["static_configs"] = configs_kept
                 jobs.append(changed_job)
@@ -1111,30 +1108,27 @@ class MetricsEndpointAggregator(Object):
         unit_name = event.unit.name
 
         for relation in self.model.relations[self._prometheus_relation]:
-            if not (
-                alert_rules := json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
-            ):
+            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            if not alert_rules:
                 continue
 
             if not (groups := alert_rules.get("groups", [])):
                 continue
 
-            if not (
-                changed_group := list(filter(lambda group: group["name"] == group_name, groups))
-            ):
+            changed_group = [group for group in groups if group["name"] == group_name]
+            if not changed_group:
                 continue
             changed_group = changed_group[0]
 
             # list of alert rule groups that have not changed
-            groups = list(filter(lambda group: group["name"] != group_name, groups))
+            groups = [group for group in groups if group["name"] != group_name]
 
             # list of alert rules not associated with departing unit
-            rules_kept = list(
-                filter(
-                    lambda rule: rule.get("labels").get("juju_unit") != unit_name,
-                    changed_group.get("rules"),
-                )
-            )
+            rules_kept = [
+                rule
+                for rule in changed_group.get("rules")
+                if rule.get("labels").get("juju_unit") != unit_name
+            ]
 
             if rules_kept:
                 changed_group["rules"] = rules_kept
