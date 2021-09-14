@@ -34,7 +34,7 @@ example, assuming your charm exposes a metrics endpoint over a
 relation named "metrics_endpoint", you may instantiate
 `MetricsEndpointProvider` as follows
 
-    from charms.prometheus_k8s.v0.prometheus import MetricsEndpointProvider
+    from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -182,7 +182,7 @@ with three two pieces of information
 For example a Prometheus charm may instantiate the
 `MetricsEndpointConsumer` in its constructor as follows
 
-    from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
+    from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 
     def __init__(self, *args):
         super().__init__(*args)
