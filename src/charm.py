@@ -16,7 +16,7 @@ from charms.prometheus_k8s.v0.prometheus import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.pebble import Layer
 
 from kubernetes_service import K8sServicePatch, PatchFailed
@@ -103,6 +103,7 @@ class PrometheusCharm(CharmBase):
         container = self.unit.get_container(self._name)
 
         if not container.can_connect():
+            self.unit.status = WaitingStatus("Waiting for Pebble ready")
             return
 
         # push Prometheus config file to workload
