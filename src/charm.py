@@ -102,30 +102,31 @@ class PrometheusCharm(CharmBase):
         """
         container = self.unit.get_container(self._name)
 
-        with container.is_ready():
+        if not container.can_connect():
+            return
 
-            # push Prometheus config file to workload
-            prometheus_config = self._prometheus_config()
-            container.push(PROMETHEUS_CONFIG, prometheus_config)
-            logger.info("Pushed new configuration")
+        # push Prometheus config file to workload
+        prometheus_config = self._prometheus_config()
+        container.push(PROMETHEUS_CONFIG, prometheus_config)
+        logger.info("Pushed new configuration")
 
-            # push alert rules if any
-            self._set_alerts(container)
+        # push alert rules if any
+        self._set_alerts(container)
 
-            current_services = container.get_plan().services
-            new_layer = self._prometheus_layer
+        current_services = container.get_plan().services
+        new_layer = self._prometheus_layer
 
-            # Restart prometheus only if command line arguments have changed,
-            # otherwise just reload its configuration.
-            if current_services == new_layer.services:
-                self._prometheus_server.reload_configuration()
-                logger.info("Prometheus configuration reloaded")
-            else:
-                container.add_layer(self._name, new_layer, combine=True)
-                container.restart(self._name)
-                logger.info("Prometheus (re)started")
+        # Restart prometheus only if command line arguments have changed,
+        # otherwise just reload its configuration.
+        if current_services == new_layer.services:
+            self._prometheus_server.reload_configuration()
+            logger.info("Prometheus configuration reloaded")
+        else:
+            container.add_layer(self._name, new_layer, combine=True)
+            container.restart(self._name)
+            logger.info("Prometheus (re)started")
 
-            self.unit.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
