@@ -25,6 +25,18 @@ requires:
     interface: prometheus-rules
 """
 
+RELABEL_INSTANCE_CONFIG = {
+    "source_labels": [
+        "juju_model",
+        "juju_model_uuid",
+        "juju_application",
+        "juju_unit",
+    ],
+    "separator": "_",
+    "target_label": "instance",
+    "regex": "(.*)",
+}
+
 ALERT_RULE_1 = """- alert: CPU_Usage
   expr: cpu_usage_idle{is_container!=\"True\", group=\"promoagents-juju\"} < 10
   for: 5m
@@ -110,6 +122,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             }
         ]
         self.assertListEqual(scrape_jobs, expected_jobs)
@@ -195,6 +208,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             }
         ]
         self.assertListEqual(scrape_jobs, expected_jobs)
@@ -290,6 +304,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             },
             {
                 "job_name": "juju_testmodel_1234567_target-app-2_prometheus_scrape",
@@ -305,6 +320,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             },
         ]
 
@@ -436,6 +452,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             }
         ]
         self.assertListEqual(scrape_jobs, expected_jobs)
@@ -555,6 +572,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         },
                     }
                 ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             }
         ]
         self.assertListEqual(scrape_jobs, expected_jobs)

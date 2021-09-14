@@ -944,14 +944,14 @@ class MetricsEndpointAggregator(Object):
     address ("hostname") and port of the scrape target.
     """
 
-    def __init__(self, charm, relation_names, multi=False):
+    def __init__(self, charm, relation_names, relabel_instance=True):
         super().__init__(charm, relation_names["prometheus"])
 
         self._charm = charm
         self._target_relation = relation_names["scrape_target"]
         self._prometheus_relation = relation_names["prometheus"]
         self._alert_rules_relation = relation_names["alert_rules"]
-        self._multi_mode = multi
+        self._relabel_instance = relabel_instance
 
         prometheus_events = self._charm.on[self._prometheus_relation]
         self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
@@ -1130,6 +1130,27 @@ class MetricsEndpointAggregator(Object):
                 }
                 for unit_name, target in targets.items()
             ],
+            "relabel_configs": self._relabel_configs,
         }
 
         return job
+
+    @property
+    def _relabel_configs(self) -> list:
+        return (
+            [
+                {
+                    "source_labels": [
+                        "juju_model",
+                        "juju_model_uuid",
+                        "juju_application",
+                        "juju_unit",
+                    ],
+                    "separator": "_",
+                    "target_label": "instance",
+                    "regex": "(.*)",
+                }
+            ]
+            if self._relabel_instance
+            else []
+        )
