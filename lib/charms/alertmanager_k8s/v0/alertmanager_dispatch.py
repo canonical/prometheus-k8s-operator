@@ -1,10 +1,27 @@
-#!/usr/bin/env python3
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""# alertmanager library.
+"""# Alertmanager library.
 
 This library is designed to be used by a charm consuming or providing the `alerting` relation.
+
+This library is published as part of the
+[Alertmanager charm](https://charmhub.io/alertmanager-k8s).
+
+You can file bugs [here](https://github.com/canonical/alertmanager-operator/issues)!
+
+A typical example of including this library might be:
+
+```python
+# ...
+from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+
+class SomeApplication(CharmBase):
+  def __init__(self, *args):
+    # ...
+    self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
+    # ...
+```
 """
 
 import logging
@@ -15,9 +32,15 @@ from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
-LIBID = "abcdef1234"  # Unique ID that refers to the library forever
-LIBAPI = 0  # Must match the major version in the import path.
-LIBPATCH = 1  # The current patch version. Must be updated when changing.
+# The unique Charmhub library identifier, never change it
+LIBID = "37f1ca6f8fe84e3092ebbf6dc2885310"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +89,7 @@ class AlertmanagerConsumer(RelationManagerBase):
     A typical example of importing this library might be
 
     ```python
-    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+    from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
     ```
 
     In your charm's `__init__` method:
@@ -151,7 +174,7 @@ class AlertmanagerProvider(RelationManagerBase):
     A typical example of importing this library might be
 
     ```python
-    from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerProvider
+    from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerProvider
     ```
 
     In your charm's `__init__` method:

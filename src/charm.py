@@ -9,7 +9,7 @@ import os
 import re
 
 import yaml
-from charms.alertmanager_k8s.v0.alertmanager import AlertmanagerConsumer
+from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
