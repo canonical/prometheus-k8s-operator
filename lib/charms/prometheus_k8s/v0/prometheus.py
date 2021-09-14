@@ -909,7 +909,7 @@ class MetricsEndpointAggregator(Object):
     determine the model name and uuid of the scrape targets.
 
     `MetricsEndpointAggregator` should be used in place of
-    `MetricsEndpointProvider` in the following two use cases.
+    `MetricsEndpointProvider` in the following two use cases:
 
     1. Integrating one or more scrape targets that do not support the
     `prometheus_scrape` interface.
@@ -924,7 +924,7 @@ class MetricsEndpointAggregator(Object):
     relation with scrape targets, the relation for alert rules, and
     that with the Prometheus charms. For example
 
-    ```
+    ```python
     self._aggregator = MetricsEndpointAggregator(
         self,
         {
@@ -942,6 +942,39 @@ class MetricsEndpointAggregator(Object):
     derive from `MetricsEndpointAggregator` overriding the `_get_targets()`
     method, which is responsible for aggregating the unit name, host
     address ("hostname") and port of the scrape target.
+
+    `MetricsEndpointAggregator` also assumes that each unit of a
+    scrape target sets in its unit-level relation data a key named
+    "groups". The value of this key is expected to be the string
+    representation of list of Prometheus Alert rules in YAML format.
+    An example of a single such alert rule is
+
+    ```yaml
+    - alert: HighRequestLatency
+      expr: job:request_latency_seconds:mean5m{job="myjob"} > 0.5
+      for: 10m
+      labels:
+        severity: page
+      annotations:
+        summary: High request latency
+    ```
+
+    Once again if it is required to integrate with charms that do not
+    honour these assumptions about alert rules then an object derived
+    from `MetricsEndpointAggregator` may be used by overriding the
+    `_get_alert_rules()` method.
+
+    `MetricsEndpointAggregator` ensures that Prometheus scrape job
+    specifications and alert rules are annotated with Juju topology
+    information, just like `MetricsEndpointProvider` and
+    `MetricsEndpointConsumer` do.
+
+    By default `MetricsEndpointAggregator` ensures that Prometheus
+    "instance" labels refer to Juju topology. This ensures that
+    instance labels are stable over unit recreation. While it is not
+    advisable to change this option, if required it can be done by
+    setting the "relabel_instance" keyword argument to `False` when
+    constructing an aggregator object.
     """
 
     def __init__(self, charm, relation_names, relabel_instance=True):
@@ -953,24 +986,33 @@ class MetricsEndpointAggregator(Object):
         self._alert_rules_relation = relation_names["alert_rules"]
         self._relabel_instance = relabel_instance
 
+        # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
         self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
 
+        # manage list of Prometheus scrape jobs from related scrape targets
         target_events = self._charm.on[self._target_relation]
         self.framework.observe(target_events.relation_changed, self._update_prometheus_jobs)
         self.framework.observe(target_events.relation_departed, self._remove_prometheus_jobs)
 
+        # manage alert rules for Prometheus from related scrape targets
         alert_rule_events = self._charm.on[self._alert_rules_relation]
         self.framework.observe(alert_rule_events.relation_changed, self._update_alert_rules)
         self.framework.observe(alert_rule_events.relation_departed, self._remove_alert_rules)
 
     def _set_prometheus_data(self, event):
-        jobs = []
+        """Ensure every new Prometheus instances is updated.
+
+        Any time a new Prometheus unit joins the relation with
+        `MetricsEndpointAggregator`, that Prometheus unit is provided
+        with the complete set of existing scrape jobs and alert rules.
+        """
+        jobs = []  # list of scrape jobs, one per relation
         for relation in self.model.relations[self._target_relation]:
             if targets := self._get_targets(relation):
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
-        groups = []
+        groups = []  # list of alert rule groups, one group per relation
         for relation in self.model.relations[self._alert_rules_relation]:
             if unit_rules := self._get_alert_rules(relation):
                 appname = relation.app.name
@@ -982,18 +1024,31 @@ class MetricsEndpointAggregator(Object):
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
     def _update_prometheus_jobs(self, event):
+        """Update scrape jobs in response to scrape target changes.
+
+        When there is any change in relation data with any scrape
+        target, the Prometheus scrape job, for that specific target is
+        updated.
+        """
         if not (targets := self._get_targets(event.relation)):
             return
 
+        # new scrape job for the relation that has changed
         updated_job = self._static_scrape_job(targets, event.relation.app.name)
 
         for relation in self.model.relations[self._prometheus_relation]:
             jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            # list of scrape jobs that have not chagned
             jobs = [job for job in jobs if updated_job["job_name"] != job["job_name"]]
             jobs.append(updated_job)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
     def _remove_prometheus_jobs(self, event):
+        """Remove scrape jobs when a target departs.
+
+        Any time a scrape target departs, any Prometheus scrape job
+        associated with that specific scrape target is removed.
+        """
         job_name = self._job_name(event.relation.app.name)
         unit_name = event.unit.name
 
@@ -1007,8 +1062,10 @@ class MetricsEndpointAggregator(Object):
                 continue
             changed_job = changed_job[0]
 
+            # list of scrape jobs that have not changed
             jobs = list(filter(lambda job: job.get("job_name") != job_name, jobs))
 
+            # list of scrape jobs for units of the same application that still exist
             configs_kept = list(
                 filter(
                     lambda config: config.get("labels", {}).get("juju_unit", "") != unit_name,
@@ -1022,21 +1079,34 @@ class MetricsEndpointAggregator(Object):
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
     def _update_alert_rules(self, event):
+        """Update alert rules in response to scrape target changes.
+
+        When there is any change in alert rule relation data for any
+        scrape target, the list of alert rules for that specific
+        target is updated.
+        """
         if not (unit_rules := self._get_alert_rules(event.relation)):
             return
 
         appname = event.relation.app.name
         rules = self._label_alert_rules(unit_rules, appname)
+        # the alert rule group that has changed
         updated_group = {"name": self._group_name(appname), "rules": rules}
 
         for relation in self.model.relations[self._prometheus_relation]:
             alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
             groups = alert_rules.get("groups", [])
+            # list of alert rule groups that have not changed
             groups = [group for group in groups if updated_group["name"] != group["name"]]
             groups.append(updated_group)
             relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
     def _remove_alert_rules(self, event):
+        """Remove alert rules for departed targets.
+
+        Any time a scrape target departs any alert rules associated
+        with that specific scrape target is removed.
+        """
         group_name = self._group_name(event.relation.app.name)
         unit_name = event.unit.name
 
@@ -1055,8 +1125,10 @@ class MetricsEndpointAggregator(Object):
                 continue
             changed_group = changed_group[0]
 
+            # list of alert rule groups that have not changed
             groups = list(filter(lambda group: group["name"] != group_name, groups))
 
+            # list of alert rules not associated with departing unit
             rules_kept = list(
                 filter(
                     lambda rule: rule.get("labels").get("juju_unit") != unit_name,
@@ -1072,7 +1144,26 @@ class MetricsEndpointAggregator(Object):
                 json.dumps({"groups": groups}) if groups else "{}"
             )
 
-    def _get_targets(self, relation):
+    def _get_targets(self, relation) -> dict:
+        """Fetch scrape targets for a relation.
+
+        Scrape target information is returned for each unit in the
+        relation. This information contains the unit name, network
+        hostname (or address) for that unit, and port on which an
+        metrics endpoint is exposed in that unit.
+
+        Args:
+            relation: an `ops.model.Relation` object for which scrape
+                targets are required.
+
+        Returns:
+            a dictionary whose keys are names of the units in the
+            relation. There values associated with each key is itself
+            a dictionary of the form
+            ```
+            {"hostname": hostname, "port": port}
+            ```
+        """
         targets = {}
         for unit in relation.units:
             port = relation.data[unit].get("port", 80)
@@ -1081,7 +1172,24 @@ class MetricsEndpointAggregator(Object):
 
         return targets
 
-    def _get_alert_rules(self, relation):
+    def _get_alert_rules(self, relation) -> dict:
+        """Fetch alert rules for a relation.
+
+        Each unit of the related scrape target may have its own
+        associated alert rules. Alert rules for all units are returned
+        indexed by unit name.
+
+        Args:
+            relation: an `ops.model.Relation` object for which alert
+                rules are required.
+
+        Returns:
+            a dictionary whose keys are names of the units in the
+            relation. There values associated with each key is a list
+            of alert rules. Each rule is in dictionary format. The
+            structure "rule dictionary" corresponds to single
+            Prometheus alert rule.
+        """
         rules = {}
         for unit in relation.units:
             if unit_rules := yaml.safe_load(relation.data[unit].get("groups", "")):
@@ -1089,13 +1197,45 @@ class MetricsEndpointAggregator(Object):
 
         return rules
 
-    def _job_name(self, appname):
+    def _job_name(self, appname) -> str:
+        """Construct a scrape job name.
+
+        Each relation has its own unique scrape job name. All units in
+        the relation are scraped as part of the same scrape job.
+
+        Args:
+            appname: string name of a related application.
+
+        Retruns:
+            a string Prometheus scrape job name for the application.
+        """
         return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_prometheus_scrape"
 
-    def _group_name(self, appname):
+    def _group_name(self, appname) -> str:
+        """Construct name for an alert rule group.
+
+        Each unit in a relation may define its own alert rules. All
+        rules, for all units in a relation are grouped together and
+        given a single alert rule group name.
+
+        Args:
+            appname: string name of a related application.
+
+        Retruns:
+            a string Prometheus alert rules group name for the application.
+        """
         return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_alert_rules"
 
-    def _juju_topology(self, unit_name, appname):
+    def _juju_topology(self, unit_name, appname) -> dict:
+        """Construct juju topology labels.
+
+        Args:
+            unit_name: a string name of a unit.
+            appname: a string name of an application.
+
+        Returns:
+            a dictionary containing Juju topology labels.
+        """
         return {
             "juju_model": self.model.name,
             "juju_model_uuid": self.model.uuid[:7],
@@ -1103,7 +1243,18 @@ class MetricsEndpointAggregator(Object):
             "juju_unit": unit_name,
         }
 
-    def _label_alert_rules(self, unit_rules, appname):
+    def _label_alert_rules(self, unit_rules, appname) -> list:
+        """Apply juju topology labels to alert rules.
+
+        Args:
+            unit_rules: a list of alert rules, where each rule is in
+                dictionary format.
+            appname: a string name of the application to which the
+                alert rules belong.
+
+        Returns:
+            a list of alert rules with Juju topology labels.
+        """
         labeled_rules = []
         for unit_name, rules in unit_rules.items():
             for rule in rules:
@@ -1112,7 +1263,25 @@ class MetricsEndpointAggregator(Object):
 
         return labeled_rules
 
-    def _static_scrape_job(self, targets, application_name):
+    def _static_scrape_job(self, targets, application_name) -> dict:
+        """Construct a static scrape job for an application.
+
+        Args:
+            targets: a dictionary providing hostname and port for all
+                scrape target. The keys of this dictionary are unit
+                names. Values corresponding to these keys are
+                themselves a dictionary with keys "hostname" and
+                "port".
+            application_name: a string name of the application for
+                which this static scrape job is being constructed.
+
+
+        Returns:
+            A dictionary corresponding to a Prometheus static scrape
+            job configuration for one application. The returned
+            dictionary may be transformed into YAML and appended to
+            the list of any existing list of Prometheus static configs.
+        """
         juju_model = self.model.name
         juju_model_uuid = self.model.uuid
         job = {
@@ -1137,6 +1306,15 @@ class MetricsEndpointAggregator(Object):
 
     @property
     def _relabel_configs(self) -> list:
+        """Create Juju topology relabeling configuation.
+
+        Using Juju topology for instance labels ensures that these
+        labels are stable across unit recreation.
+
+        Returns:
+            a list of Prometheus relabling configurations. Each item in
+            this list is one relabel configuration.
+        """
         return (
             [
                 {
