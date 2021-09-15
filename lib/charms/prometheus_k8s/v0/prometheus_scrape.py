@@ -300,21 +300,49 @@ LIBPATCH = 6
 logger = logging.getLogger(__name__)
 
 
+JOB_KEYS = {
+    "job_name",
+    "metrics_path",
+    "static_configs",
+    "scrape_interval",
+    "scrape_timeout",
+    "proxy_url",
+    "relabel_configs",
+    "metrics_relabel_configs",
+    "sample_limit",
+    "label_limit",
+    "label_name_length_limit",
+    "label_value_lenght_limit",
+}
+DEFAULT_JOB = {
+    "metrics_path": "/metrics",
+    "static_configs": [{"targets": ["*:80"]}],
+}
+
+
 def _sanitize_scrape_configuration(job) -> dict:
     """Restrict permissible scrape configuration options.
 
+    If job is empty then a default job is returned. The
+    default job is
+
+    ```
+    {
+        "metrics_path": "/metrics",
+        "static_configs": [{"targets": ["*:80"]}],
+    }
+    ```
+
     Args:
-        job: a dict containing a single Prometheus job_name
+        job: a dict containing a single Prometheus job
             specification.
 
     Returns:
         a dictionary containing a sanitized job specification.
     """
-    return {
-        "job_name": job.get("job_name"),
-        "metrics_path": job.get("metrics_path", "/metrics"),
-        "static_configs": job.get("static_configs", [{"targets": ["*:80"]}]),
-    }
+    sanitized_job = DEFAULT_JOB.copy()
+    sanitized_job.update({key: value for key, value in job.items() if key in JOB_KEYS})
+    return sanitized_job
 
 
 class TargetsChangedEvent(EventBase):
