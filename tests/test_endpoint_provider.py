@@ -43,7 +43,20 @@ JOBS = [
         ],
     },
 ]
-ALLOWED_KEYS = {"job_name", "metrics_path", "static_configs"}
+ALLOWED_KEYS = {
+    "job_name",
+    "metrics_path",
+    "static_configs",
+    "scrape_interval",
+    "scrape_timeout",
+    "proxy_url",
+    "relabel_configs",
+    "metrics_relabel_configs",
+    "sample_limit",
+    "label_limit",
+    "label_name_length_limit",
+    "label_value_lenght_limit",
+}
 
 
 class EndpointProviderCharm(CharmBase):
