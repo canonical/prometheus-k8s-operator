@@ -576,12 +576,12 @@ class MetricsEndpointConsumer(Object):
         name = job.get("job_name")
         job_name = f"{job_name_prefix}_{name}" if name else job_name_prefix
 
-        config = {"job_name": job_name, "metrics_path": job["metrics_path"]}
+        labeled_job = {"job_name": job_name, "metrics_path": job["metrics_path"]}
 
         static_configs = job.get("static_configs")
-        config["static_configs"] = []
+        labeled_job["static_configs"] = []
 
-        relabel_config = {
+        instance_relabel_config = {
             "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
             "separator": "_",
             "target_label": "instance",
@@ -611,20 +611,23 @@ class MetricsEndpointConsumer(Object):
                 unitless_config = self._labeled_unitless_config(
                     unitless_targets, labels, scrape_metadata
                 )
-                config["static_configs"].append(unitless_config)
+                labeled_job["static_configs"].append(unitless_config)
 
             # label scrape targets that do have unit labels
             for host_name, host_address in hosts.items():
                 static_config = self._labeled_unit_config(
                     host_name, host_address, ports, labels, scrape_metadata
                 )
-                config["static_configs"].append(static_config)
-                if "juju_unit" not in relabel_config["source_labels"]:
-                    relabel_config["source_labels"].append("juju_unit")
+                labeled_job["static_configs"].append(static_config)
+                if "juju_unit" not in instance_relabel_config["source_labels"]:
+                    instance_relabel_config["source_labels"].append("juju_unit")
 
-        config["relabel_configs"] = [relabel_config]
+        # ensure topology relabeling of instance label is last in order of relabelings
+        relabel_configs = job.get("relabel_configs", [])
+        relabel_configs.append(instance_relabel_config)
+        labeled_job["relabel_configs"] = relabel_configs
 
-        return config
+        return labeled_job
 
     def _set_juju_labels(self, labels, scrape_metadata) -> dict:
         """Create a copy of metric labels with Juju topology information.
