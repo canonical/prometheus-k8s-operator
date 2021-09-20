@@ -83,6 +83,16 @@ $ tox -e unit
 
 It is expected that unit tests should provide at least 80% code coverage.
 
+### Manual testing
+
+You can manually test if related charms are being scraped by the following methods:
+- using the `series` query via `/api/v1/series?match[]=up`.
+- a flat view of all the exising labels is available via 
+  `/api/v1/labels`.
+
+For further details, refer to the 
+[querying api docs](https://prometheus.io/docs/prometheus/latest/querying/api/).
+
 ## Code Overview
 
 The core implementation of this charm is represented by the
