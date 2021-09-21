@@ -4,7 +4,10 @@
 import json
 import unittest
 
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    ALLOWED_KEYS,
+    MetricsEndpointConsumer,
+)
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -108,20 +111,6 @@ OTHER_SCRAPE_METADATA = {
     "model": "consumer-model",
     "model_uuid": "hijklm",
     "application": "other-consumer",
-}
-ALLOWED_KEYS = {
-    "job_name",
-    "metrics_path",
-    "static_configs",
-    "scrape_interval",
-    "scrape_timeout",
-    "proxy_url",
-    "relabel_configs",
-    "metrics_relabel_configs",
-    "sample_limit",
-    "label_limit",
-    "label_name_length_limit",
-    "label_value_lenght_limit",
 }
 
 

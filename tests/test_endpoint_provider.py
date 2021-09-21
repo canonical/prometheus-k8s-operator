@@ -6,7 +6,10 @@ import re
 import unittest
 from unittest.mock import patch
 
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    ALLOWED_KEYS,
+    MetricsEndpointProvider,
+)
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -45,20 +48,6 @@ JOBS = [
         ],
     },
 ]
-ALLOWED_KEYS = {
-    "job_name",
-    "metrics_path",
-    "static_configs",
-    "scrape_interval",
-    "scrape_timeout",
-    "proxy_url",
-    "relabel_configs",
-    "metrics_relabel_configs",
-    "sample_limit",
-    "label_limit",
-    "label_name_length_limit",
-    "label_value_lenght_limit",
-}
 
 
 class EndpointProviderCharm(CharmBase):
