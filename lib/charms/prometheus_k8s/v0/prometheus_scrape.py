@@ -591,7 +591,8 @@ class MetricsEndpointConsumer(Object):
         name = job.get("job_name")
         job_name = f"{job_name_prefix}_{name}" if name else job_name_prefix
 
-        labeled_job = {"job_name": job_name, "metrics_path": job["metrics_path"]}
+        labeled_job = job.copy()
+        labeled_job["job_name"] = job_name
 
         static_configs = job.get("static_configs")
         labeled_job["static_configs"] = []
