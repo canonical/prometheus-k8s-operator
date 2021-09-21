@@ -315,7 +315,7 @@ LIBPATCH = 6
 logger = logging.getLogger(__name__)
 
 
-JOB_KEYS = {
+ALLOWED_KEYS = {
     "job_name",
     "metrics_path",
     "static_configs",
@@ -356,7 +356,7 @@ def _sanitize_scrape_configuration(job) -> dict:
         a dictionary containing a sanitized job specification.
     """
     sanitized_job = DEFAULT_JOB.copy()
-    sanitized_job.update({key: value for key, value in job.items() if key in JOB_KEYS})
+    sanitized_job.update({key: value for key, value in job.items() if key in ALLOWED_KEYS})
     return sanitized_job
 
 
