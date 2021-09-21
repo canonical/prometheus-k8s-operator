@@ -28,6 +28,8 @@ JOBS = [
         "file_sd_configs": [{"files": "*some-files*"}],
         "job_name": "my-first-job",
         "metrics_path": "one-path",
+        "scrape_interval": "1s",
+        "disallowed_key": "irrelavent_value",
         "static_configs": [
             {
                 "targets": ["10.1.238.1:6000", "*:7000"],
