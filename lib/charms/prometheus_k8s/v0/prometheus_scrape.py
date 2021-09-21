@@ -163,6 +163,21 @@ each job must be given a unique name. For example
 It is also possible to configure other scrape related parameters using
 these job specifications as described by the Prometheus
 [documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
+The permissible subset of job specific scrape configuration parameters
+supported in a `MetricsEndpointProvider` job specification are:
+
+- `job_name`
+- `metrics_path`
+- `static_configs`
+- `scrape_interval`
+- `scrape_timeout`
+- `proxy_url`
+- `relabel_configs`
+- `metrics_relabel_configs`
+- `sample_limit`
+- `label_limit`
+- `label_name_length_limit`
+- `label_value_lenght_limit`
 
 ## Consumer Library Usage
 
