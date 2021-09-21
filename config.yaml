@@ -32,8 +32,18 @@ options:
       halved with little extra cpu load.
     type: boolean
     default: false
-  evaluation-interval:
+  evaluation_interval:
     description: |
       How frequently rules will be evaluated.
     type: string
     default: 1m
+  scrape_interval:
+    description: |
+      How frequently to scrape targets by default.
+    type: string
+    default: 1m
+  scrape_timeout:
+    description: |
+      How long until a scrape request times out (must be shorter than scrape_interval).
+    type: string
+    default: 10s

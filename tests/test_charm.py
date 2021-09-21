@@ -58,7 +58,7 @@ class TestCharm(unittest.TestCase):
                 "debug/info/warn/error/fatal allowed. "
                 "defaulting to DEBUG loglevel."
             ]
-            self.assertEqual(sorted(logger.output), expected_logs)
+            self.assertEqual(set(logger.output), set(expected_logs))
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "debug")
@@ -163,11 +163,11 @@ class TestCharm(unittest.TestCase):
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
             push.reset()
-            evalint_config["evaluation-interval"] = "{}{}".format(1, unit)
+            evalint_config["evaluation_interval"] = "{}{}".format(1, unit)
             self.harness.update_config(evalint_config)
             config = push.call_args[0]
             gconfig = global_config(config)
-            self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation-interval"])
+            self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation_interval"])
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")

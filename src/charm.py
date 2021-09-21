@@ -225,12 +225,14 @@ class PrometheusCharm(CharmBase):
             a dictionary consisting of global configuration for Prometheus.
         """
         config = self.model.config
-        global_config = {"scrape_interval": "1m", "scrape_timeout": "10s"}
+        global_config_keys = {"evaluation_interval", "scrape_interval", "scrape_timeout"}
 
-        if config.get("evaluation-interval") and self._is_valid_timespec(
-            config["evaluation-interval"]
-        ):
-            global_config["evaluation_interval"] = config["evaluation-interval"]
+        global_config = {}
+        for k in global_config_keys:
+            if self._is_valid_timespec(config[k]):
+                global_config[k] = config[k]
+            else:
+                logger.warning("Invalid timespec '%s' for %s", config[k], k)
 
         return global_config
 
@@ -292,6 +294,7 @@ class PrometheusCharm(CharmBase):
             a Pebble layer specification for the Prometheus workload container.
         """
         logger.debug("Building pebble layer")
+        logger.debug("Command: %s", self._command())
         layer_config = {
             "summary": "Prometheus layer",
             "description": "Pebble layer configuration for Prometheus",
