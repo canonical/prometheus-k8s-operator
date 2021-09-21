@@ -249,7 +249,7 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _prometheus_config(self) -> dict:
+    def _prometheus_config(self) -> str:
         """Construct Prometheus configuration.
 
         Returns:
