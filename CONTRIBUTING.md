@@ -85,10 +85,11 @@ It is expected that unit tests should provide at least 80% code coverage.
 
 ### Manual testing
 
-You can manually test if related charms are being scraped by the following methods:
-- using the `series` query via `/api/v1/series?match[]=up`.
-- a flat view of all the exising labels is available via 
-  `/api/v1/labels`.
+You can manually test if related charms are being scraped via the following endpoints:
+- `/api/v1/targets?state=active` 
+- `/api/v1/label/job/values`
+- `/api/v1/series?match[]=up`
+- `/api/v1/labels`
 
 For further details, refer to the 
 [querying api docs](https://prometheus.io/docs/prometheus/latest/querying/api/).
