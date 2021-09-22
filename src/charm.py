@@ -12,6 +12,9 @@ import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    PrometheusRemoteWriteProvider,
+)
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -56,6 +59,11 @@ class PrometheusCharm(CharmBase):
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
 
+        # Exposes remote write endpoints
+        self.remote_write = PrometheusRemoteWriteProvider(
+            self, relation_name="remote_write_server", port=self._port
+        )
+
         # Maintains list of Alertmanagers to which alerts are forwarded
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
@@ -77,6 +85,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_joined, self._configure)
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
+        self.framework.observe(self.on.remote_write_server_relation_joined, self._configure)
+        self.framework.observe(self.on.remote_write_server_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
@@ -169,6 +179,10 @@ class PrometheusCharm(CharmBase):
             external_url = f"http://{self._external_hostname}:{self._port}"
 
             args.append(f"--web.external-url={external_url}")
+
+        # enable remote write if an instance of the relation exists
+        if self.model.relations["remote-write-server"]:
+            args.append("--enable-feature=remote-write-receiver")
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]

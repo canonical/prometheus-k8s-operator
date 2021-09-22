@@ -1,0 +1,93 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+"""This library facilitates the prometheus_remote_write interface.
+
+For the provider charm no communication is necesssary. For the consumer charm,
+instantite a PrometheusRemoteWriteConsumer in the __init__ method of your charm
+class:
+
+```
+from charms.prometheus_k8s.v0.prometheus_remote_write import PrometheusRemoteWriteConsumer
+
+def __init__(self, *args):
+    ...
+    self.remote_write = PrometheusRemoteWriteConsumer(self, "remote-write")
+    ...
+```
+
+Then access the endpoints with:
+`self.remote_write.endpoints`
+or access a prometheus style config object with:
+`self.remote_write.configs`
+"""
+
+from typing import Generator, Union
+
+from ops.charm import CharmBase
+from ops.framework import EventBase, Object
+
+
+class PrometheusRemoteWriteConsumer(Object):
+    """A prometheus remote write consumer."""
+
+    def __init__(self, charm: CharmBase, relation_name: str):
+        """A prometheus remote write consumer.
+
+        Args:
+            charm: The charm object that instantiated this class.
+            relation_name: The relation name as defined in metadata.yaml.
+        """
+        super().__init__(charm, relation_name)
+        self._relation_name = relation_name
+
+    @property
+    def endpoints(self) -> Generator[str, None, None]:
+        """A list of remote write endpoints.
+
+        Returns:
+            A list of remote write endpoints.
+        """
+        for relation in self.model.relations[self._relation_name]:
+            for unit in relation.units:
+                # If external-address is provided use that, else use ingress-address
+                if (address := relation.data[unit].get("external-address")) is None:
+                    if (address := relation.data[unit].get("ingress-address")) is None:
+                        continue
+                if (port := relation.data[unit].get("port")) is None:
+                    continue
+                yield f"http://{address}:{port}/api/v1/write"
+
+    @property
+    def configs(self) -> Generator[dict, None, None]:
+        """A config object ready to be dropped in to a prometheus config file.
+
+        Returns:
+            A list of remote_write configs.
+        """
+        for endpoint in self.endpoints:
+            yield {"url": endpoint}
+
+
+class PrometheusRemoteWriteProvider(Object):
+    """A prometheus remote write provider."""
+
+    def __init__(self, charm: CharmBase, relation_name: str, port: Union[str, int]):
+        """A prometheus remote write provider.
+
+        Args:
+            charm: The charm object that instantiated this class.
+            relation_name: The relation name as defined in metadata.yaml.
+            port: The port on which you will serve prometheus remote write.
+        """
+        super().__init__(charm, relation_name)
+        self._charm = charm
+        self._port = str(port)
+        self.framework.observe(charm.on[relation_name].relation_created, self.on_relation_created)
+
+    def on_relation_created(self, event: EventBase) -> None:
+        """Event handler for the relation joined event.
+
+        Args:
+            event: The event which is triggering
+        """
+        event.relation.data[self._charm.unit]["port"] = self._port
