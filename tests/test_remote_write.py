@@ -74,4 +74,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
     def test_port_is_set(self, *unused):
         rel_id = self.harness.add_relation(PROVIDER_RELATION, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
-        assert self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)["port"] == "9090"
+        assert (
+            self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)["port"] == "9090"
+        )
