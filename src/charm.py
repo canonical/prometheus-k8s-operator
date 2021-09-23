@@ -61,7 +61,7 @@ class PrometheusCharm(CharmBase):
 
         # Exposes remote write endpoints
         self.remote_write = PrometheusRemoteWriteProvider(
-            self, relation_name="remote_write_server", port=self._port
+            self, relation_name="remote-write-server"
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
@@ -85,7 +85,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_joined, self._configure)
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
-        self.framework.observe(self.on.remote_write_server_relation_joined, self._configure)
+        self.framework.observe(self.on.remote_write_server_relation_created, self._configure)
         self.framework.observe(self.on.remote_write_server_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
@@ -137,7 +137,18 @@ class PrometheusCharm(CharmBase):
             container.restart(self._name)
             logger.info("Prometheus (re)started")
 
+        # Provide connection info to any remote write clients.
+        self._set_remote_write()
+
         self.unit.status = ActiveStatus()
+
+    def _set_remote_write(self):
+        """Provide connection info to any remote write clients."""
+        if self.model.relations["ingress"] and self.app.planned_units() == 1:
+            self.remote_write.set_endpoint(address=self._external_hostname, port=self._port)
+        else:
+            address = f"{self.unit.name.replace('/','-')}.{self.app.name}-endpoints.{self.model.name}.svc.cluster.local"
+            self.remote_write.set_endpoint(address=address, port=self._port)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.

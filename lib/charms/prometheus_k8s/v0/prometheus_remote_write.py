@@ -24,7 +24,7 @@ or access a prometheus style config object with:
 from typing import Generator, Union
 
 from ops.charm import CharmBase
-from ops.framework import EventBase, Object
+from ops.framework import Object
 
 
 class PrometheusRemoteWriteConsumer(Object):
@@ -50,9 +50,8 @@ class PrometheusRemoteWriteConsumer(Object):
         for relation in self.model.relations[self._relation_name]:
             for unit in relation.units:
                 # If external-address is provided use that, else use ingress-address
-                if (address := relation.data[unit].get("external-address")) is None:
-                    if (address := relation.data[unit].get("ingress-address")) is None:
-                        continue
+                if (address := relation.data[unit].get("address")) is None:
+                    continue
                 if (port := relation.data[unit].get("port")) is None:
                     continue
                 yield f"http://{address}:{port}/api/v1/write"
@@ -71,23 +70,24 @@ class PrometheusRemoteWriteConsumer(Object):
 class PrometheusRemoteWriteProvider(Object):
     """A prometheus remote write provider."""
 
-    def __init__(self, charm: CharmBase, relation_name: str, port: Union[str, int]):
+    def __init__(self, charm: CharmBase, relation_name: str):
         """A prometheus remote write provider.
 
         Args:
             charm: The charm object that instantiated this class.
             relation_name: The relation name as defined in metadata.yaml.
-            port: The port on which you will serve prometheus remote write.
         """
         super().__init__(charm, relation_name)
         self._charm = charm
-        self._port = str(port)
-        self.framework.observe(charm.on[relation_name].relation_created, self.on_relation_created)
+        self._relation_name = relation_name
 
-    def on_relation_created(self, event: EventBase) -> None:
-        """Event handler for the relation joined event.
+    def set_endpoint(self, address: str, port: Union[str, int]) -> None:
+        """Set the address and port on which you will serve prometheus remote write.
 
         Args:
-            event: The event which is triggering
+            address: The address of the remote write server
+            port: The port number
         """
-        event.relation.data[self._charm.unit]["port"] = self._port
+        for relation in self.model.relations[self._relation_name]:
+            relation.data[self._charm.unit]["address"] = address
+            relation.data[self._charm.unit]["port"] = str(port)

@@ -37,26 +37,18 @@ class TestRemoteWriteConsumer(unittest.TestCase):
     def test_addr(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
-        self.harness.update_relation_data(rel_id, "provider/0", {"ingress-address": "1.1.1.1"})
+        self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
         self.harness.update_relation_data(rel_id, "provider/0", {"port": "9090"})
         assert list(self.harness.charm.provider.endpoints) == ["http://1.1.1.1:9090/api/v1/write"]
 
     def test_config(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
-        self.harness.update_relation_data(rel_id, "provider/0", {"ingress-address": "1.1.1.1"})
+        self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
         self.harness.update_relation_data(rel_id, "provider/0", {"port": "9090"})
         assert list(self.harness.charm.provider.configs) == [
             {"url": "http://1.1.1.1:9090/api/v1/write"}
         ]
-
-    def test_external_address(self):
-        rel_id = self.harness.add_relation(RELATION, "provider")
-        self.harness.add_relation_unit(rel_id, "provider/0")
-        self.harness.update_relation_data(rel_id, "provider/0", {"ingress-address": "1.1.1.1"})
-        self.harness.update_relation_data(rel_id, "provider/0", {"port": "9090"})
-        self.harness.update_relation_data(rel_id, "provider/0", {"external-address": "2.2.2.2"})
-        assert list(self.harness.charm.provider.endpoints) == ["http://2.2.2.2:9090/api/v1/write"]
 
     def test_no_address(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
@@ -67,7 +59,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
     def test_no_port(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
-        self.harness.update_relation_data(rel_id, "provider/0", {"ingress-address": "1.1.1.1"})
+        self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
         assert list(self.harness.charm.provider.endpoints) == []
 
 
@@ -82,7 +74,4 @@ class TestRemoteWriteProvider(unittest.TestCase):
     def test_port_is_set(self, *unused):
         rel_id = self.harness.add_relation(PROVIDER_RELATION, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
-        self.harness.charm.on[PROVIDER_RELATION].relation_created.emit(
-            self.harness.charm.model.get_relation(PROVIDER_RELATION, rel_id)
-        )
-        assert self.harness.get_relation_data(rel_id, "port") == "9090"
+        assert self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)["port"] == "9090"
