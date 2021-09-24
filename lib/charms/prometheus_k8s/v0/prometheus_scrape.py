@@ -789,12 +789,13 @@ class MetricsEndpointProvider(Object):
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
 
         events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_joined, self._set_scrape_metadata)
-        self.framework.observe(events.relation_changed, self._set_scrape_metadata)
+        self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
+        self.framework.observe(events.relation_changed, self._set_scrape_job_spec)
         self.framework.observe(self._service_event, self._set_unit_ip)
+        self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
-    def _set_scrape_metadata(self, event):
-        """Ensure scrape targets metadata is made available to Prometheus.
+    def _set_scrape_job_spec(self, event):
+        """Ensure scrape target information is made available to Prometheus.
 
         When a metrics provider charm is related to a Prometheus charm, the
         metrics provider sets metadata related to its own scrape
@@ -807,20 +808,19 @@ class MetricsEndpointProvider(Object):
                 forward scrape jobs, alert rules, metrics endpoint host addresses
                 and related metadata to the Prometheus charm.
         """
-        event.relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
-            self._charm.model.get_binding(event.relation).network.bind_address
-        )
+        self._set_unit_ip(event)
 
         if not self._charm.unit.is_leader():
             return
 
-        event.relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
+        for relation in self._charm.model.relations[self._relation_name]:
+            relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
+            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
 
-        if alert_groups := self._labeled_alert_groups:
-            event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                {"groups": alert_groups}
-            )
+            if alert_groups := self._labeled_alert_groups:
+                relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                    {"groups": alert_groups}
+                )
 
     def _set_unit_ip(self, event):
         """Set unit host address.
