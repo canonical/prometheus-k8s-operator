@@ -21,7 +21,7 @@ or access a prometheus style config object with:
 `self.remote_write.configs`
 """
 
-from typing import Generator, Union
+from typing import List, Union
 
 from ops.charm import CharmBase
 from ops.framework import Object
@@ -41,12 +41,13 @@ class PrometheusRemoteWriteConsumer(Object):
         self._relation_name = relation_name
 
     @property
-    def endpoints(self) -> Generator[str, None, None]:
+    def endpoints(self) -> List[str]:
         """A list of remote write endpoints.
 
         Returns:
             A list of remote write endpoints.
         """
+        endpoints = []
         for relation in self.model.relations[self._relation_name]:
             for unit in relation.units:
                 # If external-address is provided use that, else use ingress-address
@@ -54,17 +55,17 @@ class PrometheusRemoteWriteConsumer(Object):
                     continue
                 if (port := relation.data[unit].get("port")) is None:
                     continue
-                yield f"http://{address}:{port}/api/v1/write"
+                endpoints.append(f"http://{address}:{port}/api/v1/write")
+        return endpoints
 
     @property
-    def configs(self) -> Generator[dict, None, None]:
+    def configs(self) -> list:
         """A config object ready to be dropped in to a prometheus config file.
 
         Returns:
             A list of remote_write configs.
         """
-        for endpoint in self.endpoints:
-            yield {"url": endpoint}
+        return [{"url": endpoint} for endpoint in self.endpoints]
 
 
 class PrometheusRemoteWriteProvider(Object):
