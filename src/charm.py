@@ -120,14 +120,17 @@ class PrometheusCharm(CharmBase):
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
         if current_services == new_layer.services:
-            self._prometheus_server.reload_configuration()
-            logger.info("Prometheus configuration reloaded")
+            reloaded = self._prometheus_server.reload_configuration()
+            if not reloaded:
+                self.unit.status = BlockedStatus("Failed to load Prometheus config")
+            else:
+                self.unit.status = ActiveStatus()
+                logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
             container.restart(self._name)
             logger.info("Prometheus (re)started")
-
-        self.unit.status = ActiveStatus()
+            self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
