@@ -146,7 +146,10 @@ class PrometheusCharm(CharmBase):
         """Provide connection info to any remote write clients."""
         # Remote write needs to address each individual pod but the ingress relation does not
         # expose pods. Thus we can only use the ingress relation if scale is 1 at the moment
-        if self.model.relations["ingress"] and self.app.planned_units() == 1:
+        if self.model.relations["ingress"]:
+            if self.app.planned_units() > 1:
+                self.unit.status = BlockedStatus("Ingress does not support scale greater than 1")
+                return
             self.remote_write.set_endpoint(address=self._external_hostname, port=self._port)
         else:
             address = f"{self.unit.name.replace('/','-')}.{self.app.name}-endpoints.{self.model.name}.svc.cluster.local"
