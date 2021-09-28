@@ -25,6 +25,7 @@ BAD_JOBS = [
                     "juju_application": "bad_application",
                     "juju_model_uuid": "bad_uuid",
                     "juju_unit": "bad_unit",
+                    "juju_charm": "bad_charm",
                 },
             }
         ],
@@ -35,6 +36,7 @@ SCRAPE_METADATA = {
     "model": "consumer-model",
     "model_uuid": "abcdef",
     "application": "consumer",
+    "charm_name": "test-charm",
 }
 FULL_TARGET = "10.1.238.1:6000"
 SCRAPE_JOBS = [
@@ -111,6 +113,7 @@ OTHER_SCRAPE_METADATA = {
     "model": "consumer-model",
     "model_uuid": "hijklm",
     "application": "other-consumer",
+    "charm_name": "other-charm",
 }
 
 

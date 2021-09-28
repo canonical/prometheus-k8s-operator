@@ -660,7 +660,8 @@ class MetricsEndpointConsumer(Object):
         juju_labels = labels.copy()  # deep copy not needed
         juju_labels["juju_model"] = f"{scrape_metadata['model']}"
         juju_labels["juju_model_uuid"] = f"{scrape_metadata['model_uuid']}"
-        juju_labels["juju_application"] = f"{format(scrape_metadata['application'])}"
+        juju_labels["juju_application"] = f"{scrape_metadata['application']}"
+        juju_labels["juju_charm"] = f"{scrape_metadata['charm_name']}"
 
         return juju_labels
 
@@ -939,6 +940,7 @@ class MetricsEndpointProvider(Object):
             "model": f"{self._charm.model.name}",
             "model_uuid": f"{self._charm.model.uuid}",
             "application": f"{self._charm.model.app.name}",
+            "charm_name": f"{self._charm.meta.name}",
         }
         return metadata
 
