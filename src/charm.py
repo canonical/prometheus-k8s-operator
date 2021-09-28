@@ -138,11 +138,11 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus (re)started")
 
         # Provide connection info to any remote write clients.
-        self._set_remote_write()
+        self._set_remote_write_address()
 
         self.unit.status = ActiveStatus()
 
-    def _set_remote_write(self):
+    def _set_remote_write_address(self):
         """Provide connection info to any remote write clients."""
         # Remote write needs to address each individual pod but the ingress relation does not
         # expose pods. Thus we can only use the ingress relation if scale is 1 at the moment
