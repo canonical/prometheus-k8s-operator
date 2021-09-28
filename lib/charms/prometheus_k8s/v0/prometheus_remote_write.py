@@ -21,10 +21,11 @@ or access a prometheus style config object with:
 `self.remote_write.configs`
 """
 
-from typing import List, Union
+from typing import List, Optional, Union
 
 from ops.charm import CharmBase
 from ops.framework import Object
+from ops.model import BlockedStatus
 
 
 class PrometheusRemoteWriteConsumer(Object):
@@ -82,13 +83,42 @@ class PrometheusRemoteWriteProvider(Object):
         self._charm = charm
         self._relation_name = relation_name
 
-    def set_endpoint(self, address: str, port: Union[str, int]) -> None:
+    def set_endpoint(
+        self,
+        port: Union[str, int],
+        address: Optional[str] = None,
+        ingress_relation: Optional[str] = None,
+        ingress_address: Optional[str] = None,
+    ) -> None:
         """Set the address and port on which you will serve prometheus remote write.
 
+        If address is provided, all automatic logic will be skipped and the address provided will
+        be used. Otherwise the method will attempt to use the ingress information if it is
+        provided. Finally it will fall back to a predictable hostname if neither of the other two
+        methods worked.
+
         Args:
-            address: The address of the remote write server
             port: The port number
+            address: The address of the remote write server
+            ingress_relation: The name of the ingress relation to use
+            ingress_address: The ingress address
         """
+        if not address:
+            # Remote write needs to address each individual pod but the ingress relation does not
+            # expose pods. Thus we can only use the ingress relation if scale is 1 at the moment
+            if (
+                ingress_relation is not None
+                and ingress_address is not None
+                and self.model.relations[ingress_relation]
+            ):
+                if self._charm.app.planned_units() > 1:
+                    self._charm.unit.status = BlockedStatus(
+                        "Ingress does not support scale greater than 1"
+                    )
+                    return
+                address = ingress_address
+            else:
+                address = f"{self._charm.unit.name.replace('/','-')}.{self._charm.app.name}-endpoints.{self._charm.model.name}.svc.cluster.local"
         for relation in self.model.relations[self._relation_name]:
             relation.data[self._charm.unit]["address"] = address
             relation.data[self._charm.unit]["port"] = str(port)

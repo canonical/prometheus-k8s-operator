@@ -138,22 +138,11 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus (re)started")
 
         # Provide connection info to any remote write clients.
-        self._set_remote_write_address()
+        self.remote_write.set_endpoint(
+            port=self._port, ingress_relation="ingress", ingress_address=self._external_hostname
+        )
 
         self.unit.status = ActiveStatus()
-
-    def _set_remote_write_address(self):
-        """Provide connection info to any remote write clients."""
-        # Remote write needs to address each individual pod but the ingress relation does not
-        # expose pods. Thus we can only use the ingress relation if scale is 1 at the moment
-        if self.model.relations["ingress"]:
-            if self.app.planned_units() > 1:
-                self.unit.status = BlockedStatus("Ingress does not support scale greater than 1")
-                return
-            self.remote_write.set_endpoint(address=self._external_hostname, port=self._port)
-        else:
-            address = f"{self.unit.name.replace('/','-')}.{self.app.name}-endpoints.{self.model.name}.svc.cluster.local"
-            self.remote_write.set_endpoint(address=address, port=self._port)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
