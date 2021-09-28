@@ -34,14 +34,14 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
-    def test_addr(self):
+    def test_address_is_set(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
         self.harness.update_relation_data(rel_id, "provider/0", {"port": "9090"})
         assert list(self.harness.charm.provider.endpoints) == ["http://1.1.1.1:9090/api/v1/write"]
 
-    def test_config(self):
+    def test_config_is_set(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
@@ -50,13 +50,13 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             {"url": "http://1.1.1.1:9090/api/v1/write"}
         ]
 
-    def test_no_address(self):
+    def test_no_address_provided(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(rel_id, "provider/0", {"port": "9090"})
         assert list(self.harness.charm.provider.endpoints) == []
 
-    def test_no_port(self):
+    def test_no_port_provided(self):
         rel_id = self.harness.add_relation(RELATION, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(rel_id, "provider/0", {"address": "1.1.1.1"})
