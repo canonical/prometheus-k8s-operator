@@ -61,7 +61,7 @@ class PrometheusCharm(CharmBase):
 
         # Exposes remote write endpoints
         self.remote_write = PrometheusRemoteWriteProvider(
-            self, relation_name="remote-write-server"
+            self, relation_name="receive-remote-write"
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
@@ -85,8 +85,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_joined, self._configure)
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
-        self.framework.observe(self.on.remote_write_server_relation_created, self._configure)
-        self.framework.observe(self.on.remote_write_server_relation_broken, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
@@ -192,7 +192,7 @@ class PrometheusCharm(CharmBase):
             args.append(f"--web.external-url={external_url}")
 
         # enable remote write if an instance of the relation exists
-        if self.model.relations["remote-write-server"]:
+        if self.model.relations["receive-remote-write"]:
             args.append("--enable-feature=remote-write-receiver")
 
         # get log level

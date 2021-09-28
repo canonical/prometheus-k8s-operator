@@ -13,7 +13,7 @@ from ops.testing import Harness
 from charm import PrometheusCharm
 
 RELATION = "remote-write"
-PROVIDER_RELATION = "remote-write-server"
+PROVIDER_RELATION = "receive-remote-write"
 METADATA = f"""
 name: consumer-tester
 requires:
