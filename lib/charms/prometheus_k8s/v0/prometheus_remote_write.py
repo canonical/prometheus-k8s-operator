@@ -36,7 +36,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         Args:
             charm: The charm object that instantiated this class.
-            relation_name: The relation name as defined in metadata.yaml.
+            relation_name: The remote_write relation name as defined in metadata.yaml.
         """
         super().__init__(charm, relation_name)
         self._relation_name = relation_name
@@ -77,7 +77,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         Args:
             charm: The charm object that instantiated this class.
-            relation_name: The relation name as defined in metadata.yaml.
+            relation_name: The remote_write relation name as defined in metadata.yaml.
         """
         super().__init__(charm, relation_name)
         self._charm = charm
