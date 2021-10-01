@@ -12,6 +12,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from ops.charm import CharmBase
 from ops.framework import StoredState
+from ops.model import ModelError
 from ops.testing import Harness
 
 RELATION_NAME = "metrics-endpoint"
@@ -59,7 +60,19 @@ class EndpointProviderCharm(CharmBase):
         self.provider = MetricsEndpointProvider(
             self,
             RELATION_NAME,
-            service_event=self.on.prometheus_tester_pebble_ready,
+            jobs=JOBS,
+        )
+        self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
+
+
+class EndpointProviderDefaultCharm(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self,
             jobs=JOBS,
         )
         self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
@@ -71,6 +84,43 @@ class TestEndpointProvider(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
+
+    def test_provider_no_scrape_relations_in_meta(self):
+        """Tests that the Provider raises exception when no promethes_scrape in meta."""
+        self.harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                  prometheus-tester: {}
+                """,
+        )
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+
+        self.assertRaises(ModelError, self.harness.begin)
+
+    def test_provider_multiple_scrape_relations_in_meta(self):
+        """Tests that the Provider raises exception when no promethes_scrape in meta."""
+        self.harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                  prometheus-tester: {}
+                providers:
+                  rel1:
+                    interface: prometheus_scrape
+                  rel2:
+                    interface: prometheus_scrape
+                """,
+        )
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+
+        self.assertRaises(ModelError, self.harness.begin)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_sets_scrape_metadata(self, _):

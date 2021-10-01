@@ -54,7 +54,7 @@ class PrometheusCharm(CharmBase):
         )
 
         # Gathers scrape job information from metrics endpoints
-        self.metrics_consumer = MetricsEndpointConsumer(self, "metrics-endpoint")
+        self.metrics_consumer = MetricsEndpointConsumer(self)
 
         # Maintains list of Alertmanagers to which alerts are forwarded
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
