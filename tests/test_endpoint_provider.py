@@ -112,7 +112,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertRaises(RelationNotFoundError, harness.begin)
 
     def test_provider_default_scrape_relation_wrong_interface(self):
-        """Tests that the Provider raises exception if the metrics-endpoint relation has the wrong interface."""
+        """Tests that Provider raises exception if the default relation has the wrong interface."""
         harness = Harness(
             EndpointProviderDefaultCharm,
             # No provider relation with `prometheus_scrape` as interface
@@ -129,8 +129,8 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationInterfaceMismatchError, harness.begin)
 
-    def test_provider_default_scrape_relation_wrong_interface(self):
-        """Tests that the Provider raises exception if the metrics-endpoint relation is required."""
+    def test_provider_default_scrape_relation_wrong_role(self):
+        """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
             EndpointProviderDefaultCharm,
             # No provider relation with `prometheus_scrape` as interface
