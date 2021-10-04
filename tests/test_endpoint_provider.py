@@ -9,10 +9,12 @@ from unittest.mock import patch
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     MetricsEndpointProvider,
+    RelationInterfaceMismatchError,
+    RelationNotFoundError,
+    RelationRoleMismatchError,
 )
 from ops.charm import CharmBase
 from ops.framework import StoredState
-from ops.model import ModelError
 from ops.testing import Harness
 
 RELATION_NAME = "metrics-endpoint"
@@ -25,6 +27,15 @@ requires:
   {RELATION_NAME}:
     interface: prometheus_scrape
 """
+PROVIDER_META = f"""
+name: consumer-tester
+containers:
+  prometheus-tester:
+provides:
+  {RELATION_NAME}:
+    interface: prometheus_scrape
+"""
+
 JOBS = [
     {
         "global": {"scrape_interval": "1h"},
@@ -71,56 +82,70 @@ class EndpointProviderDefaultCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        self.provider = MetricsEndpointProvider(
-            self,
-            jobs=JOBS,
-        )
+        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
         self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
 
 
 class TestEndpointProvider(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
 
-    def test_provider_no_scrape_relations_in_meta(self):
+    def test_provider_default_scrape_relations_not_in_meta(self):
         """Tests that the Provider raises exception when no promethes_scrape in meta."""
-        self.harness = Harness(
+        harness = Harness(
             EndpointProviderDefaultCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
                 name: consumer-tester
                 containers:
-                  prometheus-tester: {}
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                provides:
+                    non-standard-name:
+                        interface: prometheus_scrape
                 """,
         )
-        self.addCleanup(self.harness.cleanup)
-        self.harness.set_leader(True)
+        self.assertRaises(RelationNotFoundError, harness.begin)
 
-        self.assertRaises(ModelError, self.harness.begin)
-
-    def test_provider_multiple_scrape_relations_in_meta(self):
-        """Tests that the Provider raises exception when no promethes_scrape in meta."""
-        self.harness = Harness(
+    def test_provider_default_scrape_relation_wrong_interface(self):
+        """Tests that the Provider raises exception if the metrics-endpoint relation has the wrong interface."""
+        harness = Harness(
             EndpointProviderDefaultCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
                 name: consumer-tester
                 containers:
-                  prometheus-tester: {}
-                providers:
-                  rel1:
-                    interface: prometheus_scrape
-                  rel2:
-                    interface: prometheus_scrape
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                provides:
+                    metrics-endpoint:
+                        interface: not_prometheus_scrape
                 """,
         )
-        self.addCleanup(self.harness.cleanup)
-        self.harness.set_leader(True)
+        self.assertRaises(RelationInterfaceMismatchError, harness.begin)
 
-        self.assertRaises(ModelError, self.harness.begin)
+    def test_provider_default_scrape_relation_wrong_interface(self):
+        """Tests that the Provider raises exception if the metrics-endpoint relation is required."""
+        harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                requires:
+                    metrics-endpoint:
+                        interface: prometheus_scrape
+                """,
+        )
+        self.assertRaises(RelationRoleMismatchError, harness.begin)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_sets_scrape_metadata(self, _):
@@ -229,7 +254,7 @@ class TestEndpointProvider(unittest.TestCase):
 
 class TestBadConsumers(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()

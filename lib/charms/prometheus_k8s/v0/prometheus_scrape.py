@@ -297,14 +297,12 @@ relation data provide eponymous information.
 import json
 import logging
 import sys
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import yaml
-from ops.charm import CharmBase
+from ops.charm import CharmBase, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import ModelError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "bc84295fef5f4049878f07b131968ee2"
@@ -340,79 +338,104 @@ DEFAULT_JOB = {
 }
 
 
+DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 
-class RelationDirection(Enum):
-    """Relations can be either provided or required by a charm."""
+class RelationNotFoundError(Exception):
+    """Raised if there is no relation with the given name."""
 
-    PROVIDED = 1
-    REQUIRED = 2
+    def __init__(self, relation_name: str):
+        self.relation_name = relation_name
+        self.message = f"No relation named '{relation_name}' found"
+
+        super().__init__(self.message)
 
 
-class NoRelationWithInterfaceFoundError(Exception):
-    """No relations with the given interface are found in the charm meta."""
+class RelationInterfaceMismatchError(Exception):
+    """Raised if the relation with the given name has a different interface."""
 
-    def __init__(self, charm: CharmBase, relation_interface: str):
-        self.charm = charm
-        self.relation_interface = relation_interface
+    def __init__(
+        self,
+        relation_name: str,
+        expected_relation_interface: str,
+        actual_relation_interface: str,
+    ):
+        self.relation_name = relation_name
+        self.expected_relation_interface = expected_relation_interface
+        self.actual_relation_interface = actual_relation_interface
         self.message = (
-            f"No relations with interface '{relation_interface}' found in the meta "
-            f"of the '{charm.meta.name}' charm"
+            f"The '{relation_name}' relation has '{actual_relation_interface}' as "
+            f"interface rather than the expected '{expected_relation_interface}'"
         )
 
         super().__init__(self.message)
 
 
-class MultipleRelationsWithInterfaceFoundError(Exception):
-    """Multiple relations with the given interface are found in the charm meta."""
+class RelationRoleMismatchError(Exception):
+    """Raised if the relation with the given name has a different direction."""
 
-    def __init__(self, charm: CharmBase, relation_interface: str, relations: list):
-        self.charm = charm
-        self.relation_interface = relation_interface
-        self.relations = relations
+    def __init__(
+        self,
+        relation_name: str,
+        expected_relation_role: RelationRole,
+        actual_relation_role: RelationRole,
+    ):
+        self.relation_name = relation_name
+        self.expected_relation_interface = expected_relation_role
+        self.actual_relation_role = actual_relation_role
         self.message = (
-            f"Multiple relations with interface '{relation_interface}' found in the meta "
-            f"of the '{charm.name}' charm"
+            f"The '{relation_name}' relation has role '{repr(actual_relation_role)}' "
+            f"rather than the expected '{repr(expected_relation_role)}'"
         )
 
         super().__init__(self.message)
 
 
-def _get_single_relation_by_interface(
-    charm: CharmBase, relation_interface: str, relation_direction: RelationDirection
+def _validate_relation_by_interface_and_direction(
+    charm: CharmBase,
+    relation_name: str,
+    expected_relation_interface: str,
+    expected_relation_role: RelationRole,
 ) -> str:
-    """Retrive the only relation in the charm meta that uses the given interface.
+    """Verifies that a relation has the necessary characteristics.
+
+    Verifies that the `relation_name` provided: (1) exists in metadata.yaml,
+    (2) declares as interface the interface name passed as `relation_interface`
+    and (3) has the right "direction", i.e., it is a relation that `charm`
+    provides or requires.
 
     Args:
         charm: a `CharmBase` object to scan for the matching relation.
-        relation_interface: the string name of the relation interface to look up.
-            If `charm` has exactly one relation with this interface, the relation's
-            name is returned. If none or multiple relations with the provided interface
-            are found, this method will raise either an exception of type
-            NoRelationWithInterfaceFoundError or MultipleRelationsWithInterfaceFoundError,
-            respectively.
-        relation_direction: whether the relation to look up is either one of the provided
-            or required relations.
+        relation_name: the name of the relation to be verified.
+        expected_relation_interface: the interface name to be matched by the
+            relation named `relation_name`.
+        expected_relation_role: whether the `relation_name` must be either
+            provided or required by `charm`.
     """
-    relations_with_right_direction = (
-        charm.meta.provides
-        if relation_direction == RelationDirection.PROVIDED
-        else charm.meta.requires
-    )
+    if relation_name not in charm.meta.relations:
+        raise RelationNotFoundError(relation_name)
 
-    relations = [
-        relation_name
-        for relation_name, relation_meta in relations_with_right_direction.items()
-        if relation_meta.interface_name == relation_interface
-    ]
+    relation: RelationMeta = charm.meta.relations[relation_name]
 
-    if len(relations) == 1:
-        return relations[0]
-    elif len(relations) == 0:
-        raise NoRelationWithInterfaceFoundError(charm, relation_interface)
+    actual_relation_interface = relation.interface_name
+    if actual_relation_interface != expected_relation_interface:
+        raise RelationInterfaceMismatchError(
+            relation_name, expected_relation_interface, actual_relation_interface
+        )
+
+    if expected_relation_role == RelationRole.provides:
+        if relation_name not in charm.meta.provides:
+            raise RelationRoleMismatchError(
+                relation_name, RelationRole.provides, RelationRole.requires
+            )
+    elif expected_relation_role == RelationRole.requires:
+        if relation_name not in charm.meta.requires:
+            raise RelationRoleMismatchError(
+                relation_name, RelationRole.requires, RelationRole.provides
+            )
     else:
-        raise MultipleRelationsWithInterfaceFoundError(charm, relation_interface, relations)
+        raise Exception(f"Unexpected RelationDirection: {expected_relation_role}")
 
 
 def _sanitize_scrape_configuration(job) -> dict:
@@ -467,34 +490,21 @@ class MetricsEndpointConsumer(Object):
 
     on = MonitoringEvents()
 
-    def __init__(self, charm: CharmBase, relation_name: Optional[str] = None):
+    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
         """A Prometheus based Monitoring service provider.
 
         Args:
             charm: a `CharmBase` instance that manages this
                 instance of the Prometheus service.
-            relation_name: string name of the relation over which scrape target
-                information is gathered by the Prometheus charm.
+            relation_name: an optional string name of the relation between `charm`
+                and the Prometheus charmed service. The default is "metrics-endpoint".
+                It is strongly advised not to change the default, so that people
+                deploying your charm will have a consistent experience with all
+                other charms that consume metrics endpoints.
         """
-        if not relation_name:
-            try:
-                # Check if there is just one relation with the right interface
-                relation_name = _get_single_relation_by_interface(
-                    charm, RELATION_INTERFACE_NAME, RelationDirection.REQUIRED
-                )
-            except NoRelationWithInterfaceFoundError:
-                raise ModelError(
-                    f"No required relation with the '{RELATION_INTERFACE_NAME}' interface "
-                    f"found; did you add a relation with the '{RELATION_INTERFACE_NAME}' "
-                    "interface in the charm's metadata.yaml file?"
-                )
-            except MultipleRelationsWithInterfaceFoundError as e:
-                raise ModelError(
-                    f"Multiple required relations with the '{RELATION_INTERFACE_NAME}' "
-                    f"interface found: {e.relations}; you must specify which relation "
-                    f"should be managed by this {type(self)} by providing the "
-                    "`relation_name` argument."
-                )
+        _validate_relation_by_interface_and_direction(
+            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.requires
+        )
 
         super().__init__(charm, relation_name)
         self._charm = charm
@@ -851,7 +861,7 @@ class MetricsEndpointProvider(Object):
     def __init__(
         self,
         charm,
-        relation_name: Optional[str] = None,
+        relation_name: str = DEFAULT_RELATION_NAME,
         jobs=[],
         alert_rules_path: Optional[str] = None,
     ):
@@ -933,16 +943,10 @@ class MetricsEndpointProvider(Object):
                 `MetricsEndpointProvider` object. Typically this is
                 `self` in the instantiating class.
             relation_name: an optional string name of the relation between `charm`
-                and the Prometheus charmed service. You will need to specify this
-                parameter only if your charm provides more than one relation with
-                `prometheus_scrape` as interface, which is very uncommon: if your
-                charm has multiple metrics endpoints, you can expose them over
-                one relation as separate entries in the `jobs` list.
-                If `relation_name` is not specified, the
-                `MetricsEndpointProvider` will look for the existence of precisely
-                one relation provided by the charm and using the `prometheus_scrape`
-                interface and, if none or multiple are found, it will raise a
-                ops.model.ModelError exception.
+                and the Prometheus charmed service. The default is "metrics-endpoint".
+                It is strongly advised not to change the default, so that people
+                deploying your charm will have a consistent experience with all
+                other charms that provide metrics endpoints.
             jobs: an optional list of dictionaries where each
                 dictionary represents the Prometheus scrape
                 configuration for a single job. When not provided, a
@@ -954,24 +958,9 @@ class MetricsEndpointProvider(Object):
                 resolved from the directory hosting the charm entry file.
                 The alert rules are automatically update on charm upgrade.
         """
-        if not relation_name:
-            try:
-                # Check if there is just one relation with the right interface
-                relation_name = _get_single_relation_by_interface(
-                    charm, RELATION_INTERFACE_NAME, RelationDirection.PROVIDED
-                )
-            except NoRelationWithInterfaceFoundError:
-                raise ModelError(
-                    f"No provided relation with the '{RELATION_INTERFACE_NAME}' interface found; "
-                    f"did you add a relation with the '{RELATION_INTERFACE_NAME}' interface in "
-                    "the charm's metadata.yaml file?"
-                )
-            except MultipleRelationsWithInterfaceFoundError as e:
-                raise ModelError(
-                    f"Multiple provided relations with the '{RELATION_INTERFACE_NAME}' interface "
-                    f"found: {e.relations}; you must specify which relation should be managed by "
-                    f"this {type(self)} by providing the `relation_name` argument."
-                )
+        _validate_relation_by_interface_and_direction(
+            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
+        )
 
         if not alert_rules_path:
             alert_rules_path = _resolve_dir_against_main_path("prometheus_alert_rules")
