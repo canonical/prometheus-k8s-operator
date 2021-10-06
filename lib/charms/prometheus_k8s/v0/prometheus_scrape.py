@@ -341,6 +341,8 @@ DEFAULT_JOB = {
 DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
+DEFAULT_ALERT_RULES_RELATIVE_PATH = "./prometheus_alert_rules"
+
 
 class RelationNotFoundError(Exception):
     """Raised if there is no relation with the given name."""
@@ -837,6 +839,20 @@ class MetricsEndpointConsumer(Object):
         return static_config
 
 
+class InvalidAlertRuleFolderPathError(Exception):
+    """Raised if the alert rules folder cannot be found or is otherwise invalid."""
+
+    def __init__(
+        self,
+        alert_rules_absolute_path: str,
+        message: str,
+    ):
+        self.alert_rules_absolute_path = alert_rules_absolute_path
+        self.message = message
+
+        super().__init__(self.message)
+
+
 def _resolve_dir_against_main_path(*path_elements: str) -> Optional[str]:
     """Resolve the provided path items against the directory of the main file.
 
@@ -847,12 +863,14 @@ def _resolve_dir_against_main_path(*path_elements: str) -> Optional[str]:
     """
     charm_file = sys.path[0]
 
-    default_alerts_dir = Path(charm_file).joinpath(*path_elements)
+    alerts_dir_path = Path(charm_file).joinpath(*path_elements).absolute()
 
-    if default_alerts_dir.exists() and default_alerts_dir.is_dir:
-        return str(default_alerts_dir.absolute())
+    if not alerts_dir_path.exists():
+        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "directory does not exist")
+    if not alerts_dir_path.is_dir():
+        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "is not a directory")
 
-    return None
+    return alerts_dir_path
 
 
 class MetricsEndpointProvider(Object):
@@ -863,7 +881,7 @@ class MetricsEndpointProvider(Object):
         charm,
         relation_name: str = DEFAULT_RELATION_NAME,
         jobs=[],
-        alert_rules_path: Optional[str] = None,
+        alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -956,14 +974,21 @@ class MetricsEndpointProvider(Object):
             alert_rules_path: an optional path for the location of alert rules
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved from the directory hosting the charm entry file.
-                The alert rules are automatically update on charm upgrade.
+                The alert rules are automatically updated on charm upgrade.
         """
         _validate_relation_by_interface_and_direction(
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
         )
 
-        if not alert_rules_path:
-            alert_rules_path = _resolve_dir_against_main_path("prometheus_alert_rules")
+        if alert_rules_path:
+            try:
+                alert_rules_path = _resolve_dir_against_main_path(alert_rules_path)
+            except InvalidAlertRuleFolderPathError as e:
+                logger.warning(
+                    "Invalid Prometheus alert rules folder at %s: %s",
+                    e.alert_rules_absolute_path,
+                    e.message,
+                )
 
         super().__init__(charm, relation_name)
 
