@@ -9,6 +9,9 @@ from unittest.mock import patch
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     MetricsEndpointProvider,
+    RelationInterfaceMismatchError,
+    RelationNotFoundError,
+    RelationRoleMismatchError,
 )
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -24,6 +27,15 @@ requires:
   {RELATION_NAME}:
     interface: prometheus_scrape
 """
+PROVIDER_META = f"""
+name: consumer-tester
+containers:
+  prometheus-tester:
+provides:
+  {RELATION_NAME}:
+    interface: prometheus_scrape
+"""
+
 JOBS = [
     {
         "global": {"scrape_interval": "1h"},
@@ -59,18 +71,81 @@ class EndpointProviderCharm(CharmBase):
         self.provider = MetricsEndpointProvider(
             self,
             RELATION_NAME,
-            service_event=self.on.prometheus_tester_pebble_ready,
             jobs=JOBS,
         )
         self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
 
 
+class EndpointProviderDefaultCharm(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
+        self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
+
+
 class TestEndpointProvider(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
+
+    def test_provider_default_scrape_relations_not_in_meta(self):
+        """Tests that the Provider raises exception when no promethes_scrape in meta."""
+        harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                provides:
+                    non-standard-name:
+                        interface: prometheus_scrape
+                """,
+        )
+        self.assertRaises(RelationNotFoundError, harness.begin)
+
+    def test_provider_default_scrape_relation_wrong_interface(self):
+        """Tests that Provider raises exception if the default relation has the wrong interface."""
+        harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                provides:
+                    metrics-endpoint:
+                        interface: not_prometheus_scrape
+                """,
+        )
+        self.assertRaises(RelationInterfaceMismatchError, harness.begin)
+
+    def test_provider_default_scrape_relation_wrong_role(self):
+        """Tests that Provider raises exception if the default relation has the wrong role."""
+        harness = Harness(
+            EndpointProviderDefaultCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta="""
+                name: consumer-tester
+                containers:
+                    prometheus:
+                        resource: prometheus-image
+                prometheus-tester: {}
+                requires:
+                    metrics-endpoint:
+                        interface: prometheus_scrape
+                """,
+        )
+        self.assertRaises(RelationRoleMismatchError, harness.begin)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_consumer_sets_scrape_metadata(self, _):
@@ -179,7 +254,7 @@ class TestEndpointProvider(unittest.TestCase):
 
 class TestBadConsumers(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(EndpointProviderCharm, meta=CONSUMER_META)
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
@@ -223,3 +298,34 @@ def expression_labels(expr):
         match = match.replace("=", '":').replace("juju_", '"juju_')
         labels = json.loads(match)
         yield labels
+
+
+class EndpointProviderOddAlertRulesFolderCharm(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
+        self.provider._ALERT_RULES_PATH = "./tests/non_standard_prometheus_alert_rules"
+
+
+class TestEndpointProviderAlertRules(unittest.TestCase):
+    def setUp(self):
+        self.harness = Harness(
+            EndpointProviderOddAlertRulesFolderCharm,
+            meta=PROVIDER_META,
+        )
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin()
+
+    def test_provider_default_scrape_relations_not_in_meta(self):
+        alert_groups = self.harness.charm.provider._labeled_alert_groups
+
+        self.assertTrue(len(alert_groups), 1)
+        alert_group = alert_groups[0]
+        rules = alert_group["rules"]
+        self.assertTrue(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule["alert"], "OddRule")
