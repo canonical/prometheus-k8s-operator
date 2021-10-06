@@ -871,7 +871,7 @@ class InvalidAlertRuleFolderPathError(Exception):
         super().__init__(self.message)
 
 
-def _resolve_dir_against_main_path(*path_elements: str) -> Optional[str]:
+def _resolve_dir_against_main_path(*path_elements: str) -> str:
     """Resolve the provided path items against the directory of the main file.
 
     Look up the directory of the main .py file being executed. This is normally
@@ -888,7 +888,7 @@ def _resolve_dir_against_main_path(*path_elements: str) -> Optional[str]:
     if not alerts_dir_path.is_dir():
         raise InvalidAlertRuleFolderPathError(alerts_dir_path, "is not a directory")
 
-    return alerts_dir_path
+    return str(alerts_dir_path)
 
 
 class MetricsEndpointProvider(Object):
