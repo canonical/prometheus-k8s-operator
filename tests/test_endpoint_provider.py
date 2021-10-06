@@ -298,3 +298,34 @@ def expression_labels(expr):
         match = match.replace("=", '":').replace("juju_", '"juju_')
         labels = json.loads(match)
         yield labels
+
+
+class EndpointProviderOddAlertRulesFolderCharm(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
+        self.provider._ALERT_RULES_PATH = "./tests/non_standard_prometheus_alert_rules"
+
+
+class TestEndpointProviderAlertRules(unittest.TestCase):
+    def setUp(self):
+        self.harness = Harness(
+            EndpointProviderOddAlertRulesFolderCharm,
+            meta=PROVIDER_META,
+        )
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin()
+
+    def test_provider_default_scrape_relations_not_in_meta(self):
+        alert_groups = self.harness.charm.provider._labeled_alert_groups
+
+        self.assertTrue(len(alert_groups), 1)
+        alert_group = alert_groups[0]
+        rules = alert_group["rules"]
+        self.assertTrue(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule["alert"], "OddRule")

@@ -294,9 +294,9 @@ relation data provide eponymous information.
 
 """
 
+import inspect
 import json
 import logging
-import sys
 from pathlib import Path
 
 import yaml
@@ -872,7 +872,7 @@ class InvalidAlertRuleFolderPathError(Exception):
         super().__init__(self.message)
 
 
-def _resolve_dir_against_main_path(*path_elements: str) -> str:
+def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
     """Resolve the provided path items against the directory of the main file.
 
     Look up the directory of the main .py file being executed. This is normally
@@ -880,7 +880,7 @@ def _resolve_dir_against_main_path(*path_elements: str) -> str:
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_file = sys.path[0]
+    charm_file = inspect.getsourcefile(charm.__class__)
 
     alerts_dir_path = Path(charm_file).joinpath(*path_elements).absolute()
 
@@ -1011,7 +1011,7 @@ class MetricsEndpointProvider(Object):
 
         if alert_rules_path:
             try:
-                alert_rules_path = _resolve_dir_against_main_path(alert_rules_path)
+                alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
             except InvalidAlertRuleFolderPathError as e:
                 logger.warning(
                     "Invalid Prometheus alert rules folder at %s: %s",
