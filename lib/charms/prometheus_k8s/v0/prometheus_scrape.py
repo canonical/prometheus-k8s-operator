@@ -298,7 +298,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from ops.charm import CharmBase, RelationMeta, RelationRole
@@ -414,6 +413,7 @@ def _validate_relation_by_interface_and_direction(
             relation named `relation_name`.
         expected_relation_role: whether the `relation_name` must be either
             provided or required by `charm`.
+
     Raises:
         RelationNotFoundError: If there is no relation in the charm's metadata.yaml
             with the same name as provided via `relation_name` argument.
@@ -512,6 +512,7 @@ class MetricsEndpointConsumer(Object):
                 It is strongly advised not to change the default, so that people
                 deploying your charm will have a consistent experience with all
                 other charms that consume metrics endpoints.
+
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
                 with the same name as provided via `relation_name` argument.
@@ -993,6 +994,7 @@ class MetricsEndpointProvider(Object):
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved from the directory hosting the charm entry file.
                 The alert rules are automatically updated on charm upgrade.
+
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
                 with the same name as provided via `relation_name` argument.
