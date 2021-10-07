@@ -1022,7 +1022,7 @@ class MetricsEndpointProvider(Object):
         super().__init__(charm, relation_name)
 
         self._charm = charm
-        self._ALERT_RULES_PATH = alert_rules_path
+        self._alert_rules_path = alert_rules_path
         self._relation_name = relation_name
         # Sanitize job configurations to the supported subset of parameters
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
@@ -1132,7 +1132,7 @@ class MetricsEndpointProvider(Object):
             a list of Prometheus alert rule groups.
         """
         alerts = []
-        for path in Path(self._ALERT_RULES_PATH).glob("*.rule"):
+        for path in Path(self._alert_rules_path).glob("*.rule"):
             if not path.is_file():
                 continue
 

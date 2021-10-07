@@ -261,7 +261,7 @@ class TestBadConsumers(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_expression_logs_an_error(self, _):
-        self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_expressions"
+        self.harness.charm.provider._alert_rules_path = "./tests/bad_alert_expressions"
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -272,7 +272,7 @@ class TestBadConsumers(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
-        self.harness.charm.provider._ALERT_RULES_PATH = "./tests/bad_alert_rules"
+        self.harness.charm.provider._alert_rules_path = "./tests/bad_alert_rules"
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
