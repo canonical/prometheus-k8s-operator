@@ -1009,15 +1009,14 @@ class MetricsEndpointProvider(Object):
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
         )
 
-        if alert_rules_path:
-            try:
-                alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
-            except InvalidAlertRuleFolderPathError as e:
-                logger.warning(
-                    "Invalid Prometheus alert rules folder at %s: %s",
-                    e.alert_rules_absolute_path,
-                    e.message,
-                )
+        try:
+            alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
+        except InvalidAlertRuleFolderPathError as e:
+            logger.warning(
+                "Invalid Prometheus alert rules folder at %s: %s",
+                e.alert_rules_absolute_path,
+                e.message,
+            )
 
         super().__init__(charm, relation_name)
 
