@@ -10,7 +10,7 @@ from ops.testing import Harness
 
 from charm import PrometheusCharm
 
-MINIMAL_CONFIG = {"prometheus-image-path": "prom/prometheus"}
+MINIMAL_CONFIG = {}
 
 SAMPLE_ALERTING_CONFIG = {
     "alertmanagers": [{"static_configs": [{"targets": ["192.168.0.1:9093"]}]}]
