@@ -294,9 +294,9 @@ relation data provide eponymous information.
 
 """
 
-import inspect
 import json
 import logging
+import os
 from pathlib import Path
 
 import yaml
@@ -880,9 +880,17 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_file = inspect.getsourcefile(charm.__class__)
+    charm_dir = Path(charm.charm_dir)
+    if not charm_dir.exists() or not charm_dir.is_dir():
+        # Operator Framework does not currently expose a robust
+        # way to determine the top level charm source directory
+        # that is consistent across deployed charms and unit tests
+        # Hence for unit tests the current working directory is used
+        # TODO: updated this logic when the following ticket is resolved
+        # https://github.com/canonical/operator/issues/643
+        charm_dir = Path(os.getcwd())
 
-    alerts_dir_path = Path(charm_file).joinpath(*path_elements).absolute()
+    alerts_dir_path = charm_dir.absolute().joinpath(*path_elements)
 
     if not alerts_dir_path.exists():
         raise InvalidAlertRuleFolderPathError(alerts_dir_path, "directory does not exist")
