@@ -69,21 +69,8 @@ class EndpointProviderCharm(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self,
-            RELATION_NAME,
-            jobs=JOBS,
+            self, jobs=JOBS, alert_rules_path="./tests/prometheus_alert_rules"
         )
-        self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
-
-
-class EndpointProviderDefaultCharm(CharmBase):
-    _stored = StoredState()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args)
-
-        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
-        self.provider._ALERT_RULES_PATH = "./tests/prometheus_alert_rules"
 
 
 class TestEndpointProvider(unittest.TestCase):
@@ -96,7 +83,7 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_default_scrape_relations_not_in_meta(self):
         """Tests that the Provider raises exception when no promethes_scrape in meta."""
         harness = Harness(
-            EndpointProviderDefaultCharm,
+            EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
                 name: consumer-tester
@@ -114,7 +101,7 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_default_scrape_relation_wrong_interface(self):
         """Tests that Provider raises exception if the default relation has the wrong interface."""
         harness = Harness(
-            EndpointProviderDefaultCharm,
+            EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
                 name: consumer-tester
@@ -132,7 +119,7 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_default_scrape_relation_wrong_role(self):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
-            EndpointProviderDefaultCharm,
+            EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
                 name: consumer-tester
@@ -306,8 +293,9 @@ class EndpointProviderOddAlertRulesFolderCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
 
-        self.provider = MetricsEndpointProvider(self, jobs=JOBS)
-        self.provider._ALERT_RULES_PATH = "./tests/non_standard_prometheus_alert_rules"
+        self.provider = MetricsEndpointProvider(
+            self, jobs=JOBS, alert_rules_path="./tests/non_standard_prometheus_alert_rules"
+        )
 
 
 class TestEndpointProviderAlertRules(unittest.TestCase):
