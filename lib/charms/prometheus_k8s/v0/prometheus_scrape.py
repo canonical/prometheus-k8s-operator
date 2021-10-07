@@ -1063,7 +1063,7 @@ class MetricsEndpointProvider(Object):
                     {"groups": alert_groups}
                 )
 
-    def _set_unit_ip(self, _: EventBase):
+    def _set_unit_ip(self, _):
         """Set unit host address.
 
         each time a metrics provider charm container is restarted it updates its own
