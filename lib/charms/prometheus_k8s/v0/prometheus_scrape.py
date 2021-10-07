@@ -1023,14 +1023,14 @@ class MetricsEndpointProvider(Object):
         self._charm = charm
         self._alert_rules_path = alert_rules_path
         self._relation_name = relation_name
-        # Sanitize job configurations to the supported subset of parameters
+        # sanitize job configurations to the supported subset of parameters
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
         self.framework.observe(events.relation_changed, self._set_scrape_job_spec)
 
-        # DIRTY FIX: Set the ip address when the containers start, as a workaround
+        # dirty fix: set the ip address when the containers start, as a workaround
         # for not being able to lookup the pod ip
         for container_name in charm.unit.containers:
             self.framework.observe(
@@ -1041,13 +1041,13 @@ class MetricsEndpointProvider(Object):
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
     def _set_scrape_job_spec(self, event):
-        """Ensure scrape target information is made available to Prometheus.
+        """Ensure scrape target information is made available to prometheus.
 
-        When a metrics provider charm is related to a Prometheus charm, the
+        when a metrics provider charm is related to a prometheus charm, the
         metrics provider sets metadata related to its own scrape
-        configutation.  This metadata is set using Juju application
-        data.  In addition each of the consumer units also sets its own
-        host address in Juju unit relation data.
+        configutation.  this metadata is set using juju application
+        data.  in addition each of the consumer units also sets its own
+        host address in juju unit relation data.
         """
         self._set_unit_ip(event)
 
@@ -1066,10 +1066,10 @@ class MetricsEndpointProvider(Object):
     def _set_unit_ip(self, _: EventBase):
         """Set unit host address.
 
-        Each time a metrics provider charm container is restarted it updates its own
-        host address in the unit relation data for the Prometheus charm.
+        each time a metrics provider charm container is restarted it updates its own
+        host address in the unit relation data for the prometheus charm.
 
-        The only argument specified is an event and it ignored. This is for expediency
+        the only argument specified is an event and it ignored. this is for expediency
         to be able to use this method as an event handler, although no access to the
         event is actually needed.
         """
@@ -1082,10 +1082,10 @@ class MetricsEndpointProvider(Object):
         """Insert juju topology labels into an alert rule.
 
         Args:
-            rule: a dictionary representing a Prometheus alert rule.
+            rule: a dictionary representing a prometheus alert rule.
 
         Returns:
-            a dictionary representing Prometheus alert rule with Juju
+            a dictionary representing prometheus alert rule with juju
             topology labels.
         """
         metadata = self._scrape_metadata
@@ -1097,13 +1097,13 @@ class MetricsEndpointProvider(Object):
         return rule
 
     def _label_alert_expression(self, rule) -> dict:
-        """Insert juju topology filters into a Prometheus alert rule.
+        """Insert juju topology filters into a prometheus alert rule.
 
         Args:
-            rule: a dictionary representing a Prometheus alert rule.
+            rule: a dictionary representing a prometheus alert rule.
 
         Returns:
-            a dictionary representing a Prometheus alert rule that filters based
+            a dictionary representing a prometheus alert rule that filters based
             on juju topology.
         """
         metadata = self._scrape_metadata
@@ -1124,11 +1124,11 @@ class MetricsEndpointProvider(Object):
         """Load alert rules from rule files.
 
         All rules from files for a consumer charm are loaded into a single
-        group. The generated name of this group includes Juju topology
+        group. the generated name of this group includes juju topology
         prefixes.
 
         Returns:
-            a list of Prometheus alert rule groups.
+            a list of prometheus alert rule groups.
         """
         alerts = []
         for path in Path(self._alert_rules_path).glob("*.rule"):
