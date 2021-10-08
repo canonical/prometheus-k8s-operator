@@ -19,7 +19,7 @@ from ops.testing import Harness
 
 RELATION_NAME = "metrics-endpoint"
 PROVIDER_META = f"""
-name: consumer-tester
+name: provider-tester
 containers:
   prometheus-tester:
 provides:
@@ -77,7 +77,7 @@ class TestEndpointProvider(unittest.TestCase):
             EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
-                name: consumer-tester
+                name: provider-tester
                 containers:
                     prometheus:
                         resource: prometheus-image
@@ -95,7 +95,7 @@ class TestEndpointProvider(unittest.TestCase):
             EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
-                name: consumer-tester
+                name: provider-tester
                 containers:
                     prometheus:
                         resource: prometheus-image
@@ -113,7 +113,7 @@ class TestEndpointProvider(unittest.TestCase):
             EndpointProviderCharm,
             # No provider relation with `prometheus_scrape` as interface
             meta="""
-                name: consumer-tester
+                name: provider-tester
                 containers:
                     prometheus:
                         resource: prometheus-image
@@ -126,7 +126,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertRaises(RelationRoleMismatchError, harness.begin)
 
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_consumer_sets_scrape_metadata(self, _):
+    def test_provider_sets_scrape_metadata(self, _):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
@@ -137,7 +137,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("application", scrape_metadata)
 
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_consumer_unit_sets_bind_address_on_pebble_ready(self, mock_net_get):
+    def test_provider_unit_sets_bind_address_on_pebble_ready(self, mock_net_get):
         bind_address = "192.0.8.2"
         fake_network = {
             "bind-addresses": [
@@ -155,7 +155,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_host"], bind_address)
 
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_consumer_unit_sets_bind_address_on_relation_joined(self, mock_net_get):
+    def test_provider_unit_sets_bind_address_on_relation_joined(self, mock_net_get):
         bind_address = "192.0.8.2"
         fake_network = {
             "bind-addresses": [
@@ -173,7 +173,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_host"], bind_address)
 
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_consumer_supports_multiple_jobs(self, _):
+    def test_provider_supports_multiple_jobs(self, _):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
@@ -185,7 +185,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertListEqual(names, job_names)
 
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_consumer_sanitizes_jobs(self, _):
+    def test_provider_sanitizes_jobs(self, _):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
@@ -230,7 +230,7 @@ class TestEndpointProvider(unittest.TestCase):
                 self.assertIn("juju_application", labels)
 
 
-class TestBadConsumers(unittest.TestCase):
+class TestBadProviders(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
