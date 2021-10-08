@@ -1,6 +1,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import functools
 import json
 import re
 import unittest
@@ -230,16 +231,39 @@ class TestEndpointProvider(unittest.TestCase):
                 self.assertIn("juju_application", labels)
 
 
-class TestBadProviders(unittest.TestCase):
-    def setUp(self):
-        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
+class CustomizableEndpointProviderCharm(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self, jobs=JOBS, alert_rules_path=kwargs["alert_rules_path"]
+        )
+
+
+def customize_endpoint_provider(*args, **kwargs):
+    class CustomizedEndpointProvider(CustomizableEndpointProviderCharm):
+        __init__ = functools.partialmethod(
+            CustomizableEndpointProviderCharm.__init__, *args, **kwargs
+        )
+
+    return CustomizedEndpointProvider
+
+
+class TestNonStandardProviders(unittest.TestCase):
+    def setup(self, **kwargs):
+        bad_provider_charm = customize_endpoint_provider(
+            alert_rules_path=kwargs["alert_rules_path"]
+        )
+        self.harness = Harness(bad_provider_charm, meta=PROVIDER_META)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_expression_logs_an_error(self, _):
-        self.harness.charm.provider._alert_rules_path = "./tests/bad_alert_expressions"
+        self.setup(alert_rules_path="./tests/bad_alert_expressions")
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -250,7 +274,7 @@ class TestBadProviders(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
-        self.harness.charm.provider._alert_rules_path = "./tests/bad_alert_rules"
+        self.setup(alert_rules_path="./tests/bad_alert_rules")
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -258,6 +282,17 @@ class TestBadProviders(unittest.TestCase):
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
+
+    def test_provider_default_scrape_relations_not_in_meta(self):
+        self.setup(alert_rules_path="./tests/non_standard_prometheus_alert_rules")
+
+        alert_groups = self.harness.charm.provider._labeled_alert_groups
+        self.assertTrue(len(alert_groups), 1)
+        alert_group = alert_groups[0]
+        rules = alert_group["rules"]
+        self.assertTrue(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule["alert"], "OddRule")
 
 
 def expression_labels(expr):
@@ -276,35 +311,3 @@ def expression_labels(expr):
         match = match.replace("=", '":').replace("juju_", '"juju_')
         labels = json.loads(match)
         yield labels
-
-
-class EndpointProviderOddAlertRulesFolderCharm(CharmBase):
-    _stored = StoredState()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args)
-
-        self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./tests/non_standard_prometheus_alert_rules"
-        )
-
-
-class TestEndpointProviderAlertRules(unittest.TestCase):
-    def setUp(self):
-        self.harness = Harness(
-            EndpointProviderOddAlertRulesFolderCharm,
-            meta=PROVIDER_META,
-        )
-        self.addCleanup(self.harness.cleanup)
-        self.harness.set_leader(True)
-        self.harness.begin()
-
-    def test_provider_default_scrape_relations_not_in_meta(self):
-        alert_groups = self.harness.charm.provider._labeled_alert_groups
-
-        self.assertTrue(len(alert_groups), 1)
-        alert_group = alert_groups[0]
-        rules = alert_group["rules"]
-        self.assertTrue(len(rules), 1)
-        rule = rules[0]
-        self.assertEqual(rule["alert"], "OddRule")
