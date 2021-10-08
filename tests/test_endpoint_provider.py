@@ -18,15 +18,6 @@ from ops.framework import StoredState
 from ops.testing import Harness
 
 RELATION_NAME = "metrics-endpoint"
-CONSUMER_SERVICE = "prometheus_tester"
-CONSUMER_META = f"""
-name: consumer-tester
-containers:
-  prometheus-tester:
-requires:
-  {RELATION_NAME}:
-    interface: prometheus_scrape
-"""
 PROVIDER_META = f"""
 name: consumer-tester
 containers:
