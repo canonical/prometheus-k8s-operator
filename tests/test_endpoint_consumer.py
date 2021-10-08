@@ -123,8 +123,8 @@ class EndpointConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self._stored.set_default(num_events=0)
-        self.prometheus_provider = MetricsEndpointConsumer(self, RELATION_NAME)
-        self.framework.observe(self.prometheus_provider.on.targets_changed, self.record_events)
+        self.prometheus_consumer = MetricsEndpointConsumer(self, RELATION_NAME)
+        self.framework.observe(self.prometheus_consumer.on.targets_changed, self.record_events)
 
     def record_events(self, event):
         self._stored.num_events += 1
@@ -217,7 +217,7 @@ class TestEndpointConsumer(unittest.TestCase):
                 ["juju_model", "juju_model_uuid", "juju_application", "juju_unit"],
             )
 
-    def test_provider_notifies_on_new_scrape_relation(self):
+    def test_consumer_notifies_on_new_scrape_relation(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -226,7 +226,7 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-    def test_provider_notifies_on_new_scrape_target(self):
+    def test_consumer_notifies_on_new_scrape_target(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
@@ -235,72 +235,72 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-    def test_provider_returns_all_static_scrape_labeled_jobs(self):
+    def test_consumer_returns_all_static_scrape_labeled_jobs(self):
         self.setup_charm_relations()
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
         self.validate_jobs(jobs)
 
-    def test_provider_does_not_unit_label_fully_qualified_targets(self):
+    def test_consumer_does_not_unit_label_fully_qualified_targets(self):
         self.setup_charm_relations()
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
         for job in jobs:
             for static_config in job["static_configs"]:
                 if FULL_TARGET in static_config.get("targets"):
                     self.assertNotIn("juju_unit", static_config.get("labels"))
 
-    def test_provider_does_attach_unit_labels_to_wildcard_hosts(self):
+    def test_consumer_does_attach_unit_labels_to_wildcard_hosts(self):
         self.setup_charm_relations()
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
         for job in jobs:
             for static_config in job["static_configs"]:
                 if FULL_TARGET not in static_config.get("targets"):
                     self.assertIn("juju_unit", static_config.get("labels"))
 
-    def test_provider_allows_custom_metrics_paths(self):
+    def test_consumer_allows_custom_metrics_paths(self):
         rel_ids = self.setup_charm_relations()
         self.assertEqual(len(rel_ids), 1)
         rel_id = rel_ids[0]
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         for job in jobs:
             if job.get("metrics_path"):
                 name_suffix = job_name_suffix(job["job_name"], juju_job_labels(job), rel_id)
                 path = named_job_attribute(name_suffix, "metrics_path", "/metrics")
                 self.assertEqual(job["metrics_path"], path)
 
-    def test_provider_sanitizes_jobs(self):
+    def test_consumer_sanitizes_jobs(self):
         self.setup_charm_relations()
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         for job in jobs:
             job_keys = set(job.keys())
             self.assertTrue(job_keys.issubset(ALLOWED_KEYS))
 
-    def test_provider_returns_jobs_for_all_relations(self):
+    def test_consumer_returns_jobs_for_all_relations(self):
         self.setup_charm_relations(multi=True)
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS) + len(OTHER_SCRAPE_JOBS))
 
-    def test_provider_scrapes_each_port_for_wildcard_hosts(self):
+    def test_consumer_scrapes_each_port_for_wildcard_hosts(self):
         rel_ids = self.setup_charm_relations()
         self.assertEqual(len(rel_ids), 1)
         rel_id = rel_ids[0]
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), len(SCRAPE_JOBS))
         ports = wildcard_target_ports(SCRAPE_JOBS)
         targets = wildcard_targets(jobs, ports)
         consumers = self.harness.charm.model.get_relation(RELATION_NAME, rel_id)
         self.assertEqual(len(targets), len(ports) * len(consumers.units))
 
-    def test_provider_handles_default_scrape_job(self):
+    def test_consumer_handles_default_scrape_job(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -319,10 +319,10 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.validate_jobs(jobs)
 
-    def test_provider_overwrites_juju_topology_labels(self):
+    def test_consumer_overwrites_juju_topology_labels(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.update_relation_data(
@@ -340,7 +340,7 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
 
-        jobs = self.harness.charm.prometheus_provider.jobs()
+        jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), 1)
         self.validate_jobs(jobs)
         bad_labels = juju_job_labels(BAD_JOBS[0])
@@ -348,7 +348,7 @@ class TestEndpointConsumer(unittest.TestCase):
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
 
-    def test_provider_returns_alerts_indexed_by_group_name(self):
+    def test_consumer_returns_alerts_indexed_by_group_name(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -363,13 +363,13 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-        alerts = self.harness.charm.prometheus_provider.alerts()
+        alerts = self.harness.charm.prometheus_consumer.alerts()
         self.assertEqual(len(alerts), 1)
         for name, alert_group in alerts.items():
             group = next((group for group in ALERT_RULES["groups"] if group["name"] == name), None)
             self.assertDictEqual(alert_group, group)
 
-    def test_provider_logs_an_error_on_missing_alerting_data(self):
+    def test_consumer_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         bad_metadata = {"bad": "metadata"}
@@ -387,7 +387,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         with self.assertLogs(level="ERROR") as logger:
-            _ = self.harness.charm.prometheus_provider.alerts()
+            _ = self.harness.charm.prometheus_consumer.alerts()
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn(f"Relation {rel_id} has invalid data", messages[0])
@@ -408,15 +408,15 @@ def juju_job_labels(job, num=0):
 
 
 def job_name_suffix(job_name, labels, rel_id):
-    """Construct consumer set job name.
+    """Construct provider set job name.
 
     Args:
-        job_name: Provider generated job name string.
+        job_name: Consumer generated job name string.
         labels: dictionary of juju static job labels
         rel_id: id of relation for this job.
 
     Returns:
-        string name of job as set by consumer (if any)
+        string name of job as set by provider (if any)
     """
     name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
         labels["juju_model"],
