@@ -61,7 +61,7 @@ class EndpointProviderCharm(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./tests/prometheus_alert_rules"
+            self, jobs=JOBS, alert_rules_path="./tests/unit/prometheus_alert_rules"
         )
 
 
@@ -263,7 +263,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_expression_logs_an_error(self, _):
-        self.setup(alert_rules_path="./tests/bad_alert_expressions")
+        self.setup(alert_rules_path="./tests/unit/bad_alert_expressions")
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -274,7 +274,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
-        self.setup(alert_rules_path="./tests/bad_alert_rules")
+        self.setup(alert_rules_path="./tests/unit/bad_alert_rules")
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -284,7 +284,7 @@ class TestNonStandardProviders(unittest.TestCase):
             self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
 
     def test_provider_default_scrape_relations_not_in_meta(self):
-        self.setup(alert_rules_path="./tests/non_standard_prometheus_alert_rules")
+        self.setup(alert_rules_path="./tests/unit/non_standard_prometheus_alert_rules")
 
         alert_groups = self.harness.charm.provider._labeled_alert_groups
         self.assertTrue(len(alert_groups), 1)
