@@ -136,7 +136,8 @@ class EndpointConsumerCharm(CharmBase):
 
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        self.harness = Harness(EndpointConsumerCharm)
+        metadata_file = open("metadata.yaml")
+        self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
