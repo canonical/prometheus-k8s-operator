@@ -12,14 +12,13 @@ import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
+from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from ops.charm import CharmBase
-from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.pebble import Layer
 
-from kubernetes_service import K8sServicePatch, PatchFailed
 from prometheus_server import Prometheus
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
@@ -31,8 +30,6 @@ logger = logging.getLogger(__name__)
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
-    _stored = StoredState()
-
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -40,9 +37,7 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
         self._prometheus_server = Prometheus()
 
-        self._stored.set_default(
-            k8s_service_patched=False,
-        )
+        self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
 
         # Relation handler objects
 
@@ -307,20 +302,6 @@ class PrometheusCharm(CharmBase):
         }
 
         return Layer(layer_config)
-
-    def _patch_k8s_service(self):
-        """Fix the Kubernetes service that was setup by Juju with correct port numbers."""
-        if self.unit.is_leader() and not self._stored.k8s_service_patched:
-            service_ports = [
-                (f"{self.app.name}", self._port, self._port),
-            ]
-            try:
-                K8sServicePatch.set_ports(self.app.name, service_ports)
-            except PatchFailed as e:
-                logger.error("Unable to patch the Kubernetes service: %s", str(e))
-            else:
-                self._stored.k8s_service_patched = True
-                logger.info("Successfully patched the Kubernetes service!")
 
     @property
     def _external_hostname(self) -> str:
