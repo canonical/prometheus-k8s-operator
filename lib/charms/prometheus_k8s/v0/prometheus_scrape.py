@@ -311,7 +311,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 
 logger = logging.getLogger(__name__)
@@ -340,7 +340,7 @@ DEFAULT_JOB = {
 DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
-DEFAULT_ALERT_RULES_RELATIVE_PATH = "./prometheus_alert_rules"
+DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 
 class RelationNotFoundError(Exception):
