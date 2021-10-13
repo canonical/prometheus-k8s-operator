@@ -2,3 +2,5 @@ git+git://github.com/canonical/operator
 kubernetes
 pyaml
 requests
+lightkube
+lightkube-models

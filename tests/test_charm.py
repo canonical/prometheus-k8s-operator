@@ -18,6 +18,7 @@ SAMPLE_ALERTING_CONFIG = {
 
 
 class TestCharm(unittest.TestCase):
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def setUp(self):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
