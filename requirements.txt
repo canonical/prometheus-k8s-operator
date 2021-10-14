@@ -2,5 +2,5 @@ git+git://github.com/canonical/operator
 kubernetes
 pyaml
 requests
-git+git://github.com/gtsystem/lightkube
+lightkube >= 0.8.1
 git+git://github.com/balbirthomas/lightkube-models@pip-installer
