@@ -65,7 +65,6 @@ class PrometheusCharm(CharmBase):
         )
 
         # Event handlers
-        self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
@@ -75,13 +74,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
-    def _on_install(self, _):
-        """Handler for the install event during which we will update the K8s service."""
-        self._patch_k8s_service()
-
     def _on_upgrade_charm(self, event):
         """Handler for the upgrade_charm event during which we will update the K8s service."""
-        self._patch_k8s_service()
         self._configure(event)
 
     def _configure(self, _):
