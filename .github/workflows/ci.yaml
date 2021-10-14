@@ -47,5 +47,5 @@ jobs:
       uses: charmed-kubernetes/actions-operator@main
       with:
         provider: microk8s
-    - name: Run lma bundle tests
-      run: tox -vve integration-lma
+    - name: Run Prometheus integration tests
+      run: tox -vve integration
