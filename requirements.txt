@@ -1,5 +1,4 @@
 git+git://github.com/canonical/operator
-kubernetes
 pyaml
 requests
 lightkube >= 0.8.1
