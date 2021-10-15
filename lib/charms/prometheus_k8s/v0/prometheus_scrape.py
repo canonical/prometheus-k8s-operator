@@ -1138,6 +1138,7 @@ class MetricsEndpointProvider(Object):
             )
 
         super().__init__(charm, relation_name)
+        self.topology = JujuTopology.from_charm(charm)
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
@@ -1208,9 +1209,7 @@ class MetricsEndpointProvider(Object):
         Returns:
             a list of prometheus alert rule groups.
         """
-        return load_alert_rules_from_dir(
-            self._alert_rules_path, topology=JujuTopology.from_charm(self._charm)
-        )
+        return load_alert_rules_from_dir(self._alert_rules_path, topology=self.topology)
 
     @property
     def _scrape_jobs(self) -> list:
@@ -1230,7 +1229,7 @@ class MetricsEndpointProvider(Object):
         Returns:
             Scrape configuration metadata for this metrics provider charm.
         """
-        return JujuTopology.from_charm(self._charm).as_dict()
+        return self.topology.as_dict()
 
 
 class MetricsEndpointAggregator(Object):
