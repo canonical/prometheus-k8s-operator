@@ -13,6 +13,9 @@ from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsume
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    PrometheusRemoteWriteProvider,
+)
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from ops.charm import CharmBase
 from ops.main import main
@@ -51,6 +54,14 @@ class PrometheusCharm(CharmBase):
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
+        # Exposes remote write endpoints
+        self.remote_write = PrometheusRemoteWriteProvider(
+            self,
+            relation_name="receive-remote-write",
+            endpoint_address=self._remote_write_address,
+            endpoint_port=self._port,
+        )
+
         # Maintains list of Alertmanagers to which alerts are forwarded
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
@@ -71,6 +82,10 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_joined, self._configure)
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
+        self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
+        self.framework.observe(self.on.prometheus_peers_relation_departed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
@@ -112,6 +127,7 @@ class PrometheusCharm(CharmBase):
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
                 self.unit.status = BlockedStatus("Failed to load Prometheus config")
+                return
             else:
                 self.unit.status = ActiveStatus()
                 logger.info("Prometheus configuration reloaded")
@@ -119,7 +135,34 @@ class PrometheusCharm(CharmBase):
             container.add_layer(self._name, new_layer, combine=True)
             container.restart(self._name)
             logger.info("Prometheus (re)started")
+
+        remote_write_plus_ingress_status_message = (
+            "invalid combination of 'ingress', 'receive-remote-write' relations and multiple units"
+        )
+
+        if not self._validate_ingress_and_remote_write():
+            self.unit.status = BlockedStatus(remote_write_plus_ingress_status_message)
+            logger.error(
+                "Using the ingress relation and receiving remote_write relations with more than "
+                "one Prometheus unit; remote_write data is likely to be sent to only one unit."
+            )
+        elif (
+            isinstance(self.unit.status, BlockedStatus)
+            and self.unit.status.message == remote_write_plus_ingress_status_message
+        ):
             self.unit.status = ActiveStatus()
+
+        # Ensure the right address is set on the remote_write relations
+        self.remote_write.update_endpoint()
+
+        if not isinstance(self.unit.status, BlockedStatus):
+            self.unit.status = ActiveStatus()
+
+    def _validate_ingress_and_remote_write(self) -> bool:
+        if not (peer_relation := self.model.get_relation("prometheus-peers")):
+            return True
+
+        return not (self.model.get_relation("ingress") and len(peer_relation.units) > 0)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
@@ -160,6 +203,10 @@ class PrometheusCharm(CharmBase):
             external_url = f"http://{self._external_hostname}:{self._port}"
 
             args.append(f"--web.external-url={external_url}")
+
+        # enable remote write if an instance of the relation exists
+        if self.model.relations["receive-remote-write"]:
+            args.append("--enable-feature=remote-write-receiver")
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
@@ -304,6 +351,14 @@ class PrometheusCharm(CharmBase):
         # model, but allow it to be set to something specific via config.
 
         return self.config["web_external_url"] or f"{self.app.name}"
+
+    @property
+    def _remote_write_address(self) -> str:
+        return (
+            f"{self.unit.name.replace('/','-')}.{self.app.name}-endpoints.{self.model.name}.svc.cluster.local"
+            if self.model.get_relation("ingress")
+            else None
+        )
 
 
 if __name__ == "__main__":

@@ -24,6 +24,8 @@ containers:
 provides:
   grafana-source:
     interface: grafana_datasource
+  receive-remote-write:
+    interface: prometheus_remote_write
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
@@ -31,6 +33,10 @@ requires:
     interface: alertmanager_dispatch
   ingress:
     interface: ingress
+    limit: 1
+peers:
+  prometheus-peers:
+    interface: prometheus_peers
 storage:
   database:
     type: filesystem

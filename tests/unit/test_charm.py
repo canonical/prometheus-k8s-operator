@@ -1,6 +1,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -26,7 +27,7 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_grafana_is_provided_port_and_source(self, mock_net_get, *unused):
+    def test_grafana_is_provided_port_and_source(self, mock_net_get, *_):
         self.harness.update_config(MINIMAL_CONFIG)
         ip = "1.1.1.1"
         net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
@@ -41,14 +42,16 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_default_cli_log_level_is_info(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_default_cli_log_level_is_info(self, *_):
         self.harness.update_config(MINIMAL_CONFIG)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "info")
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_invalid_log_level_defaults_to_debug(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_invalid_log_level_defaults_to_debug(self, *_):
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config["log_level"] = "bad-level"
         with self.assertLogs(level="ERROR") as logger:
@@ -65,7 +68,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_valid_log_level_is_accepted(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_valid_log_level_is_accepted(self, *_):
         valid_log_config = MINIMAL_CONFIG.copy()
         valid_log_config["log_level"] = "warn"
         self.harness.update_config(valid_log_config)
@@ -75,7 +79,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_ingress_relation_not_set(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_ingress_relation_not_set(self, *_):
         self.harness.set_leader(True)
 
         valid_log_config = MINIMAL_CONFIG.copy()
@@ -86,7 +91,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_ingress_relation_set(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_ingress_relation_set(self, *_):
         self.harness.set_leader(True)
 
         self.harness.update_config(MINIMAL_CONFIG.copy())
@@ -102,7 +108,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_metrics_wal_compression_is_not_enabled_by_default(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_metrics_wal_compression_is_not_enabled_by_default(self, *_):
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
 
@@ -111,7 +118,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_metrics_wal_compression_can_be_enabled(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_metrics_wal_compression_can_be_enabled(self, *_):
         compress_config = MINIMAL_CONFIG.copy()
         compress_config["metrics_wal_compression"] = True
         self.harness.update_config(compress_config)
@@ -124,7 +132,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_valid_metrics_retention_times_can_be_set(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_valid_metrics_retention_times_can_be_set(self, *_):
         retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -137,7 +146,8 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_invalid_metrics_retention_times_can_not_be_set(self, *unused):
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_invalid_metrics_retention_times_can_not_be_set(self, *_):
         retention_time_config = MINIMAL_CONFIG.copy()
 
         # invalid unit
@@ -156,9 +166,10 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
+    @patch("ops.testing._TestingModelBackend.network_get")
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_global_evaluation_interval_can_be_set(self, push, _):
+    def test_global_evaluation_interval_can_be_set(self, push, *_):
         evalint_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -169,13 +180,33 @@ class TestCharm(unittest.TestCase):
             gconfig = global_config(config)
             self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation_interval"])
 
+    @patch("ops.testing._TestingModelBackend.network_get")
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    def test_default_scrape_config_is_always_set(self, push, _):
+    def test_default_scrape_config_is_always_set(self, push, *_):
         self.harness.update_config(MINIMAL_CONFIG)
         config = push.call_args[0]
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("ops.testing._TestingPebbleClient.push")
+    @patch("ops.testing._TestingPebbleClient.remove_path")
+    def test_configuration_reload(self, push, trigger_configuration_reload, *_):
+        self.harness.container_pebble_ready("prometheus")
+        push.assert_called()
+
+        self.harness.update_config(MINIMAL_CONFIG)
+        push.assert_called()
+        trigger_configuration_reload.assert_called()
+
+        label_config = MINIMAL_CONFIG.copy()
+        labels = {"name1": "value1", "name2": "value2"}
+        label_config["external-labels"] = json.dumps(labels)
+
+        self.harness.update_config(label_config)
+        trigger_configuration_reload.assert_called()
 
 
 def alerting_config(config):
