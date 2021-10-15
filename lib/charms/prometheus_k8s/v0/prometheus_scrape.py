@@ -293,11 +293,12 @@ data using the `prometheus_scrape_host` key. While the
 relation data provide eponymous information.
 
 """
-
+import dataclasses
 import json
 import logging
 import os
 from pathlib import Path
+from typing import Union
 
 import yaml
 from ops.charm import CharmBase, RelationMeta, RelationRole
@@ -472,6 +473,116 @@ def _sanitize_scrape_configuration(job) -> dict:
     sanitized_job = DEFAULT_JOB.copy()
     sanitized_job.update({key: value for key, value in job.items() if key in ALLOWED_KEYS})
     return sanitized_job
+
+
+@dataclasses.dataclass(frozen=True)
+class JujuTopology:
+    """Dataclass for storing and formatting juju topology information."""
+
+    model: str
+    model_uuid: str
+    application: str
+    charm_name: str
+
+    @staticmethod
+    def from_charm(charm):
+        """Factory method for creating the topology dataclass from a given charm."""
+        return JujuTopology(
+            model=charm.model.name,
+            model_uuid=charm.model.uuid,
+            application=charm.model.app.name,
+            charm_name=charm.meta.name,
+        )
+
+    def as_str_short_form(self) -> str:
+        """Format the topology information into a terse string."""
+        return f"{self.model}_{self.model_uuid}_{self.application}"
+
+    def as_str_long_form(self) -> str:
+        """Format the topology information into a verbose string."""
+        return 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
+            self.model, self.model_uuid, self.application
+        )
+
+    def as_dict(self) -> dict:
+        """Format the topology information into a dict."""
+        return dataclasses.asdict(self)
+
+
+def label_alert_topology(rule, topology: JujuTopology) -> dict:
+    """Insert juju topology labels into an alert rule.
+
+    Args:
+        rule: a dictionary representing a prometheus alert rule.
+        topology: Juju topology.
+
+    Returns:
+        a dictionary representing prometheus alert rule with juju
+        topology labels.
+    """
+    labels = rule.get("labels", {})
+    labels["juju_model"] = topology.model
+    labels["juju_model_uuid"] = topology.model_uuid
+    labels["juju_application"] = topology.application
+    rule["labels"] = labels
+    return rule
+
+
+def label_alert_expression(rule, topology: JujuTopology) -> dict:
+    """Insert juju topology filters into a prometheus alert rule.
+
+    Args:
+        rule: a dictionary representing a prometheus alert rule.
+        topology: Juju topology.
+
+    Returns:
+        a dictionary representing a prometheus alert rule that filters based
+        on juju topology.
+    """
+    if expr := rule.get("expr", None):
+        expr = expr.replace("%%juju_topology%%", topology.as_str_long_form())
+        rule["expr"] = expr
+    else:
+        logger.error("Invalid alert expression in %s", rule.get("alert"))
+
+    return rule
+
+
+def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology):
+    """Load alert rules from rule files.
+
+    All rules from files for a consumer charm are loaded into a single
+    group. the generated name of this group includes juju topology
+    prefixes.
+
+    Returns:
+        a list of prometheus alert rule groups.
+    """
+    alerts = []
+    for path in Path(dir_path).glob("*.rule"):
+        if not path.is_file():
+            continue
+
+        logger.debug("Reading alert rule from %s", path)
+        with path.open() as rule_file:
+            # Load a list of rules from file then add labels and filters
+            try:
+                rule = yaml.safe_load(rule_file)
+                rule = label_alert_topology(rule, topology)
+                rule = label_alert_expression(rule, topology)
+                alerts.append(rule)
+            except Exception as e:
+                logger.error("Failed to read alert rules from %s: %s", path.name, str(e))
+    # Gather all alerts into a list of one group since Prometheus
+    # requires alerts be part of some group
+    groups = []
+    if alerts:
+        group = {
+            "name": topology.as_str_short_form(),
+            "rules": alerts,
+        }
+        groups.append(group)
+    return groups
 
 
 class TargetsChangedEvent(EventBase):
@@ -1086,47 +1197,6 @@ class MetricsEndpointProvider(Object):
                 self._charm.model.get_binding(relation).network.bind_address
             )
 
-    def _label_alert_topology(self, rule) -> dict:
-        """Insert juju topology labels into an alert rule.
-
-        Args:
-            rule: a dictionary representing a prometheus alert rule.
-
-        Returns:
-            a dictionary representing prometheus alert rule with juju
-            topology labels.
-        """
-        metadata = self._scrape_metadata
-        labels = rule.get("labels", {})
-        labels["juju_model"] = metadata["model"]
-        labels["juju_model_uuid"] = metadata["model_uuid"]
-        labels["juju_application"] = metadata["application"]
-        rule["labels"] = labels
-        return rule
-
-    def _label_alert_expression(self, rule) -> dict:
-        """Insert juju topology filters into a prometheus alert rule.
-
-        Args:
-            rule: a dictionary representing a prometheus alert rule.
-
-        Returns:
-            a dictionary representing a prometheus alert rule that filters based
-            on juju topology.
-        """
-        metadata = self._scrape_metadata
-        topology = 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
-            metadata["model"], metadata["model_uuid"], metadata["application"]
-        )
-
-        if expr := rule.get("expr", None):
-            expr = expr.replace("%%juju_topology%%", topology)
-            rule["expr"] = expr
-        else:
-            logger.error("Invalid alert expression in %s", rule.get("alert"))
-
-        return rule
-
     @property
     def _labeled_alert_groups(self) -> list:
         """Load alert rules from rule files.
@@ -1138,33 +1208,9 @@ class MetricsEndpointProvider(Object):
         Returns:
             a list of prometheus alert rule groups.
         """
-        alerts = []
-        for path in Path(self._alert_rules_path).glob("*.rule"):
-            if not path.is_file():
-                continue
-
-            logger.debug("Reading alert rule from %s", path)
-            with path.open() as rule_file:
-                # Load a list of rules from file then add labels and filters
-                try:
-                    rule = yaml.safe_load(rule_file)
-                    rule = self._label_alert_topology(rule)
-                    rule = self._label_alert_expression(rule)
-                    alerts.append(rule)
-                except Exception as e:
-                    logger.error("Failed to read alert rules from %s: %s", path.name, str(e))
-
-        # Gather all alerts into a list of one group since Prometheus
-        # requires alerts be part of some group
-        groups = []
-        if alerts:
-            metadata = self._scrape_metadata
-            group = {
-                "name": "{model}_{model_uuid}_{application}_alerts".format(**metadata),
-                "rules": alerts,
-            }
-            groups.append(group)
-        return groups
+        return load_alert_rules_from_dir(
+            self._alert_rules_path, topology=JujuTopology.from_charm(self._charm)
+        )
 
     @property
     def _scrape_jobs(self) -> list:
@@ -1182,15 +1228,9 @@ class MetricsEndpointProvider(Object):
         """Generate scrape metadata.
 
         Returns:
-            Scrape configutation metadata for this metrics provider charm.
+            Scrape configuration metadata for this metrics provider charm.
         """
-        metadata = {
-            "model": f"{self._charm.model.name}",
-            "model_uuid": f"{self._charm.model.uuid}",
-            "application": f"{self._charm.model.app.name}",
-            "charm_name": f"{self._charm.meta.name}",
-        }
-        return metadata
+        return JujuTopology.from_charm(self._charm).as_dict()
 
 
 class MetricsEndpointAggregator(Object):
