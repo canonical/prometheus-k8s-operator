@@ -578,7 +578,7 @@ def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology
     groups = []
     if alerts:
         group = {
-            "name": topology.as_str_short_form(),
+            "name": f"{topology.as_str_short_form()}_alerts",
             "rules": alerts,
         }
         groups.append(group)
