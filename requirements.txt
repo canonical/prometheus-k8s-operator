@@ -3,4 +3,4 @@ kubernetes
 pyaml
 requests
 lightkube >= 0.8.1
-git+git://github.com/balbirthomas/lightkube-models@pip-installer
+lightkube-models >= 1.22.0.4
