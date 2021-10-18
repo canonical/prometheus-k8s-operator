@@ -22,3 +22,19 @@ async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_cha
     assert ops_test.model.applications[app_name].units[0].workload_status == "active"
 
     await ops_test.model.applications[app_name].remove()
+
+
+@pytest.mark.abort_on_fail
+async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_charm):
+    """Test that Prometheus tester charm can be deployed successfully."""
+    resources = {"prometheus-tester-image": "docbthomas/prometheus-tester:latest"}
+    app_name = "prometheus-tester"
+
+    await ops_test.model.deploy(
+        prometheus_tester_charm, resources=resources, application_name=app_name
+    )
+    await ops_test.model.wait_for_idle(apps=[app_name], status="active")
+
+    assert ops_test.model.applications[app_name].units[0].workload_status == "active"
+
+    await ops_test.model.applications[app_name].remove()
