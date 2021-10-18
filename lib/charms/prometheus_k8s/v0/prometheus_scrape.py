@@ -298,7 +298,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Union
+from typing import Union, List, Literal
 
 import yaml
 from ops.charm import CharmBase, RelationMeta, RelationRole
@@ -508,51 +508,22 @@ class JujuTopology:
         """Format the topology information into a dict."""
         return dataclasses.asdict(self)
 
+    def as_dict_long_form(self, prefix="juju_"):
+        return {
+            f"{prefix}model": self.model,
+            f"{prefix}model_uuid": self.model_uuid,
+            f"{prefix}application": self.application,
+        }
 
-def label_alert_topology(rule, topology: JujuTopology) -> dict:
-    """Insert juju topology labels into an alert rule.
-
-    Args:
-        rule: a dictionary representing a prometheus alert rule.
-        topology: Juju topology.
-
-    Returns:
-        a dictionary representing prometheus alert rule with juju
-        topology labels.
-    """
-    labels = rule.get("labels", {})
-    labels["juju_model"] = topology.model
-    labels["juju_model_uuid"] = topology.model_uuid
-    labels["juju_application"] = topology.application
-    rule["labels"] = labels
-    return rule
+    def render(self, template: str):
+        return template.replace("%%juju_topology%%", self.as_str_long_form())
 
 
-def label_alert_expression(rule, topology: JujuTopology) -> dict:
-    """Insert juju topology filters into a prometheus alert rule.
-
-    Args:
-        rule: a dictionary representing a prometheus alert rule.
-        topology: Juju topology.
-
-    Returns:
-        a dictionary representing a prometheus alert rule that filters based
-        on juju topology.
-    """
-    if expr := rule.get("expr", None):
-        expr = expr.replace("%%juju_topology%%", topology.as_str_long_form())
-        rule["expr"] = expr
-    else:
-        logger.error("Invalid alert expression in %s", rule.get("alert"))
-
-    return rule
-
-
-def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology):
+def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology, depth: Literal[0, 1] = 1) -> List[dict]:
     """Load alert rules from rule files.
 
     All rules from files for a consumer charm are loaded into a single
-    group. the generated name of this group includes juju topology
+    group. The generated name of this group includes juju topology
     prefixes.
 
     Returns:
@@ -568,11 +539,21 @@ def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology
             # Load a list of rules from file then add labels and filters
             try:
                 rule = yaml.safe_load(rule_file)
-                rule = label_alert_topology(rule, topology)
-                rule = label_alert_expression(rule, topology)
-                alerts.append(rule)
             except Exception as e:
-                logger.error("Failed to read alert rules from %s: %s", path.name, str(e))
+                logger.error("Failed to read alert rules from %s: %s", path.name, e)
+            else:
+                try:
+                    # add "juju_" topology labels
+                    rule.get("labels", {}).update(topology.as_dict_long_form())
+
+                    # insert juju topology filters into a prometheus alert rule
+                    rule["expr"] = topology.render(rule["expr"])
+                except KeyError:
+                    logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
+                else:
+                    alerts.append(rule)
+
+
     # Gather all alerts into a list of one group since Prometheus
     # requires alerts be part of some group
     groups = []
@@ -1230,6 +1211,17 @@ class MetricsEndpointProvider(Object):
             Scrape configuration metadata for this metrics provider charm.
         """
         return self.topology.as_dict()
+
+
+class RuleFilesProvider(Object):
+    def __init__(self, charm, relation_name):
+        super().__init__(charm, relation_name)
+        self.topology = JujuTopology.from_charm(charm)
+
+        self._charm = charm
+
+    def update_rules(self, path: str = "/git/repo"):  # TODO come up with a better default
+        pass
 
 
 class MetricsEndpointAggregator(Object):
