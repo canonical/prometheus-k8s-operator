@@ -5,6 +5,7 @@
 """A Charm to functionally test the Prometheus Operator."""
 
 import logging
+from pathlib import Path
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops.charm import CharmBase
@@ -21,10 +22,14 @@ class PrometheusTesterCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._name = "prometheus-tester"
+        self._pip_path = "/usr/local/bin/pip"
+        self._metrics_exporter_script = Path("src/metrics.py")
         jobs = [
             {
                 "scrape_interval": "1s",
-                "static_configs": [{"targets": ["*:8000"], "labels": {"status": "testing"}}],
+                "static_configs": [
+                    {"targets": ["*:8000"], "labels": {"name": "prometheus-tester"}}
+                ],
             }
         ]
         self.prometheus = MetricsEndpointProvider(self, jobs=jobs)
@@ -35,17 +40,28 @@ class PrometheusTesterCharm(CharmBase):
 
     def _on_prometheus_tester_pebble_ready(self, event):
         container = event.workload
+
+        self._install_prometheus_client()
+        metrics_endpoint_script = self._metrics_exporter()
+        container.push("/metrics.py", metrics_endpoint_script)
+        logger.info("Pushed metrics exporter")
+
         layer = self._tester_pebble_layer()
         container.add_layer(self._name, layer, combine=True)
         container.restart(self._name)
+
         self.unit.status = ActiveStatus()
 
     def _on_config_changed(self, event):
         container = self.unit.get_container(self._name)
         if not container.can_connect():
             self.unit.status = BlockedStatus("Waiting for Pebble ready")
-            event.defer()
             return
+
+        self._install_prometheus_client()
+        metrics_endpoint_script = self._metrics_exporter()
+        container.push("/metrics.py", metrics_endpoint_script)
+        logger.info("Pushed metrics exporter")
 
         current_services = container.get_plan().services
         new_layer = self._tester_pebble_layer()
@@ -65,13 +81,27 @@ class PrometheusTesterCharm(CharmBase):
             "services": {
                 self._name: {
                     "override": "replace",
-                    "summary": "tester service",
-                    "command": "python /tester/tester.py",
+                    "summary": "metrics exporter service",
+                    "command": "python /metrics.py",
                     "startup": "enabled",
                 }
             },
         }
         return Layer(layer_spec)
+
+    def _install_prometheus_client(self):
+        container = self.unit.get_container(self._name)
+        if not container.can_connect():
+            self.unit.status = BlockedStatus("Waiting for Pebble ready")
+            return
+
+        process = container.exec([self._pip_path, "install", "prometheus_client"])
+        process.wait()
+        logger.debug("Installed prometheus client")
+
+    def _metrics_exporter(self):
+        with self._metrics_exporter_script.open() as script:
+            return script.read()
 
 
 if __name__ == "__main__":

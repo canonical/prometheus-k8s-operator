@@ -27,7 +27,7 @@ async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_cha
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_charm):
     """Test that Prometheus tester charm can be deployed successfully."""
-    resources = {"prometheus-tester-image": "docbthomas/prometheus-tester:latest"}
+    resources = {"prometheus-tester-image": "python:slim"}
     app_name = "prometheus-tester"
 
     await ops_test.model.deploy(

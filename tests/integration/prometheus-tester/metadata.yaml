@@ -14,8 +14,7 @@ containers:
 resources:
   prometheus-tester-image:
     type: oci-image
-    description: upstream docker image for mongodb
-    upstream-source: 'docbthomas/prometheus-tester:latest'
+    description: upstream docker image for prometheus-tester
 provides:
   metrics-endpoint:
     interface: prometheus_scrape
