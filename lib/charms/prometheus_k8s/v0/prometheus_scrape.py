@@ -400,7 +400,7 @@ def _validate_relation_by_interface_and_direction(
     relation_name: str,
     expected_relation_interface: str,
     expected_relation_role: RelationRole,
-) -> str:
+):
     """Verifies that a relation has the necessary characteristics.
 
     Verifies that the `relation_name` provided: (1) exists in metadata.yaml,
@@ -523,13 +523,18 @@ class JujuTopology:
 
 
 def load_alert_rules_from_dir(
-    dir_path: Union[str, Path], topology: JujuTopology, recursive: bool = False
+    dir_path: Union[str, Path], /, topology: JujuTopology, *, recursive: bool = False
 ) -> List[dict]:
     """Load alert rules from rule files.
 
-    All rules from files for a consumer charm are loaded into a single
-    group. The generated name of this group includes juju topology
-    prefixes.
+    All rules from files for the same directory are loaded into a single
+    group. The generated name of this group includes juju topology.
+    By default, only the top directory is scanned; for nested scanning, pass `recursive=True`.
+
+    Args:
+        dir_path: directory containing *.rule files (alert rules without groups).
+        topology: a `JujuTopology` instance.
+        recursive: flag indicating whether to scan for rule files recursively.
 
     Returns:
         a list of prometheus alert rule groups.
@@ -1147,7 +1152,7 @@ class MetricsEndpointProvider(Object):
 
         when a metrics provider charm is related to a prometheus charm, the
         metrics provider sets metadata related to its own scrape
-        configutation.  this metadata is set using juju application
+        configuration.  this metadata is set using juju application
         data.  in addition each of the consumer units also sets its own
         host address in juju unit relation data.
         """
@@ -1191,7 +1196,9 @@ class MetricsEndpointProvider(Object):
         Returns:
             a list of prometheus alert rule groups.
         """
-        return load_alert_rules_from_dir(self._alert_rules_path, topology=self.topology)
+        return load_alert_rules_from_dir(
+            self._alert_rules_path, topology=self.topology, recursive=False
+        )
 
     @property
     def _scrape_jobs(self) -> list:
@@ -1226,6 +1233,14 @@ class RuleFilesProvider(Object):
     def update_rules(self, path: str = "/git/repo"):  # TODO come up with a better default
         """TODO."""
         pass
+
+    def _update_relation_data_alert_rules(self, recursive=False):
+        """Update all app relation data with alert rules."""
+        if alert_groups := self._labeled_alert_groups(recursive=recursive):
+            for relation in self._charm.model.relations[self._relation_name]:
+                relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                    {"groups": alert_groups}
+                )
 
 
 class MetricsEndpointAggregator(Object):
