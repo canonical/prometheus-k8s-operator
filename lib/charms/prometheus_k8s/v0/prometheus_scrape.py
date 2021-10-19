@@ -1236,16 +1236,20 @@ class RuleFilesProvider(Object):
         self.framework.observe(events.relation_joined, self._update_relation_data)
         self.framework.observe(events.relation_changed, self._update_relation_data)
         self.framework.observe(self._charm.on.leader_elected, self._update_relation_data)
+        self.framework.observe(self._charm.on.config_changed, self._update_relation_data)
+        self.framework.observe(self._charm.on.update_status, self._update_relation_data)  # TODO
         self.framework.observe(self._charm.on.upgrade_charm, self._update_relation_data)
 
-    def _update_relation_data(self):
+    def _update_relation_data(self, event: EventBase):
         """Update all app relation data with alert rules."""
+        logger.info("Updating relation data with rule files from disk")
         if not self._charm.unit.is_leader():
             return
 
         if alert_groups := load_alert_rules_from_dir(
             self.dir_path, self.topology, recursive=self.recursive
         ):
+            logger.debug("ALERT RULE GROUPS: %s", alert_groups)
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
                     {"groups": alert_groups}
