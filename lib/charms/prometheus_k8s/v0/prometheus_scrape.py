@@ -1224,19 +1224,28 @@ class MetricsEndpointProvider(Object):
 class RuleFilesProvider(Object):
     """TODO."""
 
-    def __init__(self, charm, relation_name):
+    def __init__(self, charm: CharmBase, relation_name: str, dir_path: str, recursive=True):
         super().__init__(charm, relation_name)
-        self.topology = JujuTopology.from_charm(charm)
-
         self._charm = charm
+        self._relation_name = relation_name
+        self.topology = JujuTopology.from_charm(charm)
+        self.dir_path = dir_path
+        self.recursive = recursive
 
-    def update_rules(self, path: str = "/git/repo"):  # TODO come up with a better default
-        """TODO."""
-        pass
+        events = self._charm.on[self._relation_name]
+        self.framework.observe(events.relation_joined, self._update_relation_data)
+        self.framework.observe(events.relation_changed, self._update_relation_data)
+        self.framework.observe(self._charm.on.leader_elected, self._update_relation_data)
+        self.framework.observe(self._charm.on.upgrade_charm, self._update_relation_data)
 
-    def _update_relation_data_alert_rules(self, recursive=False):
+    def _update_relation_data(self):
         """Update all app relation data with alert rules."""
-        if alert_groups := self._labeled_alert_groups(recursive=recursive):
+        if not self._charm.unit.is_leader():
+            return
+
+        if alert_groups := load_alert_rules_from_dir(
+            self.dir_path, self.topology, recursive=self.recursive
+        ):
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
                     {"groups": alert_groups}
