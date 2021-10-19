@@ -9,11 +9,11 @@ from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
+    JujuTopology,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
-    JujuTopology,
     load_alert_rules_from_dir,
 )
 from ops.charm import CharmBase
@@ -272,7 +272,9 @@ class TestNonStandardProviders(unittest.TestCase):
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn("Invalid alert rule missing_expr.rule: missing an 'expr' property", messages[0])
+            self.assertIn(
+                "Invalid alert rule missing_expr.rule: missing an 'expr' property", messages[0]
+            )
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
@@ -350,7 +352,9 @@ class TestLoadAlertRulesFromDir(unittest.TestCase):
 
     def setUp(self) -> None:
         self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
-        self.rule_groups = load_alert_rules_from_dir("./tests/unit/prometheus_alert_rules", self.topology)
+        self.rule_groups = load_alert_rules_from_dir(
+            "./tests/unit/prometheus_alert_rules", self.topology
+        )
 
     def test_only_one_group_per_file(self):
         self.assertEqual(len(self.rule_groups), 1)
@@ -374,26 +378,28 @@ class TestLoadAlertRulesFromDir(unittest.TestCase):
         rules = group["rules"]
         for rule in rules:
             with self.subTest(alert=rule["alert"]):
-                self.assertGreaterEqual(rule["labels"].items(), self.topology.as_dict_long_form().items())
+                self.assertGreaterEqual(
+                    rule["labels"].items(), self.topology.as_dict_long_form().items()
+                )
 
     def test_nested_rules_not_read_by_default(self):
         group = self.rule_groups[0]
         rules = group["rules"]
         # TODO consider using in-memory filesystem instead of actual disk files
-        self.assertTrue(not(any(rule["alert"] == "CPUOverUseNested" for rule in rules)))
+        self.assertTrue(not (any(rule["alert"] == "CPUOverUseNested" for rule in rules)))
 
 
-@unittest.skip("not yet impl")
 class TestLoadAlertRulesFromDirNested(unittest.TestCase):
     def setUp(self) -> None:
         self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
-        self.rule_groups = load_alert_rules_from_dir("./tests/unit/prometheus_alert_rules", self.topology, depth=1)
+        self.rule_groups = load_alert_rules_from_dir(
+            "./tests/unit/prometheus_alert_rules", self.topology, recursive=True
+        )
 
     def test_at_least_one_group_per_file(self):
-        self.assertGreaterEqual(len(self.rule_groups), 1)
+        self.assertGreater(len(self.rule_groups), 1)
 
     def test_group_name_prefixed_by_subdir_name(self):
-        nested = list(filter(lambda group: "nested_rules_dir" in group["name"], self.rule_groups))
+        expected_group_name = "nested_rules_dir_" + self.topology.as_str_short_form() + "_alerts"
+        nested = list(filter(lambda group: expected_group_name == group["name"], self.rule_groups))
         self.assertGreaterEqual(len(nested), 1)
-        # or equivalently (TODO remove):
-        self.assertTrue(any("nested_rules_dir" in group["name"] for group in self.rule_groups))

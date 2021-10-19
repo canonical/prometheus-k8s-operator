@@ -297,8 +297,9 @@ import dataclasses
 import json
 import logging
 import os
+from collections import defaultdict
 from pathlib import Path
-from typing import Union, List, Literal
+from typing import List, Union
 
 import yaml
 from ops.charm import CharmBase, RelationMeta, RelationRole
@@ -508,18 +509,22 @@ class JujuTopology:
         """Format the topology information into a dict."""
         return dataclasses.asdict(self)
 
-    def as_dict_long_form(self, prefix="juju_"):
+    def as_dict_long_form(self):
+        """Format the topology information into a dict with keys having 'juju_' as prefix."""
         return {
-            f"{prefix}model": self.model,
-            f"{prefix}model_uuid": self.model_uuid,
-            f"{prefix}application": self.application,
+            "juju_model": self.model,
+            "juju_model_uuid": self.model_uuid,
+            "juju_application": self.application,
         }
 
     def render(self, template: str):
+        """Render a juju-topology template string with topology info."""
         return template.replace("%%juju_topology%%", self.as_str_long_form())
 
 
-def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology, depth: Literal[0, 1] = 1) -> List[dict]:
+def load_alert_rules_from_dir(
+    dir_path: Union[str, Path], topology: JujuTopology, recursive: bool = False
+) -> List[dict]:
     """Load alert rules from rule files.
 
     All rules from files for a consumer charm are loaded into a single
@@ -529,10 +534,13 @@ def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology
     Returns:
         a list of prometheus alert rule groups.
     """
-    alerts = []
-    for path in Path(dir_path).glob("*.rule"):
+    alerts = defaultdict(list)
+    for path in Path(dir_path).glob("**/*.rule" if recursive else "*.rule"):
         if not path.is_file():
             continue
+
+        relpath = os.path.relpath(os.path.dirname(path), dir_path)
+        group_name = f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}{topology.as_str_short_form()}_alerts"
 
         logger.debug("Reading alert rule from %s", path)
         with path.open() as rule_file:
@@ -551,18 +559,11 @@ def load_alert_rules_from_dir(dir_path: Union[str, Path], topology: JujuTopology
                 except KeyError:
                     logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
                 else:
-                    alerts.append(rule)
+                    alerts[group_name].append(rule)
 
-
-    # Gather all alerts into a list of one group since Prometheus
+    # Gather all alerts into a list of groups since Prometheus
     # requires alerts be part of some group
-    groups = []
-    if alerts:
-        group = {
-            "name": f"{topology.as_str_short_form()}_alerts",
-            "rules": alerts,
-        }
-        groups.append(group)
+    groups = [{"name": k, "rules": v} for k, v in alerts.items()]
     return groups
 
 
@@ -1214,6 +1215,8 @@ class MetricsEndpointProvider(Object):
 
 
 class RuleFilesProvider(Object):
+    """TODO."""
+
     def __init__(self, charm, relation_name):
         super().__init__(charm, relation_name)
         self.topology = JujuTopology.from_charm(charm)
@@ -1221,6 +1224,7 @@ class RuleFilesProvider(Object):
         self._charm = charm
 
     def update_rules(self, path: str = "/git/repo"):  # TODO come up with a better default
+        """TODO."""
         pass
 
 
