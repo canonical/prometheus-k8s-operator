@@ -1266,7 +1266,8 @@ class RuleFilesProvider(Object):
         ):
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    {"groups": alert_groups}
+                    {"groups": alert_groups},
+                    sort_keys=True,  # sort, to prevent unnecessary relation_changed events
                 )
 
 
