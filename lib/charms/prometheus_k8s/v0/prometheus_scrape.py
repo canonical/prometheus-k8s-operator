@@ -542,7 +542,14 @@ def load_alert_rules_from_dir(
     alerts = defaultdict(list)
     for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
         relpath = os.path.relpath(os.path.dirname(path), dir_path)
-        group_name = f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}{topology.as_str_short_form()}_alerts"
+
+        # Generate group name:
+        #  - prefix, from the relative path of the rule file;
+        #  - name, from juju topology
+        group_name = (
+            f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}"
+            f"{topology.as_str_short_form()}_alerts"
+        )
 
         logger.debug("Reading alert rule from %s", path)
         with path.open() as rule_file:
@@ -1251,7 +1258,6 @@ class RuleFilesProvider(Object):
         if alert_groups := load_alert_rules_from_dir(
             self.dir_path, self.topology, recursive=self.recursive
         ):
-            logger.debug("ALERT RULE GROUPS: %s", alert_groups)
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
                     {"groups": alert_groups}
