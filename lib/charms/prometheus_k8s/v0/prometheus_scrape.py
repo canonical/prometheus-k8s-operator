@@ -1233,13 +1233,21 @@ class RuleFilesProvider(Object):
      (including rules). This is useful for providing "free standing" rules.
 
     Args:
-        charm: a charm instance that has the `prometheus_scrape` interface on the "provides" side.
-        relation_name: must match metadata.yaml and have `prometheus_scrape` as interface.
-        dir_path: root directory for the collection of rule files.
-        recursive: whether or not to scan for rule files recursively.
+        charm: A charm instance that has the `prometheus_scrape` interface on the "provides" side.
+        relation_name: Must match metadata.yaml and have `prometheus_scrape` as interface.
+        dir_path: Root directory for the collection of rule files.
+        recursive: Whether or not to scan for rule files recursively.
+        aux_events: User-provided events that should trigger relation data update.
     """
 
-    def __init__(self, charm: CharmBase, relation_name: str, dir_path: str, recursive=True):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str,
+        dir_path: str,
+        recursive=True,
+        aux_events: List[EventSource] = None,
+    ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
@@ -1247,23 +1255,31 @@ class RuleFilesProvider(Object):
         self.dir_path = dir_path
         self.recursive = recursive
 
-        events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_joined, self._update_relation_data)
-        self.framework.observe(events.relation_changed, self._update_relation_data)
-        self.framework.observe(self._charm.on.leader_elected, self._update_relation_data)
-        self.framework.observe(self._charm.on.config_changed, self._update_relation_data)
-        self.framework.observe(self._charm.on.update_status, self._update_relation_data)  # TODO
-        self.framework.observe(self._charm.on.upgrade_charm, self._update_relation_data)
+        if aux_events is None:
+            aux_events = []
 
-    def _update_relation_data(self, event: EventBase):
+        events = self._charm.on[self._relation_name]
+        event_sources = [
+            events.relation_joined,
+            events.relation_changed,
+            self._charm.on.leader_elected,
+            self._charm.on.config_changed,  # TODO remove (impl detail) (use aux_events instead)
+            self._charm.on.update_status,  # TODO remove (impl detail) (use aux_events instead)
+            self._charm.on.upgrade_charm,
+        ] + aux_events
+
+        for event_source in event_sources:
+            self.framework.observe(event_source, self._update_relation_data)
+
+    def _update_relation_data(self, _):
         """Update all app relation data with alert rules."""
-        logger.info("Updating relation data with rule files from disk")
         if not self._charm.unit.is_leader():
             return
 
         if alert_groups := load_alert_rules_from_dir(
             self.dir_path, self.topology, recursive=self.recursive
         ):
+            logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
                     {"groups": alert_groups},
