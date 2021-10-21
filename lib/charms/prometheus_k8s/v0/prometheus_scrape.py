@@ -540,10 +540,7 @@ def load_alert_rules_from_dir(
         a list of prometheus alert rule groups.
     """
     alerts = defaultdict(list)
-    for path in Path(dir_path).glob("**/*.rule" if recursive else "*.rule"):
-        if not path.is_file():
-            continue
-
+    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
         relpath = os.path.relpath(os.path.dirname(path), dir_path)
         group_name = f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}{topology.as_str_short_form()}_alerts"
 
