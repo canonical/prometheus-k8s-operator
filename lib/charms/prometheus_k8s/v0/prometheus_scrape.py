@@ -1231,6 +1231,12 @@ class RuleFilesProvider(Object):
     The RuleFilesProvider class if for sending rules to prometheus, unlike
     :class:`MetricsEndpointProvider`, which is used for configuring a scrape target
      (including rules). This is useful for providing "free standing" rules.
+
+    Args:
+        charm: a charm instance that has the `prometheus_scrape` interface on the "provides" side.
+        relation_name: must match metadata.yaml and have `prometheus_scrape` as interface.
+        dir_path: root directory for the collection of rule files.
+        recursive: whether or not to scan for rule files recursively.
     """
 
     def __init__(self, charm: CharmBase, relation_name: str, dir_path: str, recursive=True):
