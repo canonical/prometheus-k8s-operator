@@ -540,6 +540,7 @@ def load_alert_rules_from_dir(
         a list of prometheus alert rule groups.
     """
     alerts = defaultdict(list)
+
     for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
         relpath = os.path.relpath(os.path.dirname(path), dir_path)
 
@@ -1228,9 +1229,9 @@ class MetricsEndpointProvider(Object):
 class RuleFilesProvider(Object):
     """A 'prometheus_scrape' provider class for rule files only.
 
-    The RuleFilesProvider class if for sending rules to prometheus, unlike
-    :class:`MetricsEndpointProvider`, which is used for configuring a scrape target
-     (including rules). This is useful for providing "free standing" rules.
+    This class is for sending rules to prometheus, unlike :class:`MetricsEndpointProvider`, which
+    is used for configuring a scrape target (including rules).
+    This is useful for providing "free standing" rules.
 
     Args:
         charm: A charm instance that has the `prometheus_scrape` interface on the "provides" side.
@@ -1253,7 +1254,7 @@ class RuleFilesProvider(Object):
         self._relation_name = relation_name
         self.topology = JujuTopology.from_charm(charm)
         self.dir_path = dir_path
-        self.recursive = recursive
+        self._recursive = recursive
 
         if aux_events is None:
             aux_events = []
@@ -1277,7 +1278,7 @@ class RuleFilesProvider(Object):
             return
 
         if alert_groups := load_alert_rules_from_dir(
-            self.dir_path, self.topology, recursive=self.recursive
+            self.dir_path, self.topology, recursive=self._recursive
         ):
             logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
