@@ -523,7 +523,7 @@ class JujuTopology:
 
 
 def load_alert_rules_from_dir(
-    dir_path: Union[str, Path], /, topology: JujuTopology, *, recursive: bool = False
+    dir_path: Union[str, Path], topology: JujuTopology, *, recursive: bool = False
 ) -> List[dict]:
     """Load alert rules from rule files.
 
