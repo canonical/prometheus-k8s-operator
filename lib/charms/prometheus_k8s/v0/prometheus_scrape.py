@@ -1222,7 +1222,12 @@ class MetricsEndpointProvider(Object):
 
 
 class RuleFilesProvider(Object):
-    """TODO."""
+    """A 'prometheus_scrape' provider class for rule files only.
+
+    The RuleFilesProvider class if for sending rules to prometheus, unlike
+    :class:`MetricsEndpointProvider`, which is used for configuring a scrape target
+     (including rules). This is useful for providing "free standing" rules.
+    """
 
     def __init__(self, charm: CharmBase, relation_name: str, dir_path: str, recursive=True):
         super().__init__(charm, relation_name)
