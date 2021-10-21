@@ -966,7 +966,7 @@ class InvalidAlertRuleFolderPathError(Exception):
 
     def __init__(
         self,
-        alert_rules_absolute_path: str,
+        alert_rules_absolute_path: Union[str, Path],
         message: str,
     ):
         self.alert_rules_absolute_path = alert_rules_absolute_path
@@ -1244,8 +1244,8 @@ class RuleFilesProvider(Object):
     def __init__(
         self,
         charm: CharmBase,
-        relation_name: str,
-        dir_path: str,
+        relation_name: str = "prometheus-config",
+        dir_path: str = None,
         recursive=True,
         aux_events: List[EventSource] = None,
     ):
@@ -1253,7 +1253,9 @@ class RuleFilesProvider(Object):
         self._charm = charm
         self._relation_name = relation_name
         self.topology = JujuTopology.from_charm(charm)
-        self.dir_path = dir_path
+        self.dir_path = dir_path or _resolve_dir_against_charm_path(
+            charm, DEFAULT_ALERT_RULES_RELATIVE_PATH
+        )
         self._recursive = recursive
 
         if aux_events is None:
