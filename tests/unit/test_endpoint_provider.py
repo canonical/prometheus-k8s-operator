@@ -361,7 +361,7 @@ class TestLoadAlertRulesFromDir(unittest.TestCase):
 
     def test_group_name_matches_topology(self):
         group = self.rule_groups[0]
-        self.assertEqual(group["name"], self.topology.as_str_short_form() + "_alerts")
+        self.assertEqual(group["name"], self.topology.identifier + "_alerts")
 
     def test_at_least_one_alert_rule_in_group(self):
         group = self.rule_groups[0]
@@ -379,7 +379,7 @@ class TestLoadAlertRulesFromDir(unittest.TestCase):
         for rule in rules:
             with self.subTest(alert=rule["alert"]):
                 self.assertGreaterEqual(
-                    rule["labels"].items(), self.topology.as_dict_long_form().items()
+                    rule["labels"].items(), self.topology.as_dict_with_promql_labels().items()
                 )
 
     def test_nested_rules_not_read_by_default(self):
@@ -400,6 +400,6 @@ class TestLoadAlertRulesFromDirNested(unittest.TestCase):
         self.assertGreater(len(self.rule_groups), 1)
 
     def test_group_name_prefixed_by_subdir_name(self):
-        expected_group_name = "nested_rules_dir_" + self.topology.as_str_short_form() + "_alerts"
+        expected_group_name = "nested_rules_dir_" + self.topology.identifier + "_alerts"
         nested = list(filter(lambda group: expected_group_name == group["name"], self.rule_groups))
         self.assertGreaterEqual(len(nested), 1)

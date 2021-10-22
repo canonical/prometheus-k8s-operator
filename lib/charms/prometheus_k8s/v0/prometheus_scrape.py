@@ -495,11 +495,13 @@ class JujuTopology:
             charm_name=charm.meta.name,
         )
 
-    def as_str_short_form(self) -> str:
+    @property
+    def identifier(self) -> str:
         """Format the topology information into a terse string."""
         return f"{self.model}_{self.model_uuid}_{self.application}"
 
-    def as_str_long_form(self) -> str:
+    @property
+    def promql_labels(self) -> str:
         """Format the topology information into a verbose string."""
         return 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
             self.model, self.model_uuid, self.application
@@ -509,7 +511,7 @@ class JujuTopology:
         """Format the topology information into a dict."""
         return dataclasses.asdict(self)
 
-    def as_dict_long_form(self):
+    def as_dict_with_promql_labels(self):
         """Format the topology information into a dict with keys having 'juju_' as prefix."""
         return {
             "juju_model": self.model,
@@ -519,7 +521,7 @@ class JujuTopology:
 
     def render(self, template: str):
         """Render a juju-topology template string with topology info."""
-        return template.replace("%%juju_topology%%", self.as_str_long_form())
+        return template.replace("%%juju_topology%%", self.promql_labels)
 
 
 def load_alert_rules_from_dir(
@@ -549,7 +551,7 @@ def load_alert_rules_from_dir(
         #  - name, from juju topology
         group_name = (
             f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}"
-            f"{topology.as_str_short_form()}_alerts"
+            f"{topology.identifier}_alerts"
         )
 
         logger.debug("Reading alert rule from %s", path)
@@ -562,7 +564,7 @@ def load_alert_rules_from_dir(
             else:
                 try:
                     # add "juju_" topology labels
-                    rule.get("labels", {}).update(topology.as_dict_long_form())
+                    rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
 
                     # insert juju topology filters into a prometheus alert rule
                     rule["expr"] = topology.render(rule["expr"])
