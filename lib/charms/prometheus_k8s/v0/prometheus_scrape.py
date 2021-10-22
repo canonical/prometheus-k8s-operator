@@ -1266,8 +1266,6 @@ class RuleFilesProvider(Object):
             events.relation_joined,
             events.relation_changed,
             self._charm.on.leader_elected,
-            self._charm.on.config_changed,  # TODO remove (impl detail) (use aux_events instead)
-            self._charm.on.update_status,  # TODO remove (impl detail) (use aux_events instead)
             self._charm.on.upgrade_charm,
         ] + aux_events
 
