@@ -495,10 +495,29 @@ class JujuTopology:
             charm_name=charm.meta.name,
         )
 
+    @staticmethod
+    def from_relation_data(data):
+        """Factory method for creating the topology dataclass from a relation data dict."""
+        return JujuTopology(
+            model=data["model"],
+            model_uuid=data["model_uuid"],
+            application=data["application"],
+            charm_name=data["charm_name"],
+        )
+
     @property
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
         return f"{self.model}_{self.model_uuid}_{self.application}"
+
+    @property
+    def scrape_identifier(self):
+        """Format the topology information into a scrape identifier."""
+        return "juju_{}_{}_{}_prometheus_scrape".format(
+            self.model,
+            self.model_uuid[:7],
+            self.application,
+        )
 
     @property
     def promql_labels(self) -> str:
@@ -517,6 +536,7 @@ class JujuTopology:
             "juju_model": self.model,
             "juju_model_uuid": self.model_uuid,
             "juju_application": self.application,
+            "juju_charm": self.charm_name,
         }
 
     def render(self, template: str):
@@ -561,17 +581,17 @@ def load_alert_rules_from_dir(
                 rule = yaml.safe_load(rule_file)
             except Exception as e:
                 logger.error("Failed to read alert rules from %s: %s", path.name, e)
-            else:
-                try:
-                    # add "juju_" topology labels
-                    rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
+                continue
+            try:
+                # add "juju_" topology labels
+                rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
 
-                    # insert juju topology filters into a prometheus alert rule
-                    rule["expr"] = topology.render(rule["expr"])
-                except KeyError:
-                    logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
-                else:
-                    alerts[group_name].append(rule)
+                # insert juju topology filters into a prometheus alert rule
+                rule["expr"] = topology.render(rule["expr"])
+            except KeyError:
+                logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
+            else:
+                alerts[group_name].append(rule)
 
     # Gather all alerts into a list of groups since Prometheus
     # requires alerts be part of some group
@@ -766,11 +786,7 @@ class MetricsEndpointConsumer(Object):
         if not scrape_metadata:
             return scrape_jobs
 
-        job_name_prefix = "juju_{}_{}_{}_prometheus_scrape".format(
-            scrape_metadata["model"],
-            scrape_metadata["model_uuid"][:7],
-            scrape_metadata["application"],
-        )
+        job_name_prefix = JujuTopology.from_relation_data(scrape_metadata).scrape_identifier
 
         hosts = self._relation_hosts(relation)
 
@@ -886,7 +902,7 @@ class MetricsEndpointConsumer(Object):
 
         Args:
             labels: a dictionary containing Prometheus metric labels.
-            scrape_metadata: scrape related metadata provied by
+            scrape_metadata: scrape related metadata provided by
                 `MetricsEndpointProvider`.
 
         Returns:
@@ -894,10 +910,9 @@ class MetricsEndpointConsumer(Object):
             topology information with the exception of unit name.
         """
         juju_labels = labels.copy()  # deep copy not needed
-        juju_labels["juju_model"] = f"{scrape_metadata['model']}"
-        juju_labels["juju_model_uuid"] = f"{scrape_metadata['model_uuid']}"
-        juju_labels["juju_application"] = f"{scrape_metadata['application']}"
-        juju_labels["juju_charm"] = f"{scrape_metadata['charm_name']}"
+        juju_labels.update(
+            JujuTopology.from_relation_data(scrape_metadata).as_dict_with_promql_labels()
+        )
 
         return juju_labels
 
