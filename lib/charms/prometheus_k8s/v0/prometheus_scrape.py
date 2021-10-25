@@ -983,7 +983,7 @@ class InvalidAlertRuleFolderPathError(Exception):
 
     def __init__(
         self,
-        alert_rules_absolute_path: Union[str, Path],
+        alert_rules_absolute_path: Path,
         message: str,
     ):
         self.alert_rules_absolute_path = alert_rules_absolute_path
