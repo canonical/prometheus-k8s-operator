@@ -299,7 +299,7 @@ import logging
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 import yaml
 from ops.charm import CharmBase, RelationMeta, RelationRole
@@ -544,6 +544,33 @@ class JujuTopology:
         return template.replace("%%juju_topology%%", self.promql_labels)
 
 
+def load_alert_rule_from_file(path: Path, topology: JujuTopology) -> Optional[dict]:
+    """Load alert rule from a rules file.
+
+    Args:
+        path: path to a *.rule file with a single rule ("groups" super section omitted).
+        topology: a `JujuTopology` instance.
+    """
+    with path.open() as rule_file:
+        # Load a list of rules from file then add labels and filters
+        try:
+            rule = yaml.safe_load(rule_file)
+        except Exception as e:
+            logger.error("Failed to read alert rules from %s: %s", path.name, e)
+            return None
+        else:
+            # add "juju_" topology labels
+            rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
+
+            if "expr" not in rule:
+                logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
+                return None
+
+            # insert juju topology filters into a prometheus alert rule
+            rule["expr"] = topology.render(rule["expr"])
+            return rule
+
+
 def load_alert_rules_from_dir(
     dir_path: Union[str, Path], topology: JujuTopology, *, recursive: bool = False
 ) -> List[dict]:
@@ -563,35 +590,29 @@ def load_alert_rules_from_dir(
     """
     alerts = defaultdict(list)
 
-    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
+    def _group_name(path) -> str:
+        """Generate group name from path and topology.
+
+        The group name is made up of the relative path between the root dir_path, the file path,
+        and topology identifier.
+
+        Args:
+            path: path to rule file.
+        """
         relpath = os.path.relpath(os.path.dirname(path), dir_path)
 
         # Generate group name:
         #  - prefix, from the relative path of the rule file;
         #  - name, from juju topology
-        group_name = (
+        return (
             f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}"
             f"{topology.identifier}_alerts"
         )
 
-        logger.debug("Reading alert rule from %s", path)
-        with path.open() as rule_file:
-            # Load a list of rules from file then add labels and filters
-            try:
-                rule = yaml.safe_load(rule_file)
-            except Exception as e:
-                logger.error("Failed to read alert rules from %s: %s", path.name, e)
-                continue
-            try:
-                # add "juju_" topology labels
-                rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
-
-                # insert juju topology filters into a prometheus alert rule
-                rule["expr"] = topology.render(rule["expr"])
-            except KeyError:
-                logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
-            else:
-                alerts[group_name].append(rule)
+    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
+        if rule := load_alert_rule_from_file(path, topology):
+            logger.debug("Reading alert rule from %s", path)
+            alerts[_group_name(path)].append(rule)
 
     # Gather all alerts into a list of groups since Prometheus
     # requires alerts be part of some group
