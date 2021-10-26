@@ -9,10 +9,12 @@ from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
+    JujuTopology,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
+    load_alert_rules_from_dir,
 )
 from ops.charm import CharmBase
 from ops.framework import StoredState
@@ -270,7 +272,9 @@ class TestNonStandardProviders(unittest.TestCase):
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn("Invalid alert expression in PrometheusTargetMissing", messages[0])
+            self.assertIn(
+                "Invalid alert rule missing_expr.rule: missing an 'expr' property", messages[0]
+            )
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
@@ -311,3 +315,91 @@ def expression_labels(expr):
         match = match.replace("=", '":').replace("juju_", '"juju_')
         labels = json.loads(match)
         yield labels
+
+
+class TestLoadAlertRulesFromDir(unittest.TestCase):
+
+    # [{'name': 'MyModel_MyUUID_MyApp_alerts',
+    #   'rules': [{'alert': 'CPUOverUse',
+    #              'annotations': {'description': '{{ $labels.instance }} of job {{ '
+    #                                             '$labels.job }} has used too much '
+    #                                             'CPU.',
+    #                              'summary': 'Instance {{ $labels.instance }} CPU '
+    #                                         'over use'},
+    #              'expr': 'process_cpu_seconds_total{juju_model="MyModel", '
+    #                      'juju_model_uuid="MyUUID", juju_application="MyApp"} > '
+    #                      '0.12',
+    #              'for': '0m',
+    #              'labels': {'juju_application': 'MyApp',
+    #                         'juju_model': 'MyModel',
+    #                         'juju_model_uuid': 'MyUUID',
+    #                         'severity': 'Low'}},
+    #             {'alert': 'PrometheusTargetMissing',
+    #              'annotations': {'description': 'A Prometheus target has '
+    #                                             'disappeared. An exporter might be '
+    #                                             'crashed.\n'
+    #                                             '  VALUE = {{ $value }}\n'
+    #                                             '  LABELS = {{ $labels }}',
+    #                              'summary': 'Prometheus target missing (instance '
+    #                                         '{{ $labels.instance }})'},
+    #              'expr': 'up{juju_model="MyModel", juju_model_uuid="MyUUID", '
+    #                      'juju_application="MyApp"} == 0',
+    #              'for': '0m',
+    #              'labels': {'juju_application': 'MyApp',
+    #                         'juju_model': 'MyModel',
+    #                         'juju_model_uuid': 'MyUUID',
+    #                         'severity': 'critical'}}]}]
+
+    def setUp(self) -> None:
+        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.rule_groups = load_alert_rules_from_dir(
+            "./tests/unit/prometheus_alert_rules", self.topology
+        )
+
+    def test_only_one_group_per_file(self):
+        self.assertEqual(len(self.rule_groups), 1)
+
+    def test_group_name_matches_topology(self):
+        group = self.rule_groups[0]
+        self.assertEqual(group["name"], self.topology.identifier + "_alerts")
+
+    def test_at_least_one_alert_rule_in_group(self):
+        group = self.rule_groups[0]
+        rules = group["rules"]
+        self.assertGreaterEqual(len(rules), 1)
+
+    def test_every_alert_rule_has_expr_property(self):
+        group = self.rule_groups[0]
+        rules = group["rules"]
+        self.assertTrue(all(bool(rule.get("expr")) for rule in rules))
+
+    def test_every_alert_rule_has_topology_labels(self):
+        group = self.rule_groups[0]
+        rules = group["rules"]
+        for rule in rules:
+            with self.subTest(alert=rule["alert"]):
+                self.assertGreaterEqual(
+                    rule["labels"].items(), self.topology.as_dict_with_promql_labels().items()
+                )
+
+    def test_nested_rules_not_read_by_default(self):
+        group = self.rule_groups[0]
+        rules = group["rules"]
+        # TODO consider using in-memory filesystem instead of actual disk files
+        self.assertTrue(not (any(rule["alert"] == "CPUOverUseNested" for rule in rules)))
+
+
+class TestLoadAlertRulesFromDirNested(unittest.TestCase):
+    def setUp(self) -> None:
+        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.rule_groups = load_alert_rules_from_dir(
+            "./tests/unit/prometheus_alert_rules", self.topology, recursive=True
+        )
+
+    def test_at_least_one_group_per_file(self):
+        self.assertGreater(len(self.rule_groups), 1)
+
+    def test_group_name_prefixed_by_subdir_name(self):
+        expected_group_name = "nested_rules_dir_" + self.topology.identifier + "_alerts"
+        nested = list(filter(lambda group: expected_group_name == group["name"], self.rule_groups))
+        self.assertGreaterEqual(len(nested), 1)
