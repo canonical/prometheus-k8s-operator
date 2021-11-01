@@ -57,7 +57,7 @@ async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_ch
 async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test, prometheus_charm, prometheus_tester_charm
 ):
-    """Test that Prometheus tester charm can be deployed successfully."""
+    """Test basic functionality of prometheus_scrape relation interface."""
     tester_resources = {"prometheus-tester-image": "python:slim"}
     prometheus_resources = {"prometheus-image": "ubuntu/prometheus:latest"}
     prometheus_app_name = "prometheus"

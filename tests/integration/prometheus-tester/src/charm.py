@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class PrometheusTesterCharm(CharmBase):
-    """Charm the service."""
+    """A Charm used to test the Prometheus charm."""
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -26,10 +26,8 @@ class PrometheusTesterCharm(CharmBase):
         self._metrics_exporter_script = Path("src/metrics.py")
         jobs = [
             {
-                "scrape_interval": "1s",
-                "static_configs": [
-                    {"targets": ["*:8000"], "labels": {"name": "prometheus-tester"}}
-                ],
+                "scrape_interval": self.model.config["scrape-interval"],
+                "static_configs": [{"targets": ["*:8000"], "labels": {"name": self._name}}],
             }
         ]
         self.prometheus = MetricsEndpointProvider(self, jobs=jobs)
@@ -39,6 +37,7 @@ class PrometheusTesterCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._on_config_changed)
 
     def _on_prometheus_tester_pebble_ready(self, event):
+        """Install the metrics exporter script and its dependencies."""
         container = event.workload
 
         self._install_prometheus_client()
@@ -53,6 +52,7 @@ class PrometheusTesterCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_config_changed(self, event):
+        """Reconfigure the Prometheus tester."""
         container = self.unit.get_container(self._name)
         if not container.can_connect():
             self.unit.status = BlockedStatus("Waiting for Pebble ready")
@@ -75,6 +75,7 @@ class PrometheusTesterCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _tester_pebble_layer(self):
+        """Generate Prometheus tester pebble layer."""
         layer_spec = {
             "summary": "prometheus tester",
             "description": "a test data generator for Prometheus",
@@ -90,6 +91,7 @@ class PrometheusTesterCharm(CharmBase):
         return Layer(layer_spec)
 
     def _install_prometheus_client(self):
+        """Install Prometheus tester dependencies."""
         container = self.unit.get_container(self._name)
         if not container.can_connect():
             self.unit.status = BlockedStatus("Waiting for Pebble ready")
@@ -100,6 +102,7 @@ class PrometheusTesterCharm(CharmBase):
         logger.debug("Installed prometheus client")
 
     def _metrics_exporter(self):
+        """Generate the metrics exporter script."""
         with self._metrics_exporter_script.open() as script:
             return script.read()
 

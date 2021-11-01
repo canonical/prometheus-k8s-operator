@@ -43,7 +43,7 @@ async def get_prometheus_config(ops_test, app_name, unit_num):
         unit_num: integer number of a Prometheus juju unit
 
     Returns:
-        Prometheus YALM configuration in string format.
+        Prometheus YAML configuration in string format.
     """
     host = await unit_address(ops_test, app_name, unit_num)
     prometheus = Prometheus(host=host)

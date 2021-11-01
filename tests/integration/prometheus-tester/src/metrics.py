@@ -9,7 +9,7 @@ REQUEST_TIME = Summary("request_processing_seconds", "Time spent processing requ
 
 @REQUEST_TIME.time()
 def process_request(t):
-    """A fake function that takes a configurable amount of time.
+    """A fake function that takes a configurable amount of time to run.
 
     Args:
         t: integer specifying amount of time that should be

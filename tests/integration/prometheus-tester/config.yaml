@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 options:
-  duration:
-    default: 1
-    description: "Number of hours for which data should be genrated"
-    type: int
+  scrape-interval:
+    default: 1s
+    description: "Prometheus job configuration for scrape interval"
+    type: string
