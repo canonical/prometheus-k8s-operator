@@ -17,7 +17,7 @@ class Prometheus:
         """
         self.base_url = f"http://{host}:{port}"
 
-    async def is_ready(self):
+    async def is_ready(self) -> bool:
         """Send a GET request to check readiness.
 
         Returns:
@@ -28,7 +28,7 @@ class Prometheus:
             async with session.get(url) as response:
                 return response.status == 200
 
-    async def config(self):
+    async def config(self) -> str:
         """Send a GET request to get Prometheus configuation.
 
         Returns:
@@ -40,7 +40,7 @@ class Prometheus:
                 result = await response.json()
                 return result["data"]["yaml"] if result["status"] == "success" else ""
 
-    async def rules(self):
+    async def rules(self) -> list:
         """Send a GET request to get Prometheus rules.
 
         Returns:

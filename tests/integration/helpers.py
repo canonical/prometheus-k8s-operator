@@ -1,8 +1,9 @@
 import yaml
+from pytest_operator.plugin import OpsTest
 from workload import Prometheus
 
 
-async def unit_address(ops_test, app_name, unit_num):
+async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     """Find unit address for any application.
 
     Args:
@@ -17,7 +18,7 @@ async def unit_address(ops_test, app_name, unit_num):
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(ops_test, app_name, unit_num):
+async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
@@ -34,7 +35,7 @@ async def check_prometheus_is_ready(ops_test, app_name, unit_num):
     assert is_ready
 
 
-async def get_prometheus_config(ops_test, app_name, unit_num):
+async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     """Fetch Prometheus configuration.
 
     Args:
@@ -51,7 +52,7 @@ async def get_prometheus_config(ops_test, app_name, unit_num):
     return config
 
 
-async def get_prometheus_rules(ops_test, app_name, unit_num):
+async def get_prometheus_rules(ops_test: OpsTest, app_name: str, unit_num: int) -> list:
     """Fetch all Prometheus rules.
 
     Args:
@@ -68,7 +69,7 @@ async def get_prometheus_rules(ops_test, app_name, unit_num):
     return rules
 
 
-def get_job_config_for(app_name, job_config):
+def get_job_config_for(app_name: str, job_config: str) -> dict:
     """Find scrape configuration for a specific application.
 
     A Prometheus scrape configuration may have multiple "jobs". The
@@ -90,7 +91,7 @@ def get_job_config_for(app_name, job_config):
     return {}
 
 
-def get_rules_for(app_name, rule_groups):
+def get_rules_for(app_name: str, rule_groups: list) -> dict:
     """Find rule group for a specific application.
 
     Prometheus charm creates a rule group for each related scrape
