@@ -11,6 +11,7 @@ from helpers import (
     get_prometheus_config,
     get_prometheus_rules,
     get_rules_for,
+    oci_image,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_charm):
     """Test that the Prometheus charm can be deployed successfully."""
-    resources = {"prometheus-image": "ubuntu/prometheus:latest"}
+    resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     app_name = "prometheus-ubuntu"
 
     await ops_test.model.deploy(prometheus_charm, resources=resources, application_name=app_name)
@@ -37,7 +38,11 @@ async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_cha
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_charm):
     """Test that Prometheus tester charm can be deployed successfully."""
-    resources = {"prometheus-tester-image": "python:slim"}
+    resources = {
+        "prometheus-tester-image": oci_image(
+            "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
+        )
+    }
     app_name = "prometheus-tester"
 
     await ops_test.model.deploy(
@@ -57,8 +62,12 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
-    tester_resources = {"prometheus-tester-image": "python:slim"}
-    prometheus_resources = {"prometheus-image": "ubuntu/prometheus:latest"}
+    tester_resources = {
+        "prometheus-tester-image": oci_image(
+            "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
+        )
+    }
+    prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     prometheus_app_name = "prometheus"
     tester_app_name = "prometheus-tester"
 
