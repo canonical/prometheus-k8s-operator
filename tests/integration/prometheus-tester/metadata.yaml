@@ -15,6 +15,7 @@ resources:
   prometheus-tester-image:
     type: oci-image
     description: upstream docker image for prometheus-tester
+    upstream-source: python:slim
 provides:
   metrics-endpoint:
     interface: prometheus_scrape
