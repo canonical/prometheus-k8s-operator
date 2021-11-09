@@ -385,8 +385,13 @@ class TestLoadAlertRulesFromDir(unittest.TestCase):
     def test_nested_rules_not_read_by_default(self):
         group = self.rule_groups[0]
         rules = group["rules"]
-        # TODO consider using in-memory filesystem instead of actual disk files
         self.assertTrue(not (any(rule["alert"] == "CPUOverUseNested" for rule in rules)))
+
+    def test_all_alerts_have_labels(self):
+        group = self.rule_groups[0]
+        rules = group["rules"]
+        self.assertTrue(any(rule["alert"] == "CPUOverUse_no_labels" for rule in rules))
+        self.assertTrue(all("labels" in rule for rule in rules))
 
 
 class TestLoadAlertRulesFromDirNested(unittest.TestCase):

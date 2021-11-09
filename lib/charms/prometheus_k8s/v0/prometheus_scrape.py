@@ -560,7 +560,9 @@ def load_alert_rule_from_file(path: Path, topology: JujuTopology) -> Optional[di
             return None
         else:
             # add "juju_" topology labels
-            rule.get("labels", {}).update(topology.as_dict_with_promql_labels())
+            if "labels" not in rule:
+                rule["labels"] = {}
+            rule["labels"].update(topology.as_dict_with_promql_labels())
 
             if "expr" not in rule:
                 logger.error("Invalid alert rule %s: missing an 'expr' property.", path.name)
