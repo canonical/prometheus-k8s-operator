@@ -29,7 +29,7 @@ class Prometheus:
                 return response.status == 200
 
     async def config(self) -> str:
-        """Send a GET request to get Prometheus configuation.
+        """Send a GET request to get Prometheus configuration.
 
         Returns:
           YAML config in string format or empty string

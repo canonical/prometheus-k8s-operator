@@ -143,7 +143,7 @@ class PrometheusCharm(CharmBase):
         """Construct command to launch Prometheus.
 
         Returns:
-            a sting consisting of Prometheus command and associated
+            a string consisting of Prometheus command and associated
             command line options.
         """
         config = self.model.config
