@@ -177,7 +177,7 @@ supported in a `MetricsEndpointProvider` job specification are:
 - `sample_limit`
 - `label_limit`
 - `label_name_length_limit`
-- `label_value_lenght_limit`
+- `label_value_length_limit`
 
 ## Consumer Library Usage
 
