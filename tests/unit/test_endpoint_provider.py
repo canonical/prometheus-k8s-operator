@@ -3,22 +3,27 @@
 
 import functools
 import json
+import os
 import re
 import unittest
 from unittest.mock import patch
 
+import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
+    AlertRules,
     JujuTopology,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
-    load_alert_rules_from_dir,
 )
+from deepdiff import DeepDiff
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
+
+from .helpers import Sandbox
 
 RELATION_NAME = "metrics-endpoint"
 PROVIDER_META = f"""
@@ -204,9 +209,9 @@ class TestEndpointProvider(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
-        alerts = json.loads(data["alert_rules"])
+        alerts = json.loads(data["alert_rules"])[1]
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 1)
+        self.assertEqual(len(alerts["groups"]), 3)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("labels", rule)
@@ -221,9 +226,9 @@ class TestEndpointProvider(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
-        alerts = json.loads(data["alert_rules"])
+        alerts = json.loads(data["alert_rules"])[1]
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 1)
+        self.assertEqual(len(alerts["groups"]), 3)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
@@ -272,9 +277,7 @@ class TestNonStandardProviders(unittest.TestCase):
             self.harness.add_relation_unit(rel_id, "provider/0")
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn(
-                "Invalid alert rule missing_expr.rule: missing an 'expr' property", messages[0]
-            )
+            self.assertIn("Invalid rules file: missing_expr.rule", messages[0])
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_a_bad_alert_rules_logs_an_error(self, _):
@@ -286,17 +289,6 @@ class TestNonStandardProviders(unittest.TestCase):
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
-
-    def test_provider_default_scrape_relations_not_in_meta(self):
-        self.setup(alert_rules_path="./tests/unit/non_standard_prometheus_alert_rules")
-
-        alert_groups = self.harness.charm.provider._labeled_alert_groups
-        self.assertTrue(len(alert_groups), 1)
-        alert_group = alert_groups[0]
-        rules = alert_group["rules"]
-        self.assertTrue(len(rules), 1)
-        rule = rules[0]
-        self.assertEqual(rule["alert"], "OddRule")
 
 
 def expression_labels(expr):
@@ -317,94 +309,69 @@ def expression_labels(expr):
         yield labels
 
 
-class TestLoadAlertRulesFromDir(unittest.TestCase):
-
-    # [{'name': 'MyModel_MyUUID_MyApp_alerts',
-    #   'rules': [{'alert': 'CPUOverUse',
-    #              'annotations': {'description': '{{ $labels.instance }} of job {{ '
-    #                                             '$labels.job }} has used too much '
-    #                                             'CPU.',
-    #                              'summary': 'Instance {{ $labels.instance }} CPU '
-    #                                         'over use'},
-    #              'expr': 'process_cpu_seconds_total{juju_model="MyModel", '
-    #                      'juju_model_uuid="MyUUID", juju_application="MyApp"} > '
-    #                      '0.12',
-    #              'for': '0m',
-    #              'labels': {'juju_application': 'MyApp',
-    #                         'juju_model': 'MyModel',
-    #                         'juju_model_uuid': 'MyUUID',
-    #                         'severity': 'Low'}},
-    #             {'alert': 'PrometheusTargetMissing',
-    #              'annotations': {'description': 'A Prometheus target has '
-    #                                             'disappeared. An exporter might be '
-    #                                             'crashed.\n'
-    #                                             '  VALUE = {{ $value }}\n'
-    #                                             '  LABELS = {{ $labels }}',
-    #                              'summary': 'Prometheus target missing (instance '
-    #                                         '{{ $labels.instance }})'},
-    #              'expr': 'up{juju_model="MyModel", juju_model_uuid="MyUUID", '
-    #                      'juju_application="MyApp"} == 0',
-    #              'for': '0m',
-    #              'labels': {'juju_application': 'MyApp',
-    #                         'juju_model': 'MyModel',
-    #                         'juju_model_uuid': 'MyUUID',
-    #                         'severity': 'critical'}}]}]
-
+class TestAlertRules(unittest.TestCase):
     def setUp(self) -> None:
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
-        self.rule_groups = load_alert_rules_from_dir(
-            "./tests/unit/prometheus_alert_rules", self.topology
+        free_standing_rule = {
+            "alert": "free_standing",
+            "expr": "avg(some_vector[5m]) > 5",
+        }
+
+        alert_rule = {
+            "alert": "CPUOverUse",
+            "expr": "process_cpu_seconds_total{%%juju_topology%%} > 0.12",
+        }
+        rules_file_dict = {"groups": [{"name": "group1", "rules": [alert_rule]}]}
+
+        self.sandbox = Sandbox()
+        self.sandbox.put_files(
+            ("rules/prom/sub1/lma_rule.rule", yaml.safe_dump(alert_rule)),
+            ("rules/prom/sub1/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
+            ("rules/prom/sub2/free_standing_rule.rule", yaml.safe_dump(free_standing_rule)),
         )
 
-    def test_only_one_group_per_file(self):
-        self.assertEqual(len(self.rule_groups), 1)
-
-    def test_group_name_matches_topology(self):
-        group = self.rule_groups[0]
-        self.assertEqual(group["name"], self.topology.identifier + "_alerts")
-
-    def test_at_least_one_alert_rule_in_group(self):
-        group = self.rule_groups[0]
-        rules = group["rules"]
-        self.assertGreaterEqual(len(rules), 1)
-
-    def test_every_alert_rule_has_expr_property(self):
-        group = self.rule_groups[0]
-        rules = group["rules"]
-        self.assertTrue(all(bool(rule.get("expr")) for rule in rules))
-
-    def test_every_alert_rule_has_topology_labels(self):
-        group = self.rule_groups[0]
-        rules = group["rules"]
-        for rule in rules:
-            with self.subTest(alert=rule["alert"]):
-                self.assertGreaterEqual(
-                    rule["labels"].items(), self.topology.as_dict_with_promql_labels().items()
-                )
-
-    def test_nested_rules_not_read_by_default(self):
-        group = self.rule_groups[0]
-        rules = group["rules"]
-        self.assertTrue(not (any(rule["alert"] == "CPUOverUseNested" for rule in rules)))
-
-    def test_all_alerts_have_labels(self):
-        group = self.rule_groups[0]
-        rules = group["rules"]
-        self.assertTrue(any(rule["alert"] == "CPUOverUse_no_labels" for rule in rules))
-        self.assertTrue(all("labels" in rule for rule in rules))
-
-
-class TestLoadAlertRulesFromDirNested(unittest.TestCase):
-    def setUp(self) -> None:
         self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
-        self.rule_groups = load_alert_rules_from_dir(
-            "./tests/unit/prometheus_alert_rules", self.topology, recursive=True
-        )
 
-    def test_at_least_one_group_per_file(self):
-        self.assertGreater(len(self.rule_groups), 1)
+    def test_non_recursive_is_default(self):
+        rules_file_dict = AlertRules.from_path(
+            os.path.join(self.sandbox.root, "rules", "prom"), topology=self.topology
+        ).as_rules_file_dict()
+        self.assertEqual({}, rules_file_dict)
 
-    def test_group_name_prefixed_by_subdir_name(self):
-        expected_group_name = "nested_rules_dir_" + self.topology.identifier + "_alerts"
-        nested = list(filter(lambda group: expected_group_name == group["name"], self.rule_groups))
-        self.assertGreaterEqual(len(nested), 1)
+    def test_alerts_in_both_formats_are_recursively_aggregated(self):
+        self.maxDiff = None
+        rules_file_dict = AlertRules.from_path(
+            os.path.join(self.sandbox.root, "rules", "prom"),
+            topology=self.topology,
+            recursive=True,
+        ).as_rules_file_dict()
+
+        expected_alert_rule = {
+            "alert": "CPUOverUse",
+            "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
+            "labels": self.topology.as_dict_with_promql_labels(),
+        }
+
+        expected_freestanding_rule = {
+            "alert": "free_standing",
+            "expr": "avg(some_vector[5m]) > 5",
+            "labels": self.topology.as_dict_with_promql_labels(),
+        }
+
+        expected_rules_file = {
+            "groups": [
+                {
+                    "name": f"{self.topology.identifier}_sub1_group1_alerts",
+                    "rules": [expected_alert_rule],
+                },
+                {
+                    "name": f"{self.topology.identifier}_sub1_lma_rule_alerts",
+                    "rules": [expected_alert_rule],
+                },
+                {
+                    "name": f"{self.topology.identifier}_sub2_free_standing_rule_alerts",
+                    "rules": [expected_freestanding_rule],
+                },
+            ]
+        }
+
+        self.assertEqual({}, DeepDiff(expected_rules_file, rules_file_dict, ignore_order=True))

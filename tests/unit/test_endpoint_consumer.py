@@ -349,7 +349,7 @@ class TestEndpointConsumer(unittest.TestCase):
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
 
-    def test_consumer_returns_alerts_indexed_by_group_name(self):
+    def test_consumer_returns_alerts_rules_file(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -358,17 +358,15 @@ class TestEndpointConsumer(unittest.TestCase):
             "consumer",
             {
                 "scrape_metadata": json.dumps(SCRAPE_METADATA),
-                "alert_rules": json.dumps(ALERT_RULES),
+                "alert_rules": json.dumps(["dummy_topology_identifier", ALERT_RULES]),
             },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-        alerts = self.harness.charm.prometheus_consumer.alerts()
-        self.assertEqual(len(alerts), 1)
-        for name, alert_group in alerts.items():
-            group = next((group for group in ALERT_RULES["groups"] if group["name"] == name), None)
-            self.assertDictEqual(alert_group, group)
+        rules_file = self.harness.charm.prometheus_consumer.alerts()
+        alerts = list(rules_file.values())[0]
+        self.assertDictEqual(ALERT_RULES, alerts)
 
     def test_consumer_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)

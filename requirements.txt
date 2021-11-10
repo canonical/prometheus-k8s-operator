@@ -1,4 +1,4 @@
-git+git://github.com/canonical/operator
+git+git://github.com/canonical/operator#egg=ops
 pyaml
 requests
 lightkube >= 0.8.1

@@ -113,7 +113,7 @@ The Prometheus charm library facilitates two things
    alert rules and related metadata to the Prometheus charm.
 2. For metrics consumers (the Prometheus charm) to assimilate information
    provided by the scrape targets, so that it may be used to configure
-   Promtheus.
+   Prometheus.
 
 The Prometheus charm library exposes a consumer and provider object -
 `MetricsEndpointConsumer` and `MetricsEndpointProvider` along with the custom
@@ -125,18 +125,10 @@ Prometheus configuration using information provided by the `jobs()`
 and `alerts()` methods of the `MetricsEndpointConsumer`.
 
 The `jobs()` method gathers a list of scrape jobs from all related
-scrape target charms. In doing so it invokes the `_static_scrape_config()`
-method for each such relation. `_static_scrape_config()` generates a
-unique job name for each job, sanitizes the job and associates Juju
-topology labels with it. Labeling of Juju topology is done by
-`_labeled_static_job_config()`. However the labeling differs for
-scrape targets whose host address was automatically gathered and those
-addresses were explicitly specified. Hence three separate
-functions are required for labeling `_set_juju_labels()` for labels
-common to both but `_labeled_unitless_config()` and
-`_labeled_unit_config()` for the differing labels. The list of
-automatically gathered host address is provided by
-`_relation_hosts()`.
+scrape target charms, generating a unique job name for each job and associates
+Juju topology labels with it. The labeling differs for scrape targets whose
+host address was automatically gathered and for addresses that were explicitly
+specified.
 
 The `MetricsEndpointProvider` is responsible for forwarding scrape
 configuration, scrape target addresses, scrape metadata and alert
@@ -145,12 +137,7 @@ alert rules have Juju topology labels and filters injected into
 them. The `_set_unit_ip()` methods forwards scrape target host
 addresses using unit relation data. The `_set_scrape_metadata()`
 method forwards all the other information using application relation
-data. The list of scrape jobs is gathered by the `_scrape_jobs()`
-method and Juju topology information is constructed using the
-`_scrape_metadata()` method. Finally `_labeled_alert_groups()` loads
-alert rules from files and ensures they include Juju topology labels
-and filters respectively by invoking `_label_alert_topology()` and
-`_label_alert_expression()`.
+data.
 
 ### Charm Details
 
