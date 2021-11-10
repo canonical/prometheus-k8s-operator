@@ -177,7 +177,7 @@ supported in a `MetricsEndpointProvider` job specification are:
 - `sample_limit`
 - `label_limit`
 - `label_name_length_limit`
-- `label_value_lenght_limit`
+- `label_value_length_limit`
 
 ## Consumer Library Usage
 
@@ -951,7 +951,7 @@ class MetricsEndpointConsumer(Object):
             targets: a list of addresses of fully qualified hosts.
             labels: labels specified by `MetricsEndpointProvider` clients
                  which are associated with `targets`.
-            scrape_metadata: scrape related metadata provied by `MetricsEndpointProvider`.
+            scrape_metadata: scrape related metadata provided by `MetricsEndpointProvider`.
 
         Returns:
             A dictionary containing the static scrape configuration
@@ -976,7 +976,7 @@ class MetricsEndpointConsumer(Object):
             labels: a dictionary of labels provided by
                 `MetricsEndpointProvider` intended to be associated with
                 this wildcard host.
-            scrape_metadata: scrape related metadata provied by `MetricsEndpointProvider`.
+            scrape_metadata: scrape related metadata provided by `MetricsEndpointProvider`.
 
         Returns:
             A dictionary containing the static scrape configuration
