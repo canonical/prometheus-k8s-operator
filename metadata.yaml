@@ -41,8 +41,14 @@ resources:
     upstream-source: docker.io/ubuntu/prometheus@sha256:03936a740851b8786c328e08803a70feaa97731714a8dbe4b709c44366699b0c
   promql-transform-amd64:
     type: file
-    description: promql-transform binary for adding label selectors on amd64
-    filename: promql-transform
+    description: |
+      Promql-transform binary for adding label selectors on amd64. Promql-transform is available
+      as a stand-alone tool on https://github.com/canonical/promql-transform
+    filename: promql-transform-amd64
   promql-transform-arm64:
     type: file
-    description: promql-transform binary for adding label selectors on arm64
+    description: |
+      Promql-transform binary for adding label selectors on arm64. Promql-transform is available
+      as a stand-alone tool on https://github.com/canonical/promql-transform
+    filename: promql-transform-arm64
+  
