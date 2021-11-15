@@ -5,8 +5,8 @@
 import logging
 
 import pytest
+import tenacity
 import yaml
-
 from helpers import unit_address
 from workload import Prometheus
 
@@ -52,38 +52,41 @@ async def test_remote_write_with_grafana_agent(ops_test):
     await ops_test.model.wait_for_idle(apps=[prometheus_application_name], status="active")
     await ops_test.model.wait_for_idle(apps=[grafana_agent_application_name], status="active")
 
-    assert ops_test.model.applications[prometheus_application_name].units[0].workload_status == "active"
-    assert ops_test.model.applications[grafana_agent_application_name].units[0].workload_status == "active"
+    assert (
+        ops_test.model.applications[prometheus_application_name].units[0].workload_status
+        == "active"
+    )
+    assert (
+        ops_test.model.applications[grafana_agent_application_name].units[0].workload_status
+        == "active"
+    )
 
-    host = None
-
-    while True:
-        try:
-            if host := await unit_address(ops_test, prometheus_application_name, 0):
-                break
-        except Exception:
-            pass
+    host = await get_unit_address(ops_test, prometheus_application_name)
 
     prometheus = Prometheus(host=host)
 
-    while True:
-        try:
-            if await prometheus.is_ready():
-                break
-        except Exception:
-            pass
+    while not await check_if_prometheus_ready(prometheus):
+        pass
 
-    logger.info("Prometheus is ready")
-
-    promql_query = f"up{{juju_model=\"{ops_test.model_name}\",juju_application=\"{grafana_agent_application_name}\"}}"
+    promql_query = f'up{{juju_model="{ops_test.model_name}",juju_application="{grafana_agent_application_name}"}}'
 
     while True:
-        try:
-            res = await prometheus.run_promql(promql_query)
+        for timeseries in await run_promql(promql_query):
+            if metric := timeseries.get("metric"):
+                logger.info(f'Found Grafana Agent "up" metric: {metric}')
+                return
 
-            for timeseries in res:
-                if metric := timeseries.get("metric"):
-                    logger.info(f"Found Grafana Agent \"up\" metric: {metric}")
-                    return
-        except Exception:
-            pass
+
+@tenacity.retry(wait=tenacity.wait_fixed(2))
+async def get_unit_address(ops_test, application_name, unit_index=0):
+    return await unit_address(ops_test, application_name, unit_index)
+
+
+@tenacity.retry(wait=tenacity.wait_fixed(2))
+async def check_if_prometheus_ready(prometheus: Prometheus):
+    return await prometheus.is_ready()
+
+
+@tenacity.retry(wait=tenacity.wait_fixed(2))
+async def run_promql(prometheus: Prometheus, promql_query):
+    return await prometheus.run_promql(promql_query)
