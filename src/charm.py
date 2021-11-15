@@ -27,6 +27,10 @@ from prometheus_server import Prometheus
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
+INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = (
+    "invalid combination of 'ingress', 'receive-remote-write' relations and multiple units"
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,7 +59,7 @@ class PrometheusCharm(CharmBase):
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
         # Exposes remote write endpoints
-        self.remote_write = PrometheusRemoteWriteProvider(
+        self.remote_write_provider = PrometheusRemoteWriteProvider(
             self,
             relation_name="receive-remote-write",
             endpoint_address=self._remote_write_address,
@@ -136,9 +140,7 @@ class PrometheusCharm(CharmBase):
             container.restart(self._name)
             logger.info("Prometheus (re)started")
 
-        remote_write_plus_ingress_status_message = (
-            "invalid combination of 'ingress', 'receive-remote-write' relations and multiple units"
-        )
+        remote_write_plus_ingress_status_message = INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
 
         if not self._validate_ingress_and_remote_write():
             self.unit.status = BlockedStatus(remote_write_plus_ingress_status_message)
@@ -153,7 +155,7 @@ class PrometheusCharm(CharmBase):
             self.unit.status = ActiveStatus()
 
         # Ensure the right address is set on the remote_write relations
-        self.remote_write.update_endpoint()
+        self.remote_write_provider.update_endpoint()
 
         if not isinstance(self.unit.status, BlockedStatus):
             self.unit.status = ActiveStatus()
@@ -174,10 +176,14 @@ class PrometheusCharm(CharmBase):
         """
         container.remove_path(RULES_DIR, recursive=True)
 
-        for topology_identifier, rules_file in self.metrics_consumer.alerts().items():
-            filename = "juju_" + topology_identifier + ".rules"
+        self._push_alert_rules_group(container, self.metrics_consumer.alerts())
+        self._push_alert_rules_group(container, self.remote_write_provider.alerts())
+
+    def _push_alert_rules_group(self, container, alerts):
+        for group_name, group in alerts.items():
+            filename = "juju_" + group_name + ".rules"
             path = os.path.join(RULES_DIR, filename)
-            rules = yaml.dump(rules_file)
+            rules = yaml.dump(group)
 
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
@@ -354,11 +360,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _remote_write_address(self) -> str:
-        return (
-            f"{self.unit.name.replace('/','-')}.{self.app.name}-endpoints.{self.model.name}.svc.cluster.local"
-            if self.model.get_relation("ingress")
-            else None
-        )
+        return self._external_hostname if self.model.get_relation("ingress") else None
 
 
 if __name__ == "__main__":

@@ -8,8 +8,13 @@ the Prometheus remote_write API, that is, they can receive metrics data over rem
 should use the `PrometheusRemoteWriteProducer`.
 """
 
-from typing import List, Optional, Union
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
+import yaml
 from ops.charm import CharmBase, RelationEvent, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
@@ -25,8 +30,13 @@ LIBAPI = 0
 LIBPATCH = 1
 
 
+logger = logging.getLogger(__name__)
+
+
 DEFAULT_RELATION_NAME = "prometheus-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
+
+DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 
 class RelationNotFoundError(Exception):
@@ -151,6 +161,48 @@ class PrometheusRemoteWriteEndpointsChangedEvent(EventBase):
         self.relation_id = snapshot["relation_id"]
 
 
+class InvalidAlertRuleFolderPathError(Exception):
+    """Raised if the alert rules folder cannot be found or is otherwise invalid."""
+
+    def __init__(
+        self,
+        alert_rules_absolute_path: str,
+        message: str,
+    ):
+        self.alert_rules_absolute_path = alert_rules_absolute_path
+        self.message = message
+
+        super().__init__(self.message)
+
+
+def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
+    """Resolve the provided path items against the directory of the main file.
+
+    Look up the directory of the main .py file being executed. This is normally
+    going to be the charm.py file of the charm including this library. Then, resolve
+    the provided path elements and, if the result path exists and is a directory,
+    return its absolute path; otherwise, return `None`.
+    """
+    charm_dir = Path(charm.charm_dir)
+    if not charm_dir.exists() or not charm_dir.is_dir():
+        # Operator Framework does not currently expose a robust
+        # way to determine the top level charm source directory
+        # that is consistent across deployed charms and unit tests
+        # Hence for unit tests the current working directory is used
+        # TODO: updated this logic when the following ticket is resolved
+        # https://github.com/canonical/operator/issues/643
+        charm_dir = Path(os.getcwd())
+
+    alerts_dir_path = charm_dir.absolute().joinpath(*path_elements)
+
+    if not alerts_dir_path.exists():
+        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "directory does not exist")
+    if not alerts_dir_path.is_dir():
+        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "is not a directory")
+
+    return str(alerts_dir_path)
+
+
 class PrometheusRemoteWriteConsumerEvents(ObjectEvents):
     """Event descriptor for events raised by `PrometheusRemoteWriteConsumer`."""
 
@@ -204,14 +256,8 @@ class PrometheusRemoteWriteConsumer(Object):
     self.remote_write_consumer.endpoints
     ```
 
-    Alternatively, the consumer can also provide you with a dictionary structured like the
-    Prometheus configuration object (see
-    https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write),
-    with:
-
-    ```
-    self.remote_write_consumer.configs
-    ```
+    which returns a dictionary structured like the Prometheus configuration object (see
+    https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
     About the name of the relation managed by this library: technically, you *could* change
     the relation name, `prometheus-remote-write`, but that requires you to provide the new
@@ -224,11 +270,44 @@ class PrometheusRemoteWriteConsumer(Object):
     The one exception to the rule above, is if you charm needs to both consume and provide a
     relation using the `prometheus_remote_write` interface, in which case changing the relation
     name to differentiate between "incoming" and "outgoing" remote write interactions is necessary.
+
+    It is also possible to specify alert rules. By default, this library will look
+    into the `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
+    layouts resolves to `src/prometheus_alert_rules`. Each alert rule goes into a
+    separate `*.rule` file. If the syntax of a rule is invalid,
+    the  `MetricsEndpointProvider` logs an error and does not load the particular
+    rule.
+
+    To avoid false positives and negatives in the evaluation of your alert rules,
+    you must always add the `%%juju_topology%%` token as label filters in the
+    PromQL expression, e.g.:
+
+        alert: UnitUnavailable
+        expr: up{%%juju_topology%%} < 1
+        for: 0m
+        labels:
+            severity: critical
+        annotations:
+            summary: Unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
+            description: >
+            The unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
+
+    The `%%juju_topology%%` token will be replaced with label filters ensuring that
+    the only timeseries evaluated are those scraped from this charm, and no other.
+    Failing to ensure that the `%%juju_topology%%` token is applied to each and every
+    of the queries timeseries will lead to unpredictable alert rule evaluation
+    if your charm is deployed multiple times and various of its instances are
+    monitored by the same Prometheus.
     """
 
     on = PrometheusRemoteWriteConsumerEvents()
 
-    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_RELATION_NAME,
+        alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+    ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
         Args:
@@ -250,9 +329,19 @@ class PrometheusRemoteWriteConsumer(Object):
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.requires
         )
 
+        try:
+            alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
+        except InvalidAlertRuleFolderPathError as e:
+            logger.debug(
+                "Invalid Prometheus alert rules folder at %s: %s",
+                e.alert_rules_absolute_path,
+                e.message,
+            )
+
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
+        self._alert_rules_path = alert_rules_path
 
         self.framework.observe(
             self._charm.on[self._relation_name].relation_joined,
@@ -271,15 +360,35 @@ class PrometheusRemoteWriteConsumer(Object):
             self._handle_endpoints_changed,
         )
 
+        self.framework.observe(
+            self._charm.on[self._relation_name].relation_joined,
+            self._set_alerts_on_relation_changed,
+        )
+        self.framework.observe(
+            self._charm.on.upgrade_charm,
+            self._set_alerts_to_all_relation,
+        )
+
     def _handle_endpoints_changed(self, event: RelationEvent):
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
+    def _set_alerts_on_relation_changed(self, event: RelationEvent):
+        self._set_alerts_to_relation(event.relation)
+
+    def _set_alerts_to_all_relation(self, _):
+        for relation in self.model.relations[self._relation_name]:
+            self._set_alerts_to_relation(relation)
+
+    def _set_alerts_to_relation(self, relation: Relation):
+        if alert_groups := self._labeled_alert_groups:
+            relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": alert_groups})
+
     @property
-    def endpoints(self) -> List[str]:
-        """A list of remote write endpoints.
+    def endpoints(self) -> List[Dict[str, str]]:
+        """A config object ready to be dropped in to a prometheus config file.
 
         Returns:
-            A list of remote write endpoints.
+            A list of remote_write endpoints.
         """
         endpoints = []
         for relation in self.model.relations[self._relation_name]:
@@ -287,18 +396,111 @@ class PrometheusRemoteWriteConsumer(Object):
                 if unit.app is self._charm.app:
                     # This is a peer unit
                     continue
-                if endpoint := relation.data[unit].get("remote_write_endpoint"):
-                    endpoints.append(endpoint)
+
+                if remote_write := relation.data[unit].get("remote_write"):
+                    deserialized_remote_write = json.loads(remote_write)
+                    endpoints.append(
+                        {
+                            "url": deserialized_remote_write["url"],
+                        }
+                    )
+
         return endpoints
 
-    @property
-    def configs(self) -> list:
-        """A config object ready to be dropped in to a prometheus config file.
+    def _label_alert_topology(self, rule) -> dict:
+        """Insert juju topology labels into an alert rule.
+
+        Args:
+            rule: a dictionary representing a prometheus alert rule.
 
         Returns:
-            A list of remote_write configs.
+            a dictionary representing prometheus alert rule with juju
+            topology labels.
         """
-        return [{"url": endpoint} for endpoint in self.endpoints]
+        metadata = self._consumer_metadata
+        labels = rule.get("labels", {})
+        labels["juju_model"] = metadata["model"]
+        labels["juju_model_uuid"] = metadata["model_uuid"]
+        labels["juju_application"] = metadata["application"]
+        rule["labels"] = labels
+        return rule
+
+    def _label_alert_expression(self, rule) -> dict:
+        """Insert juju topology filters into a prometheus alert rule.
+
+        Args:
+            rule: a dictionary representing a prometheus alert rule.
+
+        Returns:
+            a dictionary representing a prometheus alert rule that filters based
+            on juju topology.
+        """
+        metadata = self._consumer_metadata
+        topology = 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
+            metadata["model"], metadata["model_uuid"], metadata["application"]
+        )
+
+        if expr := rule.get("expr", None):
+            expr = expr.replace("%%juju_topology%%", topology)
+            rule["expr"] = expr
+        else:
+            logger.error("Invalid alert expression in %s", rule.get("alert"))
+
+        return rule
+
+    @property
+    def _labeled_alert_groups(self) -> list:
+        """Load alert rules from rule files.
+
+        All rules from files for a consumer charm are loaded into a single
+        group. the generated name of this group includes juju topology
+        prefixes.
+
+        Returns:
+            a list of prometheus alert rule groups.
+        """
+        alerts = []
+        for path in Path(self._alert_rules_path).glob("*.rule"):
+            if not path.is_file():
+                continue
+
+            logger.debug("Reading alert rule from %s", path)
+            with path.open() as rule_file:
+                # Load a list of rules from file then add labels and filters
+                try:
+                    rule = yaml.safe_load(rule_file)
+                    rule = self._label_alert_topology(rule)
+                    rule = self._label_alert_expression(rule)
+                    alerts.append(rule)
+                except Exception as e:
+                    logger.error("Failed to read alert rules from %s: %s", path.name, str(e))
+
+        # Gather all alerts into a list of one group since Prometheus
+        # requires alerts be part of some group
+        groups = []
+        if alerts:
+            metadata = self._consumer_metadata
+            group = {
+                "name": "{model}_{model_uuid}_{application}_alerts".format(**metadata),
+                "rules": alerts,
+            }
+            groups.append(group)
+        return groups
+
+    @property
+    def _consumer_metadata(self) -> dict:
+        """Generate scrape metadata.
+
+        Returns:
+            Scrape configuration metadata for the charm using this PrometheusRemoteWriteConsumer.
+        """
+        metadata = {
+            "model": f"{self._charm.model.name}",
+            "model_uuid": f"{self._charm.model.uuid}",
+            "application": f"{self._charm.model.app.name}",
+            "charm_name": f"{self._charm.meta.name}",
+        }
+        return metadata
 
 
 class PrometheusRemoteWriteProvider(Object):
@@ -436,8 +638,64 @@ class PrometheusRemoteWriteProvider(Object):
 
         endpoint_url = f"{self._endpoint_schema}://{address}:{str(self._endpoint_port)}{path}"
 
-        relation.data[self._charm.unit]["remote_write_endpoint"] = endpoint_url
+        relation.data[self._charm.unit]["remote_write"] = json.dumps(
+            {
+                "url": endpoint_url,
+            }
+        )
 
     def _get_relation_bind_address(self):
         network_binding = self._charm.model.get_binding(self._relation_name)
         return network_binding.network.bind_address
+
+    def alerts(self) -> dict:
+        """Fetch alert rules from all relations.
+
+        A Prometheus alert rules file consists of a list of "groups". Each
+        group consists of a list of alerts (`rules`) that are sequentially
+        executed. This method returns all the alert rules provided by each
+        related metrics provider charm. These rules may be used to generate a
+        separate alert rules file for each relation since the returned list
+        of alert groups are indexed by relation ID. Also for each relation ID
+        associated scrape metadata such as Juju model, UUID and application
+        name are provided so the a unique name may be generated for the rules
+        file. For each relation the structure of data returned is a dictionary
+        with four keys
+
+        - groups
+        - model
+        - model_uuid
+        - application
+
+        The value of the `groups` key is such that it may be used to generate
+        a Prometheus alert rules file directly using `yaml.dump` but the
+        `groups` key itself must be included as this is required by Prometheus,
+        for example as in `yaml.dump({"groups": alerts["groups"]})`.
+
+        The `PrometheusRemoteWriteProvider` accepts a list of rules and these
+        rules are all placed into one group.
+
+        Returns:
+            a dictionary mapping the name of an alert rule group to the group.
+        """
+        alerts = {}
+        for relation in self._charm.model.relations[self._relation_name]:
+            if not relation.units:
+                continue
+
+            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+
+            if not alert_rules:
+                continue
+
+            try:
+                for group in alert_rules["groups"]:
+                    alerts[group["name"]] = group
+            except KeyError as e:
+                logger.error(
+                    "Relation %s has invalid data : %s",
+                    relation.id,
+                    e,
+                )
+
+        return alerts

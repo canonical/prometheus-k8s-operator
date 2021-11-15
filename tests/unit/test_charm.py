@@ -1,7 +1,6 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import json
 import unittest
 from unittest.mock import patch
 
@@ -201,11 +200,7 @@ class TestCharm(unittest.TestCase):
         push.assert_called()
         trigger_configuration_reload.assert_called()
 
-        label_config = MINIMAL_CONFIG.copy()
-        labels = {"name1": "value1", "name2": "value2"}
-        label_config["external-labels"] = json.dumps(labels)
-
-        self.harness.update_config(label_config)
+        self.harness.update_config({"log-level": "INFO"})
         trigger_configuration_reload.assert_called()
 
 

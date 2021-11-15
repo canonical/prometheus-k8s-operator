@@ -2,6 +2,8 @@ import logging
 
 import aiohttp
 
+from prometheus_api_client import PrometheusConnect
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,3 +53,7 @@ class Prometheus:
             async with session.get(url) as response:
                 result = await response.json()
                 return result["data"]["groups"] if result["status"] == "success" else []
+
+    async def run_promql(self, query: str) -> list:
+        prometheus = PrometheusConnect(url=self.base_url, disable_ssl=True)
+        return prometheus.custom_query(query=query)
