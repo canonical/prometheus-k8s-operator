@@ -54,6 +54,24 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     return config
 
 
+async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_num: int = 0):
+    """Run a PromQL query in Prometheus.
+
+    Args:
+        ops_test: pytest-operator plugin
+        promql_query: promql query expression
+        app_name: string name of Prometheus application
+        unit_num: integer number of a Prometheus juju unit
+
+    Returns:
+        Result of the query
+    """
+    host = await unit_address(ops_test, app_name, unit_num)
+    prometheus = Prometheus(host=host)
+    result = await prometheus.run_promql(promql_query)
+    return result
+
+
 async def get_prometheus_rules(ops_test: OpsTest, app_name: str, unit_num: int) -> list:
     """Fetch all Prometheus rules.
 
