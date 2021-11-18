@@ -3,21 +3,10 @@
 # See LICENSE file for licensing details.
 
 import logging
-import pytest
-import yaml
 
-from helpers import (
-    check_prometheus_is_ready,
-    run_promql,
-    oci_image
-)
-from tenacity import (
-    retry,
-    wait_fixed,
-    stop_after_delay,
-    retry_if_result
-)
-from workload import Prometheus
+import pytest
+from helpers import check_prometheus_is_ready, oci_image, run_promql
+from tenacity import retry, stop_after_delay, wait_fixed
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +28,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
         channel="edge",
     )
 
-    await ops_test.model.add_relation(
-        prometheus_name,
-        agent_name
-    )
+    await ops_test.model.add_relation(prometheus_name, agent_name)
 
     apps = [prometheus_name, agent_name]
     await ops_test.model.wait_for_idle(apps=apps, status="active")
@@ -53,7 +39,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     await has_metric(
         ops_test,
         f'up{{juju_model="{ops_test.model_name}",juju_application="{agent_name}"}}',
-        prometheus_name
+        prometheus_name,
     )
 
 
