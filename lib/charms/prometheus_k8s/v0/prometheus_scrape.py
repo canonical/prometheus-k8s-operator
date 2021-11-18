@@ -293,7 +293,6 @@ data using the `prometheus_scrape_host` key. While the
 relation data provide eponymous information.
 
 """
-import dataclasses
 import json
 import logging
 import os
@@ -302,7 +301,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import yaml
-from ops.charm import CharmBase, RelationMeta, RelationRole
+from ops.charm import CharmBase, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 # The unique Charmhub library identifier, never change it
@@ -350,7 +349,7 @@ class RelationNotFoundError(Exception):
 
     def __init__(self, relation_name: str):
         self.relation_name = relation_name
-        self.message = f"No relation named '{relation_name}' found"
+        self.message = "No relation named '{}' found".format(relation_name)
 
         super().__init__(self.message)
 
@@ -368,8 +367,9 @@ class RelationInterfaceMismatchError(Exception):
         self.expected_relation_interface = expected_relation_interface
         self.actual_relation_interface = actual_relation_interface
         self.message = (
-            f"The '{relation_name}' relation has '{actual_relation_interface}' as "
-            f"interface rather than the expected '{expected_relation_interface}'"
+            "The '{}' relation has '{}' as interface rather than the expected '{}'".format(
+                relation_name, actual_relation_interface, expected_relation_interface
+            )
         )
 
         super().__init__(self.message)
@@ -387,9 +387,8 @@ class RelationRoleMismatchError(Exception):
         self.relation_name = relation_name
         self.expected_relation_interface = expected_relation_role
         self.actual_relation_role = actual_relation_role
-        self.message = (
-            f"The '{relation_name}' relation has role '{repr(actual_relation_role)}' "
-            f"rather than the expected '{repr(expected_relation_role)}'"
+        self.message = "The '{}' relation has role '{}' rather than the expected '{}'".format(
+            relation_name, repr(actual_relation_role), repr(expected_relation_role)
         )
 
         super().__init__(self.message)
@@ -429,7 +428,7 @@ def _validate_relation_by_interface_and_direction(
     if relation_name not in charm.meta.relations:
         raise RelationNotFoundError(relation_name)
 
-    relation: RelationMeta = charm.meta.relations[relation_name]
+    relation = charm.meta.relations[relation_name]
 
     actual_relation_interface = relation.interface_name
     if actual_relation_interface != expected_relation_interface:
@@ -448,7 +447,7 @@ def _validate_relation_by_interface_and_direction(
                 relation_name, RelationRole.requires, RelationRole.provides
             )
     else:
-        raise Exception(f"Unexpected RelationDirection: {expected_relation_role}")
+        raise Exception("Unexpected RelationDirection: {}".format(expected_relation_role))
 
 
 def _sanitize_scrape_configuration(job) -> dict:
@@ -476,14 +475,14 @@ def _sanitize_scrape_configuration(job) -> dict:
     return sanitized_job
 
 
-@dataclasses.dataclass(frozen=True)
 class JujuTopology:
-    """Dataclass for storing and formatting juju topology information."""
+    """Class for storing and formatting juju topology information."""
 
-    model: str
-    model_uuid: str
-    application: str
-    charm_name: str
+    def __init__(self, model: str, model_uuid: str, application: str, charm_name: str):
+        self.model = model
+        self.model_uuid = model_uuid
+        self.application = application
+        self.charm_name = charm_name
 
     @staticmethod
     def from_charm(charm):
@@ -508,7 +507,7 @@ class JujuTopology:
     @property
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
-        return f"{self.model}_{self.model_uuid}_{self.application}"
+        return "{}_{}_{}".format(self.model, self.model_uuid, self.application)
 
     @property
     def scrape_identifier(self):
@@ -528,7 +527,12 @@ class JujuTopology:
 
     def as_dict(self) -> dict:
         """Format the topology information into a dict."""
-        return dataclasses.asdict(self)
+        return {
+            "model": self.model,
+            "model_uuid": self.model_uuid,
+            "application": self.application,
+            "charm": self.charm_name,
+        }
 
     def as_dict_with_promql_labels(self):
         """Format the topology information into a dict with keys having 'juju_' as prefix."""
@@ -601,17 +605,16 @@ def load_alert_rules_from_dir(
         Args:
             path: path to rule file.
         """
-        relpath = os.path.relpath(os.path.dirname(path), dir_path)
+        relpath = os.path.relpath(os.path.dirname(path), str(dir_path))
 
         # Generate group name:
         #  - prefix, from the relative path of the rule file;
         #  - name, from juju topology
-        return (
-            f"{'' if relpath == '.' else relpath.replace(os.path.sep, '_') + '_'}"
-            f"{topology.identifier}_alerts"
-        )
+        prefix = "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_"
+        return "{}{}_alerts".format(prefix, topology.identifier)
 
-    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):
+    paths = Path(dir_path).glob("**/*.rule" if recursive else "*.rule")  # type: ignore
+    for path in filter(Path.is_file, paths):
         if rule := load_alert_rule_from_file(path, topology):
             logger.debug("Reading alert rule from %s", path)
             alerts[_group_name(path)].append(rule)
@@ -864,7 +867,7 @@ class MetricsEndpointConsumer(Object):
             for a single job.
         """
         name = job.get("job_name")
-        job_name = f"{job_name_prefix}_{name}" if name else job_name_prefix
+        job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
 
         labeled_job = job.copy()
         labeled_job["job_name"] = job_name
@@ -911,7 +914,7 @@ class MetricsEndpointConsumer(Object):
                 )
                 labeled_job["static_configs"].append(static_config)
                 if "juju_unit" not in instance_relabel_config["source_labels"]:
-                    instance_relabel_config["source_labels"].append("juju_unit")
+                    instance_relabel_config["source_labels"].append("juju_unit")  # type: ignore
 
         # ensure topology relabeling of instance label is last in order of relabelings
         relabel_configs = job.get("relabel_configs", [])
@@ -986,17 +989,17 @@ class MetricsEndpointConsumer(Object):
 
         # '/' is not allowed in Prometheus label names. It technically works,
         # but complex queries silently fail
-        juju_labels["juju_unit"] = f"{host_name.replace('/', '-')}"
+        juju_labels["juju_unit"] = host_name.replace("/", "-")
 
         static_config = {"labels": juju_labels}
 
         if ports:
             targets = []
             for port in ports:
-                targets.append(f"{host_address}:{port}")
-            static_config["targets"] = targets
+                targets.append("{}:{}".format(host_address, port))
+            static_config["targets"] = targets  # type: ignore
         else:
-            static_config["targets"] = [host_address]
+            static_config["targets"] = [host_address]  # type: ignore
 
         return static_config
 
@@ -1023,7 +1026,7 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_dir = Path(charm.charm_dir)
+    charm_dir = Path(charm.charm_dir)  # type: ignore
     if not charm_dir.exists() or not charm_dir.is_dir():
         # Operator Framework does not currently expose a robust
         # way to determine the top level charm source directory
@@ -1635,7 +1638,9 @@ class MetricsEndpointAggregator(Object):
         Returns:
             a string Prometheus scrape job name for the application.
         """
-        return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_prometheus_scrape"
+        return "juju_{}_{}_{}_prometheus_scrape".format(
+            self.model.name, self.model.uuid[:7], appname
+        )
 
     def _group_name(self, appname) -> str:
         """Construct name for an alert rule group.
@@ -1650,7 +1655,7 @@ class MetricsEndpointAggregator(Object):
         Returns:
             a string Prometheus alert rules group name for the application.
         """
-        return f"juju_{self.model.name}_{self.model.uuid[:7]}_{appname}_alert_rules"
+        return "juju_{}_{}_{}_alert_rules".format(self.model.name, self.model.uuid[:7], appname)
 
     def _juju_topology(self, unit_name, appname) -> dict:
         """Construct juju topology labels.
@@ -1714,7 +1719,7 @@ class MetricsEndpointAggregator(Object):
             "job_name": self._job_name(application_name),
             "static_configs": [
                 {
-                    "targets": [f"{target['hostname']}:{target['port']}"],
+                    "targets": ["{}:{}".format(target["hostname"], target["port"])],
                     "labels": {
                         "juju_model": juju_model,
                         "juju_model_uuid": juju_model_uuid,
