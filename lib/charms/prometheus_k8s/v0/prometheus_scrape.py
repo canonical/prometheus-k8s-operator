@@ -476,7 +476,7 @@ def _sanitize_scrape_configuration(job) -> dict:
 
 
 class JujuTopology:
-    """Dataclass for storing and formatting juju topology information."""
+    """Class for storing and formatting juju topology information."""
 
     def __init__(self, model: str, model_uuid: str, application: str, charm_name: str):
         self.model = model
