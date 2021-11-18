@@ -476,7 +476,7 @@ def _sanitize_scrape_configuration(job) -> dict:
 
 
 class JujuTopology:
-    """Dataclass for storing and formatting juju topology information."""
+    """Class for storing and formatting juju topology information."""
 
     def __init__(self, model: str, model_uuid: str, application: str, charm_name: str):
         self.model = model
@@ -610,11 +610,11 @@ def load_alert_rules_from_dir(
         # Generate group name:
         #  - prefix, from the relative path of the rule file;
         #  - name, from juju topology
-        return "{}{}_alerts".format(
-            "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_", topology.identifier
-        )
+        prefix =  "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_"
+        return "{}{}_alerts".format(prefix, topology.identifier)
 
-    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):  # type: ignore
+    paths = Path(dir_path).glob("**/*.rule" if recursive else "*.rule")
+    for path in filter(Path.is_file, paths):  # type: ignore
         if rule := load_alert_rule_from_file(path, topology):
             logger.debug("Reading alert rule from %s", path)
             alerts[_group_name(path)].append(rule)
