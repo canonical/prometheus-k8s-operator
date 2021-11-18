@@ -613,7 +613,8 @@ def load_alert_rules_from_dir(
         prefix =  "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_"
         return "{}{}_alerts".format(prefix, topology.identifier)
 
-    for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):  # type: ignore
+    paths = Path(dir_path).glob("**/*.rule" if recursive else "*.rule")
+    for path in filter(Path.is_file, paths):  # type: ignore
         if rule := load_alert_rule_from_file(path, topology):
             logger.debug("Reading alert rule from %s", path)
             alerts[_group_name(path)].append(rule)
