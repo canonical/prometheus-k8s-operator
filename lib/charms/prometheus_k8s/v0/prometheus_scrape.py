@@ -610,9 +610,8 @@ def load_alert_rules_from_dir(
         # Generate group name:
         #  - prefix, from the relative path of the rule file;
         #  - name, from juju topology
-        return "{}{}_alerts".format(
-            "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_", topology.identifier
-        )
+        prefix =  "" if relpath == "." else relpath.replace(os.path.sep, "_") + "_"
+        return "{}{}_alerts".format(prefix, topology.identifier)
 
     for path in filter(Path.is_file, Path(dir_path).glob("**/*.rule" if recursive else "*.rule")):  # type: ignore
         if rule := load_alert_rule_from_file(path, topology):
