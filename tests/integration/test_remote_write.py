@@ -5,7 +5,7 @@
 import logging
 
 import pytest
-from helpers import check_prometheus_is_ready, oci_image, run_promql
+from helpers import check_prometheus_is_ready, oci_image, run_promql, initial_workload_is_ready
 from tenacity import retry, stop_after_delay, wait_fixed
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
 
     apps = [prometheus_name, agent_name]
     await ops_test.model.wait_for_idle(apps=apps, status="active")
-    assert leader_workloads_are_ready(ops_test, apps)
+    assert initial_workload_is_ready(ops_test, apps)
 
     await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
@@ -53,11 +53,3 @@ async def has_metric(ops_test, query: str, app_name: str) -> bool:
 
     raise Exception
 
-
-def leader_workloads_are_ready(ops_test, names) -> bool:
-    apps = ops_test.model.applications
-    for name in names:
-        if apps[name].units[0].workload_status != "active":
-            return False
-
-    return True
