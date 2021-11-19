@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 
 import pytest
@@ -24,3 +25,16 @@ async def prometheus_tester_charm(ops_test):
     charm_path = "tests/integration/prometheus-tester"
     charm = await ops_test.build_charm(charm_path)
     return charm
+
+
+@pytest.fixture(scope="module")
+async def prometheus_charms(ops_test):
+    """Builds both charms in parallel."""
+    charm_path = "tests/integration/prometheus-tester"
+
+    prometheus, tester = await asyncio.gather(
+        ops_test.build_charm("."),
+        ops_test.build_charm(charm_path),
+    )
+
+    return prometheus, tester

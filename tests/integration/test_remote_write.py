@@ -48,9 +48,11 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     )
 
 
+# TODO: Move this to a helper? It has dependencies on tenacity, so not really
+# sure - SA 2021-11-19
 @retry(wait=wait_fixed(10), stop=stop_after_delay(60 * 5))
 async def has_metric(ops_test, query: str, app_name: str) -> bool:
-    # Throws if the query does not return any time series in 5 minutes,
+    # Throws if the query does not return any time series within 5 minutes,
     # and as a consequence, fails the test
     for timeseries in await run_promql(ops_test, query, app_name):
         if timeseries.get("metric"):
