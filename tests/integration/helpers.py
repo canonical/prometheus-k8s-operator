@@ -162,3 +162,19 @@ def oci_image(metadata_file: str, image_name: str) -> str:
         raise ValueError("Upstream source not found")
 
     return upstream_source
+
+
+def initial_workload_is_ready(ops_test, app_names) -> bool:
+    """Checks that the initial workload (ie. x/0) is ready.
+
+    Args:
+        ops_test: pytest-operator plugin
+        app_names: array of application names to check for
+
+    Returns:
+        whether the workloads are active or not
+    """
+    for name in app_names:
+        if ops_test.model.applications[name].units[0].workload_status != "active":
+            return False
+    return True
