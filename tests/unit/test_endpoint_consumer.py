@@ -358,15 +358,16 @@ class TestEndpointConsumer(unittest.TestCase):
             "consumer",
             {
                 "scrape_metadata": json.dumps(SCRAPE_METADATA),
-                "alert_rules": json.dumps(["dummy_topology_identifier", ALERT_RULES]),
+                "alert_rules": json.dumps(ALERT_RULES),
             },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
         rules_file = self.harness.charm.prometheus_consumer.alerts()
+        self.maxDiff = None
         alerts = list(rules_file.values())[0]
-        self.assertDictEqual(ALERT_RULES, alerts)
+        self.assertEqual(ALERT_RULES, alerts)
 
     def test_consumer_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)

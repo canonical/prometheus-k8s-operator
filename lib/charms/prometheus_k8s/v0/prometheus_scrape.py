@@ -496,7 +496,7 @@ class JujuTopology:
         )
 
     @staticmethod
-    def from_relation_data(data):
+    def from_relation_data(data: dict):
         """Factory method for creating the topology dataclass from a relation data dict."""
         return JujuTopology(
             model=data["model"],
@@ -565,14 +565,14 @@ class InvalidAlertRulePathError(Exception):
 
 
 class AlertRules:
-    """Data store for prometheus alert rules.
+    """Utility class for amalgamating prometheus alert rule files and injecting juju topology.
 
-    Alert rule files can be read in both the official and the LMA format. All rules are combined in
-    a single data structure representing an amalgamated rules file.
+    Alert rule files can be read in both the official and the custom format (one alert per file).
+    All rules are combined in a single data structure representing an amalgamated rules file.
 
     The official Prometheus format is a YAML file conforming to the Prometheus documentation
     (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
-    The LMA format is a subsection of the official YAML, having a single alert rule, effectively
+    The custom format is a subsection of the official YAML, having a single alert rule, effectively
     "one alert per file". This class supports either format.
 
     For the purpose of forwarding alert rules over relation data, all rules are aggregated into a
@@ -596,40 +596,43 @@ class AlertRules:
         self.alert_groups = []  # type: List[dict]
 
     @staticmethod
-    def _is_valid_official_format(rules_dict: dict):
+    def _is_official_format(rules_dict: dict) -> bool:
+        # TODO validate e.g. against schema using pydantic
         return "groups" in rules_dict
 
     @staticmethod
-    def _is_valid_lma_format(rules_dict: dict):
+    def _is_custom_format(rules_dict: dict) -> bool:
         # one alert rule per file
+        # TODO validate e.g. against schema using pydantic
         return set(rules_dict) >= {"alert", "expr"}
 
-    @staticmethod
-    def _from_file(root_path: str, file_path: Path, topology: JujuTopology) -> List[dict]:
+    def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
         """Read a rules file from path, injecting juju topology.
 
         Args:
-            root_path: path to the root rules folder (used only for generating group name)
-            file_path: path to a *.rule file.
-            topology: juju topology information.
+            root_path: full path to the root rules folder (used only for generating group name)
+            file_path: full path to a *.rule file.
+
+        Returns:
+            A list of dictionaries representing the rules file, if file is valid (the structure is
+            formed by `yaml.safe_load` of the file); an empty list otherwise.
         """
-        with file_path.open() as rule_file:
+        with file_path.open() as rf:
             # Load a list of rules from file then add labels and filters
             try:
-                from_yaml = yaml.safe_load(rule_file)
+                rule_file = yaml.safe_load(rf)
+
             except Exception as e:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
                 return []
 
             # TODO validate input
-            if AlertRules._is_valid_official_format(from_yaml):
-                # looks like standard rules file
-                alert_groups = from_yaml["groups"]
-            elif AlertRules._is_valid_lma_format(from_yaml):
-                # looks like LMA format (one alert rule per file)
+            if AlertRules._is_official_format(rule_file):
+                alert_groups = rule_file["groups"]
+            elif AlertRules._is_custom_format(rule_file):
                 # convert to list of alert groups
                 # group name is made up from the file name
-                alert_groups = [{"name": file_path.stem, "rules": [from_yaml]}]
+                alert_groups = [{"name": file_path.stem, "rules": [rule_file]}]
             else:
                 # invalid/unsupported
                 logger.error("Invalid rules file: %s", file_path.name)
@@ -638,10 +641,9 @@ class AlertRules:
             # update rules with additional metadata
             for alert_group in alert_groups:
                 # update group name with topology and sub-path
-                alert_group["name"] = AlertRules._group_name(
-                    root_path,
+                alert_group["name"] = self._group_name(
+                    str(root_path),
                     str(file_path),
-                    topology,
                     alert_group["name"],
                 )
 
@@ -649,17 +651,14 @@ class AlertRules:
                 for alert_rule in alert_group["rules"]:
                     if "labels" not in alert_rule:
                         alert_rule["labels"] = {}
-                    alert_rule["labels"].update(topology.as_dict_with_promql_labels())
+                    alert_rule["labels"].update(self.topology.as_dict_with_promql_labels())
 
                     # insert juju topology filters into a prometheus alert rule
-                    alert_rule["expr"] = topology.render(alert_rule["expr"])
+                    alert_rule["expr"] = self.topology.render(alert_rule["expr"])
 
             return alert_groups
 
-    @staticmethod
-    def _group_name(
-        root_path: str, file_path: str, topology: JujuTopology, group_name: str
-    ) -> str:
+    def _group_name(self, root_path: str, file_path: str, group_name: str) -> str:
         """Generate group name from path and topology.
 
         The group name is made up of the relative path between the root dir_path, the file path,
@@ -668,8 +667,10 @@ class AlertRules:
         Args:
             root_path: path to the root rules dir.
             file_path: path to rule file.
-            topology: juju topology information.
             group_name: original group name to keep as part of the new augmented group name
+
+        Returns:
+            New group name, augmented by juju topology and relative path.
         """
         rel_path = os.path.relpath(os.path.dirname(file_path), root_path)
         rel_path = "" if rel_path == "." else rel_path.replace(os.path.sep, "_")
@@ -677,12 +678,11 @@ class AlertRules:
         # Generate group name:
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
+        group_name_parts = [self.topology.identifier, rel_path, group_name, "alerts"]
+        return "_".join(filter(None, group_name_parts))
 
-        return "{}_{}_{}_alerts".format(topology.identifier, rel_path, group_name)
-
-    @staticmethod
-    def _from_dir(dir_path: str, topology: JujuTopology, recursive: bool) -> List[dict]:
-        """Factory method for creating an instance from a path to a folder of rules.
+    def _from_dir(self, dir_path: Path, recursive: bool) -> List[dict]:
+        """Read all rule files in a directory.
 
         All rules from files for the same directory are loaded into a single
         group. The generated name of this group includes juju topology.
@@ -690,20 +690,20 @@ class AlertRules:
 
         Args:
             dir_path: directory containing *.rule files (alert rules without groups).
-            topology: juju topology information.
             recursive: flag indicating whether to scan for rule files recursively.
 
         Returns:
-            a list of prometheus alert rule groups.
+            a list of dictionaries representing prometheus alert rule groups, each dictionary
+            representing an alert group (structure determined by `yaml.safe_load`).
         """
         alert_groups = []  # type: List[dict]
 
         # Gather all alerts into a list of groups
-        paths = Path(dir_path).glob("**/*.rule" if recursive else "*.rule")
+        paths = dir_path.glob("**/*.rule" if recursive else "*.rule")
         for file_path in filter(Path.is_file, paths):
-            alert_groups_from_file = AlertRules._from_file(dir_path, file_path, topology)
+            alert_groups_from_file = self._from_file(dir_path, file_path)
             if alert_groups_from_file:
-                print("Reading alert rule from %s", file_path)
+                logger.debug("Reading alert rule from %s", file_path)
                 alert_groups.extend(alert_groups_from_file)
 
         return alert_groups if alert_groups else []
@@ -716,20 +716,26 @@ class AlertRules:
 
         Args:
             path: either a rules file or a dir of rules files.
-            recursive: whether to read files recursively or not.
+            recursive: whether to read files recursively or not (no impact if `path` is a file).
 
         Raises:
             NotADirectoryError: if the provided path is invalid.
+
+        Returns:
+            self, so calls are chainable.
         """
-        if Path(path).is_dir():
-            self.alert_groups.extend(AlertRules._from_dir(path, self.topology, recursive))
+        path = Path(path)  # type: Path
+        if path.is_dir():
+            self.alert_groups.extend(self._from_dir(path, recursive))
+        elif path.is_file():
+            self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            raise NotADirectoryError("The provided path does not exist: {}".format(path))
+            raise InvalidAlertRulePathError(path, "path does not exist")
 
         return self  # so calls are chainable
 
-    def as_rules_file_dict(self) -> dict:
-        """Return standard alert rules file in string representation."""
+    def as_dict(self) -> dict:
+        """Return standard alert rules file in dict representation."""
         return {"groups": self.alert_groups} if self.alert_groups else {}
 
 
@@ -859,28 +865,33 @@ class MetricsEndpointConsumer(Object):
 
         {"groups": [{"name": ...}, ...]}
 
+        per official prometheus documentation
+        https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+
         The value of the `groups` key is such that it may be used to generate
         a Prometheus alert rules file directly using `yaml.dump` but the
         `groups` key itself must be included as this is required by Prometheus.
 
         Returns:
-            A dictionary mapping the juju identifier of the source charm to its rules file.
+            A dictionary mapping the juju identifier of the source charm to its alert rules file.
         """
         alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "[]"))
+            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
             if not alert_rules:
                 continue
 
             try:
-                topology_identifier, rules_file = alert_rules
-                # TODO validate rules_file
-                alerts[topology_identifier] = rules_file
+                scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
+                topology = JujuTopology.from_relation_data(scrape_metadata)
 
-            except ValueError as e:
+                # TODO validate rules_file
+                alerts[topology.identifier] = alert_rules
+
+            except KeyError as e:
                 logger.error(
                     "Relation %s has invalid data : %s",
                     relation.id,
@@ -1300,7 +1311,7 @@ class MetricsEndpointProvider(Object):
         rules_file = (
             AlertRules(self.topology)
             .add_from_path(self._alert_rules_path, recursive=False)
-            .as_rules_file_dict()
+            .as_dict()
         )
 
         for relation in self._charm.model.relations[self._relation_name]:
@@ -1309,13 +1320,10 @@ class MetricsEndpointProvider(Object):
 
             if rules_file:
                 # Update relation data with the string representation of the rule file.
-                # Juju topology is included because the consumer side of the relation uses this
-                # information to name the rules file that is written to the filesystem.
-                # Although the topology identifier is included in all group names, it cannot be
-                # easily retrieved from there.
-                relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    [self.topology.identifier, rules_file]
-                )
+                # Juju topology is already included in the "scrape_metadata" field above.
+                # The consumer side of the relation uses this information to name the rules file
+                # that is written to the filesystem.
+                relation.data[self._charm.app]["alert_rules"] = json.dumps(rules_file)
 
     def _set_unit_ip(self, _):
         """Set unit host address.
@@ -1407,19 +1415,18 @@ class RuleFilesProvider(Object):
         rules_file = (
             AlertRules(self.topology)
             .add_from_path(self.dir_path, recursive=self._recursive)
-            .as_rules_file_dict()
+            .as_dict()
         )
 
         if rules_file:
             logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    [self.topology.identifier, rules_file],
+                    rules_file,
                     sort_keys=True,  # sort, to prevent unnecessary relation_changed events
                 )
 
 
-# TODO: update this class with changes made to relation data format
 class MetricsEndpointAggregator(Object):
     """Aggregate metrics from multiple scrape targets.
 
@@ -1532,12 +1539,14 @@ class MetricsEndpointAggregator(Object):
         """
         jobs = []  # list of scrape jobs, one per relation
         for relation in self.model.relations[self._target_relation]:
-            if targets := self._get_targets(relation):
+            targets = self._get_targets(relation)
+            if targets:
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
         groups = []  # list of alert rule groups, one group per relation
         for relation in self.model.relations[self._alert_rules_relation]:
-            if unit_rules := self._get_alert_rules(relation):
+            unit_rules = self._get_alert_rules(relation)
+            if unit_rules:
                 appname = relation.app.name
                 rules = self._label_alert_rules(unit_rules, appname)
                 group = {"name": self._group_name(appname), "rules": rules}
@@ -1553,7 +1562,8 @@ class MetricsEndpointAggregator(Object):
         target, the Prometheus scrape job, for that specific target is
         updated.
         """
-        if not (targets := self._get_targets(event.relation)):
+        targets = self._get_targets(event.relation)
+        if not targets:
             return
 
         # new scrape job for the relation that has changed
@@ -1576,10 +1586,12 @@ class MetricsEndpointAggregator(Object):
         unit_name = event.unit.name
 
         for relation in self.model.relations[self._prometheus_relation]:
-            if not (jobs := json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))):
+            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            if not jobs:
                 continue
 
-            if not (changed_job := [j for j in jobs if j.get("job_name") == job_name]):
+            changed_job = [j for j in jobs if j.get("job_name") == job_name]
+            if not changed_job:
                 continue
             changed_job = changed_job[0]
 
@@ -1606,7 +1618,8 @@ class MetricsEndpointAggregator(Object):
         scrape target, the list of alert rules for that specific
         target is updated.
         """
-        if not (unit_rules := self._get_alert_rules(event.relation)):
+        unit_rules = self._get_alert_rules(event.relation)
+        if not unit_rules:
             return
 
         appname = event.relation.app.name
@@ -1636,7 +1649,8 @@ class MetricsEndpointAggregator(Object):
             if not alert_rules:
                 continue
 
-            if not (groups := alert_rules.get("groups", [])):
+            groups = alert_rules.get("groups", [])
+            if not groups:
                 continue
 
             changed_group = [group for group in groups if group["name"] == group_name]
@@ -1685,7 +1699,8 @@ class MetricsEndpointAggregator(Object):
         targets = {}
         for unit in relation.units:
             port = relation.data[unit].get("port", 80)
-            if hostname := relation.data[unit].get("hostname"):
+            hostname = relation.data[unit].get("hostname")
+            if hostname:
                 targets.update({unit.name: {"hostname": hostname, "port": port}})
 
         return targets
@@ -1710,7 +1725,8 @@ class MetricsEndpointAggregator(Object):
         """
         rules = {}
         for unit in relation.units:
-            if unit_rules := yaml.safe_load(relation.data[unit].get("groups", "")):
+            unit_rules = yaml.safe_load(relation.data[unit].get("groups", ""))
+            if unit_rules:
                 rules.update({unit.name: unit_rules})
 
         return rules
