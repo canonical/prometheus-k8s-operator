@@ -20,14 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
-async def test_prometheus_scrape_relation_with_prometheus_tester(ops_test, prometheus_charms):
+async def test_prometheus_scrape_relation_with_prometheus_tester(
+    ops_test, prometheus_charm, prometheus_tester_charm
+):
     """Test basic functionality of prometheus_scrape relation interface."""
     tester_resources = {
         "prometheus-tester-image": oci_image(
             "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
         )
     }
-    prometheus_charm, prometheus_tester_charm = prometheus_charms
     prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     prometheus_app_name = "prometheus"
     tester_app_name = "prometheus-tester"

@@ -34,11 +34,9 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     )
 
     await ops_test.model.add_relation(prometheus_name, agent_name)
-
     apps = [prometheus_name, agent_name]
     await ops_test.model.wait_for_idle(apps=apps, status="active")
     assert initial_workload_is_ready(ops_test, apps)
-
     await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await has_metric(
