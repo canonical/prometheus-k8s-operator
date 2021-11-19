@@ -297,7 +297,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import yaml
 from ops.charm import CharmBase, RelationRole
@@ -546,6 +546,7 @@ class JujuTopology:
 
     def render(self, template: str):
         """Render a juju-topology template string with topology info."""
+        # TODO remove, once https://github.com/canonical/prometheus-operator/pull/166 is merged
         return template.replace(JujuTopology.STUB, self.promql_labels)
 
 
@@ -564,7 +565,10 @@ class InvalidAlertRulePathError(Exception):
 
 
 class AlertRules:
-    """Read alert rule files recursively, in both the official and the LMA format, into one list.
+    """Data store for prometheus alert rules.
+
+    Alert rule files can be read in both the official and the LMA format. All rules are combined in
+    a single data structure representing an amalgamated rules file.
 
     The official Prometheus format is a YAML file conforming to the Prometheus documentation
     (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
@@ -573,6 +577,9 @@ class AlertRules:
 
     For the purpose of forwarding alert rules over relation data, all rules are aggregated into a
     single data structure (which can then be written into a single *.rules YAML file).
+
+    Args:
+        topology: a JujuTopology instance.
     """
 
     # This class uses the following terminology for the various parts of a rule file:
@@ -584,14 +591,22 @@ class AlertRules:
     #   the "alert" and "expr" keys.
     # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
 
-    def __init__(self, alert_groups: List[dict] = None):
-        self.alert_groups = alert_groups if alert_groups else []
+    def __init__(self, topology: JujuTopology):
+        self.topology = topology
+        self.alert_groups = []  # type: List[dict]
 
     @staticmethod
-    def _from_file(
-        root_path: str, file_path: Path, topology: JujuTopology
-    ) -> Optional[List[dict]]:
-        """Factory method for creating an instance from a path to a rules file.
+    def _is_valid_official_format(rules_dict: dict):
+        return "groups" in rules_dict
+
+    @staticmethod
+    def _is_valid_lma_format(rules_dict: dict):
+        # one alert rule per file
+        return set(rules_dict) >= {"alert", "expr"}
+
+    @staticmethod
+    def _from_file(root_path: str, file_path: Path, topology: JujuTopology) -> List[dict]:
+        """Read a rules file from path, injecting juju topology.
 
         Args:
             root_path: path to the root rules folder (used only for generating group name)
@@ -604,42 +619,42 @@ class AlertRules:
                 from_yaml = yaml.safe_load(rule_file)
             except Exception as e:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
-                return None
+                return []
+
+            # TODO validate input
+            if AlertRules._is_valid_official_format(from_yaml):
+                # looks like standard rules file
+                alert_groups = from_yaml["groups"]
+            elif AlertRules._is_valid_lma_format(from_yaml):
+                # looks like LMA format (one alert rule per file)
+                # convert to list of alert groups
+                # group name is made up from the file name
+                alert_groups = [{"name": file_path.stem, "rules": [from_yaml]}]
             else:
-                # TODO validate input
-                if "groups" in from_yaml:
-                    # looks like standard rules file
-                    alert_groups = from_yaml["groups"]
-                elif all(itm in from_yaml for itm in ["alert", "expr"]):
-                    # looks like LMA format (one alert rule per file)
-                    # convert to list of alert groups
-                    # group name is made up from the file name
-                    alert_groups = [{"name": file_path.stem, "rules": [from_yaml]}]
-                else:
-                    # invalid/unsupported
-                    logger.error("Invalid rules file: %s", file_path.name)
-                    return None
+                # invalid/unsupported
+                logger.error("Invalid rules file: %s", file_path.name)
+                return []
 
-                # update rules with additional metadata
-                for alert_group in alert_groups:
-                    # update group name with topology and sub-path
-                    alert_group["name"] = AlertRules._group_name(
-                        root_path,
-                        str(file_path),
-                        topology,
-                        alert_group["name"],
-                    )
+            # update rules with additional metadata
+            for alert_group in alert_groups:
+                # update group name with topology and sub-path
+                alert_group["name"] = AlertRules._group_name(
+                    root_path,
+                    str(file_path),
+                    topology,
+                    alert_group["name"],
+                )
 
-                    # add "juju_" topology labels
-                    for alert_rule in alert_group["rules"]:
-                        if "labels" not in alert_rule:
-                            alert_rule["labels"] = {}
-                        alert_rule["labels"].update(topology.as_dict_with_promql_labels())
+                # add "juju_" topology labels
+                for alert_rule in alert_group["rules"]:
+                    if "labels" not in alert_rule:
+                        alert_rule["labels"] = {}
+                    alert_rule["labels"].update(topology.as_dict_with_promql_labels())
 
-                        # insert juju topology filters into a prometheus alert rule
-                        alert_rule["expr"] = topology.render(alert_rule["expr"])
+                    # insert juju topology filters into a prometheus alert rule
+                    alert_rule["expr"] = topology.render(alert_rule["expr"])
 
-                return alert_groups
+            return alert_groups
 
     @staticmethod
     def _group_name(
@@ -681,37 +696,37 @@ class AlertRules:
         Returns:
             a list of prometheus alert rule groups.
         """
-        alert_groups = []
+        alert_groups = []  # type: List[dict]
 
         # Gather all alerts into a list of groups
         paths = Path(dir_path).glob("**/*.rule" if recursive else "*.rule")
         for file_path in filter(Path.is_file, paths):
-            if alert_groups_from_file := AlertRules._from_file(dir_path, file_path, topology):
+            alert_groups_from_file = AlertRules._from_file(dir_path, file_path, topology)
+            if alert_groups_from_file:
                 print("Reading alert rule from %s", file_path)
                 alert_groups.extend(alert_groups_from_file)
 
         return alert_groups if alert_groups else []
 
-    @staticmethod
-    def from_path(path: str, *, topology: JujuTopology, recursive: bool = False):
-        """Factory method for creating an instance from a dir path.
+    def add_from_path(self, path: str, *, recursive: bool = False):
+        """Add rules from a dir path.
 
         All rules from files are aggregated into a data structure representing a single rule file.
         All group names are augmented with juju topology.
 
         Args:
             path: either a rules file or a dir of rules files.
-            topology: juju topology information.
             recursive: whether to read files recursively or not.
 
         Raises:
-            InvalidAlertRulePathError: if the provided path is invalid.
+            NotADirectoryError: if the provided path is invalid.
         """
         if Path(path).is_dir():
-            return AlertRules(AlertRules._from_dir(path, topology, recursive))
+            self.alert_groups.extend(AlertRules._from_dir(path, self.topology, recursive))
         else:
-            # path does not exist; perhaps git-sync side-car is not up yet
-            return AlertRules()
+            raise NotADirectoryError("The provided path does not exist: {}".format(path))
+
+        return self  # so calls are chainable
 
     def as_rules_file_dict(self) -> dict:
         """Return standard alert rules file in string representation."""
@@ -1282,9 +1297,11 @@ class MetricsEndpointProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        rules_file = AlertRules.from_path(
-            self._alert_rules_path, topology=self.topology, recursive=False
-        ).as_rules_file_dict()
+        rules_file = (
+            AlertRules(self.topology)
+            .add_from_path(self._alert_rules_path, recursive=False)
+            .as_rules_file_dict()
+        )
 
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
@@ -1387,9 +1404,13 @@ class RuleFilesProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        if rules_file := AlertRules.from_path(
-            self.dir_path, topology=self.topology, recursive=self._recursive
-        ).as_rules_file_dict():
+        rules_file = (
+            AlertRules(self.topology)
+            .add_from_path(self.dir_path, recursive=self._recursive)
+            .as_rules_file_dict()
+        )
+
+        if rules_file:
             logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(

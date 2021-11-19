@@ -332,18 +332,22 @@ class TestAlertRules(unittest.TestCase):
         self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def test_non_recursive_is_default(self):
-        rules_file_dict = AlertRules.from_path(
-            os.path.join(self.sandbox.root, "rules", "prom"), topology=self.topology
-        ).as_rules_file_dict()
+        rules_file_dict = (
+            AlertRules(self.topology)
+            .add_from_path(os.path.join(self.sandbox.root, "rules", "prom"))
+            .as_rules_file_dict()
+        )
         self.assertEqual({}, rules_file_dict)
 
     def test_alerts_in_both_formats_are_recursively_aggregated(self):
-        self.maxDiff = None
-        rules_file_dict = AlertRules.from_path(
-            os.path.join(self.sandbox.root, "rules", "prom"),
-            topology=self.topology,
-            recursive=True,
-        ).as_rules_file_dict()
+        rules_file_dict = (
+            AlertRules(self.topology)
+            .add_from_path(
+                os.path.join(self.sandbox.root, "rules", "prom"),
+                recursive=True,
+            )
+            .as_rules_file_dict()
+        )
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
