@@ -11,8 +11,8 @@ from helpers import (
     get_prometheus_config,
     get_prometheus_rules,
     get_rules_for,
+    initial_workload_is_ready,
     oci_image,
-    initial_workload_is_ready
 )
 
 logger = logging.getLogger(__name__)
@@ -34,8 +34,12 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
     app_names = [prometheus_app_name, tester_app_name]
 
-    await ops_test.model.deploy(prometheus_charm, resources=prometheus_resources, application_name=prometheus_app_name)
-    await ops_test.model.deploy(prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name)
+    await ops_test.model.deploy(
+        prometheus_charm, resources=prometheus_resources, application_name=prometheus_app_name
+    )
+    await ops_test.model.deploy(
+        prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name
+    )
 
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
 
@@ -43,7 +47,8 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         lambda: (
             len(ops_test.model.applications[prometheus_app_name].units) > 0
             and len(ops_test.model.applications[tester_app_name].units) > 0
-        ))
+        )
+    )
 
     assert initial_workload_is_ready(ops_test, apps=app_names)
     await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)

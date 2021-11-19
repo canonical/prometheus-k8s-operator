@@ -5,7 +5,12 @@
 import logging
 
 import pytest
-from helpers import check_prometheus_is_ready, oci_image, run_promql, initial_workload_is_ready
+from helpers import (
+    check_prometheus_is_ready,
+    initial_workload_is_ready,
+    oci_image,
+    run_promql,
+)
 from tenacity import retry, stop_after_delay, wait_fixed
 
 logger = logging.getLogger(__name__)
@@ -52,4 +57,3 @@ async def has_metric(ops_test, query: str, app_name: str) -> bool:
             return True
 
     raise Exception
-
