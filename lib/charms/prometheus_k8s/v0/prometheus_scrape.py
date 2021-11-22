@@ -531,7 +531,7 @@ class JujuTopology:
             "model": self.model,
             "model_uuid": self.model_uuid,
             "application": self.application,
-            "charm": self.charm_name,
+            "charm_name": self.charm_name,
         }
 
     def as_dict_with_promql_labels(self):
