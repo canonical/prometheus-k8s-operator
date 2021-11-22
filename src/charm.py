@@ -140,17 +140,15 @@ class PrometheusCharm(CharmBase):
             container.restart(self._name)
             logger.info("Prometheus (re)started")
 
-        remote_write_plus_ingress_status_message = INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
-
         if not self._validate_ingress_and_remote_write():
-            self.unit.status = BlockedStatus(remote_write_plus_ingress_status_message)
+            self.unit.status = BlockedStatus(INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE)
             logger.error(
                 "Using the ingress relation and receiving remote_write relations with more than "
                 "one Prometheus unit; remote_write data is likely to be sent to only one unit."
             )
         elif (
             isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message == remote_write_plus_ingress_status_message
+            and self.unit.status.message == INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
         ):
             self.unit.status = ActiveStatus()
 

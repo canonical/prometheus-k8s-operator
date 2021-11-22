@@ -44,7 +44,7 @@ class RelationNotFoundError(Exception):
 
     def __init__(self, relation_name: str):
         self.relation_name = relation_name
-        self.message = f"No relation named '{relation_name}' found"
+        self.message = "No relation named '{}' found".format(relation_name)
 
         super().__init__(self.message)
 
@@ -62,8 +62,9 @@ class RelationInterfaceMismatchError(Exception):
         self.expected_relation_interface = expected_relation_interface
         self.actual_relation_interface = actual_relation_interface
         self.message = (
-            f"The '{relation_name}' relation has '{actual_relation_interface}' as "
-            f"interface rather than the expected '{expected_relation_interface}'"
+            "The '{}' relation has '{}' as its interface rather than the expected '{}'".format(
+                relation_name, actual_relation_interface, expected_relation_interface
+            )
         )
 
         super().__init__(self.message)
@@ -81,9 +82,8 @@ class RelationRoleMismatchError(Exception):
         self.relation_name = relation_name
         self.expected_relation_interface = expected_relation_role
         self.actual_relation_role = actual_relation_role
-        self.message = (
-            f"The '{relation_name}' relation has role '{repr(actual_relation_role)}' "
-            f"rather than the expected '{repr(expected_relation_role)}'"
+        self.message = "The '{}' relation has role '{}' rather than the expected '{}'".format(
+            relation_name, repr(actual_relation_role), repr(expected_relation_role)
         )
 
         super().__init__(self.message)
@@ -142,7 +142,7 @@ def _validate_relation_by_interface_and_direction(
                 relation_name, RelationRole.requires, RelationRole.provides
             )
     else:
-        raise Exception(f"Unexpected RelationDirection: {expected_relation_role}")
+        raise Exception("Unexpected RelationDirection: {}".format(expected_relation_role))
 
 
 class PrometheusRemoteWriteEndpointsChangedEvent(EventBase):
@@ -495,10 +495,10 @@ class PrometheusRemoteWriteConsumer(Object):
             Scrape configuration metadata for the charm using this PrometheusRemoteWriteConsumer.
         """
         metadata = {
-            "model": f"{self._charm.model.name}",
-            "model_uuid": f"{self._charm.model.uuid}",
-            "application": f"{self._charm.model.app.name}",
-            "charm_name": f"{self._charm.meta.name}",
+            "model": "{}".format(self._charm.model.name),
+            "model_uuid": "{}".format(self._charm.model.uuid),
+            "application": "{}".format(self._charm.model.app.name),
+            "charm_name": "{}".format(self._charm.meta.name),
         }
         return metadata
 
@@ -634,9 +634,11 @@ class PrometheusRemoteWriteProvider(Object):
 
         path = self._endpoint_path or ""
         if path and not path.startswith("/"):
-            path = f"/{path}"
+            path = "/{}".format(path)
 
-        endpoint_url = f"{self._endpoint_schema}://{address}:{str(self._endpoint_port)}{path}"
+        endpoint_url = "{}://{}:{}{}".format(
+            self._endpoint_schema, address, str(self._endpoint_port), path
+        )
 
         relation.data[self._charm.unit]["remote_write"] = json.dumps(
             {

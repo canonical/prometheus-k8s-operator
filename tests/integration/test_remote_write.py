@@ -2,6 +2,7 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import asyncio
 import logging
 
 import pytest
@@ -22,15 +23,17 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     prometheus_name = "prometheus"
     agent_name = "grafana-agent"
 
-    await ops_test.model.deploy(
-        prometheus_charm,
-        resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
-        application_name=prometheus_name,
-    )
-    await ops_test.model.deploy(
-        "grafana-agent-k8s",
-        application_name=agent_name,
-        channel="edge",
+    asyncio.gather(
+        ops_test.model.deploy(
+            prometheus_charm,
+            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            application_name=prometheus_name,
+        ),
+        ops_test.model.deploy(
+            "grafana-agent-k8s",
+            application_name=agent_name,
+            channel="edge",
+        ),
     )
 
     await ops_test.model.add_relation(prometheus_name, agent_name)
