@@ -23,7 +23,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     prometheus_name = "prometheus"
     agent_name = "grafana-agent"
 
-    asyncio.gather(
+    await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
             resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
