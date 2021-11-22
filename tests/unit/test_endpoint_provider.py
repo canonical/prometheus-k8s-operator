@@ -333,19 +333,15 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def test_non_recursive_is_default(self):
-        rules_file_dict = (
-            AlertRules(self.topology)
-            .add_from_path(os.path.join(self.sandbox.root, "rules", "prom"))
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"))
+        rules_file_dict = rules.as_dict()
         self.assertEqual({}, rules_file_dict)
 
     def test_non_recursive_lma_format_loading_from_root_dir(self):
-        rules_file_dict = (
-            AlertRules(self.topology)
-            .add_from_path(os.path.join(self.sandbox.root, "rules", "prom", "lma_format"))
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "lma_format"))
+        rules_file_dict = rules.as_dict()
 
         expected_freestanding_rule = {
             "alert": "free_standing",
@@ -365,11 +361,9 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.assertEqual(expected_rules_file, rules_file_dict)
 
     def test_non_recursive_official_format_loading_from_root_dir(self):
-        rules_file_dict = (
-            AlertRules(self.topology)
-            .add_from_path(os.path.join(self.sandbox.root, "rules", "prom", "prom_format"))
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "prom_format"))
+        rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
@@ -395,14 +389,9 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
           - For rules in lma format, core group name is the filename
           - For rules in official format, core group name is the group name in the file
         """
-        rules_file_dict = (
-            AlertRules(self.topology)
-            .add_from_path(
-                os.path.join(self.sandbox.root, "rules", "prom"),
-                recursive=True,
-            )
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"), recursive=True)
+        rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
@@ -460,14 +449,9 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = Sandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules_file_dict_read = (
-            AlertRules(self.topology)
-            .add_from_path(
-                os.path.join(sandbox.root, "rules"),
-                recursive=False,
-            )
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
+        rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
             "groups": [
@@ -502,14 +486,9 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = Sandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules_file_dict_read = (
-            AlertRules(self.topology)
-            .add_from_path(
-                os.path.join(sandbox.root, "rules"),
-                recursive=False,
-            )
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
+        rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
             "groups": [
@@ -530,14 +509,9 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = Sandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules_file_dict_read = (
-            AlertRules(self.topology)
-            .add_from_path(
-                os.path.join(sandbox.root, "rules"),
-                recursive=False,
-            )
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
+        rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
             "groups": [
@@ -568,14 +542,9 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             ("rules/a/b/file.rule", yaml.safe_dump(self.gen_rule(2))),
         )
 
-        rules_file_dict_read = (
-            AlertRules(self.topology)
-            .add_from_path(
-                os.path.join(sandbox.root, "rules"),
-                recursive=True,
-            )
-            .as_dict()
-        )
+        rules = AlertRules(self.topology)
+        rules.add_path(os.path.join(sandbox.root, "rules"), recursive=True)
+        rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
             "groups": [

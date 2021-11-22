@@ -708,7 +708,7 @@ class AlertRules:
 
         return alert_groups if alert_groups else []
 
-    def add_from_path(self, path: str, *, recursive: bool = False):
+    def add_path(self, path: str, *, recursive: bool = False):
         """Add rules from a dir path.
 
         All rules from files are aggregated into a data structure representing a single rule file.
@@ -720,9 +720,6 @@ class AlertRules:
 
         Raises:
             NotADirectoryError: if the provided path is invalid.
-
-        Returns:
-            self, so calls are chainable.
         """
         path = Path(path)  # type: Path
         if path.is_dir():
@@ -731,8 +728,6 @@ class AlertRules:
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
             raise InvalidAlertRulePathError(path, "path does not exist")
-
-        return self  # so calls are chainable
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation."""
@@ -1308,22 +1303,20 @@ class MetricsEndpointProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        rules_file = (
-            AlertRules(self.topology)
-            .add_from_path(self._alert_rules_path, recursive=False)
-            .as_dict()
-        )
+        alert_rules = AlertRules(self.topology)
+        alert_rules.add_path(self._alert_rules_path, recursive=False)
+        alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
 
-            if rules_file:
+            if alert_rules_as_dict:
                 # Update relation data with the string representation of the rule file.
                 # Juju topology is already included in the "scrape_metadata" field above.
                 # The consumer side of the relation uses this information to name the rules file
                 # that is written to the filesystem.
-                relation.data[self._charm.app]["alert_rules"] = json.dumps(rules_file)
+                relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def _set_unit_ip(self, _):
         """Set unit host address.
@@ -1412,17 +1405,15 @@ class RuleFilesProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        rules_file = (
-            AlertRules(self.topology)
-            .add_from_path(self.dir_path, recursive=self._recursive)
-            .as_dict()
-        )
+        alert_rules = AlertRules(self.topology)
+        alert_rules.add_path(self.dir_path, recursive=self._recursive)
+        alert_rules_as_dict = alert_rules.as_dict()
 
-        if rules_file:
+        if alert_rules_as_dict:
             logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    rules_file,
+                    alert_rules_as_dict,
                     sort_keys=True,  # sort, to prevent unnecessary relation_changed events
                 )
 
