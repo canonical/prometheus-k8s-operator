@@ -174,7 +174,4 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
     Returns:
         whether the workloads are active or not
     """
-    for name in app_names:
-        if ops_test.model.applications[name].units[0].workload_status != "active":
-            return False
-    return True
+    return all(ops_test.model.applications[name].units[0].workload_status == "active" for name in app_names)
