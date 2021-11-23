@@ -260,15 +260,18 @@ class PrometheusRemoteWriteConsumer(Object):
     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
     Regarding the default relation name, `prometheus-remote-write`: if you choose to change it,
-    you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the `relation_name` constructor
-    argument. (The relation interface, on the other hand, is immutable and, if you were to change
-    it, your charm would not be able to relate with other charms using the right relation
-    interface. The library prevents you from doing that by raising an exception.) In any case, it
-    is strongly discouraged to change the relation name: having consistent relation names across
-    charms that do similar things is good practice and more straightforward for the users of your charm.
-    The one exception to the rule above, is if you charm needs to both consume and provide a
-    relation using the `prometheus_remote_write` interface, in which case changing the relation
-    name to differentiate between "incoming" and "outgoing" remote write interactions is necessary.
+    you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
+    `relation_name` constructor argument. (The relation interface, on the other hand, is
+    immutable and, if you were to change it, your charm would not be able to relate with other
+    charms using the right relation interface. The library prevents you from doing that by
+    raising an exception.)
+
+    In any case, it is strongly discouraged to change the relation name: having consistent
+    relation names across charms that do similar things is good practice and more
+    straightforward for the users of your charm. The one exception to the rule above,
+    is if you charm needs to both consume and provide a relation using the
+    `prometheus_remote_write` interface, in which case changing the relation name to
+    differentiate between "incoming" and "outgoing" remote write interactions is necessary.
 
     It is also possible to specify alert rules. By default, this library will look
     into the `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
