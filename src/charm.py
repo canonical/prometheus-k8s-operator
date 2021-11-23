@@ -132,13 +132,14 @@ class PrometheusCharm(CharmBase):
             if not reloaded:
                 self.unit.status = BlockedStatus("Failed to load Prometheus config")
                 return
-            else:
-                self.unit.status = ActiveStatus()
-                logger.info("Prometheus configuration reloaded")
+            logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
             container.restart(self._name)
             logger.info("Prometheus (re)started")
+
+        # Ensure the right address is set on the remote_write relations
+        self.remote_write_provider.update_endpoint()
 
         if not self._validate_ingress_and_remote_write():
             self.unit.status = BlockedStatus(INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE)
@@ -146,17 +147,15 @@ class PrometheusCharm(CharmBase):
                 "Using the ingress relation and receiving remote_write relations with more than "
                 "one Prometheus unit; remote_write data is likely to be sent to only one unit."
             )
-        elif (
+            return
+
+        if (
             isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message == INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
+            and self.unit.status.message != INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
         ):
-            self.unit.status = ActiveStatus()
+            return
 
-        # Ensure the right address is set on the remote_write relations
-        self.remote_write_provider.update_endpoint()
-
-        if not isinstance(self.unit.status, BlockedStatus):
-            self.unit.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
     def _validate_ingress_and_remote_write(self) -> bool:
         if not (peer_relation := self.model.get_relation("prometheus-peers")):

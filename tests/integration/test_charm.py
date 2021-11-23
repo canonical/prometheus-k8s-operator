@@ -24,28 +24,33 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
-    tester_resources = {
-        "prometheus-tester-image": oci_image(
-            "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
-        )
-    }
-    prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     prometheus_app_name = "prometheus"
     tester_app_name = "prometheus-tester"
-
     app_names = [prometheus_app_name, tester_app_name]
 
     await asyncio.gather(
         ops_test.model.deploy(
-            prometheus_charm, resources=prometheus_resources, application_name=prometheus_app_name
+            prometheus_charm,
+            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            application_name=prometheus_app_name,
         ),
         ops_test.model.deploy(
-            prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name
+            prometheus_tester_charm,
+            resources={
+                "prometheus-tester-image": oci_image(
+                    "./tests/integration/prometheus-tester/metadata.yaml",
+                    "prometheus-tester-image",
+                )
+            },
+            application_name=tester_app_name,
         ),
     )
 
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
 
+    # TODO: Should not be needed.
+    #       Drop once https://github.com/juju/python-libjuju/issues/574 is resolved
+    #       - SA 2021-11-23
     await ops_test.model.block_until(
         lambda: (
             len(ops_test.model.applications[prometheus_app_name].units) > 0

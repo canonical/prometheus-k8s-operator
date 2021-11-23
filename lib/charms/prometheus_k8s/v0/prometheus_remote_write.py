@@ -342,31 +342,14 @@ class PrometheusRemoteWriteConsumer(Object):
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
 
-        self.framework.observe(
-            self._charm.on[self._relation_name].relation_joined,
-            self._handle_endpoints_changed,
-        )
-        self.framework.observe(
-            self._charm.on[self._relation_name].relation_changed,
-            self._handle_endpoints_changed,
-        )
-        self.framework.observe(
-            self._charm.on[self._relation_name].relation_departed,
-            self._handle_endpoints_changed,
-        )
-        self.framework.observe(
-            self._charm.on[self._relation_name].relation_broken,
-            self._handle_endpoints_changed,
-        )
+        on_relation = self._charm.on[self._relation_name]
 
-        self.framework.observe(
-            self._charm.on[self._relation_name].relation_joined,
-            self._set_alerts_on_relation_changed,
-        )
-        self.framework.observe(
-            self._charm.on.upgrade_charm,
-            self._set_alerts_to_all_relation,
-        )
+        self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_broken, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_joined, self._set_alerts_on_relation_changed)
+        self.framework.observe(self._charm.on.upgrade_charm, self._set_alerts_to_all_relation)
 
     def _handle_endpoints_changed(self, event: RelationEvent):
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
@@ -588,13 +571,13 @@ class PrometheusRemoteWriteProvider(Object):
         self._endpoint_port = int(endpoint_port)
         self._endpoint_path = endpoint_path
 
-        relation_events = self._charm.on[self._relation_name]
+        on_relation = self._charm.on[self._relation_name]
         self.framework.observe(
-            relation_events.relation_created,
+            on_relation.relation_created,
             self._set_endpoint_on_relation_change,
         )
         self.framework.observe(
-            relation_events.relation_joined,
+            on_relation.relation_joined,
             self._set_endpoint_on_relation_change,
         )
 
