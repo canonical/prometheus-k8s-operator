@@ -235,7 +235,7 @@ class PrometheusRemoteWriteConsumer(Object):
             interface: prometheus_remote_write  # Relation interface
     ```
 
-    The charmed operator uses the `PrometheusRemoteWriteConsumer` as follows:
+    The charmed operator is expected to use the `PrometheusRemoteWriteConsumer` as follows:
 
     ```
     def __init__(self, *args):
