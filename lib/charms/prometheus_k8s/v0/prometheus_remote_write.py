@@ -265,7 +265,7 @@ class PrometheusRemoteWriteConsumer(Object):
     it, your charm would not be able to relate with other charms using the right relation
     interface. The library prevents you from doing that by raising an exception.) In any case, it
     is strongly discouraged to change the relation name: having consistent relation names across
-    charms that do similar things is a very good thing for the people that will use your charm.
+    charms that do similar things is good practice and more straightforward for the users of your charm.
     The one exception to the rule above, is if you charm needs to both consume and provide a
     relation using the `prometheus_remote_write` interface, in which case changing the relation
     name to differentiate between "incoming" and "outgoing" remote write interactions is necessary.
