@@ -259,9 +259,8 @@ class PrometheusRemoteWriteConsumer(Object):
     which returns a dictionary structured like the Prometheus configuration object (see
     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
-    About the name of the relation managed by this library: technically, you *could* change
-    the relation name, `prometheus-remote-write`, but that requires you to provide the new
-    relation name to the `PrometheusRemoteWriteConsumer` via the `relation_name` constructor
+    Regarding the default relation name, `prometheus-remote-write`: if you choose to change it,
+    you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the `relation_name` constructor
     argument. (The relation interface, on the other hand, is immutable and, if you were to change
     it, your charm would not be able to relate with other charms using the right relation
     interface. The library prevents you from doing that by raising an exception.) In any case, it
