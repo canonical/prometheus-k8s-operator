@@ -6,7 +6,7 @@ import tempfile
 from typing import Tuple
 
 
-class Sandbox:
+class TempFolderSandbox:
     """A helper class for creating files in a temporary folder (sandbox)."""
 
     def __init__(self):

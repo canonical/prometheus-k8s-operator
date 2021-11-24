@@ -23,7 +23,7 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
 
-from .helpers import Sandbox
+from .helpers import TempFolderSandbox
 
 RELATION_NAME = "metrics-endpoint"
 PROVIDER_META = f"""
@@ -322,7 +322,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         }
         rules_file_dict = {"groups": [{"name": "group1", "rules": [alert_rule]}]}
 
-        self.sandbox = Sandbox()
+        self.sandbox = TempFolderSandbox()
         self.sandbox.put_files(
             ("rules/prom/mixed_format/lma_rule.rule", yaml.safe_dump(alert_rule)),
             ("rules/prom/mixed_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
@@ -446,7 +446,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def test_load_multiple_rules_per_file(self):
         """Test official format with multiple alert rules per group in multiple groups."""
         rules_file_dict = {"groups": [self.gen_group(1), self.gen_group(2)]}
-        sandbox = Sandbox()
+        sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(self.topology)
@@ -483,7 +483,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 }
             ]
         }
-        sandbox = Sandbox()
+        sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(self.topology)
@@ -506,7 +506,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
 
     def test_duplicated_group_names_within_a_file_are_silently_accepted(self):
         rules_file_dict = {"groups": [self.gen_group("same"), self.gen_group("same")]}
-        sandbox = Sandbox()
+        sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(self.topology)
@@ -535,7 +535,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
     def test_deeply_nested(self):
-        sandbox = Sandbox()
+        sandbox = TempFolderSandbox()
         sandbox.put_files(
             ("rules/file.rule", yaml.safe_dump(self.gen_rule(0))),
             ("rules/a/file.rule", yaml.safe_dump(self.gen_rule(1))),

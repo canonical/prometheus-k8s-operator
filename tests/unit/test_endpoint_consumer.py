@@ -340,7 +340,6 @@ class TestEndpointConsumer(unittest.TestCase):
             rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
-
         jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), 1)
         self.validate_jobs(jobs)
@@ -365,7 +364,6 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
         rules_file = self.harness.charm.prometheus_consumer.alerts()
-        self.maxDiff = None
         alerts = list(rules_file.values())[0]
         self.assertEqual(ALERT_RULES, alerts)
 

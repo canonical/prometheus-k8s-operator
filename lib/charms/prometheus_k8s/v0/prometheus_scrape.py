@@ -564,6 +564,17 @@ class InvalidAlertRulePathError(Exception):
         super().__init__(self.message)
 
 
+def _is_official_alert_rule_format(rules_dict: dict) -> bool:
+    # TODO validate e.g. against schema using pydantic
+    return "groups" in rules_dict
+
+
+def _is_custom_alert_rule_format(rules_dict: dict) -> bool:
+    # one alert rule per file
+    # TODO validate e.g. against schema using pydantic
+    return set(rules_dict) >= {"alert", "expr"}
+
+
 class AlertRules:
     """Utility class for amalgamating prometheus alert rule files and injecting juju topology.
 
@@ -595,17 +606,6 @@ class AlertRules:
         self.topology = topology
         self.alert_groups = []  # type: List[dict]
 
-    @staticmethod
-    def _is_official_format(rules_dict: dict) -> bool:
-        # TODO validate e.g. against schema using pydantic
-        return "groups" in rules_dict
-
-    @staticmethod
-    def _is_custom_format(rules_dict: dict) -> bool:
-        # one alert rule per file
-        # TODO validate e.g. against schema using pydantic
-        return set(rules_dict) >= {"alert", "expr"}
-
     def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
         """Read a rules file from path, injecting juju topology.
 
@@ -627,9 +627,9 @@ class AlertRules:
                 return []
 
             # TODO validate input
-            if AlertRules._is_official_format(rule_file):
+            if _is_official_alert_rule_format(rule_file):
                 alert_groups = rule_file["groups"]
-            elif AlertRules._is_custom_format(rule_file):
+            elif _is_custom_alert_rule_format(rule_file):
                 # convert to list of alert groups
                 # group name is made up from the file name
                 alert_groups = [{"name": file_path.stem, "rules": [rule_file]}]
