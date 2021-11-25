@@ -241,10 +241,15 @@ Prometheus charm.  Alert rules are automatically gathered by `MetricsEndpointPro
 charms when using this library, from a directory conventionally named
 `prometheus_alert_rules`. This directory must reside at the top level
 in the `src` folder of the consumer charm. Each file in this directory
-is assumed to be a single alert rule in YAML format. The file name must
-have the `.rule` extension. The format of this alert rule conforms to the
-[Prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
-An example of the contents of one such file is shown below.
+is assumed to be in one of two formats:
+- the official prometheus alert rule format, conforming to the
+[Prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
+- a custom format, which is a simplified subset of the official format, comprising a single alert
+rule per file, in the same YAML format.
+
+The file name must have the `.rule` extension.
+
+An example of the contents of one such file in the custom format is shown below.
 
 ```
 alert: HighRequestLatency
