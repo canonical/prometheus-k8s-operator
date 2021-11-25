@@ -679,6 +679,7 @@ class AlertRules:
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
         group_name_parts = [self.topology.identifier, rel_path, group_name, "alerts"]
+        # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
 
     def _from_dir(self, dir_path: Path, recursive: bool) -> List[dict]:
@@ -706,7 +707,7 @@ class AlertRules:
                 logger.debug("Reading alert rule from %s", file_path)
                 alert_groups.extend(alert_groups_from_file)
 
-        return alert_groups if alert_groups else []
+        return alert_groups
 
     def add_path(self, path: str, *, recursive: bool = False):
         """Add rules from a dir path.
@@ -719,7 +720,7 @@ class AlertRules:
             recursive: whether to read files recursively or not (no impact if `path` is a file).
 
         Raises:
-            NotADirectoryError: if the provided path is invalid.
+            InvalidAlertRulePathError: if the provided path is invalid.
         """
         path = Path(path)  # type: Path
         if path.is_dir():
