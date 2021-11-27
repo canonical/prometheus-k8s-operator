@@ -340,7 +340,6 @@ class TestEndpointConsumer(unittest.TestCase):
             rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
-
         jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(len(jobs), 1)
         self.validate_jobs(jobs)
@@ -349,7 +348,7 @@ class TestEndpointConsumer(unittest.TestCase):
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
 
-    def test_consumer_returns_alerts_indexed_by_group_name(self):
+    def test_consumer_returns_alerts_rules_file(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -364,11 +363,9 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-        alerts = self.harness.charm.prometheus_consumer.alerts()
-        self.assertEqual(len(alerts), 1)
-        for name, alert_group in alerts.items():
-            group = next((group for group in ALERT_RULES["groups"] if group["name"] == name), None)
-            self.assertDictEqual(alert_group, group)
+        rules_file = self.harness.charm.prometheus_consumer.alerts()
+        alerts = list(rules_file.values())[0]
+        self.assertEqual(ALERT_RULES, alerts)
 
     def test_consumer_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
