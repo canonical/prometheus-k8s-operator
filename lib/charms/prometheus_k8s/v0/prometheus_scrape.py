@@ -1153,7 +1153,7 @@ class MetricsEndpointProvider(Object):
         self,
         charm,
         relation_name: str = DEFAULT_RELATION_NAME,
-        jobs=[],
+        jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
     ):
         """Construct a metrics provider for a Prometheus charm.
@@ -1279,6 +1279,7 @@ class MetricsEndpointProvider(Object):
         self._alert_rules_path = alert_rules_path
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
+        jobs = [] if jobs is None else jobs
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
 
         events = self._charm.on[self._relation_name]
