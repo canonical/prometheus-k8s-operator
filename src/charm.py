@@ -75,7 +75,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
     def _on_upgrade_charm(self, event):
-        """Handler for the upgrade_charm event during which we will update the K8s service."""
+        """Handler for the upgrade_charm event during which will update the K8s service."""
         self._configure(event)
 
     def _configure(self, _):
@@ -156,7 +156,6 @@ class PrometheusCharm(CharmBase):
         ]
 
         if self.model.get_relation("ingress"):
-
             # TODO The ingress should communicate the externally-visible scheme
             external_url = f"http://{self._external_hostname}:{self._port}"
 
