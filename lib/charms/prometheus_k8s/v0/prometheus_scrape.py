@@ -544,7 +544,6 @@ class JujuTopology:
 
     def render(self, template: str):
         """Render a juju-topology template string with topology info."""
-        # TODO remove, once https://github.com/canonical/prometheus-operator/pull/166 is merged
         return template.replace(JujuTopology.STUB, self.promql_labels)
 
 
@@ -563,13 +562,11 @@ class InvalidAlertRulePathError(Exception):
 
 
 def _is_official_alert_rule_format(rules_dict: dict) -> bool:
-    # TODO validate e.g. against schema using pydantic
     return "groups" in rules_dict
 
 
 def _is_custom_alert_rule_format(rules_dict: dict) -> bool:
     # one alert rule per file
-    # TODO validate e.g. against schema using pydantic
     return set(rules_dict) >= {"alert", "expr"}
 
 
@@ -624,7 +621,6 @@ class AlertRules:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
                 return []
 
-            # TODO validate input
             if _is_official_alert_rule_format(rule_file):
                 alert_groups = rule_file["groups"]
             elif _is_custom_alert_rule_format(rule_file):
@@ -882,7 +878,6 @@ class MetricsEndpointConsumer(Object):
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 topology = JujuTopology.from_relation_data(scrape_metadata)
 
-                # TODO validate rules_file
                 alerts[topology.identifier] = alert_rules
 
             except KeyError as e:
