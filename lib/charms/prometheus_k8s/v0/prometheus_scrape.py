@@ -3,8 +3,8 @@
 """## Overview.
 
 This document explains how to integrate with the Prometheus charm
-for the purposes of providing a metrics endpoint to Prometheus. It
-also explains how alternative implementations of the Prometheus charm
+for the purpose of providing a metrics endpoint to Prometheus. It
+also explains how alternative implementations of the Prometheus charms
 may maintain the same interface and be backward compatible with all
 currently integrated charms. Finally this document is the
 authoritative reference on the structure of relation data that is
@@ -14,7 +14,7 @@ provide a scrape target for Prometheus.
 ## Provider Library Usage
 
 This Prometheus charm interacts with its scrape targets using its
-charm library. Charms seeking to expose a metric endpoints for the
+charm library. Charms seeking to expose metric endpoints for the
 Prometheus charm, must do so using the `MetricsEndpointProvider`
 object from this charm library. For the simplest use cases, using the
 `MetricsEndpointProvider` object only requires instantiating it,
@@ -22,46 +22,43 @@ typically in the constructor of your charm (the one which exposes a
 metrics endpoint). The `MetricsEndpointProvider` constructor requires
 the name of the relation over which a scrape target (metrics endpoint)
 is exposed to the Prometheus charm. This relation must use the
-`prometheus_scrape` interface. The address of the metrics endpoint is
-set to the unit address, by each unit of the `MetricsEndpointProvider`
-charm. These units set their address in response to a specific
-`CharmEvent`. Hence instantiating the `MetricsEndpointProvider` also
-requires a `CharmEvent` object in response to which each unit will
-post its address into the unit's relation data for the Prometheus
-charm. Since container restarts of Kubernetes charms can result in
-change of IP addresses, this event is typically `PebbleReady`. For
-example, assuming your charm exposes a metrics endpoint over a
-relation named "metrics_endpoint", you may instantiate
-`MetricsEndpointProvider` as follows
+`prometheus_scrape` interface. By default address of the metrics
+endpoint is set to the unit IP address, by each unit of the
+`MetricsEndpointProvider` charm. These units set their address in
+response to the `PebbleReady` event of each container in the unit,
+since container restarts of Kubernetes charms can result in change of
+IP addresses. The default name for the metrics endpoint relation is
+`metrics-endpoint`. It is strongly recommended to use the same
+relation name for consitency across charms and doing so obviates the
+need for an additional constructor argument. The
+`MetricsEndpointProvider` object may be instantiated as follows
 
     from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 
     def __init__(self, *args):
         super().__init__(*args)
         ...
-        self.metrics_endpoint = MetricsEndpointProvider(self, "metrics-endpoint",
-                                                self.on.container_name_pebble_ready)
+        self.metrics_endpoint = MetricsEndpointProvider(self)
         ...
 
-In this example `container_name_pebble_ready` is the `PebbleReady` event
-in response to which each unit will advertise its address. Also note
-that the first argument (`self`) to `MetricsEndpointProvider` is always a
-reference to the parent (scrape target) charm.
+Note that the first argument (`self`) to `MetricsEndpointProvider` is
+always a reference to the parent (scrape target) charm.
 
-An instantiated `MetricsEndpointProvider` object will ensure that each unit of
-its parent charm, is a scrape target for the `MetricsEndpointConsumer`
-(Prometheus). By default `MetricsEndpointProvider` assumes each unit of the
-consumer charm exports its metrics at a path given by `/metrics` on
-port 80. The defaults may be changed by providing the
-`MetricsEndpointProvider` constructor an optional argument (`jobs`) that
-represents list of Prometheus scrape job specification using Python
-standard data structures. This job specification is a subset of
-Prometheus' own [scrape
+An instantiated `MetricsEndpointProvider` object will ensure that each
+unit of its parent charm, is a scrape target for the
+`MetricsEndpointConsumer` (Prometheus) charm. By default
+`MetricsEndpointProvider` assumes each unit of the consumer charm
+exports its metrics at a path given by `/metrics` on port 80. These
+defaults may be changed by providing the `MetricsEndpointProvider`
+constructor an optional argument (`jobs`) that represents a
+Prometheus scrape job specification using Python standard data
+structures. This job specification is a subset of Prometheus' own
+[scrape
 configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config)
 format but represented using Python data structures. More than one job
 may be provided using the `jobs` argument. Hence `jobs` accepts a list
 of dictionaries where each dictionary represents one `<scrape_config>`
-object as described in the Prometheus documentation. The current
+object as described in the Prometheus documentation. The currently
 supported configuration subset is: `job_name`, `metrics_path`,
 `static_configs`
 
@@ -185,14 +182,12 @@ The `MetricsEndpointConsumer` object may be used by Prometheus
 charms to manage relations with their scrape targets. For this
 purposes a Prometheus charm needs to do two things
 
-1. Instantiate the `MetricsEndpointConsumer` object providing it
-with three two pieces of information
-
-- A reference to the parent (Prometheus) charm.
-
-- Name of the relation that the Prometheus charm uses to interact with
-  scrape targets. This relation must confirm to the
-  `prometheus_scrape` interface.
+1. Instantiate the `MetricsEndpointConsumer` object by providing it a
+reference to the parent (Prometheus) charm and optionally the name of
+the relation that the Prometheus charm uses to interact with scrape
+targets. This relation must confirm to the `prometheus_scrape`
+interface and it is strongly recommended that this relation be named
+`metrics-endpoint` which is its default value.
 
 For example a Prometheus charm may instantiate the
 `MetricsEndpointConsumer` in its constructor as follows
@@ -202,14 +197,12 @@ For example a Prometheus charm may instantiate the
     def __init__(self, *args):
         super().__init__(*args)
         ...
-        self.metrics_consumer = MetricsEndpointConsumer(
-                self, "metrics-endpoint"
-            )
+        self.metrics_consumer = MetricsEndpointConsumer(self)
         ...
 
 2. A Prometheus charm also needs to respond to the
 `TargetsChangedEvent` event of the `MetricsEndpointConsumer` by adding itself as
-and observer for these events, as in
+an observer for these events, as in
 
     self.framework.observe(
         self.metrics_consumer.on.targets_changed,
@@ -245,11 +238,12 @@ is assumed to be in one of two formats:
 - the official prometheus alert rule format, conforming to the
 [Prometheus docs](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
 - a custom format, which is a simplified subset of the official format, comprising a single alert
-rule per file, in the same YAML format.
+rule per file, using the same YAML fields.
 
 The file name must have the `.rule` extension.
 
-An example of the contents of one such file in the custom format is shown below.
+An example of the contents of such a file in the custom single rule
+format is shown below.
 
 ```
 alert: HighRequestLatency
@@ -275,7 +269,7 @@ expression must include such a topology filter stub.
 
 Gathering alert rules and generating rule files within the Prometheus
 charm is easily done using the `alerts()` method of
-`MetricsEndpointConsumer`. Alerts generated by the Prometheus will
+`MetricsEndpointConsumer`. Alerts generated by Prometheus will
 automatically include Juju topology labels in the alerts. These labels
 indicate the source of the alert. The following labels are
 automatically included with each alert
@@ -296,7 +290,6 @@ Units of consumer charm advertise their address over unit relation
 data using the `prometheus_scrape_host` key. While the
 `scrape_metadata`, `scrape_jobs` and `alert_rules` keys in application
 relation data provide eponymous information.
-
 """
 import json
 import logging
@@ -349,7 +342,7 @@ DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 
 class RelationNotFoundError(Exception):
-    """Raised if there is no relation with the given name."""
+    """Raised if there is no relation with the given name is found."""
 
     def __init__(self, relation_name: str):
         self.relation_name = relation_name
@@ -380,7 +373,7 @@ class RelationInterfaceMismatchError(Exception):
 
 
 class RelationRoleMismatchError(Exception):
-    """Raised if the relation with the given name has a different direction."""
+    """Raised if the relation with the given name has a different role."""
 
     def __init__(
         self,
