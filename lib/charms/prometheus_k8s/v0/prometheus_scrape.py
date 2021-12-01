@@ -287,7 +287,7 @@ the YAML structure of Prometheus [scrape configuration]
 (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
 
 Units of consumer charm advertise their address over unit relation
-data using the `prometheus_scrape_host` key. While the
+data using the `prometheus_scrape_host_address` key. While the
 `scrape_metadata`, `scrape_jobs` and `alert_rules` keys in application
 relation data provide eponymous information.
 """
@@ -941,11 +941,14 @@ class MetricsEndpointConsumer(Object):
             A dictionary that maps unit names to unit addresses for
             the specified relation.
         """
-        return {
-            unit.name: relation.data[unit].get("prometheus_scrape_host")
-            for unit in relation.units
-            if relation.data[unit].get("prometheus_scrape_host")
-        }
+        hosts = {}
+        for unit in relation.units:
+            unit_name = relation.data[unit].get("prometheus_scrape_host_name")
+            host_address = relation.data[unit].get("prometheus_scrape_host_address")
+            if unit_name and host_address:
+                hosts.update({unit_name: host_address})
+
+        return hosts
 
     def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata) -> dict:
         """Construct labeled job configuration for a single job.
@@ -1322,8 +1325,11 @@ class MetricsEndpointProvider(Object):
         event is actually needed.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            relation.data[self._charm.unit]["prometheus_scrape_host"] = str(
+            relation.data[self._charm.unit]["prometheus_scrape_host_address"] = str(
                 self._charm.model.get_binding(relation).network.bind_address
+            )
+            relation.data[self._charm.unit]["prometheus_scrape_host_name"] = str(
+                self._charm.model.unit.name
             )
 
     @property
