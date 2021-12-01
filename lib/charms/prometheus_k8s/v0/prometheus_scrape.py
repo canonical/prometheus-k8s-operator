@@ -483,20 +483,20 @@ class JujuTopology:
         self.application = application
         self.charm_name = charm_name
 
-    @staticmethod
-    def from_charm(charm):
+    @classmethod
+    def from_charm(cls, charm):
         """Factory method for creating the topology dataclass from a given charm."""
-        return JujuTopology(
+        return cls(
             model=charm.model.name,
             model_uuid=charm.model.uuid,
             application=charm.model.app.name,
             charm_name=charm.meta.name,
         )
 
-    @staticmethod
-    def from_relation_data(data: dict):
+    @classmethod
+    def from_relation_data(cls, data: dict):
         """Factory method for creating the topology dataclass from a relation data dict."""
-        return JujuTopology(
+        return cls(
             model=data["model"],
             model_uuid=data["model_uuid"],
             application=data["application"],
