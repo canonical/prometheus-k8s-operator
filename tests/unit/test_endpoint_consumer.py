@@ -162,7 +162,12 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(
-            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_host_address": "1.1.1.1",
+                "prometheus_scrape_host_name": "consumer/0",
+            },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
 
@@ -179,7 +184,12 @@ class TestEndpointConsumer(unittest.TestCase):
             )
             self.harness.add_relation_unit(rel_id, "other-consumer/0")
             self.harness.update_relation_data(
-                rel_id, "other-consumer/0", {"prometheus_scrape_host": "2.2.2.2"}
+                rel_id,
+                "other-consumer/0",
+                {
+                    "prometheus_scrape_host_address": "2.2.2.2",
+                    "prometheus_scrape_host_name": "other-consumer/0",
+                },
             )
             self.assertEqual(self.harness.charm._stored.num_events, 4)
 
@@ -316,7 +326,12 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(
-            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_host_address": "1.1.1.1",
+                "prometheus_scrape_host_name": "provider/0",
+            },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
 
@@ -337,7 +352,12 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(
-            rel_id, "consumer/0", {"prometheus_scrape_host": "1.1.1.1"}
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_host_address": "1.1.1.1",
+                "prometheus_scrape_host_name": "provider/0",
+            },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
         jobs = self.harness.charm.prometheus_consumer.jobs()
