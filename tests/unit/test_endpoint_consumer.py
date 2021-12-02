@@ -165,8 +165,8 @@ class TestEndpointConsumer(unittest.TestCase):
             rel_id,
             "consumer/0",
             {
-                "prometheus_scrape_host_address": "1.1.1.1",
-                "prometheus_scrape_host_name": "consumer/0",
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "consumer/0",
             },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
@@ -187,8 +187,8 @@ class TestEndpointConsumer(unittest.TestCase):
                 rel_id,
                 "other-consumer/0",
                 {
-                    "prometheus_scrape_host_address": "2.2.2.2",
-                    "prometheus_scrape_host_name": "other-consumer/0",
+                    "prometheus_scrape_unit_address": "2.2.2.2",
+                    "prometheus_scrape_unit_name": "other-consumer/0",
                 },
             )
             self.assertEqual(self.harness.charm._stored.num_events, 4)
@@ -329,8 +329,8 @@ class TestEndpointConsumer(unittest.TestCase):
             rel_id,
             "consumer/0",
             {
-                "prometheus_scrape_host_address": "1.1.1.1",
-                "prometheus_scrape_host_name": "provider/0",
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider/0",
             },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
@@ -355,8 +355,8 @@ class TestEndpointConsumer(unittest.TestCase):
             rel_id,
             "consumer/0",
             {
-                "prometheus_scrape_host_address": "1.1.1.1",
-                "prometheus_scrape_host_name": "provider/0",
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider/0",
             },
         )
         self.assertEqual(self.harness.charm._stored.num_events, 2)
