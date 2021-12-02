@@ -159,8 +159,8 @@ class TestEndpointProvider(unittest.TestCase):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
-        self.assertIn("prometheus_scrape_host_address", data)
-        self.assertEqual(data["prometheus_scrape_host_address"], bind_address)
+        self.assertIn("prometheus_scrape_unit_address", data)
+        self.assertEqual(data["prometheus_scrape_unit_address"], bind_address)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_provider_unit_sets_bind_address_on_relation_joined(self, mock_net_get):
@@ -177,9 +177,9 @@ class TestEndpointProvider(unittest.TestCase):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
-        self.assertIn("prometheus_scrape_host_address", data)
-        self.assertEqual(data["prometheus_scrape_host_address"], bind_address)
-        self.assertIn("prometheus_scrape_host_name", data)
+        self.assertIn("prometheus_scrape_unit_address", data)
+        self.assertEqual(data["prometheus_scrape_unit_address"], bind_address)
+        self.assertIn("prometheus_scrape_unit_name", data)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_provider_supports_multiple_jobs(self, _):
