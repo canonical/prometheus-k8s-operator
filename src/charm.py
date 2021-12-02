@@ -163,7 +163,7 @@ class PrometheusCharm(CharmBase):
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
-        log_level = config["log-level"].lower()
+        log_level = config["log_level"].lower()
 
         # If log level is invalid set it to debug
         if log_level not in allowed_log_levels:
@@ -178,14 +178,14 @@ class PrometheusCharm(CharmBase):
         args.append(f"--log.level={log_level}")
 
         # Enable time series database compression
-        if config.get("metrics-wal-compression"):
+        if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
         # Set time series retention time
-        if config.get("metrics-retention-time") and self._is_valid_timespec(
-            config["metrics-retention-time"]
+        if config.get("metrics_retention_time") and self._is_valid_timespec(
+            config["metrics_retention_time"]
         ):
-            args.append(f"--storage.tsdb.retention.time={config['metrics-retention-time']}")
+            args.append(f"--storage.tsdb.retention.time={config['metrics_retention_time']}")
 
         command = ["/bin/prometheus"] + args
 
@@ -216,10 +216,10 @@ class PrometheusCharm(CharmBase):
         config = self.model.config
         global_config = {"scrape_interval": "1m", "scrape_timeout": "10s"}
 
-        if config.get("evaluation-interval") and self._is_valid_timespec(
-            config["evaluation-interval"]
+        if config.get("evaluation_interval") and self._is_valid_timespec(
+            config["evaluation_interval"]
         ):
-            global_config["evaluation_interval"] = config["evaluation-interval"]
+            global_config["evaluation_interval"] = config["evaluation_interval"]
 
         return global_config
 
@@ -303,7 +303,7 @@ class PrometheusCharm(CharmBase):
         # hostname will correspond to the deployed application name in the
         # model, but allow it to be set to something specific via config.
 
-        return self.config["web-external-url"] or f"{self.app.name}"
+        return self.config["web_external_url"] or f"{self.app.name}"
 
 
 if __name__ == "__main__":

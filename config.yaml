@@ -1,14 +1,14 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 options:
-  log-level:
+  log_level:
     description: |
       Prometheus server log level (only log messages with the given severity
       or above). Must be one of: [debug, info, warn, error, fatal].
       If not set, the Prometheus default one (info) will be used.
     type: string
     default: info
-  web-external-url:
+  web_external_url:
     description: |
       The URL under which Prometheus is externally reachable (for example,
       if Prometheus is served via a reverse proxy).
@@ -19,20 +19,20 @@ options:
       If omitted, relevant URL components will be derived automatically.
     type: string
     default: ""
-  metrics-retention-time:
+  metrics_retention_time:
     description: |
       How long to retain samples in the storage.
       Units Supported: y, w, d, h, m, s
     type: string
     default: 15d
-  metrics-wal-compression:
+  metrics_wal_compression:
     description: |
       This flag enables compression of the write-ahead log (WAL).
       Depending on your data, you can expect the WAL size to be
       halved with little extra cpu load.
     type: boolean
     default: false
-  evaluation-interval:
+  evaluation_interval:
     description: |
       How frequently rules will be evaluated.
     type: string

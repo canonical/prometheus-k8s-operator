@@ -50,7 +50,7 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     def test_invalid_log_level_defaults_to_debug(self, *unused):
         bad_log_config = MINIMAL_CONFIG.copy()
-        bad_log_config["log-level"] = "bad-level"
+        bad_log_config["log_level"] = "bad-level"
         with self.assertLogs(level="ERROR") as logger:
             self.harness.update_config(bad_log_config)
             expected_logs = [
@@ -67,7 +67,7 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     def test_valid_log_level_is_accepted(self, *unused):
         valid_log_config = MINIMAL_CONFIG.copy()
-        valid_log_config["log-level"] = "warn"
+        valid_log_config["log_level"] = "warn"
         self.harness.update_config(valid_log_config)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -113,7 +113,7 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     def test_metrics_wal_compression_can_be_enabled(self, *unused):
         compress_config = MINIMAL_CONFIG.copy()
-        compress_config["metrics-wal-compression"] = True
+        compress_config["metrics_wal_compression"] = True
         self.harness.update_config(compress_config)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -129,7 +129,7 @@ class TestCharm(unittest.TestCase):
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
             retention_time = "{}{}".format(1, unit)
-            retention_time_config["metrics-retention-time"] = retention_time
+            retention_time_config["metrics_retention_time"] = retention_time
             self.harness.update_config(retention_time_config)
 
             plan = self.harness.get_container_pebble_plan("prometheus")
@@ -142,7 +142,7 @@ class TestCharm(unittest.TestCase):
 
         # invalid unit
         retention_time = "1x"
-        retention_time_config["metrics-retention-time"] = retention_time
+        retention_time_config["metrics_retention_time"] = retention_time
 
         self.harness.update_config(retention_time_config)
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -150,7 +150,7 @@ class TestCharm(unittest.TestCase):
 
         # invalid time value
         retention_time = "0d"
-        retention_time_config["metrics-retention-time"] = retention_time
+        retention_time_config["metrics_retention_time"] = retention_time
 
         self.harness.update_config(retention_time_config)
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -163,11 +163,11 @@ class TestCharm(unittest.TestCase):
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
             push.reset()
-            evalint_config["evaluation-interval"] = "{}{}".format(1, unit)
+            evalint_config["evaluation_interval"] = "{}{}".format(1, unit)
             self.harness.update_config(evalint_config)
             config = push.call_args[0]
             gconfig = global_config(config)
-            self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation-interval"])
+            self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation_interval"])
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
