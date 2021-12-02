@@ -943,10 +943,14 @@ class MetricsEndpointConsumer(Object):
         """
         hosts = {}
         for unit in relation.units:
-            unit_name = relation.data[unit].get("prometheus_scrape_unit_name")
-            host_address = relation.data[unit].get("prometheus_scrape_unit_address")
-            if unit_name and host_address:
-                hosts.update({unit_name: host_address})
+            # TODO deprecate and remove unit.name
+            unit_name = relation.data[unit].get("prometheus_scrape_unit_name") or unit.name
+            # TODO deprecate and remove "prometheus_scrape_host"
+            unit_address = relation.data[unit].get(
+                "prometheus_scrape_unit_address"
+            ) or relation.data[unit].get("prometheus_scrape_host")
+            if unit_name and unit_address:
+                hosts.update({unit_name: unit_address})
 
         return hosts
 
