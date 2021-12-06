@@ -565,7 +565,7 @@ def _is_official_alert_rule_format(rules_dict: dict) -> bool:
     return "groups" in rules_dict
 
 
-def _is_custom_alert_rule_format(rules_dict: dict) -> bool:
+def _is_single_alert_rule_format(rules_dict: dict) -> bool:
     # one alert rule per file
     return set(rules_dict) >= {"alert", "expr"}
 
@@ -623,7 +623,7 @@ class AlertRules:
 
             if _is_official_alert_rule_format(rule_file):
                 alert_groups = rule_file["groups"]
-            elif _is_custom_alert_rule_format(rule_file):
+            elif _is_single_alert_rule_format(rule_file):
                 # convert to list of alert groups
                 # group name is made up from the file name
                 alert_groups = [{"name": file_path.stem, "rules": [rule_file]}]
