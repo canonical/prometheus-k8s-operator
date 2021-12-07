@@ -1356,7 +1356,7 @@ class MetricsEndpointProvider(Object):
         return self.topology.as_dict()
 
 
-class RuleFilesProvider(Object):
+class PrometheusRulesProvider(Object):
     """A 'prometheus_scrape' provider class for rule files only.
 
     This class is for sending rules to prometheus, unlike :class:`MetricsEndpointProvider`, which
