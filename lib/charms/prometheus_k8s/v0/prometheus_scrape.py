@@ -1344,8 +1344,7 @@ class MetricsEndpointProvider(Object):
            A list of dictionaries, where each dictionary specifies a
            single scrape job for Prometheus.
         """
-        default_job = [{"metrics_path": "/metrics"}]
-        return self._jobs if self._jobs else default_job
+        return self._jobs if self._jobs else [DEFAULT_JOB]
 
     @property
     def _scrape_metadata(self) -> dict:
