@@ -1079,7 +1079,7 @@ class MetricsEndpointConsumer(Object):
         return unitless_config
 
     def _labeled_unit_config(
-        self, host_name, host_address, ports, labels, scrape_metadata
+        self, unit_name, host_address, ports, labels, scrape_metadata
     ) -> dict:
         """Static scrape configuration for a wildcard host.
 
@@ -1087,7 +1087,7 @@ class MetricsEndpointConsumer(Object):
         automatically determined by `MetricsEndpointConsumer`.
 
         Args:
-            host_name: a string representing the unit name of the wildcard host.
+            unit_name: a string representing the unit name of the wildcard host.
             host_address: a string representing the address of the wildcard host.
             ports: list of ports on which this wildcard host exposes its metrics.
             labels: a dictionary of labels provided by
@@ -1101,9 +1101,7 @@ class MetricsEndpointConsumer(Object):
         """
         juju_labels = self._set_juju_labels(labels, scrape_metadata)
 
-        # '/' is not allowed in Prometheus label names. It technically works,
-        # but complex queries silently fail
-        juju_labels["juju_unit"] = host_name.replace("/", "-")
+        juju_labels["juju_unit"] = unit_name
 
         static_config = {"labels": juju_labels}
 
