@@ -773,7 +773,7 @@ class AlertRules:
 
         return alert_groups
 
-    def add_path(self, path: str, *, recursive: bool = False):
+    def add_path(self, path: str, *, recursive: bool = False) -> bool:
         """Add rules from a dir path.
 
         All rules from files are aggregated into a data structure representing a single rule file.
@@ -783,16 +783,20 @@ class AlertRules:
             path: either a rules file or a dir of rules files.
             recursive: whether to read files recursively or not (no impact if `path` is a file).
 
-        Raises:
-            InvalidAlertRulePathError: if the provided path is invalid.
+        Returns:
+            True if path was added else False.
         """
-        path = Path(path)  # type: Path
-        if path.is_dir():
-            self.alert_groups.extend(self._from_dir(path, recursive))
-        elif path.is_file():
-            self.alert_groups.extend(self._from_file(path.parent, path))
-        else:
-            raise InvalidAlertRulePathError(path, "path does not exist")
+        rules_path = Path(path)
+        if not rules_path.exists:
+            logger.warning("Alert rules path %s does not exist", path)
+            return False
+
+        if rules_path.is_dir():
+            self.alert_groups.extend(self._from_dir(rules_path, recursive))
+        elif rules_path.is_file():
+            self.alert_groups.extend(self._from_file(rules_path.parent, rules_path))
+
+        return True
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1407,14 +1411,14 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(self.topology)
-        alert_rules.add_path(self._alert_rules_path, recursive=False)
+        path_added = alert_rules.add_path(self._alert_rules_path, recursive=False)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
 
-            if alert_rules_as_dict:
+            if path_added and alert_rules_as_dict:
                 # Update relation data with the string representation of the rule file.
                 # Juju topology is already included in the "scrape_metadata" field above.
                 # The consumer side of the relation uses this information to name the rules file
@@ -1516,10 +1520,10 @@ class PrometheusRulesProvider(Object):
             return
 
         alert_rules = AlertRules(self.topology)
-        alert_rules.add_path(self.dir_path, recursive=self._recursive)
+        path_added = alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if alert_rules_as_dict:
+        if path_added and alert_rules_as_dict:
             logger.info("Updating relation data with rule files from disk")
             for relation in self._charm.model.relations[self._relation_name]:
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(
