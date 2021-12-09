@@ -662,13 +662,13 @@ class AlertRules:
     #   the "alert" and "expr" keys.
     # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
 
-    def __init__(self, topology: JujuTopology):
+    def __init__(self):
         """Build and alert rule object.
 
         Args:
             topology: a `JujuTopology` instance that is used to annotate all alert rules.
         """
-        self.topology = topology
+        self.topology = None
         self.alert_groups = []  # type: List[dict]
 
     def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
@@ -713,12 +713,14 @@ class AlertRules:
 
                 # add "juju_" topology labels
                 for alert_rule in alert_group["rules"]:
-                    if "labels" not in alert_rule:
-                        alert_rule["labels"] = {}
-                    alert_rule["labels"].update(self.topology.as_dict_with_promql_labels())
 
-                    # insert juju topology filters into a prometheus alert rule
-                    alert_rule["expr"] = self.topology.render(alert_rule["expr"])
+                    if self.topology:
+                        if "labels" not in alert_rule:
+                            alert_rule["labels"] = {}
+
+                        alert_rule["labels"].update(self.topology.as_dict_with_promql_labels())
+                        # insert juju topology filters into a prometheus alert rule
+                        alert_rule["expr"] = self.topology.render(alert_rule["expr"])
 
             return alert_groups
 
@@ -772,6 +774,14 @@ class AlertRules:
                 alert_groups.extend(alert_groups_from_file)
 
         return alert_groups
+
+    def set_topology(self, topology: JujuTopology):
+        """Set topology used to annotate alert rules.
+
+        Args:
+            topology: A JujuTopology object used to annotate alert rules
+        """
+        self.topology = topology
 
     def add_path(self, path: str, *, recursive: bool = False) -> bool:
         """Add rules from a dir path.
@@ -1410,7 +1420,8 @@ class MetricsEndpointProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        alert_rules = AlertRules(self.topology)
+        alert_rules = AlertRules()
+        alert_rules.set_topology(self.topology)
         path_added = alert_rules.add_path(self._alert_rules_path, recursive=False)
         alert_rules_as_dict = alert_rules.as_dict()
 
@@ -1494,7 +1505,6 @@ class PrometheusRulesProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self.topology = JujuTopology.from_charm(charm)
         self.dir_path = dir_path or _resolve_dir_against_charm_path(
             charm, DEFAULT_ALERT_RULES_RELATIVE_PATH
         )
@@ -1519,7 +1529,7 @@ class PrometheusRulesProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        alert_rules = AlertRules(self.topology)
+        alert_rules = AlertRules()
         path_added = alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
