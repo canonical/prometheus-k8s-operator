@@ -436,10 +436,11 @@ def job_name_suffix(job_name, labels, rel_id):
     Returns:
         string name of job as set by provider (if any)
     """
-    name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
+    name_prefix = "juju_{}_{}_{}_{}_prometheus_{}_scrape_".format(
         labels["juju_model"],
         labels["juju_model_uuid"][:7],
         labels["juju_application"],
+        labels["juju_charm"],
         rel_id,
     )
     return job_name[len(name_prefix) :]

@@ -349,7 +349,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -372,7 +372,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_alert_rule = {
             "alert": "CPUOverUse",
             "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -401,13 +401,13 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_alert_rule = {
             "alert": "CPUOverUse",
             "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -464,15 +464,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_1_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_2_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
@@ -502,8 +502,8 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_my_group_alerts",
                     "rules": [
-                        self.gen_rule("same", labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule("same", labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
@@ -526,15 +526,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
@@ -559,15 +559,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             "groups": [
                 {
                     "name": f"{self.topology.identifier}_file_alerts",
-                    "rules": [self.gen_rule(0, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(0, labels=self.topology.as_promql_label_dict())],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_file_alerts",
-                    "rules": [self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(1, labels=self.topology.as_promql_label_dict())],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_b_file_alerts",
-                    "rules": [self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(2, labels=self.topology.as_promql_label_dict())],
                 },
             ]
         }

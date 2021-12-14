@@ -297,7 +297,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import yaml
 from ops.charm import CharmBase, RelationRole
@@ -351,6 +351,15 @@ class RelationNotFoundError(Exception):
         self.message = "No relation named '{}' found".format(relation_name)
 
         super().__init__(self.message)
+
+
+class InvalidTopologyError(Exception):
+    """Raised if there is insufficient data to construct JujuTopology."""
+
+    def __init__(self):
+        super().__init__(
+            "Neither Juju unit data nor a Juju class object were provided to JujuTopology"
+        )
 
 
 class RelationInterfaceMismatchError(Exception):
@@ -479,7 +488,14 @@ class JujuTopology:
 
     STUB = "%%juju_topology%%"
 
-    def __init__(self, model: str, model_uuid: str, application: str, charm_name: str):
+    def __init__(
+        self,
+        model: str,
+        model_uuid: str,
+        application: str,
+        unit: Optional[str] = "",
+        charm_name: Optional[str] = "",
+    ):
         """Build a JujuTopology object.
 
         A `JujuTopology` object is used for storing and transforming
@@ -495,12 +511,17 @@ class JujuTopology:
             model: a string name of the Juju model
             model_uuid: a globally unique string identifier for the Juju model
             application: an application name as a string
+            unit: a unit name as a string
             charm_name: name of charm as a string
         """
         self.model = model
         self.model_uuid = model_uuid
         self.application = application
         self.charm_name = charm_name
+        self.unit = unit
+
+        if not self.unit and not self.charm_name:
+            raise InvalidTopologyError()
 
     @classmethod
     def from_charm(cls, charm):
@@ -516,6 +537,7 @@ class JujuTopology:
             model=charm.model.name,
             model_uuid=charm.model.uuid,
             application=charm.model.app.name,
+            unit=charm.model.unit.name,
             charm_name=charm.meta.name,
         )
 
@@ -528,6 +550,7 @@ class JujuTopology:
                 - "model"
                 - "model_uuid"
                 - "application"
+                - "unit"
                 - "charm_name"
 
         Returns:
@@ -537,51 +560,110 @@ class JujuTopology:
             model=data["model"],
             model_uuid=data["model_uuid"],
             application=data["application"],
-            charm_name=data["charm_name"],
+            unit=data.get("unit", ""),
+            charm_name=data.get("charm_name", ""),
         )
 
     @property
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
-        return "{}_{}_{}".format(self.model, self.model_uuid, self.application)
-
-    @property
-    def scrape_identifier(self):
-        """Format the topology information into a scrape identifier."""
-        return "juju_{}_{}_{}_prometheus_scrape".format(
-            self.model,
-            self.model_uuid[:7],
-            self.application,
-        )
+        # This is odd, but may have `None` as a model key
+        return "_".join([str(val) for val in self.as_dict().values()])
 
     @property
     def promql_labels(self) -> str:
         """Format the topology information into a verbose string."""
-        return 'juju_model="{}", juju_model_uuid="{}", juju_application="{}"'.format(
-            self.model, self.model_uuid, self.application
+        return ", ".join(
+            ['juju_{}="{}"'.format(key, value) for key, value in self.as_dict().items()]
         )
 
     def as_dict(self) -> dict:
         """Format the topology information into a dict."""
-        return {
+        ret = {
             "model": self.model,
             "model_uuid": self.model_uuid,
             "application": self.application,
+            "unit": self.unit,
             "charm_name": self.charm_name,
         }
 
-    def as_dict_with_promql_labels(self):
+        ret["unit"] or ret.pop("unit")
+        ret["charm_name"] or ret.pop("charm_name")
+        return ret
+
+    def as_promql_label_dict(self):
         """Format the topology information into a dict with keys having 'juju_' as prefix."""
-        return {
-            "juju_model": self.model,
-            "juju_model_uuid": self.model_uuid,
-            "juju_application": self.application,
-            "juju_charm": self.charm_name,
-        }
+        vals = {"juju_{}".format(key): val for key, val in self.as_dict().items()}
+
+        if "juju_charm_name" in vals:
+            vals["juju_charm"] = vals.pop("juju_charm_name")
+
+        return vals
 
     def render(self, template: str):
         """Render a juju-topology template string with topology info."""
         return template.replace(JujuTopology.STUB, self.promql_labels)
+
+
+class AggregatorTopology(JujuTopology):
+    """Class for initializing topology information for MetricsEndpointAggregator."""
+
+    @classmethod
+    def from_parts(cls, model: str, model_uuid: str, application: str, unit: str):
+        """Factory method for creating the `AggregatorTopology` dataclass from a given charm.
+
+        Args:
+            charm: a `CharmBase` object for which the `AggregatorTopology` has to be constructed
+
+        Returns:
+            a `AggregatorTopology` object.
+        """
+        return cls(
+            model=model,
+            model_uuid=model_uuid,
+            application=application,
+            unit=unit,
+        )
+
+    def as_promql_label_dict(self):
+        """Format the topology information into a dict with keys having 'juju_' as prefix."""
+        vals = {"juju_{}".format(key): val for key, val in self.as_dict().items()}
+
+        # FIXME: Why is this different? I have no idea. The uuid length should be the same
+        vals["juju_model_uuid"] = vals.pop("juju_model_uuid")
+        vals["juju_model_uuid"] = vals["juju_model_uuid"][:7]
+
+        return vals
+
+
+class ProviderTopology(JujuTopology):
+    """Class for initializing topology information for MetricsEndpointProvider."""
+
+    @classmethod
+    def from_charm(cls, charm):
+        """Factory method for creating the `ProviderTopology` dataclass from a given charm.
+
+        Args:
+            charm: a `CharmBase` object for which the `ProviderTopology` has to be constructed
+
+        Returns:
+            a `ProviderTopology` object.
+        """
+        return cls(
+            model=charm.model.name,
+            model_uuid=charm.model.uuid,
+            application=charm.model.app.name,
+            charm_name=charm.meta.name,
+        )
+
+    @property
+    def scrape_identifier(self):
+        """Format the topology information into a scrape identifier."""
+        # This is used only by Metrics[Consumer|Provider] and does not need a
+        # unit name, so only check for the charm name
+        return "juju_{}_prometheus_scrape".format(
+            "_".join([self.model, self.model_uuid[:7], self.application, self.charm_name])
+        )
 
 
 class InvalidAlertRulePathError(Exception):
@@ -713,12 +795,15 @@ class AlertRules:
 
                 # add "juju_" topology labels
                 for alert_rule in alert_group["rules"]:
+                    if "labels" not in alert_rule:
+                        alert_rule["labels"] = {}
+                    alert_rule["labels"].update(self.topology.as_promql_label_dict())
 
                     if self.topology:
                         if "labels" not in alert_rule:
                             alert_rule["labels"] = {}
 
-                        alert_rule["labels"].update(self.topology.as_dict_with_promql_labels())
+                        alert_rule["labels"].update(self.topology.as_promql_label_dict())
                         # insert juju topology filters into a prometheus alert rule
                         alert_rule["expr"] = self.topology.render(alert_rule["expr"])
 
@@ -981,7 +1066,7 @@ class MetricsEndpointConsumer(Object):
 
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
-                topology = JujuTopology.from_relation_data(scrape_metadata)
+                topology = ProviderTopology.from_relation_data(scrape_metadata)
 
                 alerts[topology.identifier] = alert_rules
 
@@ -1019,7 +1104,7 @@ class MetricsEndpointConsumer(Object):
         if not scrape_metadata:
             return scrape_jobs
 
-        job_name_prefix = JujuTopology.from_relation_data(scrape_metadata).scrape_identifier
+        job_name_prefix = ProviderTopology.from_relation_data(scrape_metadata).scrape_identifier
 
         hosts = self._relation_hosts(relation)
 
@@ -1153,7 +1238,7 @@ class MetricsEndpointConsumer(Object):
         """
         juju_labels = labels.copy()  # deep copy not needed
         juju_labels.update(
-            JujuTopology.from_relation_data(scrape_metadata).as_dict_with_promql_labels()
+            ProviderTopology.from_relation_data(scrape_metadata).as_promql_label_dict()
         )
 
         return juju_labels
@@ -1383,7 +1468,7 @@ class MetricsEndpointProvider(Object):
             )
 
         super().__init__(charm, relation_name)
-        self.topology = JujuTopology.from_charm(charm)
+        self.topology = ProviderTopology.from_charm(charm)
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
@@ -1505,6 +1590,7 @@ class PrometheusRulesProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
+        self.topology = ProviderTopology.from_charm(charm)
         self.dir_path = dir_path or _resolve_dir_against_charm_path(
             charm, DEFAULT_ALERT_RULES_RELATIVE_PATH
         )
@@ -1877,23 +1963,6 @@ class MetricsEndpointAggregator(Object):
         """
         return "juju_{}_{}_{}_alert_rules".format(self.model.name, self.model.uuid[:7], appname)
 
-    def _juju_topology(self, unit_name, appname) -> dict:
-        """Construct juju topology labels.
-
-        Args:
-            unit_name: a string name of a unit.
-            appname: a string name of an application.
-
-        Returns:
-            a dictionary containing Juju topology labels.
-        """
-        return {
-            "juju_model": self.model.name,
-            "juju_model_uuid": self.model.uuid[:7],
-            "juju_application": appname,
-            "juju_unit": unit_name,
-        }
-
     def _label_alert_rules(self, unit_rules, appname) -> list:
         """Apply juju topology labels to alert rules.
 
@@ -1909,7 +1978,11 @@ class MetricsEndpointAggregator(Object):
         labeled_rules = []
         for unit_name, rules in unit_rules.items():
             for rule in rules:
-                rule["labels"].update(self._juju_topology(unit_name, appname))
+                rule["labels"].update(
+                    AggregatorTopology.from_parts(
+                        self.model.name, self.model.uuid, appname, unit_name
+                    ).as_promql_label_dict()
+                )
                 labeled_rules.append(rule)
 
         return labeled_rules

@@ -635,5 +635,5 @@ class TestEndpointAggregator(unittest.TestCase):
                 ],
             },
         ]
-
+        self.maxDiff = None
         self.assertListEqual(groups, expected_groups)
