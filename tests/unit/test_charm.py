@@ -200,7 +200,7 @@ class TestCharm(unittest.TestCase):
         push.assert_called()
         trigger_configuration_reload.assert_called()
 
-        self.harness.update_config({"log-level": "INFO"})
+        self.harness.update_config({"log_level": "INFO"})
         trigger_configuration_reload.assert_called()
 
 

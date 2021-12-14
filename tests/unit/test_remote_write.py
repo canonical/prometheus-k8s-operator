@@ -178,7 +178,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
         mock_net_get.return_value = net_info
 
-        self.harness.update_config({"web-external-url": "my_happy_ingress"})
+        self.harness.update_config({"web_external_url": "my_happy_ingress"})
 
         ingress_rel_id = self.harness.add_relation("ingress", "nginx-ingress")
         self.harness.add_relation_unit(ingress_rel_id, "ingress/0")
@@ -204,7 +204,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
         mock_net_get.return_value = net_info
 
-        self.harness.update_config({"web-external-url": "my_happy_ingress"})
+        self.harness.update_config({"web_external_url": "my_happy_ingress"})
 
         ingress_rel_id = self.harness.add_relation("ingress", "nginx-ingress")
         self.harness.add_relation_unit(ingress_rel_id, "ingress/0")
@@ -227,9 +227,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         )
 
         self.harness.remove_relation_unit(peers_rel_id, "prometheus/1")
-
-        # TODO Uncomment when https://github.com/canonical/operator/issues/638 is fixed
-        # self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
