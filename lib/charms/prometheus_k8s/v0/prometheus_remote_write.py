@@ -94,7 +94,7 @@ def _validate_relation_by_interface_and_direction(
     relation_name: str,
     expected_relation_interface: str,
     expected_relation_role: RelationRole,
-) -> str:
+):
     """Verifies that a relation has the necessary characteristics.
 
     Verifies that the `relation_name` provided: (1) exists in metadata.yaml,
@@ -123,7 +123,7 @@ def _validate_relation_by_interface_and_direction(
     if relation_name not in charm.meta.relations:
         raise RelationNotFoundError(relation_name)
 
-    relation: RelationMeta = charm.meta.relations[relation_name]
+    relation = charm.meta.relations[relation_name]  # type: RelationMeta
 
     actual_relation_interface = relation.interface_name
     if actual_relation_interface != expected_relation_interface:
@@ -183,7 +183,7 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_dir = Path(charm.charm_dir)
+    charm_dir = Path(str(charm.charm_dir))
     if not charm_dir.exists() or not charm_dir.is_dir():
         # Operator Framework does not currently expose a robust
         # way to determine the top level charm source directory
@@ -196,9 +196,9 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     alerts_dir_path = charm_dir.absolute().joinpath(*path_elements)
 
     if not alerts_dir_path.exists():
-        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "directory does not exist")
+        raise InvalidAlertRuleFolderPathError(str(alerts_dir_path), "directory does not exist")
     if not alerts_dir_path.is_dir():
-        raise InvalidAlertRuleFolderPathError(alerts_dir_path, "is not a directory")
+        raise InvalidAlertRuleFolderPathError(str(alerts_dir_path), "is not a directory")
 
     return str(alerts_dir_path)
 
@@ -373,7 +373,8 @@ class PrometheusRemoteWriteConsumer(Object):
         """A config object ready to be dropped in to a prometheus config file.
 
         Returns:
-            A list of dictionaries where each dictionary provides information about a single remote_write endpoint.
+            A list of dictionaries where each dictionary provides information about
+            a single remote_write endpoint.
         """
         endpoints = []
         for relation in self.model.relations[self._relation_name]:
