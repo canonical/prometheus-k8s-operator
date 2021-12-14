@@ -373,7 +373,7 @@ class PrometheusRemoteWriteConsumer(Object):
         """A config object ready to be dropped in to a prometheus config file.
 
         Returns:
-            A list of remote_write endpoints.
+            A list of dictionaries where each dictionary provides information about a single remote_write endpoint.
         """
         endpoints = []
         for relation in self.model.relations[self._relation_name]:
