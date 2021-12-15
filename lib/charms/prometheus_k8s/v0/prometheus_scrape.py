@@ -576,11 +576,11 @@ class JujuTopology:
         return ", ".join(
             [
                 'juju_{}="{}"'.format(key, value)
-                for key, value in self.as_dict(replace={"charm_name": "charm"}).items()
+                for key, value in self.as_dict(rename_keys={"charm_name": "charm"}).items()
             ]
         )
 
-    def as_dict(self, replace: Dict[str, str] = dict()) -> dict:
+    def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> dict:
         """Format the topology information into a dict."""
         ret = {
             "model": self.model,
@@ -593,16 +593,16 @@ class JujuTopology:
         ret["unit"] or ret.pop("unit")
         ret["charm_name"] or ret.pop("charm_name")
 
-        for drop, to in replace.items():
-            if drop in ret:
-                ret[to] = ret.pop(drop)
+        # If a key exists in `rename_keys`, replace the value
+        ret = {rename_keys.get(k, k): v for k, v in ret.items()} if rename_keys else ret
+
         return ret
 
     def as_promql_label_dict(self):
         """Format the topology information into a dict with keys having 'juju_' as prefix."""
         vals = {
             "juju_{}".format(key): val
-            for key, val in self.as_dict(replace={"charm_name": "charm"}).items()
+            for key, val in self.as_dict(rename_keys={"charm_name": "charm"}).items()
         }
 
         return vals
@@ -751,13 +751,13 @@ class AlertRules:
     #   the "alert" and "expr" keys.
     # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
 
-    def __init__(self):
+    def __init__(self, topology: Optional[JujuTopology] = None):
         """Build and alert rule object.
 
         Args:
-            topology: a `JujuTopology` instance that is used to annotate all alert rules.
+            topology: an optional `JujuTopology` instance that is used to annotate all alert rules.
         """
-        self.topology = None
+        self.topology = topology
         self.alert_groups = []  # type: List[dict]
 
     def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
@@ -804,12 +804,8 @@ class AlertRules:
                 for alert_rule in alert_group["rules"]:
                     if "labels" not in alert_rule:
                         alert_rule["labels"] = {}
-                    alert_rule["labels"].update(self.topology.as_promql_label_dict())
 
                     if self.topology:
-                        if "labels" not in alert_rule:
-                            alert_rule["labels"] = {}
-
                         alert_rule["labels"].update(self.topology.as_promql_label_dict())
                         # insert juju topology filters into a prometheus alert rule
                         alert_rule["expr"] = self.topology.render(alert_rule["expr"])
@@ -836,7 +832,8 @@ class AlertRules:
         # Generate group name:
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
-        group_name_parts = [self.topology.identifier, rel_path, group_name, "alerts"]
+        group_name_parts = [self.topology.identifier] if self.topology else []
+        group_name_parts.extend([rel_path, group_name, "alerts"])
         # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
 
@@ -866,14 +863,6 @@ class AlertRules:
                 alert_groups.extend(alert_groups_from_file)
 
         return alert_groups
-
-    def set_topology(self, topology: JujuTopology):
-        """Set topology used to annotate alert rules.
-
-        Args:
-            topology: A JujuTopology object used to annotate alert rules
-        """
-        self.topology = topology
 
     def add_path(self, path: str, *, recursive: bool = False) -> bool:
         """Add rules from a dir path.
@@ -1075,21 +1064,15 @@ class MetricsEndpointConsumer(Object):
                 metadata = relation.data[relation.app].get("scrape_metadata", "")
                 if metadata:
                     scrape_metadata = json.loads(metadata)
-                    topology = ProviderTopology.from_relation_data(scrape_metadata)
+                    identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 else:
                     # FIXME: older versions of MetricsEndpointAggregator do not give
                     # us nearly enough information about model data or other, so stub
-                    # out the topology with the only information we can
-                    topology = ProviderTopology.from_relation_data(
-                        {
-                            "model": self._charm.model,
-                            "model_uuid": self._charm.model.uuid,
-                            "applicaiton": relation.app.name,
-                            "unit": alert_rules["groups"].keys()[0],
-                        }
-                    )
+                    # out the identifier with the only information we can to get a
+                    # reasonably unique filename
+                    identifier = "_".join([relation.name, relation.id, relation.app.name])
 
-                alerts[topology.identifier] = alert_rules
+                alerts[identifier] = alert_rules
 
             except KeyError as e:
                 logger.error(
@@ -1526,8 +1509,7 @@ class MetricsEndpointProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        alert_rules = AlertRules()
-        alert_rules.set_topology(self.topology)
+        alert_rules = AlertRules(topology=self.topology)
         path_added = alert_rules.add_path(self._alert_rules_path, recursive=True)
         alert_rules_as_dict = alert_rules.as_dict()
 

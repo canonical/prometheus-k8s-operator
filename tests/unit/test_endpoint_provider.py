@@ -336,15 +336,13 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def test_non_recursive_is_default(self):
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"))
         rules_file_dict = rules.as_dict()
         self.assertEqual({}, rules_file_dict)
 
     def test_non_recursive_lma_format_loading_from_root_dir(self):
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "lma_format"))
         rules_file_dict = rules.as_dict()
 
@@ -366,8 +364,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.assertEqual(expected_rules_file, rules_file_dict)
 
     def test_non_recursive_official_format_loading_from_root_dir(self):
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "prom_format"))
         rules_file_dict = rules.as_dict()
 
@@ -395,8 +392,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
           - For rules in lma format, core group name is the filename
           - For rules in official format, core group name is the group name in the file
         """
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"), recursive=True)
         rules_file_dict = rules.as_dict()
 
@@ -456,8 +452,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -494,8 +489,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -510,7 +504,6 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 },
             ]
         }
-        self.maxDiff = None
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
     def test_duplicated_group_names_within_a_file_are_silently_accepted(self):
@@ -518,8 +511,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -541,7 +533,6 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 },
             ]
         }
-        self.maxDiff = None
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
     def test_deeply_nested(self):
@@ -552,8 +543,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             ("rules/a/b/file.rule", yaml.safe_dump(self.gen_rule(2))),
         )
 
-        rules = AlertRules()
-        rules.set_topology(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=True)
         rules_file_dict_read = rules.as_dict()
 
