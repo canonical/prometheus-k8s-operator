@@ -1507,7 +1507,7 @@ class MetricsEndpointProvider(Object):
 
         alert_rules = AlertRules()
         alert_rules.set_topology(self.topology)
-        path_added = alert_rules.add_path(self._alert_rules_path, recursive=False)
+        path_added = alert_rules.add_path(self._alert_rules_path, recursive=True)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
