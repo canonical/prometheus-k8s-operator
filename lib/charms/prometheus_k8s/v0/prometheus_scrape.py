@@ -1072,8 +1072,22 @@ class MetricsEndpointConsumer(Object):
                 continue
 
             try:
-                scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
-                topology = ProviderTopology.from_relation_data(scrape_metadata)
+                metadata = relation.data[relation.app].get("scrape_metadata", "")
+                if metadata:
+                    scrape_metadata = json.loads(metadata)
+                    topology = ProviderTopology.from_relation_data(scrape_metadata)
+                else:
+                    # FIXME: older versions of MetricsEndpointAggregator do not give
+                    # us nearly enough information about model data or other, so stub
+                    # out the topology with the only information we can
+                    topology = ProviderTopology.from_relation_data(
+                        {
+                            "model": self._charm.model,
+                            "model_uuid": self._charm.model.uuid,
+                            "applicaiton": relation.app.name,
+                            "unit": alert_rules["groups"].keys()[0],
+                        }
+                    )
 
                 alerts[topology.identifier] = alert_rules
 
