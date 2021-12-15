@@ -13,8 +13,8 @@ import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
-    JujuTopology,
     MetricsEndpointProvider,
+    ProviderTopology,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
@@ -212,7 +212,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("labels", rule)
@@ -220,6 +220,7 @@ class TestEndpointProvider(unittest.TestCase):
             self.assertIn("juju_model", labels)
             self.assertIn("juju_application", labels)
             self.assertIn("juju_model_uuid", labels)
+            self.assertIn("juju_charm", labels)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_expression_is_topology_labeled(self, _):
@@ -229,7 +230,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
@@ -237,6 +238,7 @@ class TestEndpointProvider(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
+                self.assertIn("juju_charm", labels)
 
 
 class CustomizableEndpointProviderCharm(CharmBase):
@@ -331,7 +333,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
             ("rules/prom/prom_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
         )
 
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def test_non_recursive_is_default(self):
         rules = AlertRules()
@@ -436,7 +438,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
 class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def setUp(self) -> None:
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def gen_rule(self, name, **extra):
         return {

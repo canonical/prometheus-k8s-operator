@@ -218,6 +218,7 @@ class TestEndpointConsumer(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
+                self.assertIn("juju_charm", labels)
 
             relabel_configs = job["relabel_configs"]
             self.assertEqual(len(relabel_configs), 1)

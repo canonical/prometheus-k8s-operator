@@ -574,10 +574,13 @@ class JujuTopology:
     def promql_labels(self) -> str:
         """Format the topology information into a verbose string."""
         return ", ".join(
-            ['juju_{}="{}"'.format(key, value) for key, value in self.as_dict().items()]
+            [
+                'juju_{}="{}"'.format(key, value)
+                for key, value in self.as_dict(replace={"charm_name": "charm"}).items()
+            ]
         )
 
-    def as_dict(self) -> dict:
+    def as_dict(self, replace: Dict[str, str] = dict()) -> dict:
         """Format the topology information into a dict."""
         ret = {
             "model": self.model,
@@ -589,14 +592,18 @@ class JujuTopology:
 
         ret["unit"] or ret.pop("unit")
         ret["charm_name"] or ret.pop("charm_name")
+
+        for drop, to in replace.items():
+            if drop in ret:
+                ret[to] = ret.pop(drop)
         return ret
 
     def as_promql_label_dict(self):
         """Format the topology information into a dict with keys having 'juju_' as prefix."""
-        vals = {"juju_{}".format(key): val for key, val in self.as_dict().items()}
-
-        if "juju_charm_name" in vals:
-            vals["juju_charm"] = vals.pop("juju_charm_name")
+        vals = {
+            "juju_{}".format(key): val
+            for key, val in self.as_dict(replace={"charm_name": "charm"}).items()
+        }
 
         return vals
 
