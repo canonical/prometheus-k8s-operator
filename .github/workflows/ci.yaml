@@ -51,5 +51,7 @@ jobs:
       uses: charmed-kubernetes/actions-operator@main
       with:
         provider: microk8s
+    - name: Check charm is using latest libs
+      run: bash -c '[[ $(find lib/charms -mindepth 1 -maxdepth 1 -type d | wc -l) -eq $(charmcraft fetch-lib 2>&1 | grep "was already up to date" | wc -l) ]]'
     - name: Run Prometheus integration tests
       run: tox -vve integration
