@@ -405,11 +405,11 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
-        with self.assertLogs(level="ERROR") as logger:
+        with self.assertLogs(level="WARNING") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts()
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn(f"Relation {rel_id} has invalid data", messages[0])
+            self.assertIn(f"Relation {rel_id} has no 'scrape_metadata'", messages[0])
 
 
 def juju_job_labels(job, num=0):
