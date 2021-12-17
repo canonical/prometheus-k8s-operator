@@ -296,6 +296,7 @@ of Metrics provider charms hold eponymous information.
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -1060,26 +1061,28 @@ class MetricsEndpointConsumer(Object):
             if not alert_rules:
                 continue
 
+            identifier = None
             try:
-                metadata = relation.data[relation.app].get("scrape_metadata", "")
-                if metadata:
-                    scrape_metadata = json.loads(metadata)
-                    identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
-                else:
-                    # FIXME: older versions of MetricsEndpointAggregator do not give
-                    # us nearly enough information about model data or other, so stub
-                    # out the identifier with the only information we can to get a
-                    # reasonably unique filename
-                    identifier = "_".join([relation.name, relation.id, relation.app.name])
-
+                scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
+                identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = alert_rules
-
             except KeyError as e:
-                logger.error(
-                    "Relation %s has invalid data : %s",
+                logger.warning(
+                    "Relation %s has no 'scrape_metadata': %s",
                     relation.id,
                     e,
                 )
+                logger.debug("Without scrape_metadata, check for an aggregate or forwarder")
+                if "groups" in alert_rules["groups"][0].keys():
+                    # Strip off the first parts of the rule name, set by topology, to give back
+                    # an identifier which can be used to write the file
+                    flattened = {
+                        re.sub(
+                            r"^(?P<id>(.*?_){2}(.*?))_", r"\g<id>", alert["groups"][0]["name"]
+                        ): dict(alert.items())
+                        for alert in alert_rules["groups"]
+                    }
+                    alerts.update(flattened)
 
         return alerts
 
