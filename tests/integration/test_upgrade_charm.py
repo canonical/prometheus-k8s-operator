@@ -27,7 +27,7 @@ async def test_build_and_deploy(ops_test, prometheus_charm):
     """
     log.info("build charm from local source folder")
     resources = {
-        "alertmanager-image": METADATA["resources"]["alertmanager-image"]["upstream-source"]
+        "prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]
     }
 
     async with IPAddressWorkaround(ops_test):
