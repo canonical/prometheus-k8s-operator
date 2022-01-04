@@ -10,6 +10,7 @@ import pytest
 import yaml
 from helpers import (  # type: ignore[attr-defined]
     IPAddressWorkaround,
+    check_prometheus_is_ready,
     cli_upgrade_from_path_and_wait,
 )
 
@@ -47,3 +48,5 @@ async def test_build_and_deploy(ops_test, prometheus_charm):
             resources=resources,
             wait_for_status="active",
         )
+
+        await check_prometheus_is_ready(ops_test, app_name, 0)
