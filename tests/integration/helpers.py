@@ -155,7 +155,10 @@ class IPAddressWorkaround:
     Due to a juju bug, occasionally some charms finish a startup sequence without
     having an ip address returned by `bind_address`.
     https://bugs.launchpad.net/juju/+bug/1929364
-    Issuing dummy update_status just to trigger an event, and then restore it.
+
+    On entry, the context manager changes the update status interval to the minimum 10s, so that
+    the update_status hook is trigger shortly.
+    On exit, the context manager restores the interval to its previous value.
     """
 
     def __init__(self, ops_test: OpsTest):

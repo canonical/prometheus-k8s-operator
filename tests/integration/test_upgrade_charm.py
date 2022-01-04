@@ -20,7 +20,7 @@ app_name = METADATA["name"]
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test, prometheus_charm):
+async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus_charm):
     """Build the charm-under-test and deploy it together with related charms.
 
     Assert on the unit status before any relations/configurations take place.
