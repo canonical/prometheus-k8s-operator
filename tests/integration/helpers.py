@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import Dict
 
 import yaml
 from pytest_operator.plugin import OpsTest
@@ -148,46 +147,6 @@ def oci_image(metadata_file: str, image_name: str) -> str:
         raise ValueError("Upstream source not found")
 
     return upstream_source
-
-
-def interleave(l1: list, l2: list) -> list:
-    """Interleave two lists.
-
-    >>> interleave([1,2,3], ['a', 'b', 'c'])
-    [1, 'a', 2, 'b', 3, 'c']
-
-    Reference: https://stackoverflow.com/a/11125298/3516684
-    """
-    return [x for t in zip(l1, l2) for x in t]
-
-
-async def cli_upgrade_from_path_and_wait(
-    ops_test: OpsTest,
-    path: str,
-    alias: str,
-    resources: Dict[str, str] = None,
-    wait_for_status: str = None,
-):
-    if resources is None:
-        resources = {}
-
-    resource_pairs = [f"{k}={v}" for k, v in resources.items()]
-    resource_arg_prefixes = ["--resource"] * len(resource_pairs)
-    resource_args = interleave(resource_arg_prefixes, resource_pairs)
-
-    cmd = [
-        "juju",
-        "refresh",
-        "--path",
-        path,
-        alias,
-        *resource_args,
-    ]
-
-    retcode, stdout, stderr = await ops_test._run(*cmd)
-    assert retcode == 0, f"Upgrade failed: {(stderr or stdout).strip()}"
-    log.info(stdout)
-    await ops_test.model.wait_for_idle(apps=[alias], status=wait_for_status, timeout=120)
 
 
 class IPAddressWorkaround:

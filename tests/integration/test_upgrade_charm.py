@@ -11,7 +11,6 @@ import yaml
 from helpers import (  # type: ignore[attr-defined]
     IPAddressWorkaround,
     check_prometheus_is_ready,
-    cli_upgrade_from_path_and_wait,
 )
 
 log = logging.getLogger(__name__)
@@ -37,16 +36,8 @@ async def test_build_and_deploy(ops_test, prometheus_charm):
         await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=1000)
 
         log.info("upgrade deployed charm with local charm %s", prometheus_charm)
-        # await ops_test.model.applications[app_name].refresh(
-        #     path=local_charm, resources=resources
-        # )
-
-        await cli_upgrade_from_path_and_wait(
-            ops_test,
-            path=prometheus_charm,
-            alias=app_name,
-            resources=resources,
-            wait_for_status="active",
+        await ops_test.model.applications[app_name].refresh(
+            path=prometheus_charm, resources=resources
         )
-
+        await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=1000)
         await check_prometheus_is_ready(ops_test, app_name, 0)
