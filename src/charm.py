@@ -11,7 +11,7 @@ import re
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
-from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
+from charms.istio_pilot.v0.ingress import IngressRequirer
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
@@ -70,22 +70,18 @@ class PrometheusCharm(CharmBase):
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
         # Manages ingress for this charm
-        self.ingress = IngressRequires(
+        self.ingress = IngressRequirer(
             self,
-            {
-                "service-hostname": self._external_hostname,
-                "service-name": self.app.name,
-                "service-port": str(self._port),
-            },
+            port = self._port,
+            per_unit_routes = True,
         )
 
         # Event handlers
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.on.ingress_relation_joined, self._configure)
-        self.framework.observe(self.on.ingress_relation_changed, self._configure)
-        self.framework.observe(self.on.ingress_relation_broken, self._configure)
+        self.framework.observe(self.ingress.on.ready, self._configure)
+        self.framework.observe(self.ingress.on.removed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
@@ -141,14 +137,6 @@ class PrometheusCharm(CharmBase):
         # Ensure the right address is set on the remote_write relations
         self.remote_write_provider.update_endpoint()
 
-        if not self._validate_ingress_and_remote_write():
-            self.unit.status = BlockedStatus(INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE)
-            logger.error(
-                "Using the ingress relation and receiving remote_write relations with more than "
-                "one Prometheus unit; remote_write data is likely to be sent to only one unit."
-            )
-            return
-
         if (
             isinstance(self.unit.status, BlockedStatus)
             and self.unit.status.message != INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
@@ -156,12 +144,6 @@ class PrometheusCharm(CharmBase):
             return
 
         self.unit.status = ActiveStatus()
-
-    def _validate_ingress_and_remote_write(self) -> bool:
-        if not (peer_relation := self.model.get_relation("prometheus-peers")):
-            return True
-
-        return not (self.model.get_relation("ingress") and len(peer_relation.units) > 0)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
@@ -202,10 +184,8 @@ class PrometheusCharm(CharmBase):
         ]
 
         if self.model.get_relation("ingress"):
-            # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{self._port}"
-
-            args.append(f"--web.external-url={external_url}")
+            if unit_external_url := self.ingress.unit_urls[self.unit.name]:
+                args.append(f"--web.external-url={unit_external_url}")
 
         # enable remote write if an instance of the relation exists
         if self.model.relations["receive-remote-write"]:
