@@ -26,9 +26,7 @@ async def test_build_and_deploy(ops_test, prometheus_charm):
     Assert on the unit status before any relations/configurations take place.
     """
     log.info("build charm from local source folder")
-    resources = {
-        "prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]
-    }
+    resources = {"prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]}
 
     async with IPAddressWorkaround(ops_test):
         log.info("deploy charm from charmhub")
