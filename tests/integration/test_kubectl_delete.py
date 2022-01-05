@@ -48,7 +48,7 @@ async def test_kubectl_delete_pod(ops_test, prometheus_charm):
         "Removing pod '%s' from model '%s' with cmd: %s", pod_name, ops_test.model_name, cmd
     )
 
-    retcode, stdout, stderr = await ops_test._run(*cmd)
+    retcode, stdout, stderr = await ops_test.run(*cmd)
     assert retcode == 0, f"kubectl failed: {(stderr or stdout).strip()}"
     logger.debug(stdout)
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[app_name].units) > 0)
