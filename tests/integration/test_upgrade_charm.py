@@ -13,7 +13,7 @@ from helpers import (  # type: ignore[attr-defined]
     check_prometheus_is_ready,
 )
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 app_name = METADATA["name"]
@@ -27,11 +27,11 @@ async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus
     Assert on the unit status before any relations/configurations take place.
     """
     async with IPAddressWorkaround(ops_test):
-        log.debug("deploy charm from charmhub")
+        logger.debug("deploy charm from charmhub")
         await ops_test.model.deploy(f"ch:{app_name}", application_name=app_name, channel="edge")
         await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=1000)
 
-        log.debug("upgrade deployed charm with local charm %s", prometheus_charm)
+        logger.debug("upgrade deployed charm with local charm %s", prometheus_charm)
         await ops_test.model.applications[app_name].refresh(
             path=prometheus_charm, resources=resources
         )
