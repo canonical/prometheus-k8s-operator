@@ -39,8 +39,8 @@ async def test_deploy_from_local_path(ops_test, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_kubectl_delete_pod(ops_test, prometheus_charm):
     pod_name = f"{app_name}-0"
-    log.info("Removing pod '%s' from model '%s'", pod_name, ops_test.model_name)
     cmd = [
+        "sudo",
         "microk8s.kubectl",
         "delete",
         "pod",
@@ -48,6 +48,7 @@ async def test_kubectl_delete_pod(ops_test, prometheus_charm):
         ops_test.model_name,
         pod_name,
     ]
+    log.info("Removing pod '%s' from model '%s' with cmd: %s", pod_name, ops_test.model_name, cmd)
 
     retcode, stdout, stderr = await ops_test._run(*cmd)
     assert retcode == 0, f"kubectl failed: {(stderr or stdout).strip()}"
