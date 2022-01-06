@@ -16,14 +16,22 @@ from helpers import (
 
 logger = logging.getLogger(__name__)
 
+tester_resources = {
+    "prometheus-tester-image": oci_image(
+        "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
+    )
+}
+prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_charm):
     """Test that the Prometheus charm can be deployed successfully."""
-    resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     app_name = "prometheus-ubuntu"
 
-    await ops_test.model.deploy(prometheus_charm, resources=resources, application_name=app_name)
+    await ops_test.model.deploy(
+        prometheus_charm, resources=prometheus_resources, application_name=app_name
+    )
     await ops_test.model.wait_for_idle(apps=[app_name], status="active")
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[app_name].units) > 0)
 
@@ -32,21 +40,17 @@ async def test_build_and_deploy_with_alternative_images(ops_test, prometheus_cha
     await check_prometheus_is_ready(ops_test, app_name, 0)
 
     await ops_test.model.applications[app_name].remove()
+    await ops_test.model.block_until(lambda: app_name not in ops_test.model.applications)
     await ops_test.model.reset()
 
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_charm):
     """Test that Prometheus tester charm can be deployed successfully."""
-    resources = {
-        "prometheus-tester-image": oci_image(
-            "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
-        )
-    }
     app_name = "prometheus-tester"
 
     await ops_test.model.deploy(
-        prometheus_tester_charm, resources=resources, application_name=app_name
+        prometheus_tester_charm, resources=tester_resources, application_name=app_name
     )
     await ops_test.model.wait_for_idle(apps=[app_name], status="active")
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[app_name].units) > 0)
@@ -54,6 +58,7 @@ async def test_build_and_deploy_prometheus_tester(ops_test, prometheus_tester_ch
     assert ops_test.model.applications[app_name].units[0].workload_status == "active"
 
     await ops_test.model.applications[app_name].remove()
+    await ops_test.model.block_until(lambda: app_name not in ops_test.model.applications)
     await ops_test.model.reset()
 
 
@@ -62,12 +67,6 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
-    tester_resources = {
-        "prometheus-tester-image": oci_image(
-            "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"
-        )
-    }
-    prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
     prometheus_app_name = "prometheus"
     tester_app_name = "prometheus-tester"
 
@@ -113,4 +112,9 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     assert initial_rules == relation_removed_rules
 
     await ops_test.model.applications[prometheus_app_name].remove()
+
+    await ops_test.model.block_until(
+        lambda: prometheus_app_name not in ops_test.model.applications
+    )
+    await ops_test.model.block_until(lambda: tester_app_name not in ops_test.model.applications)
     await ops_test.model.reset()
