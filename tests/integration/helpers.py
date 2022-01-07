@@ -181,6 +181,8 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
         ops_test.model.applications[name].units[0].workload_status == "active"
         for name in app_names
     )
+
+
 class IPAddressWorkaround:
     """Context manager for deploying a charm that needs to have its IP address.
 
@@ -206,17 +208,3 @@ class IPAddressWorkaround:
     async def __aexit__(self, exc_type, exc_value, exc_traceback):
         """On exit, the update status interval is reverted to its original value."""
         await self.ops_test.model.set_config({"update-status-hook-interval": self.revert_to})
-def initial_workload_is_ready(ops_test, app_names) -> bool:
-    """Checks that the initial workload (ie. x/0) is ready.
-
-    Args:
-        ops_test: pytest-operator plugin
-        app_names: array of application names to check for
-
-    Returns:
-        whether the workloads are active or not
-    """
-    for name in app_names:
-        if ops_test.model.applications[name].units[0].workload_status != "active":
-            return False
-    return True

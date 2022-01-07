@@ -7,6 +7,12 @@ from unittest.mock import patch
 
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    DEFAULT_RELATION_NAME as RELATION_NAME,
+)
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    RELATION_INTERFACE_NAME as RELATION_INTERFACE,
+)
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from ops.charm import CharmBase
@@ -15,8 +21,6 @@ from ops.testing import Harness
 
 from charm import INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE, Prometheus, PrometheusCharm
 
-RELATION_NAME = "receive-remote-write"
-RELATION_INTERFACE = "prometheus_remote_write"
 METADATA = f"""
 name: consumer-tester
 requires:
@@ -82,7 +86,11 @@ def fake_push(self, path, content, **kwargs):
 class RemoteWriteConsumerCharm(CharmBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
-        self.remote_write_consumer = PrometheusRemoteWriteConsumer(self, RELATION_NAME)
+        self.remote_write_consumer = PrometheusRemoteWriteConsumer(
+            self,
+            RELATION_NAME,
+            alert_rules_path="./tests/unit/prometheus_alert_rules",
+        )
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
             self._handle_endpoints_changed,
@@ -96,7 +104,8 @@ class TestRemoteWriteConsumer(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
         self.addCleanup(self.harness.cleanup)
-        self.harness.begin()
+        self.harness.set_leader(True)
+        self.harness.begin_with_initial_hooks()
 
     def test_address_is_set(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -113,6 +122,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
     @patch.object(RemoteWriteConsumerCharm, "_handle_endpoints_changed")
     def test_config_is_set(self, mock_handle_endpoints_changed):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(
             rel_id,
@@ -136,8 +146,6 @@ class TestRemoteWriteConsumer(unittest.TestCase):
 
 
 class TestRemoteWriteProvider(unittest.TestCase):
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push", new=fake_push)
     @patch("ops.testing._TestingModelBackend.network_get")
     def setUp(self, mock_net_get, *_):
         ip = "1.1.1.1"
@@ -165,8 +173,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
             self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
             {"remote_write": json.dumps({"url": "http://1.1.1.1:9090/api/v1/write"})},
         )
-
-        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+        self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -192,7 +199,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
             {"remote_write": json.dumps({"url": "http://my_happy_ingress:9090/api/v1/write"})},
         )
 
-        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+        self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -227,7 +234,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         )
 
         self.harness.remove_relation_unit(peers_rel_id, "prometheus/1")
-        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
+        self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)

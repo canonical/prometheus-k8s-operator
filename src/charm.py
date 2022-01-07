@@ -10,9 +10,12 @@ import re
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
-from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
+from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
+)
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
@@ -27,9 +30,7 @@ from prometheus_server import Prometheus
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
-INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = (
-    "invalid combination of 'ingress', 'receive-remote-write' relations and multiple units"
-)
+INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = f"invalid combination of 'ingress', '{DEFAULT_REMOTE_WRITE_RELATION_NAME}' relations and multiple units"
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,8 @@ class PrometheusCharm(CharmBase):
         # Relation handler objects
 
         # Allows Grafana to aggregate metrics
-        self.grafana_source_consumer = GrafanaSourceConsumer(
+        self.grafana_source_consumer = GrafanaSourceProvider(
             charm=self,
-            name="grafana-source",
             refresh_event=self.on.prometheus_pebble_ready,
         )
 
@@ -61,7 +61,7 @@ class PrometheusCharm(CharmBase):
         # Exposes remote write endpoints
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             self,
-            relation_name="receive-remote-write",
+            relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             endpoint_address=self._remote_write_address,
             endpoint_port=self._port,
         )
@@ -158,6 +158,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _validate_ingress_and_remote_write(self) -> bool:
+        """Validate that ingresses are created if there are peers."""
         if not (peer_relation := self.model.get_relation("prometheus-peers")):
             return True
 
@@ -208,7 +209,7 @@ class PrometheusCharm(CharmBase):
             args.append(f"--web.external-url={external_url}")
 
         # enable remote write if an instance of the relation exists
-        if self.model.relations["receive-remote-write"]:
+        if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--enable-feature=remote-write-receiver")
 
         # get log level

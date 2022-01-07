@@ -41,7 +41,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_default_cli_log_level_is_info(self, *_):
         self.harness.update_config(MINIMAL_CONFIG)
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -49,7 +48,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_invalid_log_level_defaults_to_debug(self, *_):
         bad_log_config = MINIMAL_CONFIG.copy()
         bad_log_config["log_level"] = "bad-level"
@@ -67,7 +65,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_valid_log_level_is_accepted(self, *_):
         valid_log_config = MINIMAL_CONFIG.copy()
         valid_log_config["log_level"] = "warn"
@@ -78,7 +75,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_ingress_relation_not_set(self, *_):
         self.harness.set_leader(True)
 
@@ -90,7 +86,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_ingress_relation_set(self, *_):
         self.harness.set_leader(True)
 
@@ -107,7 +102,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_metrics_wal_compression_is_not_enabled_by_default(self, *_):
         compress_config = MINIMAL_CONFIG.copy()
         self.harness.update_config(compress_config)
@@ -117,7 +111,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_metrics_wal_compression_can_be_enabled(self, *_):
         compress_config = MINIMAL_CONFIG.copy()
         compress_config["metrics_wal_compression"] = True
@@ -131,7 +124,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_valid_metrics_retention_times_can_be_set(self, *_):
         retention_time_config = MINIMAL_CONFIG.copy()
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
@@ -145,7 +137,6 @@ class TestCharm(unittest.TestCase):
 
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
-    @patch("ops.testing._TestingModelBackend.network_get")
     def test_invalid_metrics_retention_times_can_not_be_set(self, *_):
         retention_time_config = MINIMAL_CONFIG.copy()
 
@@ -165,7 +156,6 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
-    @patch("ops.testing._TestingModelBackend.network_get")
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
     def test_global_evaluation_interval_can_be_set(self, push, *_):
@@ -179,7 +169,6 @@ class TestCharm(unittest.TestCase):
             gconfig = global_config(config)
             self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation_interval"])
 
-    @patch("ops.testing._TestingModelBackend.network_get")
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
     def test_default_scrape_config_is_always_set(self, push, *_):
@@ -188,7 +177,6 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
 
-    @patch("ops.testing._TestingModelBackend.network_get")
     @patch("prometheus_server.Prometheus.reload_configuration")
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingPebbleClient.remove_path")

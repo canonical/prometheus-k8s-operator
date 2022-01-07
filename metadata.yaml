@@ -36,6 +36,7 @@ requires:
     limit: 1
 peers:
   prometheus-peers:
+    # Clustered prometheus is not yet supported
     interface: prometheus_peers
 storage:
   database:
