@@ -567,7 +567,10 @@ class PrometheusRemoteWriteConsumer(Object):
             _handle_endpoints_changed,
         )
     ```
-    The `endpoints_changed` event will fire in situations such as provider ip change (e.g. relation created, provider upgrade, provider pod churn) or provider config change (e.g. metadata settings).
+    The `endpoints_changed` event will fire in situations such as provider ip change (e.g.
+    relation created, provider upgrade, provider pod churn) or provider config change (e.g.
+    metadata settings).
+
     Then, inside the logic of `_handle_endpoints_changed`, the updated endpoint list is
     retrieved with with:
 
@@ -674,8 +677,12 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
-        self.framework.observe(self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags)
-        self.framework.observe(self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags)
+        self.framework.observe(
+            self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
+        )
+        self.framework.observe(
+            self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
+        )
 
     def _handle_endpoints_changed(self, event: RelationEvent):
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
@@ -728,8 +735,8 @@ class PrometheusRemoteWriteConsumer(Object):
 class PrometheusRemoteWriteProvider(Object):
     """API that manages a provided `prometheus_remote_write` relation.
 
-    The `PrometheusRemoteWriteProvider` is intended to be used by charms whose workloads need to receive data
-    from other charms' workloads over the Prometheus remote_write API.
+    The `PrometheusRemoteWriteProvider` is intended to be used by charms whose workloads need
+    to receive data from other charms' workloads over the Prometheus remote_write API.
 
     The `PrometheusRemoteWriteProvider` object can be instantiated as follows in your charm:
 
@@ -902,7 +909,7 @@ class PrometheusRemoteWriteProvider(Object):
         Returns:
             a dictionary mapping the name of an alert rule group to the group.
         """
-        alerts = {} # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units:
                 continue

@@ -15,6 +15,8 @@ from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
+)
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
