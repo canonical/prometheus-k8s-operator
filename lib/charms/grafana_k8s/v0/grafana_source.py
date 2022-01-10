@@ -33,7 +33,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +268,7 @@ class GrafanaSourceProvider(Object):
             "model": str(self._charm.model.name),
             "model_uuid": str(self._charm.model.uuid),
             "application": str(self._charm.model.app.name),
+            "type": self._source_type,
         }
         return data
 
@@ -435,6 +436,19 @@ class GrafanaSourceConsumer(Object):
     def _remove_source(self, source_name: str) -> None:
         """Remove a datasource by name."""
         self._stored.sources_to_delete.add(source_name)
+
+    def upgrade_keys(self) -> None:
+        """On upgrade, ensure stored data maintains compatibility."""
+        # self._stored.sources may have hyphens instead of underscores in key names.
+        # Make sure they reconcile.
+        sources = _type_convert_stored(self._stored.sources)
+        for rel_id in sources.keys():
+            for i in range(len(sources[rel_id])):
+                sources[rel_id][i].update(
+                    {k.replace("-", "_"): v for k, v in sources[rel_id][i].items()}
+                )
+
+        self._stored.sources = sources
 
     @property
     def sources(self) -> List[dict]:
