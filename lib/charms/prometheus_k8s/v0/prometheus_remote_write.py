@@ -674,6 +674,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
+        self.framework.observe(self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags)
         self.framework.observe(self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags)
 
     def _handle_endpoints_changed(self, event: RelationEvent):
@@ -901,7 +902,7 @@ class PrometheusRemoteWriteProvider(Object):
         Returns:
             a dictionary mapping the name of an alert rule group to the group.
         """
-        alerts = {}
+        alerts = {} # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units:
                 continue
@@ -912,6 +913,7 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
+
                 for group in alert_rules["groups"]:
                     alerts[group["name"]] = group
             except KeyError as e:

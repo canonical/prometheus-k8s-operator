@@ -156,7 +156,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _validate_ingress_and_remote_write(self) -> bool:
-        """Validate that ingresses are created if there are peers."""
+        """Validate that there's only one unit if ingress is used."""
         if not (peer_relation := self.model.get_relation("prometheus-peers")):
             return True
 
