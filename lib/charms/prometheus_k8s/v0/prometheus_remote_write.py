@@ -673,22 +673,20 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._handle_endpoints_changed)
-        self.framework.observe(on_relation.relation_joined, self._set_alerts_on_relation_changed)
-        self.framework.observe(self._charm.on.upgrade_charm, self._set_alerts_to_all_relation)
+        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
+        self.framework.observe(self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags)
 
     def _handle_endpoints_changed(self, event: RelationEvent):
-
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
-    def _set_alerts_on_relation_changed(self, event: RelationEvent):
+    def _push_alerts_on_relation_joined(self, event: RelationEvent):
+        self._push_alerts_to_relation_databag(event.relation)
 
-        self._set_alerts_to_relation(event.relation)
-
-    def _set_alerts_to_all_relation(self, _):
+    def _push_alerts_to_all_relation_databags(self, _):
         for relation in self.model.relations[self._relation_name]:
-            self._set_alerts_to_relation(relation)
+            self._push_alerts_to_relation_databag(relation)
 
-    def _set_alerts_to_relation(self, relation: Relation):
+    def _push_alerts_to_relation_databag(self, relation: Relation):
         if not self._charm.unit.is_leader():
             return
 
