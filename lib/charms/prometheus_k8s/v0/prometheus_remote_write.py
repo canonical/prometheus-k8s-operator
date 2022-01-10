@@ -567,7 +567,7 @@ class PrometheusRemoteWriteConsumer(Object):
             _handle_endpoints_changed,
         )
     ```
-
+    The `endpoints_changed` event will fire in situations such as provider ip change (e.g. relation created, provider upgrade, provider pod churn) or provider config change (e.g. metadata settings).
     Then, inside the logic of `_handle_endpoints_changed`, the updated endpoint list is
     retrieved with with:
 
@@ -588,12 +588,12 @@ class PrometheusRemoteWriteConsumer(Object):
     In any case, it is strongly discouraged to change the relation name: having consistent
     relation names across charms that do similar things is good practice and more
     straightforward for the users of your charm. The one exception to the rule above,
-    is if you charm needs to both consume and provide a relation using the
+    is if your charm needs to both consume and provide a relation using the
     `prometheus_remote_write` interface, in which case changing the relation name to
     differentiate between "incoming" and "outgoing" remote write interactions is necessary.
 
-    It is also possible to specify alert rules. By default, this library will look
-    into the `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
+    It is also possible to specify alert rules. By default, this library will search
+    `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
     layouts resolves to `src/prometheus_alert_rules`. Each alert rule goes into a
     separate `*.rule` file. If the syntax of a rule is invalid,
     the  `MetricsEndpointProvider` logs an error and does not load the particular
