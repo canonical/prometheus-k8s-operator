@@ -6,8 +6,6 @@ import asyncio
 import logging
 
 import pytest
-from pytest_operator.plugin import OpsTest
-
 from helpers import (
     check_prometheus_is_ready,
     get_job_config_for,
@@ -17,6 +15,7 @@ from helpers import (
     initial_workload_is_ready,
     oci_image,
 )
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 

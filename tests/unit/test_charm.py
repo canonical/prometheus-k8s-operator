@@ -7,7 +7,7 @@ from unittest.mock import patch
 import yaml
 from ops.testing import Harness
 
-from charm import PrometheusCharm, PROMETHEUS_CONFIG
+from charm import PROMETHEUS_CONFIG, PrometheusCharm
 
 MINIMAL_CONFIG = {}
 
