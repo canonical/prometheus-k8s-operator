@@ -581,8 +581,8 @@ class PrometheusRemoteWriteConsumer(Object):
     Regarding the default relation name, `prometheus-remote-write`: if you choose to change it,
     you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
     `relation_name` constructor argument. (The relation interface, on the other hand, is
-    immutable and, if you were to change it, your charm would not be able to relate with other
-    charms using the right relation interface. The library prevents you from doing that by
+    fixed and, if you were to change it, your charm would not be able to relate with other
+    charms using the correct relation interface. The library prevents you from doing that by
     raising an exception.)
 
     In any case, it is strongly discouraged to change the relation name: having consistent
@@ -594,10 +594,11 @@ class PrometheusRemoteWriteConsumer(Object):
 
     It is also possible to specify alert rules. By default, this library will search
     `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
-    layouts resolves to `src/prometheus_alert_rules`. Each alert rule goes into a
-    separate `*.rule` file. If the syntax of a rule is invalid,
-    the  `MetricsEndpointProvider` logs an error and does not load the particular
-    rule.
+    layouts resolves to `src/prometheus_alert_rules`. Each set of alert rules, grouped
+    by the topology identifier, goes into a separate `*.rule` file.
+
+    If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
+    does not load the particular rule.
 
     To avoid false positives and negatives in the evaluation of your alert rules,
     you must always add the `%%juju_topology%%` token as label filters in the

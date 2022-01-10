@@ -174,14 +174,25 @@ class PrometheusCharm(CharmBase):
         """
         container.remove_path(RULES_DIR, recursive=True)
 
-        self._push_alert_rules_group(container, self.metrics_consumer.alerts())
-        self._push_alert_rules_group(container, self.remote_write_provider.alerts())
+        self._push_alert_rules(container, self.metrics_consumer.alerts())
+        self._push_alert_rules(container, self.remote_write_provider.alerts())
 
-    def _push_alert_rules_group(self, container, alerts):
-        for group_name, group in alerts.items():
-            filename = "juju_" + group_name + ".rules"
+    def _push_alert_rules(self, container, alerts):
+        """Pushes alert rules from a rules file to the prometheus container.
+
+        Args:
+            container: the Prometheus workload container into which
+                alert rule files need to be created. This container
+                must be in a pebble ready state.
+            alerts: a dictionary of alert rule files, fetched from
+                either a metrics consumer or a remote write provider.
+
+        """
+        for topology_identifier, rules_file in alerts.items():
+            filename = "juju_" + topology_identifier + ".rules"
             path = os.path.join(RULES_DIR, filename)
-            rules = yaml.dump(group)
+
+            rules = yaml.dump(rules_file)
 
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
