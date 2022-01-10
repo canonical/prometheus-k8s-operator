@@ -700,7 +700,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     @property
     def endpoints(self) -> List[Dict[str, str]]:
-        """A config object ready to be dropped in to a prometheus config file.
+        """A config object ready to be dropped into a prometheus config file.
 
         Returns:
             A list of dictionaries where each dictionary provides information about
