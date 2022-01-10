@@ -6,6 +6,8 @@ import asyncio
 import logging
 
 import pytest
+from pytest_operator.plugin import OpsTest
+
 from helpers import (
     check_prometheus_is_ready,
     get_job_config_for,
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.abort_on_fail
 async def test_prometheus_scrape_relation_with_prometheus_tester(
-    ops_test, prometheus_charm, prometheus_tester_charm
+    ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
     prometheus_app_name = "prometheus"

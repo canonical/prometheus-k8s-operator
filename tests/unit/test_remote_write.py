@@ -28,7 +28,6 @@ requires:
     interface: {RELATION_INTERFACE}
 """
 
-FILES = {}
 
 ALERT_RULES = {
     "groups": [
@@ -76,11 +75,6 @@ ALERT_RULES = {
         }
     ]
 }
-
-
-def fake_push(self, path, content, **kwargs):
-    global FILES
-    FILES[path] = content
 
 
 class RemoteWriteConsumerCharm(CharmBase):
@@ -157,8 +151,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push", new=fake_push)
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_port_is_set(self, mock_net_get, *_):
         ip = "1.1.1.1"
@@ -177,8 +169,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push", new=fake_push)
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_endpoint_url_with_ingress_and_external_url(self, mock_net_get, *_):
         ip = "1.1.1.1"
@@ -203,8 +193,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push", new=fake_push)
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_multiple_units_with_ingress(self, mock_net_get, *_):
         ip = "1.1.1.1"
@@ -238,10 +226,8 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch("ops.testing._TestingPebbleClient.remove_path")
-    @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_alert_rules(self, mock_net_get, mock_push, *_):
+    def test_alert_rules(self, mock_net_get, *_):
         ip = "1.1.1.1"
         net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
         mock_net_get.return_value = net_info
@@ -262,5 +248,3 @@ class TestRemoteWriteProvider(unittest.TestCase):
         for name, alert_group in alerts.items():
             group = next((group for group in ALERT_RULES["groups"] if group["name"] == name), None)
             self.assertDictEqual(alert_group, group)
-
-        mock_push.has_been_called()
