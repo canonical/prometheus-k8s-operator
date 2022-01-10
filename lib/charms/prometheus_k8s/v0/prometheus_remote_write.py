@@ -727,8 +727,8 @@ class PrometheusRemoteWriteConsumer(Object):
 class PrometheusRemoteWriteProvider(Object):
     """API that manages a provided `prometheus_remote_write` relation.
 
-    The `PrometheusRemoteWriteProvider` is intended to be used by charms that need to receive data
-    from other charms over the Prometheus remote_write API.
+    The `PrometheusRemoteWriteProvider` is intended to be used by charms whose workloads need to receive data
+    from other charms' workloads over the Prometheus remote_write API.
 
     The `PrometheusRemoteWriteProvider` object can be instantiated as follows in your charm:
 
