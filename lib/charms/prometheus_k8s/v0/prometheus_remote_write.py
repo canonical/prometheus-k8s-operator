@@ -825,7 +825,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         This method should be used when the charm relying on this library needs
         to update the relation data in response to something occurring outside
-        of the `prometheus_remote_write` relation lifecycle, e.g., in case of an
+        of the `prometheus_remote_write` relation lifecycle, e.g., in case of a
         host address change because the charmed operator becomes connected to an
         Ingress after the `prometheus_remote_write` relation is established.
 
