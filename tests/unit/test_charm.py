@@ -91,13 +91,36 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.remove_path")
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
-    def test_ingress_relation_set(self, *_):
+    def test_ingress_relation_set_leader(self, *_):
         self.harness.set_leader(True)
 
         self.harness.update_config(MINIMAL_CONFIG.copy())
 
         rel_id = self.harness.add_relation("ingress", "ingress")
         self.harness.add_relation_unit(rel_id, "ingress/0")
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(
+            cli_arg(plan, "--web.external-url"),
+            "http://prometheus-k8s:9090",
+        )
+
+    @patch("ops.testing._TestingPebbleClient.remove_path")
+    @patch("ops.testing._TestingPebbleClient.push")
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_ingress_relation_set_follower(self, *_):
+        self.harness.set_leader(False)
+
+        self.harness.update_config(MINIMAL_CONFIG.copy())
+
+        rel_id = self.harness.add_relation("ingress", "ingress")
+        self.harness.add_relation_unit(rel_id, "ingress/0")
+        self.harness.update_relation_data(rel_id, "ingress", {
+            "url": None,
+            "unit_urls": {
+                self.harness.charm.unit.name: "http://prometheus-k8s:9090"
+            }
+        })
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(

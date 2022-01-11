@@ -1,6 +1,6 @@
-git+git://github.com/canonical/operator#egg=ops
+git+https://github.com/canonical/operator#egg=ops
 pyaml
 requests
 lightkube >= 0.8.1
 lightkube-models >= 1.22.0.4
-serialized-data-interface<0.4
+serialized-data-interface<0.5

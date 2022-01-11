@@ -89,6 +89,13 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
+        if relations := self.model.relations["metrics-endpoint"]:
+            app_data_bag = relations[0].data[self.app]
+            if self.unit.is_leader():
+                app_data_bag["test"] = "OK"
+            else:
+                print(f"Check if we can read the own app data bag: {app_data_bag['test']}")
+
     def _on_upgrade_charm(self, event):
         """Handler for the upgrade_charm event during which will update the K8s service."""
         self._configure(event)
@@ -121,27 +128,31 @@ class PrometheusCharm(CharmBase):
         current_services = container.get_plan().services
         new_layer = self._prometheus_layer
 
-        # Restart prometheus only if command line arguments have changed,
-        # otherwise just reload its configuration.
-        if current_services == new_layer.services:
-            reloaded = self._prometheus_server.reload_configuration()
-            if not reloaded:
-                self.unit.status = BlockedStatus("Failed to load Prometheus config")
-                return
-            logger.info("Prometheus configuration reloaded")
-        else:
-            container.add_layer(self._name, new_layer, combine=True)
-            container.restart(self._name)
-            logger.info("Prometheus (re)started")
+        ### TODO
+        # Fix this: updating the command args in manual tests did not result
+        # in Prometheus restarting!
+
+        # # Restart prometheus only if command line arguments have changed,
+        # # otherwise just reload its configuration.
+        # if current_services == new_layer.services:
+        #     reloaded = self._prometheus_server.reload_configuration()
+        #     if not reloaded:
+        #         self.unit.status = BlockedStatus("Failed to load Prometheus config")
+        #         return
+        #     logger.info("Prometheus configuration reloaded")
+        # else:
+        #     container.add_layer(self._name, new_layer, combine=True)
+        #     container.restart(self._name)
+        #     logger.info("Prometheus (re)started")
+
+        container.add_layer(self._name, new_layer, combine=True)
+        container.restart(self._name)
+        logger.info("Prometheus (re)started")
+
+        ### END TODO
 
         # Ensure the right address is set on the remote_write relations
         self.remote_write_provider.update_endpoint()
-
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message != INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
-        ):
-            return
 
         self.unit.status = ActiveStatus()
 
@@ -184,7 +195,8 @@ class PrometheusCharm(CharmBase):
         ]
 
         if self.model.get_relation("ingress"):
-            if unit_external_url := self.ingress.unit_urls[self.unit.name]:
+            if unit_external_url := self.ingress.unit_url:
+                logger.debug(f"Setting external web URL to ingress-provided '{unit_external_url}'")
                 args.append(f"--web.external-url={unit_external_url}")
 
         # enable remote write if an instance of the relation exists
