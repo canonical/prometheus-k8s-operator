@@ -19,6 +19,9 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 app_name = METADATA["name"]
 resources = {"prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]}
 
+# Please see https://github.com/canonical/prometheus-k8s-operator/issues/197
+TIMEOUT = 1000
+
 
 @pytest.mark.abort_on_fail
 async def test_deploy_from_local_path(ops_test, prometheus_charm):
@@ -29,7 +32,7 @@ async def test_deploy_from_local_path(ops_test, prometheus_charm):
         await ops_test.model.deploy(
             prometheus_charm, application_name=app_name, resources=resources
         )
-        await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=1000)
+        await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=TIMEOUT)
         await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
@@ -52,5 +55,5 @@ async def test_kubectl_delete_pod(ops_test, prometheus_charm):
     assert retcode == 0, f"kubectl failed: {(stderr or stdout).strip()}"
     logger.debug(stdout)
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[app_name].units) > 0)
-    await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=1000)
+    await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=TIMEOUT)
     await check_prometheus_is_ready(ops_test, app_name, 0)
