@@ -24,6 +24,8 @@ containers:
 provides:
   grafana-source:
     interface: grafana_datasource
+  grafana-dashboard:
+    interface: grafana_dashboard
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
@@ -51,4 +53,4 @@ resources:
       Promql-transform binary for adding label selectors on arm64. Promql-transform is available
       as a stand-alone tool on https://github.com/canonical/promql-transform
     filename: promql-transform-arm64
-  
+

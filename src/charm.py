@@ -10,7 +10,8 @@ import re
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
-from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
+from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
+from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
@@ -42,11 +43,13 @@ class PrometheusCharm(CharmBase):
         # Relation handler objects
 
         # Allows Grafana to aggregate metrics
-        self.grafana_source_consumer = GrafanaSourceConsumer(
+        self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
-            name="grafana-source",
+            relation_name="grafana-source",
             refresh_event=self.on.prometheus_pebble_ready,
         )
+
+        self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
 
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)
