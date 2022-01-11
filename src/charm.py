@@ -116,7 +116,7 @@ class PrometheusCharm(CharmBase):
 
         # push Prometheus config file to workload
         prometheus_config = self._prometheus_config()
-        container.push(PROMETHEUS_CONFIG, prometheus_config)
+        container.push(PROMETHEUS_CONFIG, prometheus_config, make_dirs=True)
         logger.info("Pushed new configuration")
 
         # push alert rules if any
