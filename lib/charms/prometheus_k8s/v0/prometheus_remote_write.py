@@ -550,7 +550,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     ```
     requires:
-        prometheus-remote-write:  # Relation name
+        receive-remote-write:  # Relation name
             interface: prometheus_remote_write  # Relation interface
     ```
 
@@ -564,7 +564,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
-            _handle_endpoints_changed,
+            self._handle_endpoints_changed,
         )
     ```
     The `endpoints_changed` event will fire in situations such as provider ip change (e.g.
@@ -581,7 +581,7 @@ class PrometheusRemoteWriteConsumer(Object):
     which returns a dictionary structured like the Prometheus configuration object (see
     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
-    Regarding the default relation name, `prometheus-remote-write`: if you choose to change it,
+    Regarding the default relation name, `receive-remote-write`: if you choose to change it,
     you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
     `relation_name` constructor argument. (The relation interface, on the other hand, is
     fixed and, if you were to change it, your charm would not be able to relate with other
@@ -709,6 +709,9 @@ class PrometheusRemoteWriteConsumer(Object):
     @property
     def endpoints(self) -> List[Dict[str, str]]:
         """A config object ready to be dropped into a prometheus config file.
+
+        The format of the dict is specified in the official prometheus docs:
+        https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write
 
         Returns:
             A list of dictionaries where each dictionary provides information about
