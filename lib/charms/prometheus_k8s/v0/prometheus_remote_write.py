@@ -923,9 +923,15 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
+                # remote write doesn't have scrape metadata; need to get topology from somewhere
+                # scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
+                # topology = JujuTopology.from_relation_data(scrape_metadata)
+                topology = JujuTopology(
+                    "dont", "really", "know", "yet"
+                )  # should be unique and not duplicating alerts
 
-                for group in alert_rules["groups"]:
-                    alerts[group["name"]] = group
+                alerts[topology.identifier] = alert_rules
+
             except KeyError as e:
                 logger.error(
                     "Relation %s has invalid data : %s",
