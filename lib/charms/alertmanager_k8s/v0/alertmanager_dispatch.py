@@ -3,7 +3,8 @@
 
 """# Alertmanager library.
 
-This library is designed to be used by a charm consuming or providing the `alerting` relation.
+This library is designed to be used by a charm consuming or providing the `alertmanager_dispatch`
+relation interface.
 
 This library is published as part of the
 [Alertmanager charm](https://charmhub.io/alertmanager-k8s).
@@ -23,12 +24,11 @@ class SomeApplication(CharmBase):
     # ...
 ```
 """
-
 import logging
 from typing import List
 
 import ops
-from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent
+from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
@@ -40,7 +40,10 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
+
+# Set to match metadata.yaml
+INTERFACE_NAME = "alertmanager_dispatch"
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +72,36 @@ class RelationManagerBase(Object):
         name (str): consumer's relation name
     """
 
-    def __init__(self, charm: CharmBase, relation_name):
+    def __init__(self, charm: CharmBase, relation_name: str, relation_role: RelationRole):
         super().__init__(charm, relation_name)
+        self.charm = charm
+        self._validate_relation(relation_name, relation_role)
         self.name = relation_name
+
+    def _validate_relation(self, relation_name: str, relation_role: RelationRole):
+        try:
+            if self.charm.meta.relations[relation_name].role != relation_role:
+                raise ValueError(
+                    "Relation '{}' in the charm's metadata.yaml must be '{}' "
+                    "to be managed by this library, but instead it is '{}'".format(
+                        relation_name,
+                        relation_role,
+                        self.charm.meta.relations[relation_name].role,
+                    )
+                )
+            if self.charm.meta.relations[relation_name].interface_name != INTERFACE_NAME:
+                raise ValueError(
+                    "Relation '{}' in the charm's metadata.yaml must use the '{}' interface "
+                    "to be managed by this library, but instead it is '{}'".format(
+                        relation_name,
+                        INTERFACE_NAME,
+                        self.charm.meta.relations[relation_name].interface_name,
+                    )
+                )
+        except KeyError:
+            raise ValueError(
+                "Relation '{}' is not in the charm's metadata.yaml".format(relation_name)
+            )
 
 
 class AlertmanagerConsumer(RelationManagerBase):
@@ -120,9 +150,8 @@ class AlertmanagerConsumer(RelationManagerBase):
 
     on = AlertmanagerConsumerEvents()
 
-    def __init__(self, charm: CharmBase, relation_name: str):
-        super().__init__(charm, relation_name)
-        self.charm = charm
+    def __init__(self, charm: CharmBase, relation_name: str = "alerting"):
+        super().__init__(charm, relation_name, RelationRole.requires)
 
         self.framework.observe(
             self.charm.on[self.name].relation_changed, self._on_relation_changed
@@ -141,7 +170,7 @@ class AlertmanagerConsumer(RelationManagerBase):
 
     def get_cluster_info(self) -> List[str]:
         """Returns a list of ip addresses of all the alertmanager units."""
-        alertmanagers: List[str] = []
+        alertmanagers = []  # type: List[str]
         if not (relation := self.charm.model.get_relation(self.name)):
             return alertmanagers
         for unit in relation.units:
@@ -201,9 +230,8 @@ class AlertmanagerProvider(RelationManagerBase):
             charm (CharmBase): the Alertmanager charm
     """
 
-    def __init__(self, charm, relation_name: str, api_port: int = 9093):
-        super().__init__(charm, relation_name)
-        self.charm = charm
+    def __init__(self, charm, relation_name: str = "alerting", api_port: int = 9093):
+        super().__init__(charm, relation_name, RelationRole.provides)
 
         self._api_port = api_port
 
@@ -228,8 +256,8 @@ class AlertmanagerProvider(RelationManagerBase):
 
     def _generate_relation_data(self, relation: Relation):
         """Helper function to generate relation data in the correct format."""
-        public_address = (
-            f"{self.charm.model.get_binding(relation).network.bind_address}:{self.api_port}"
+        public_address = "{}:{}".format(
+            self.charm.model.get_binding(relation).network.bind_address, self.api_port
         )
         return {"public_address": public_address}
 

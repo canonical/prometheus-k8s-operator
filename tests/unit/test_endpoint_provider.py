@@ -19,11 +19,10 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     RelationRoleMismatchError,
 )
 from deepdiff import DeepDiff
+from helpers import TempFolderSandbox
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-
-from .helpers import TempFolderSandbox
 
 RELATION_NAME = "metrics-endpoint"
 PROVIDER_META = f"""

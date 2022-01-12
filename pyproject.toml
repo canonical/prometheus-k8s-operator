@@ -1,14 +1,5 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-[project]
-name = "prometheus-operator"
-description = "Kubernetes charm for Prometheus"
-license = "Apache 2.0"
-python = "^3.8"
-readme = "README.md"
-homepage = "https://charmhub.io/prometheus-k8s"
-repository = "https://github.com/canonical/prometheus-operator"
-documentation = "https://charmhub.io/prometheus-k8s/docs"
 
 # Testing tools configuration
 [tool.coverage.run]
@@ -36,7 +27,7 @@ select = ["E", "W", "F", "C", "N", "R", "D", "H"]
 # Ignore D107 Missing docstring in __init__
 ignore = ["W503", "E501", "D107", "E203"]
 # D100, D101, D102, D103: Ignore missing docstrings in tests
-per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,C801"]
+per-file-ignores = ["tests/*:D100,D101,D102,D103"]
 docstring-convention = "google"
 # Check for properly formatted copyright header in each file
 copyright-check = "True"
