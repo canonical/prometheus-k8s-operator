@@ -35,7 +35,7 @@ LIBPATCH = 1
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_RELATION_NAME = "receive-remote-write"
+DEFAULT_RELATION_NAME = "prometheus-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
@@ -550,7 +550,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     ```
     requires:
-        receive-remote-write:  # Relation name
+        prometheus-remote-write:  # Relation name
             interface: prometheus_remote_write  # Relation interface
     ```
 
@@ -581,7 +581,7 @@ class PrometheusRemoteWriteConsumer(Object):
     which returns a dictionary structured like the Prometheus configuration object (see
     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
-    Regarding the default relation name, `receive-remote-write`: if you choose to change it,
+    Regarding the default relation name, `prometheus-remote-write`: if you choose to change it,
     you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
     `relation_name` constructor argument. (The relation interface, on the other hand, is
     fixed and, if you were to change it, your charm would not be able to relate with other
