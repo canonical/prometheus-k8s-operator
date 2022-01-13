@@ -28,6 +28,8 @@ provides:
     interface: grafana_dashboard
   metrics-endpoint:
     interface: prometheus_scrape
+  receive-remote-write:
+    interface: prometheus_remote_write
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
@@ -35,6 +37,11 @@ requires:
     interface: alertmanager_dispatch
   ingress:
     interface: ingress
+    limit: 1
+peers:
+  prometheus-peers:
+    # Clustered prometheus is not yet supported
+    interface: prometheus_peers
 storage:
   database:
     type: filesystem

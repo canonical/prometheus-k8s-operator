@@ -6,3 +6,5 @@
 __pycache__
 build
 venv
+.idea
+tests/integration/prometheus-tester/lib/charms/prometheus_k8s/v0/prometheus_scrape.py
