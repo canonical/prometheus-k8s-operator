@@ -14,7 +14,10 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    JujuTopology,
+    MetricsEndpointConsumer,
+)
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -39,6 +42,7 @@ class PrometheusCharm(CharmBase):
         self._prometheus_server = Prometheus()
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+        self._topology = JujuTopology.from_charm(self)
 
         # Relation handler objects
 
@@ -267,7 +271,31 @@ class PrometheusCharm(CharmBase):
             "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",
-            "static_configs": [{"targets": [f"localhost:{self._port}"]}],
+            "static_configs": [
+                {
+                    "targets": [f"localhost:{self._port}"],
+                    "labels": {
+                        "juju_model": self._topology.model,
+                        "juju_model_uuid": self._topology.model_uuid,
+                        "juju_application": self._topology.application,
+                        "juju_unit": self._topology.charm_name,
+                        "host": "localhost",
+                    },
+                }
+            ],
+            "relabel_configs": [
+                {
+                    "source_labels": [
+                        "juju_model",
+                        "juju_model_uuid",
+                        "juju_application",
+                        "juju_unit",
+                    ],
+                    "separator": "_",
+                    "target_label": "instance",
+                    "regex": "(.*)",
+                }
+            ],
         }
         prometheus_config["scrape_configs"].append(default_config)
         scrape_jobs = self.metrics_consumer.jobs()

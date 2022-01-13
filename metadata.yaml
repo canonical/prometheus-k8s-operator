@@ -26,6 +26,8 @@ provides:
     interface: grafana_datasource
   grafana-dashboard:
     interface: grafana_dashboard
+  metrics-endpoint:
+    interface: prometheus_scrape
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
