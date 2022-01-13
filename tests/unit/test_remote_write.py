@@ -151,6 +151,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_port_is_set(self, mock_net_get, *_):
         ip = "1.1.1.1"

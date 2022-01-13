@@ -211,6 +211,7 @@ class PrometheusCharm(CharmBase):
             "--web.enable-lifecycle",
             "--web.console.templates=/usr/share/prometheus/consoles",
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
+            "--enable-feature=remote-write-receiver",
         ]
 
         if self.model.get_relation("ingress"):
@@ -220,8 +221,10 @@ class PrometheusCharm(CharmBase):
             args.append(f"--web.external-url={external_url}")
 
         # enable remote write if an instance of the relation exists
-        if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
-            args.append("--enable-feature=remote-write-receiver")
+        # FIXME for some reason this does not work
+        # FIXME if user changes relation name this will break anyway
+        # if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
+        #     args.append("--enable-feature=remote-write-receiver")
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
