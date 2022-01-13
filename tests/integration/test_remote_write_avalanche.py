@@ -20,6 +20,7 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test, prometheus_charm):
     """Deploy the charm-under-test together with related charms."""
+    await ops_test.model.set_config({"logging-config": "<root>=WARNING; unit=DEBUG"})
     resources = {"prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]}
 
     # deploy prometheus
