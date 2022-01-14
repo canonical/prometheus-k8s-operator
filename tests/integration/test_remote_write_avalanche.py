@@ -7,6 +7,7 @@ import json
 import logging
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 import pytest
 import yaml
@@ -83,41 +84,49 @@ async def test_avalanche_alerts_ingested_by_prometeus(ops_test):
     assert len(alerts_response["data"]["groups"]) > 0
 
 
-async def test_avalanche_always_firing_alarm_is_ingested_by_prometheus(ops_test):
-    prom_url = f"http://{await unit_address(ops_test, 'prom', 0)}:9090/api/v1/alerts"
+async def test_avalanche_always_firing_alarm_is_firing(ops_test):
+    async def get_alert() -> Optional[dict]:
+        prom_url = f"http://{await unit_address(ops_test, 'prom', 0)}:9090/api/v1/alerts"
 
-    response = urllib.request.urlopen(prom_url, data=None, timeout=5.0)
-    assert response.code == 200
+        response = urllib.request.urlopen(prom_url, data=None, timeout=5.0)
+        assert response.code == 200
 
-    # response looks like this:
-    #
-    # {
-    #   "status": "success",
-    #   "data": {
-    #     "alerts": [
-    #       {
-    #         "labels": {
-    #           "alertname": "AlwaysFiring",
-    #           "job": "non_existing_job",
-    #           "juju_application": "avalanche-k8s",
-    #           "juju_charm": "avalanche-k8s",
-    #           "juju_model": "remotewrite",
-    #           "juju_model_uuid": "5d2582f6-f8c9-4496-835b-675431d1fafe",
-    #           "severity": "High"
-    #         },
-    #         "annotations": {
-    #           "description": " of job non_existing_job is firing the dummy alarm.",
-    #           "summary": "Instance  dummy alarm (always firing)"
-    #         },
-    #         "state": "firing",
-    #         "activeAt": "2022-01-13T18:53:12.808550042Z",
-    #         "value": "1e+00"
-    #       }
-    #     ]
-    #   }
-    # }
+        # response looks like this:
+        #
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "alerts": [
+        #       {
+        #         "labels": {
+        #           "alertname": "AlwaysFiring",
+        #           "job": "non_existing_job",
+        #           "juju_application": "avalanche-k8s",
+        #           "juju_charm": "avalanche-k8s",
+        #           "juju_model": "remotewrite",
+        #           "juju_model_uuid": "5d2582f6-f8c9-4496-835b-675431d1fafe",
+        #           "severity": "High"
+        #         },
+        #         "annotations": {
+        #           "description": " of job non_existing_job is firing the dummy alarm.",
+        #           "summary": "Instance  dummy alarm (always firing)"
+        #         },
+        #         "state": "firing",
+        #         "activeAt": "2022-01-13T18:53:12.808550042Z",
+        #         "value": "1e+00"
+        #       }
+        #     ]
+        #   }
+        # }
 
-    alerts_response = json.loads(response.read())
-    alert = alerts_response["data"]["alerts"][0]  # there is only one alert
+        alerts_response = json.loads(response.read())
+        alerts = alerts_response["data"]["alerts"]
+        if len(alerts) == 0:
+            return None
+        return alerts[0]  # there is only one alert
+
+    await ops_test.model.block_until_with_coroutine(get_alert, timeout=60)
+
+    alert = await get_alert()
     assert alert["labels"]["alertname"] == "AlwaysFiring"
     assert alert["state"] == "firing"
