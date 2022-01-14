@@ -69,6 +69,20 @@ async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test):
     assert "label_key_kkkkk_0" in labels_response["data"]
 
 
+@pytest.mark.abort_on_fail
+async def test_avalanche_alerts_ingested_by_prometeus(ops_test):
+    prom_url = f"http://{await unit_address(ops_test, 'prom', 0)}:9090/api/v1/rules?type=alert"
+
+    response = urllib.request.urlopen(prom_url, data=None, timeout=5.0)
+    assert response.code == 200
+
+    # response looks like this:
+    # {"status":"success","data":{"groups":[]}
+
+    alerts_response = json.loads(response.read())
+    assert len(alerts_response["data"]["groups"]) > 0
+
+
 async def test_avalanche_always_firing_alarm_is_ingested_by_prometheus(ops_test):
     prom_url = f"http://{await unit_address(ops_test, 'prom', 0)}:9090/api/v1/alerts"
 

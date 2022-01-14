@@ -150,13 +150,10 @@ class PrometheusCharm(CharmBase):
             )
             return
 
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message not in [
-                INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE,
-                CORRUPT_PROMETHEUS_CONFIG_MESSAGE
-            ]
-        ):
+        if isinstance(self.unit.status, BlockedStatus) and self.unit.status.message not in [
+            INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE,
+            CORRUPT_PROMETHEUS_CONFIG_MESSAGE,
+        ]:
             return
 
         self.unit.status = ActiveStatus()
@@ -214,7 +211,7 @@ class PrometheusCharm(CharmBase):
             "--storage.tsdb.path=/var/lib/prometheus",
             "--web.enable-lifecycle",
             "--web.console.templates=/usr/share/prometheus/consoles",
-            "--web.console.libraries=/usr/share/prometheus/console_libraries"
+            "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
         if self.model.get_relation("ingress"):
