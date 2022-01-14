@@ -31,6 +31,7 @@ PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
 INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = f"invalid combination of 'ingress', '{DEFAULT_REMOTE_WRITE_RELATION_NAME}' relations and multiple units"
+CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
 
@@ -130,12 +131,12 @@ class PrometheusCharm(CharmBase):
         if current_services == new_layer.services:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
-                self.unit.status = BlockedStatus("Failed to load Prometheus config")
+                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
             logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
-            container.restart(self._name)
+            container.replan()
             logger.info("Prometheus (re)started")
 
         # Ensure the right address is set on the remote_write relations
@@ -151,7 +152,10 @@ class PrometheusCharm(CharmBase):
 
         if (
             isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message != INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
+            and self.unit.status.message not in [
+                INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE,
+                CORRUPT_PROMETHEUS_CONFIG_MESSAGE
+            ]
         ):
             return
 
@@ -210,8 +214,7 @@ class PrometheusCharm(CharmBase):
             "--storage.tsdb.path=/var/lib/prometheus",
             "--web.enable-lifecycle",
             "--web.console.templates=/usr/share/prometheus/consoles",
-            "--web.console.libraries=/usr/share/prometheus/console_libraries",
-            "--enable-feature=remote-write-receiver",
+            "--web.console.libraries=/usr/share/prometheus/console_libraries"
         ]
 
         if self.model.get_relation("ingress"):
@@ -220,11 +223,8 @@ class PrometheusCharm(CharmBase):
 
             args.append(f"--web.external-url={external_url}")
 
-        # enable remote write if an instance of the relation exists
-        # FIXME for some reason this does not work
-        # FIXME if user changes relation name this will break anyway
-        # if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
-        #     args.append("--enable-feature=remote-write-receiver")
+        if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
+            args.append("--enable-feature=remote-write-receiver")
 
         # get log level
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
