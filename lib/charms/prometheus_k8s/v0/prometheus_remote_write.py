@@ -289,7 +289,6 @@ class AlertRules:
             # Load a list of rules from file then add labels and filters
             try:
                 rule_file = yaml.safe_load(rf)
-
             except Exception as e:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
                 return []
@@ -923,15 +922,8 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
-                # remote write doesn't have scrape metadata; need to get topology from somewhere
-                # scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
-                # topology = JujuTopology.from_relation_data(scrape_metadata)
-                topology = JujuTopology(
-                    "dont", "really", "know", "yet"
-                )  # should be unique and not duplicating alerts
-
-                alerts[topology.identifier] = alert_rules
-
+                for group in alert_rules["groups"]:
+                    alerts[group["name"]] = {"groups": [group]}
             except KeyError as e:
                 logger.error(
                     "Relation %s has invalid data : %s",
