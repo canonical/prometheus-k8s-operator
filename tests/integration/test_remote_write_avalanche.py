@@ -12,6 +12,7 @@ from typing import Optional
 import pytest
 import yaml
 from helpers import IPAddressWorkaround, unit_address  # type: ignore[import]
+from juju import utils
 from pytest_operator.plugin import OpsTest
 
 log = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ async def test_avalanche_always_firing_alarm_is_firing(ops_test: OpsTest):
             return None
         return alerts[0]  # there is only one alert
 
-    await ops_test.utils.block_until_with_coroutine(get_alert, timeout=60)
+    await utils.block_until_with_coroutine(get_alert, timeout=60)
 
     alert = await get_alert()
     assert alert["labels"]["alertname"] == "AlwaysFiring"
