@@ -1,0 +1,8 @@
+- alert: PrometheusAllTargetsMissing
+  expr: count by (%%juju_topology%%) (up) == 0
+  for: 0m
+  labels:
+    severity: critical
+  annotations:
+    summary: Prometheus all targets missing (instance {{ $labels.instance }})
+    description: "A Prometheus job does not have living targets anymore.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

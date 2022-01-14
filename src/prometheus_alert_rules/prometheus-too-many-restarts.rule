@@ -1,0 +1,8 @@
+- alert: PrometheusTooManyRestarts
+  expr: changes(process_start_time_seconds{%%juju_topology%%}[15m]) > 2
+  for: 0m
+  labels:
+    severity: warning
+  annotations:
+    summary: Prometheus too many restarts (instance {{ $labels.instance }})
+    description: "Prometheus has restarted more than twice in the last 15 minutes. It might be crashlooping.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

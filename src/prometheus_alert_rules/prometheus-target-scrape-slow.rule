@@ -1,0 +1,8 @@
+- alert: PrometheusTargetScrapingSlow
+  expr: prometheus_target_interval_length_seconds{quantile="0.9"} > 60
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: Prometheus target scraping slow (instance {{ $labels.instance }})
+    description: "Prometheus is scraping exporters slowly\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
