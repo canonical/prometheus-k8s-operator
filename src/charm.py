@@ -88,6 +88,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_departed, self._configure)
