@@ -27,7 +27,7 @@ async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
+async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int):
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:

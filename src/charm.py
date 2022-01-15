@@ -7,6 +7,7 @@
 import logging
 import os
 import re
+from typing import Optional, Dict
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
@@ -268,7 +269,7 @@ class PrometheusCharm(CharmBase):
         if not (matched := re.match(r"[1-9][0-9]*[ymwdhs]", timeval)):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
-        return matched
+        return bool(matched)
 
     def _prometheus_global_config(self) -> dict:
         """Construct Prometheus global configuration.
@@ -292,7 +293,7 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alerting_config = {}
+        alerting_config = {}  # type: Dict[str, list]
 
         alertmanagers = self.alertmanager_consumer.get_cluster_info()
 
@@ -329,10 +330,10 @@ class PrometheusCharm(CharmBase):
             "scheme": "http",
             "static_configs": [{"targets": [f"localhost:{self._port}"]}],
         }
-        prometheus_config["scrape_configs"].append(default_config)
+        prometheus_config["scrape_configs"].append(default_config)  # type: ignore
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
-            prometheus_config["scrape_configs"].append(job)
+            prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         return yaml.dump(prometheus_config)
 
@@ -369,7 +370,7 @@ class PrometheusCharm(CharmBase):
         return self.config["web_external_url"] or f"{self.app.name}"
 
     @property
-    def _remote_write_address(self) -> str:
+    def _remote_write_address(self) -> Optional[str]:
         return self._external_hostname if self.model.get_relation("ingress") else None
 
 

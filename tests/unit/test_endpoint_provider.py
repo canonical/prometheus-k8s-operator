@@ -5,6 +5,7 @@ import functools
 import json
 import os
 import re
+from typing import List
 import unittest
 from unittest.mock import patch
 
@@ -34,7 +35,7 @@ provides:
     interface: prometheus_scrape
 """
 
-JOBS = [
+JOBS: List[dict] = [
     {
         "global": {"scrape_interval": "1h"},
         "rule_files": ["/some/file"],
@@ -253,7 +254,7 @@ def customize_endpoint_provider(*args, **kwargs):
     class CustomizedEndpointProvider(CustomizableEndpointProviderCharm):
         __init__ = functools.partialmethod(
             CustomizableEndpointProviderCharm.__init__, *args, **kwargs
-        )
+        )  # type: ignore
 
     return CustomizedEndpointProvider
 

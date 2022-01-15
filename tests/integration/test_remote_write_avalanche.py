@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from helpers import IPAddressWorkaround, unit_address  # type: ignore[import]
+from helpers import IPAddressWorkaround, unit_address
 from pytest_operator.plugin import OpsTest
 from tenacity import retry, stop_after_attempt, wait_exponential
 from workload import Prometheus

@@ -1,6 +1,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+from typing import Dict, Any
 import unittest
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
 
-MINIMAL_CONFIG = {}
+MINIMAL_CONFIG: Dict[str, Any] = {}
 
 SAMPLE_ALERTING_CONFIG = {
     "alertmanagers": [{"static_configs": [{"targets": ["192.168.0.1:9093"]}]}]

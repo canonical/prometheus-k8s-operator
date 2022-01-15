@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from helpers import (  # type: ignore[attr-defined]
+from helpers import (
     IPAddressWorkaround,
     check_prometheus_is_ready,
 )
