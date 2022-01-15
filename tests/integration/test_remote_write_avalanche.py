@@ -50,7 +50,6 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
 async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
     labels = await Prometheus(address).labels()
-    logger.info("Labels: %s", labels)
     assert "label_key_kkkkk_0" in labels
 
 

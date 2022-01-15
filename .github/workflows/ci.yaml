@@ -1,6 +1,6 @@
 name: Run-Tests
 
-on: 
+on:
   pull_request: {}
   push:
     branches:
@@ -52,4 +52,11 @@ jobs:
       with:
         provider: microk8s
     - name: Run Prometheus integration tests
-      run: tox -vve integration
+      # set a predictable model name so it can be consumed by charm-logdump-action
+      run: tox -vve integration -- --model testing-model
+    - name: Dump logs
+      uses: canonical/charm-logdump-action@main
+      if: failure()
+      with:
+        app: av
+        model: testing-model
