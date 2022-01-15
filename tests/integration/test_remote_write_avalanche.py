@@ -54,7 +54,7 @@ async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
 
 @pytest.mark.abort_on_fail
 @tenatious
-async def test_avalanche_alerts_ingested_by_prometeus(ops_test: OpsTest):
+async def test_avalanche_alerts_ingested_by_prometheus(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
     assert len(await Prometheus(address).rules("alert")) > 0
 
@@ -62,6 +62,6 @@ async def test_avalanche_alerts_ingested_by_prometeus(ops_test: OpsTest):
 @tenatious
 async def test_avalanche_always_firing_alarm_is_firing(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
-    alert = await Prometheus(address).alerts()[0]  # there is only one alert
+    alert = (await Prometheus(address).alerts())[0]  # there is only one alert
     assert alert["labels"]["alertname"] == "AlwaysFiring"
     assert alert["state"] == "firing"
