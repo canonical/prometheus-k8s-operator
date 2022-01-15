@@ -21,7 +21,7 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 # disadvantage is that the log would be very vague: it would show "asyncio.exceptions.TimeoutError"
 # without pytest printing out the nicely formatted mismatch between left and right.
 # By using tenacity the test body can be kept short, and the logs descriptive.
-tenatious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(7))
+tenatious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(9))
 
 
 @pytest.mark.abort_on_fail
