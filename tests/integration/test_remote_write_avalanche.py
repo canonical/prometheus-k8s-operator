@@ -12,7 +12,7 @@ from pytest_operator.plugin import OpsTest
 from tenacity import retry, stop_after_attempt, wait_exponential
 from workload import Prometheus
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 
@@ -21,7 +21,7 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 # disadvantage is that the log would be very vague: it would show "asyncio.exceptions.TimeoutError"
 # without pytest printing out the nicely formatted mismatch between left and right.
 # By using tenacity the test body can be kept short, and the logs descriptive.
-tenatious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(9))
+tenatious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(7))
 
 
 @pytest.mark.abort_on_fail
@@ -49,7 +49,9 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
 @tenatious
 async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
-    assert "label_key_kkkkk_0" in await Prometheus(address).labels()
+    labels = await Prometheus(address).labels()
+    logger.info("Labels: %s", labels)
+    assert "label_key_kkkkk_0" in labels
 
 
 @pytest.mark.abort_on_fail
