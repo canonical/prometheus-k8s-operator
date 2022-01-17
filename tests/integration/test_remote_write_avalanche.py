@@ -36,7 +36,10 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
         await ops_test.model.wait_for_idle(apps=["prom"], status="active")
 
     # deploy avalanche
-    await ops_test.model.deploy("ch:avalanche-k8s", application_name="av", channel="edge")
+    av_config = {"metric_count": 50, "series_count": 1, "value_interval": 3600}
+    await ops_test.model.deploy(
+        "ch:avalanche-k8s", application_name="av", channel="edge", config=av_config
+    )
     await ops_test.model.wait_for_idle(apps=["av"], status="active")
 
 
@@ -46,7 +49,7 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(apps=["av", "prom"], status="active")
 
     cmd = [
-        "kubectl",
+        "microk8s.kubectl",
         "logs",
         "-n",
         ops_test.model_name,
@@ -56,7 +59,7 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
     ]
 
     retcode, stdout, stderr = await ops_test.run(*cmd)
-    logger.info(stdout)
+    logger.info(stdout, stderr)
 
 
 @tenatious
