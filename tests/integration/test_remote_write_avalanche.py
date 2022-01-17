@@ -21,7 +21,7 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 # disadvantage is that the log would be very vague: it would show "asyncio.exceptions.TimeoutError"
 # without pytest printing out the nicely formatted mismatch between left and right.
 # By using tenacity the test body can be kept short, and the logs descriptive.
-tenatious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(7))
+tenacious = retry(wait=wait_exponential(multiplier=1, min=10, max=60), stop=stop_after_attempt(7))
 
 
 @pytest.mark.abort_on_fail
@@ -53,16 +53,17 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
         "logs",
         "-n",
         ops_test.model_name,
-        "av",
+        "av-0",
         "-c",
         "avalanche",
     ]
 
     retcode, stdout, stderr = await ops_test.run(*cmd)
-    logger.info(stdout, stderr)
+    logger.info("stdout: %s", stdout)
+    logger.info("stderr: %s", stderr)
 
 
-@tenatious
+@tenacious
 async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
     labels = await Prometheus(address).labels()
@@ -70,13 +71,13 @@ async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
 
 
 @pytest.mark.abort_on_fail
-@tenatious
+@tenacious
 async def test_avalanche_alerts_ingested_by_prometheus(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
     assert len(await Prometheus(address).rules("alert")) > 0
 
 
-@tenatious
+@tenacious
 async def test_avalanche_always_firing_alarm_is_firing(ops_test: OpsTest):
     address = await unit_address(ops_test, "prom", 0)
     alert = (await Prometheus(address).alerts())[0]  # there is only one alert
