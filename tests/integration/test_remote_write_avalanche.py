@@ -45,6 +45,19 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
     await ops_test.model.add_relation("prom:receive-remote-write", "av:receive-remote-write")
     await ops_test.model.wait_for_idle(apps=["av", "prom"], status="active")
 
+    cmd = [
+        "kubectl",
+        "logs",
+        "-n",
+        ops_test.model_name,
+        "av",
+        "-c",
+        "avalanche",
+    ]
+
+    retcode, stdout, stderr = await ops_test.run(*cmd)
+    logger.info(stdout)
+
 
 @tenatious
 async def test_avalanche_metrics_are_ingested_by_prometheus(ops_test: OpsTest):
