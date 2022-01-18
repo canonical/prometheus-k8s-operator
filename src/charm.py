@@ -7,7 +7,7 @@
 import logging
 import os
 import re
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer

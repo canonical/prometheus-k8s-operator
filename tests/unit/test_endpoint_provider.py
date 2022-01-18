@@ -5,8 +5,8 @@ import functools
 import json
 import os
 import re
-from typing import List
 import unittest
+from typing import List
 from unittest.mock import patch
 
 import yaml

@@ -1,8 +1,8 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from typing import Dict, Any
 import unittest
+from typing import Any, Dict
 from unittest.mock import patch
 
 import yaml

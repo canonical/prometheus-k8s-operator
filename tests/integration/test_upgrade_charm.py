@@ -8,10 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from helpers import (
-    IPAddressWorkaround,
-    check_prometheus_is_ready,
-)
+from helpers import IPAddressWorkaround, check_prometheus_is_ready
 
 logger = logging.getLogger(__name__)
 
