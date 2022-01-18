@@ -723,7 +723,8 @@ class PrometheusRemoteWriteConsumer(Object):
                     # This is a peer unit
                     continue
 
-                if remote_write := relation.data[unit].get("remote_write"):
+                remote_write = relation.data[unit].get("remote_write")
+                if remote_write:
                     deserialized_remote_write = json.loads(remote_write)
                     endpoints.append(
                         {
