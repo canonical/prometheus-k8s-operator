@@ -31,6 +31,7 @@ PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
 INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = f"invalid combination of 'ingress', '{DEFAULT_REMOTE_WRITE_RELATION_NAME}' relations and multiple units"
+CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.ingress_relation_changed, self._configure)
         self.framework.observe(self.on.ingress_relation_broken, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
+        self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_departed, self._configure)
@@ -130,12 +132,12 @@ class PrometheusCharm(CharmBase):
         if current_services == new_layer.services:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
-                self.unit.status = BlockedStatus("Failed to load Prometheus config")
+                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
             logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
-            container.restart(self._name)
+            container.replan()
             logger.info("Prometheus (re)started")
 
         # Ensure the right address is set on the remote_write relations
@@ -149,10 +151,10 @@ class PrometheusCharm(CharmBase):
             )
             return
 
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message != INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE
-        ):
+        if isinstance(self.unit.status, BlockedStatus) and self.unit.status.message not in [
+            INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE,
+            CORRUPT_PROMETHEUS_CONFIG_MESSAGE,
+        ]:
             return
 
         self.unit.status = ActiveStatus()
@@ -219,8 +221,7 @@ class PrometheusCharm(CharmBase):
 
             args.append(f"--web.external-url={external_url}")
 
-        # enable remote write if an instance of the relation exists
-        if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
+        if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
             args.append("--enable-feature=remote-write-receiver")
 
         # get log level

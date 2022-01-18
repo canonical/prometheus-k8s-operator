@@ -289,7 +289,6 @@ class AlertRules:
             # Load a list of rules from file then add labels and filters
             try:
                 rule_file = yaml.safe_load(rf)
-
             except Exception as e:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
                 return []
@@ -923,9 +922,8 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
-
                 for group in alert_rules["groups"]:
-                    alerts[group["name"]] = group
+                    alerts[group["name"]] = {"groups": [group]}
             except KeyError as e:
                 logger.error(
                     "Relation %s has invalid data : %s",
