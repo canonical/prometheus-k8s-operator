@@ -582,7 +582,12 @@ class JujuTopology:
         )
 
     def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> dict:
-        """Format the topology information into a dict."""
+        """Format the topology information into a dict.
+
+        Args:
+            rename_keys: A dictionary mapping old key names to new key names, which will
+                be substituted when invoked.
+        """
         ret = {
             "model": self.model,
             "model_uuid": self.model_uuid,
@@ -638,7 +643,6 @@ class AggregatorTopology(JujuTopology):
         vals = {"juju_{}".format(key): val for key, val in self.as_dict().items()}
 
         # FIXME: Why is this different? I have no idea. The uuid length should be the same
-        vals["juju_model_uuid"] = vals.pop("juju_model_uuid")
         vals["juju_model_uuid"] = vals["juju_model_uuid"][:7]
 
         return vals
@@ -1076,6 +1080,12 @@ class MetricsEndpointConsumer(Object):
                 if "groups" in alert_rules["groups"][0].keys():
                     # Strip off the first parts of the rule name, set by topology, to give back
                     # an identifier which can be used to write the file
+                    #
+                    # Topology will look like:
+                    # juju_modelname_modeluuid_appname_alert.rules
+                    # The regular expression takes off:
+                    # juju_modelname_modeluuid_appname
+                    # And uses it as the dict key
                     flattened = {
                         re.sub(
                             r"^(?P<id>(.*?_){2}(.*?))_", r"\g<id>", alert["groups"][0]["name"]
