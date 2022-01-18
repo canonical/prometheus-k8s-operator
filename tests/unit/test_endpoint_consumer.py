@@ -6,6 +6,7 @@ import unittest
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
+    InvalidTopologyError,
     MetricsEndpointConsumer,
 )
 from ops.charm import CharmBase
@@ -388,7 +389,7 @@ class TestEndpointConsumer(unittest.TestCase):
         alerts = list(rules_file.values())[0]
         self.assertEqual(ALERT_RULES, alerts)
 
-    def test_consumer_logs_an_error_on_missing_alerting_data(self):
+    def test_consumer_raises_an_exception_on_bad_metadata(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
         bad_metadata = {"bad": "metadata"}
@@ -404,12 +405,7 @@ class TestEndpointConsumer(unittest.TestCase):
             },
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
-        self.assertEqual(self.harness.charm._stored.num_events, 1)
-        with self.assertLogs(level="WARNING") as logger:
-            _ = self.harness.charm.prometheus_consumer.alerts()
-            messages = sorted(logger.output)
-            self.assertEqual(len(messages), 1)
-            self.assertIn(f"Relation {rel_id} has no 'scrape_metadata'", messages[0])
+        self.assertRaises(InvalidTopologyError, self.harness.charm.prometheus_consumer.alerts)
 
 
 def juju_job_labels(job, num=0):

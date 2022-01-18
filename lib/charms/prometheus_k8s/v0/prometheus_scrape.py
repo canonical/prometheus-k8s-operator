@@ -558,9 +558,9 @@ class JujuTopology:
             a `JujuTopology` object.
         """
         return cls(
-            model=data["model"],
-            model_uuid=data["model_uuid"],
-            application=data["application"],
+            model=data.get("model", ""),
+            model_uuid=data.get("model_uuid", ""),
+            application=data.get("application", ""),
             unit=data.get("unit", ""),
             charm_name=data.get("charm_name", ""),
         )
