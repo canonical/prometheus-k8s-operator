@@ -12,7 +12,7 @@ When modifying the default set of resources managed by Juju, one must consider t
 charm. In this case, any modifications to the default service (created during deployment), will
 be overwritten during a charm upgrade.
 
-When intialised, this library binds a handler to the parent charm's `install` and `upgrade_charm`
+When initialised, this library binds a handler to the parent charm's `install` and `upgrade_charm`
 events which applies the patch to the cluster. This should ensure that the service ports are
 correct throughout the charm's life.
 
