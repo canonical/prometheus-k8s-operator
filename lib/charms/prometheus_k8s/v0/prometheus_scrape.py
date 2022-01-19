@@ -1217,7 +1217,7 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_dir = Path(charm.charm_dir)
+    charm_dir = Path(str(charm.charm_dir))
     if not charm_dir.exists() or not charm_dir.is_dir():
         # Operator Framework does not currently expose a robust
         # way to determine the top level charm source directory
