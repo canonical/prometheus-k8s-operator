@@ -222,13 +222,13 @@ def _is_single_alert_rule_format(rules_dict: dict) -> bool:
 
     The Prometheus charm library supports reading of alert rules in a
     custom format that consists of a single alert rule per file. This
-    does not conform to the offical Prometheus alert rule file format
+    does not conform to the official Prometheus alert rule file format
     which requires that each alert rules file consists of a list of
     alert rule groups and each group consists of a list of alert
     rules.
 
     Alert rules in dictionary form are considered to be in single rule
-    format if in the least it contains two keys correspoinding to the
+    format if in the least it contains two keys corresponding to the
     alert rule name and alert expression.
 
     Returns:
@@ -723,7 +723,8 @@ class PrometheusRemoteWriteConsumer(Object):
                     # This is a peer unit
                     continue
 
-                if remote_write := relation.data[unit].get("remote_write"):
+                remote_write = relation.data[unit].get("remote_write")
+                if remote_write:
                     deserialized_remote_write = json.loads(remote_write)
                     endpoints.append(
                         {

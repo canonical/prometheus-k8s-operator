@@ -7,6 +7,42 @@ on:
       - main
 
 jobs:
+  fetch-lib-check:
+    name: Check the charm uses up-to-date charm libraries
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check libs
+      uses: canonical/charm-lib-checker-action@main
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+  lib-check:
+    name: Static analysis of /lib for Python 3.5
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python 3.5
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.5
+    - name: Install dependencies
+      run: python3 -m pip install tox
+    - name: Run static analysis for /lib for 3.5
+      run: tox -vve static-lib
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Install dependencies
+      run: python3 -m pip install tox
+    - name: Run static analysis (charm)
+      run: tox -vve static-charm
+    - name: Run static analysis (unit tests)
+      run: tox -vve static-unit
+    - name: Run static analysis (integration tests)
+      run: tox -vve static-integration
   lint:
     name: Lint
     runs-on: ubuntu-latest

@@ -36,4 +36,20 @@ copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
 
 [tool.mypy]
 pretty = true
+python_version = 3.8
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src:$MYPY_CONFIG_FILE_DIR/lib"
+follow_imports = "normal"
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+show_traceback = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+check_untyped_defs = true
 allow_redefinition = true
+
+# Ignore libraries that do not have type hint nor stubs
+[[tool.mypy.overrides]]
+module = ["ops.*", "pytest.*", "pytest_operator.*", "prometheus_api_client.*", "deepdiff.*"]
+ignore_missing_imports = true

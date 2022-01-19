@@ -10,7 +10,7 @@ from prometheus_server import Prometheus
 
 class TestServer(unittest.TestCase):
     def setUp(self):
-        self.prometheus = Prometheus("localhost", "9090")
+        self.prometheus = Prometheus("localhost", 9090)
 
     @responses.activate
     def test_prometheus_server_returns_valid_data(self):

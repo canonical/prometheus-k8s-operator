@@ -619,13 +619,13 @@ def _is_single_alert_rule_format(rules_dict: dict) -> bool:
 
     The Prometheus charm library supports reading of alert rules in a
     custom format that consists of a single alert rule per file. This
-    does not conform to the offical Prometheus alert rule file format
+    does not conform to the official Prometheus alert rule file format
     which requires that each alert rules file consists of a list of
     alert rule groups and each group consists of a list of alert
     rules.
 
     Alert rules in dictionary form are considered to be in single rule
-    format if in the least it contains two keys correspoinding to the
+    format if in the least it contains two keys corresponding to the
     alert rule name and alert expression.
 
     Returns:
@@ -1217,7 +1217,7 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     the provided path elements and, if the result path exists and is a directory,
     return its absolute path; otherwise, return `None`.
     """
-    charm_dir = Path(charm.charm_dir)  # type: ignore
+    charm_dir = Path(str(charm.charm_dir))
     if not charm_dir.exists() or not charm_dir.is_dir():
         # Operator Framework does not currently expose a robust
         # way to determine the top level charm source directory
@@ -1702,12 +1702,12 @@ class MetricsEndpointAggregator(Object):
             # list of scrape jobs for units of the same application that still exist
             configs_kept = [
                 config
-                for config in changed_job["static_configs"]
+                for config in changed_job["static_configs"]  # type: ignore
                 if config.get("labels", {}).get("juju_unit") != unit_name
             ]
 
             if configs_kept:
-                changed_job["static_configs"] = configs_kept
+                changed_job["static_configs"] = configs_kept  # type: ignore
                 jobs.append(changed_job)
 
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
@@ -1765,12 +1765,12 @@ class MetricsEndpointAggregator(Object):
             # list of alert rules not associated with departing unit
             rules_kept = [
                 rule
-                for rule in changed_group.get("rules")
+                for rule in changed_group.get("rules")  # type: ignore
                 if rule.get("labels").get("juju_unit") != unit_name
             ]
 
             if rules_kept:
-                changed_group["rules"] = rules_kept
+                changed_group["rules"] = rules_kept  # type: ignore
                 groups.append(changed_group)
 
             relation.data[self._charm.app]["alert_rules"] = (
