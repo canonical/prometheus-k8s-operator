@@ -7,6 +7,14 @@ on:
       - main
 
 jobs:
+  fetch-lib-check:
+    name: Check the charm uses up-to-date charm libraries
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check libs
+      uses: canonical/charm-lib-checker-action@main
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
   lib-check:
     name: Static analysis of /lib for Python 3.5
     runs-on: ubuntu-latest
