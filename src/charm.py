@@ -7,7 +7,7 @@
 import logging
 import os
 import re
-from typing import Dict, Optional
+from typing import Dict
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
@@ -370,8 +370,8 @@ class PrometheusCharm(CharmBase):
         return self.config["web_external_url"] or f"{self.app.name}"
 
     @property
-    def _remote_write_address(self) -> Optional[str]:
-        return self._external_hostname if self.model.get_relation("ingress") else None
+    def _remote_write_address(self) -> str:
+        return self._external_hostname if self.model.get_relation("ingress") else ""
 
 
 if __name__ == "__main__":

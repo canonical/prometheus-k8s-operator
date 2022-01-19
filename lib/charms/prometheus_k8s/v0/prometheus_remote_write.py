@@ -14,7 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 import yaml
 from ops.charm import CharmBase, RelationEvent, RelationMeta, RelationRole
@@ -29,7 +29,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 
 logger = logging.getLogger(__name__)
@@ -779,7 +779,7 @@ class PrometheusRemoteWriteProvider(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_RELATION_NAME,
         endpoint_schema: str = "http",
-        endpoint_address: Optional[str] = None,
+        endpoint_address: str = "",
         endpoint_port: Union[str, int] = 9090,
         endpoint_path: str = "/api/v1/write",
     ):
