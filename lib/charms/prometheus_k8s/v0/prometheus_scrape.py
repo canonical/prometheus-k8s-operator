@@ -296,7 +296,7 @@ of Metrics provider charms hold eponymous information.
 import json
 import logging
 import os
-import re
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -352,15 +352,6 @@ class RelationNotFoundError(Exception):
         self.message = "No relation named '{}' found".format(relation_name)
 
         super().__init__(self.message)
-
-
-class InvalidTopologyError(Exception):
-    """Raised if there is insufficient data to construct JujuTopology."""
-
-    def __init__(self):
-        super().__init__(
-            "Neither Juju unit data nor a Juju class object were provided to JujuTopology"
-        )
 
 
 class RelationInterfaceMismatchError(Exception):
@@ -489,6 +480,12 @@ class JujuTopology:
 
     STUB = "%%juju_topology%%"
 
+    def __new__(cls, *args, **kwargs):
+        """Reject instantiation of a base JujuTopology class. Children only."""
+        if cls is JujuTopology:
+            raise TypeError("only children of '{}' may be instantiated".format(cls.__name__))
+        return object.__new__(cls)
+
     def __init__(
         self,
         model: str,
@@ -521,12 +518,9 @@ class JujuTopology:
         self.charm_name = charm_name
         self.unit = unit
 
-        if not self.unit and not self.charm_name:
-            raise InvalidTopologyError()
-
     @classmethod
     def from_charm(cls, charm):
-        """Factory method for creating the `JujuTopology` dataclass from a given charm.
+        """Factory method for creating `JujuTopology` children from a given charm.
 
         Args:
             charm: a `CharmBase` object for which the `JujuTopology` has to be constructed
@@ -544,7 +538,7 @@ class JujuTopology:
 
     @classmethod
     def from_relation_data(cls, data: dict):
-        """Factory method for creating the `JujuTopology` dataclass from a dictionary.
+        """Factory method for creating `JujuTopology` children from a dictionary.
 
         Args:
             data: a dictionary with four keys providing topology information. The keys are
@@ -554,13 +548,16 @@ class JujuTopology:
                 - "unit"
                 - "charm_name"
 
+                `unit` and `charm_name` may be empty, but will result in more limited
+                labels. However, this allows us to support payload-only charms.
+
         Returns:
             a `JujuTopology` object.
         """
         return cls(
-            model=data.get("model", ""),
-            model_uuid=data.get("model_uuid", ""),
-            application=data.get("application", ""),
+            model=data["model"],
+            model_uuid=data["model_uuid"],
+            application=data["application"],
             unit=data.get("unit", ""),
             charm_name=data.get("charm_name", ""),
         )
@@ -581,26 +578,34 @@ class JujuTopology:
             ]
         )
 
-    def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> dict:
+    def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> OrderedDict:
         """Format the topology information into a dict.
+
+        Use an OrderedDict so we can rely on the insertion order on Python 3.5 (and 3.6,
+        which still does not guarantee it).
 
         Args:
             rename_keys: A dictionary mapping old key names to new key names, which will
                 be substituted when invoked.
         """
-        ret = {
-            "model": self.model,
-            "model_uuid": self.model_uuid,
-            "application": self.application,
-            "unit": self.unit,
-            "charm_name": self.charm_name,
-        }
+        ret = OrderedDict(
+            [
+                ("model", self.model),
+                ("model_uuid", self.model_uuid),
+                ("application", self.application),
+                ("unit", self.unit),
+                ("charm_name", self.charm_name),
+            ]
+        )
 
         ret["unit"] or ret.pop("unit")
         ret["charm_name"] or ret.pop("charm_name")
 
         # If a key exists in `rename_keys`, replace the value
-        ret = {rename_keys.get(k, k): v for k, v in ret.items()} if rename_keys else ret
+        if rename_keys:
+            ret = OrderedDict(
+                (rename_keys.get(k), v) if rename_keys.get(k) else (k, v) for k, v in ret.items()  # type: ignore
+            )
 
         return ret
 
@@ -622,11 +627,14 @@ class AggregatorTopology(JujuTopology):
     """Class for initializing topology information for MetricsEndpointAggregator."""
 
     @classmethod
-    def from_parts(cls, model: str, model_uuid: str, application: str, unit: str):
+    def from_arguments(cls, model: str, model_uuid: str, application: str, unit: str):
         """Factory method for creating the `AggregatorTopology` dataclass from a given charm.
 
         Args:
-            charm: a `CharmBase` object for which the `AggregatorTopology` has to be constructed
+            model: a string representing the model
+            model_uuid: the model UUID as a string
+            application: the application name
+            unit: the unit name
 
         Returns:
             a `AggregatorTopology` object.
@@ -650,23 +658,6 @@ class AggregatorTopology(JujuTopology):
 
 class ProviderTopology(JujuTopology):
     """Class for initializing topology information for MetricsEndpointProvider."""
-
-    @classmethod
-    def from_charm(cls, charm):
-        """Factory method for creating the `ProviderTopology` dataclass from a given charm.
-
-        Args:
-            charm: a `CharmBase` object for which the `ProviderTopology` has to be constructed
-
-        Returns:
-            a `ProviderTopology` object.
-        """
-        return cls(
-            model=charm.model.name,
-            model_uuid=charm.model.uuid,
-            application=charm.model.app.name,
-            charm_name=charm.meta.name,
-        )
 
     @property
     def scrape_identifier(self):
@@ -1071,28 +1062,11 @@ class MetricsEndpointConsumer(Object):
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = alert_rules
             except KeyError as e:
-                logger.warning(
+                logger.error(
                     "Relation %s has no 'scrape_metadata': %s",
                     relation.id,
                     e,
                 )
-                logger.debug("Without scrape_metadata, check for an aggregate or forwarder")
-                if "groups" in alert_rules["groups"][0].keys():
-                    # Strip off the first parts of the rule name, set by topology, to give back
-                    # an identifier which can be used to write the file
-                    #
-                    # Topology will look like:
-                    # juju_modelname_modeluuid_appname_alert.rules
-                    # The regular expression takes off:
-                    # juju_modelname_modeluuid_appname
-                    # And uses it as the dict key
-                    flattened = {
-                        re.sub(
-                            r"^(?P<id>(.*?_){2}(.*?))_", r"\g<id>", alert["groups"][0]["name"]
-                        ): dict(alert.items())
-                        for alert in alert_rules["groups"]
-                    }
-                    alerts.update(flattened)
 
         return alerts
 
@@ -1995,7 +1969,7 @@ class MetricsEndpointAggregator(Object):
         for unit_name, rules in unit_rules.items():
             for rule in rules:
                 rule["labels"].update(
-                    AggregatorTopology.from_parts(
+                    AggregatorTopology.from_arguments(
                         self.model.name, self.model.uuid, appname, unit_name
                     ).as_promql_label_dict()
                 )
