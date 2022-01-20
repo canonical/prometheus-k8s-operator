@@ -665,7 +665,7 @@ class ProviderTopology(JujuTopology):
         # This is used only by Metrics[Consumer|Provider] and does not need a
         # unit name, so only check for the charm name
         return "juju_{}_prometheus_scrape".format(
-            "_".join([self.model, self.model_uuid[:7], self.application, self.charm_name])
+                "_".join([self.model, self.model_uuid[:7], self.application, self.charm_name]) # type: ignore
         )
 
 
