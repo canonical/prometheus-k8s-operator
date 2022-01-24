@@ -212,7 +212,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("labels", rule)
@@ -229,7 +229,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
