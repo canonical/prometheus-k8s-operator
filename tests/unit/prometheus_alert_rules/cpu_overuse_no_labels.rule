@@ -1,5 +1,5 @@
 alert: CPUOverUse_no_labels
-expr: process_cpu_seconds_total{%%juju_topology%%} > 0.12
+expr: process_cpu_seconds_total > 0.12
 for: 0m
 annotations:
   summary: "Instance {{ $labels.instance }} CPU over use"

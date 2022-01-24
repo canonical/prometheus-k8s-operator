@@ -14,13 +14,15 @@ import json
 import logging
 import os
 from collections import OrderedDict
+import platform
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import yaml
 from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import Relation
+from ops.model import ModelError, Relation
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -900,6 +902,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         super().__init__(charm, relation_name)
         self._charm = charm
+        self._transformer = PromqlTransformer(self._charm)
         self._relation_name = relation_name
         self._endpoint_schema = endpoint_schema
         self._endpoint_address = endpoint_address
@@ -1010,7 +1013,7 @@ class PrometheusRemoteWriteProvider(Object):
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
-                alerts[identifier] = alert_rules
+                alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
             except KeyError as e:
                 logger.warning(
                     "Relation %s has no 'scrape_metadata': %s",
@@ -1035,3 +1038,88 @@ class PrometheusRemoteWriteProvider(Object):
                         logger.error("Alert rules were found but no usable labels were present")
 
         return alerts
+
+
+# Copy/pasted from prometheus_scrape.py
+class PromqlTransformer:
+    """Uses promql-transform to inject label matchers into alert rule expressions."""
+
+    _path = None
+    _disabled = False
+
+    @property
+    def path(self):
+        """Lazy lookup of the path of promql-transform."""
+        if self._disabled:
+            return None
+        if not self._path:
+            self._path = self._get_transformer_path()
+            if not self._path:
+                logger.debug("Skipping injection of juju topology as label matchers")
+                self._disabled = True
+        return self._path
+
+    def __init__(self, charm):
+        self._charm = charm
+
+    def apply_label_matchers(self, rules):
+        """Will apply label matchers to the expression of all alerts in all supplied groups."""
+        if not self.path:
+            return rules
+        for group in rules["groups"]:
+            rules_in_group = group.get("rules", [])
+            for rule in rules_in_group:
+                topology = {}
+                # if the user for some reason has provided juju_unit, we'll need to honor it
+                # in most cases, however, this will be empty
+                for label in [
+                    "juju_model",
+                    "juju_model_uuid",
+                    "juju_application",
+                    "juju_charm",
+                    "juju_unit",
+                ]:
+                    if label in rule["labels"]:
+                        topology[label] = rule["labels"][label]
+                rule["expr"] = self._apply_label_matcher(rule["expr"], topology)
+        return rules
+
+    def _apply_label_matcher(self, expression, topology):
+        if not topology:
+            return expression
+        if not self.path:
+            logger.debug(
+                "`promql-transform` unavailable. leaving expression unchanged: %s", expression
+            )
+            return expression
+        args = [str(self.path)]
+        args.extend(
+            ['--label-matcher={}="{}"'.format(key, value) for key, value in topology.items()]
+        )
+
+        args.extend(["{}".format(expression)])
+        # noinspection PyBroadException
+        try:
+            return self._exec(args)
+        except Exception as e:
+            logger.debug('Applying the expression failed: "{}", falling back to the original', e)
+            return expression
+
+    def _get_transformer_path(self) -> Optional[Path]:
+        arch = platform.processor()
+        arch = "amd64" if arch == "x86_64" else arch
+        res = "promql-transform-{}".format(arch)
+        try:
+            path = self._charm.model.resources.fetch(res)
+            os.chmod(path, 0o777)
+            return path
+        except NotImplementedError:
+            logger.debug("System lacks support for chmod")
+        except (NameError, ModelError):
+            logger.debug('No resource available for the platform "{}"'.format(arch))
+        return None
+
+    def _exec(self, cmd):
+        result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE)
+        output = result.stdout.decode("utf-8").strip()
+        return output
