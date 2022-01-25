@@ -1062,11 +1062,20 @@ class MetricsEndpointConsumer(Object):
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = alert_rules
             except KeyError as e:
-                logger.error(
+                logger.warning(
                     "Relation %s has no 'scrape_metadata': %s",
                     relation.id,
                     e,
                 )
+
+                # Construct an ID based on what's in the alert rules
+                labels = next(alert_rules["groups"])["labels"]
+                identifier = "{}_{}_{}".format(
+                    labels["juju_model"],
+                    labels["juju_model_uuid"],
+                    labels["juju_application"]
+                )
+                alerts[identifier] = alert_rules
 
         return alerts
 
