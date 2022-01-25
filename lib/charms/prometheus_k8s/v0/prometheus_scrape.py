@@ -1519,13 +1519,12 @@ class PrometheusRulesProvider(Object):
         alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if alert_rules_as_dict:
-            logger.info("Updating relation data with rule files from disk")
-            for relation in self._charm.model.relations[self._relation_name]:
-                relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    alert_rules_as_dict,
-                    sort_keys=True,  # sort, to prevent unnecessary relation_changed events
-                )
+        logger.info("Updating relation data with rule files from disk")
+        for relation in self._charm.model.relations[self._relation_name]:
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                alert_rules_as_dict,
+                sort_keys=True,  # sort, to prevent unnecessary relation_changed events
+            )
 
 
 class MetricsEndpointAggregator(Object):
