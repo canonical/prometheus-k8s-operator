@@ -1505,7 +1505,7 @@ class PrometheusRulesProvider(Object):
         for event_source in event_sources:
             self.framework.observe(event_source, self._update_relation_data)
 
-    def reload_alert_rules(self):
+    def _reinitialize_alert_rules(self):
         """Reloads alert rules and updates all relations."""
         self._update_relation_data(None)
 

@@ -66,7 +66,7 @@ class TestReloadAlertRules(unittest.TestCase):
         # WHEN no rule files are present
 
         # AND the reload method is called
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # THEN relation data is unchanged
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
@@ -82,7 +82,7 @@ class TestReloadAlertRules(unittest.TestCase):
         self.sandbox.put_file(os.path.join(self.alert_rules_path, "alert.rule"), self.ALERT)
 
         # AND the reload method is called
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # THEN relation data is updated
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
@@ -95,13 +95,13 @@ class TestReloadAlertRules(unittest.TestCase):
         # GIVEN alert files are present and relation data contains respective alerts
         alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
         self.sandbox.put_file(alert_filename, self.ALERT)
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # WHEN all rule files are deleted from the alerts dir
         self.sandbox.remove(alert_filename)
 
         # AND the reload method is called
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # THEN relation data is empty again
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
@@ -112,14 +112,14 @@ class TestReloadAlertRules(unittest.TestCase):
         # GIVEN alert files are present and relation data contains respective alerts
         alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
         self.sandbox.put_file(alert_filename, self.ALERT)
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # WHEN the alerts dir itself is deleted
         self.sandbox.remove(alert_filename)
         self.sandbox.rmdir(self.alert_rules_path)
 
         # AND the reload method is called
-        self.harness.charm.rules_provider.reload_alert_rules()
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
         # THEN relation data is empty again
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
