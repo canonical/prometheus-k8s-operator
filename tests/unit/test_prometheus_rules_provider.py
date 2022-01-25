@@ -96,6 +96,10 @@ class TestReloadAlertRules(unittest.TestCase):
         alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
         self.sandbox.put_file(alert_filename, self.ALERT)
         self.harness.charm.rules_provider._reinitialize_alert_rules()
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        self.assertNotEqual(
+            relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
+        )
 
         # WHEN all rule files are deleted from the alerts dir
         self.sandbox.remove(alert_filename)
@@ -113,6 +117,10 @@ class TestReloadAlertRules(unittest.TestCase):
         alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
         self.sandbox.put_file(alert_filename, self.ALERT)
         self.harness.charm.rules_provider._reinitialize_alert_rules()
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        self.assertNotEqual(
+            relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
+        )
 
         # WHEN the alerts dir itself is deleted
         self.sandbox.remove(alert_filename)
