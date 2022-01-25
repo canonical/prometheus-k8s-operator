@@ -792,7 +792,7 @@ class AlertRules:
         elif path.is_file():
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            raise InvalidAlertRulePathError(path, "path does not exist")
+            logger.warning("path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1481,7 +1481,7 @@ class PrometheusRulesProvider(Object):
     def __init__(
         self,
         charm: CharmBase,
-        relation_name: str = "prometheus-config",
+        relation_name: str = DEFAULT_RELATION_NAME,
         dir_path: str = None,
         recursive=True,
     ):
