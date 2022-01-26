@@ -860,7 +860,7 @@ class AlertRules:
 
         return alert_groups
 
-    def add_path(self, path: str, *, recursive: bool = False) -> bool:
+    def add_path(self, path: str, *, recursive: bool = False) -> None:
         """Add rules from a dir path.
 
         All rules from files are aggregated into a data structure representing a single rule file.
@@ -1052,7 +1052,6 @@ class MetricsEndpointConsumer(Object):
             if not alert_rules:
                 continue
 
-            identifier = None
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
@@ -1512,14 +1511,14 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(topology=self.topology)
-        path_added = alert_rules.add_path(self._alert_rules_path, recursive=True)
+        alert_rules.add_path(self._alert_rules_path, recursive=True)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(self._scrape_jobs)
 
-            if path_added and alert_rules_as_dict:
+            if alert_rules_as_dict:
                 # Update relation data with the string representation of the rule file.
                 # Juju topology is already included in the "scrape_metadata" field above.
                 # The consumer side of the relation uses this information to name the rules file
@@ -1627,7 +1626,7 @@ class PrometheusRulesProvider(Object):
             return
 
         alert_rules = AlertRules()
-        path_added = alert_rules.add_path(self.dir_path, recursive=self._recursive)
+        alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
         logger.info("Updating relation data with rule files from disk")
