@@ -312,7 +312,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 15
 
 
 logger = logging.getLogger(__name__)
@@ -873,17 +873,13 @@ class AlertRules:
         Returns:
             True if path was added else False.
         """
-        rules_path = Path(path)
-        if not rules_path.exists:
-            logger.warning("Alert rules path %s does not exist", path)
-            return False
-
-        if rules_path.is_dir():
-            self.alert_groups.extend(self._from_dir(rules_path, recursive))
-        elif rules_path.is_file():
-            self.alert_groups.extend(self._from_file(rules_path.parent, rules_path))
-
-        return True
+        path = Path(path)  # type: Path
+        if path.is_dir():
+            self.alert_groups.extend(self._from_dir(path, recursive))
+        elif path.is_file():
+            self.alert_groups.extend(self._from_file(path.parent, path))
+        else:
+            logger.warning("path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1321,7 +1317,10 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     Look up the directory of the `main.py` file being executed. This is normally
     going to be the charm.py file of the charm including this library. Then, resolve
     the provided path elements and, if the result path exists and is a directory,
-    return its absolute path; otherwise, return `None`.
+    return its absolute path; otherwise, raise en exception.
+
+    Raises:
+        InvalidAlertRulePathError, if the path does not exist or is not a directory.
     """
     charm_dir = Path(str(charm.charm_dir))
     if not charm_dir.exists() or not charm_dir.is_dir():
@@ -1582,28 +1581,30 @@ class PrometheusRulesProvider(Object):
             has the `prometheus_scrape` interface.
         dir_path: Root directory for the collection of rule files.
         recursive: Whether or not to scan for rule files recursively.
-        aux_events: User-provided events that should trigger relation data update.
     """
 
     def __init__(
         self,
         charm: CharmBase,
-        relation_name: str = "prometheus-config",
-        dir_path: str = None,
+        relation_name: str = DEFAULT_RELATION_NAME,
+        dir_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         recursive=True,
-        aux_events: List[EventSource] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self.topology = ProviderTopology.from_charm(charm)
-        self.dir_path = dir_path or _resolve_dir_against_charm_path(
-            charm, DEFAULT_ALERT_RULES_RELATIVE_PATH
-        )
         self._recursive = recursive
 
-        if aux_events is None:
-            aux_events = []
+        try:
+            dir_path = _resolve_dir_against_charm_path(charm, dir_path)
+        except InvalidAlertRulePathError as e:
+            logger.warning(
+                "Invalid Prometheus alert rules folder at %s: %s",
+                e.alert_rules_absolute_path,
+                e.message,
+            )
+        self.dir_path = dir_path
 
         events = self._charm.on[self._relation_name]
         event_sources = [
@@ -1611,10 +1612,14 @@ class PrometheusRulesProvider(Object):
             events.relation_changed,
             self._charm.on.leader_elected,
             self._charm.on.upgrade_charm,
-        ] + aux_events
+        ]
 
         for event_source in event_sources:
             self.framework.observe(event_source, self._update_relation_data)
+
+    def _reinitialize_alert_rules(self):
+        """Reloads alert rules and updates all relations."""
+        self._update_relation_data(None)
 
     def _update_relation_data(self, _):
         """Update application relation data with alert rules for all relations."""
@@ -1625,13 +1630,12 @@ class PrometheusRulesProvider(Object):
         path_added = alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if path_added and alert_rules_as_dict:
-            logger.info("Updating relation data with rule files from disk")
-            for relation in self._charm.model.relations[self._relation_name]:
-                relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                    alert_rules_as_dict,
-                    sort_keys=True,  # sort, to prevent unnecessary relation_changed events
-                )
+        logger.info("Updating relation data with rule files from disk")
+        for relation in self._charm.model.relations[self._relation_name]:
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                alert_rules_as_dict,
+                sort_keys=True,  # sort, to prevent unnecessary relation_changed events
+            )
 
 
 class MetricsEndpointAggregator(Object):

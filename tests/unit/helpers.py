@@ -32,3 +32,21 @@ class TempFolderSandbox:
         """
         for rel_path, contents in args:
             self.put_file(rel_path, contents)
+
+    def remove(self, rel_path: str):
+        """Delete file from disk.
+
+        Args:
+            rel_path: path to file, relative to the sandbox root.
+        """
+        file_path = os.path.join(self.root, rel_path)
+        os.remove(file_path)
+
+    def rmdir(self, rel_path):
+        """Delete an empty dir.
+
+        Args:
+            rel_path: path to dir, relative to the sandbox root.
+        """
+        dir_path = os.path.join(self.root, rel_path)
+        os.rmdir(dir_path)
