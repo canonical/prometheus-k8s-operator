@@ -311,7 +311,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 
 logger = logging.getLogger(__name__)
@@ -792,7 +792,7 @@ class AlertRules:
         elif path.is_file():
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            raise InvalidAlertRulePathError(path, "path does not exist")
+            logger.warning("path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1476,16 +1476,14 @@ class PrometheusRulesProvider(Object):
             has the `prometheus_scrape` interface.
         dir_path: Root directory for the collection of rule files.
         recursive: Whether or not to scan for rule files recursively.
-        aux_events: User-provided events that should trigger relation data update.
     """
 
     def __init__(
         self,
         charm: CharmBase,
-        relation_name: str = "prometheus-config",
+        relation_name: str = DEFAULT_RELATION_NAME,
         dir_path: str = None,
         recursive=True,
-        aux_events: List[EventSource] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
@@ -1496,19 +1494,20 @@ class PrometheusRulesProvider(Object):
         )
         self._recursive = recursive
 
-        if aux_events is None:
-            aux_events = []
-
         events = self._charm.on[self._relation_name]
         event_sources = [
             events.relation_joined,
             events.relation_changed,
             self._charm.on.leader_elected,
             self._charm.on.upgrade_charm,
-        ] + aux_events
+        ]
 
         for event_source in event_sources:
             self.framework.observe(event_source, self._update_relation_data)
+
+    def _reinitialize_alert_rules(self):
+        """Reloads alert rules and updates all relations."""
+        self._update_relation_data(None)
 
     def _update_relation_data(self, _):
         """Update application relation data with alert rules for all relations."""
