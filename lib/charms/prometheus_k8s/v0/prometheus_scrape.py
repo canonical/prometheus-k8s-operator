@@ -627,7 +627,7 @@ class AggregatorTopology(JujuTopology):
     """Class for initializing topology information for MetricsEndpointAggregator."""
 
     @classmethod
-    def from_arguments(cls, model: str, model_uuid: str, application: str, unit: str):
+    def create(cls, model: str, model_uuid: str, application: str, unit: str):
         """Factory method for creating the `AggregatorTopology` dataclass from a given charm.
 
         Args:
@@ -1988,7 +1988,7 @@ class MetricsEndpointAggregator(Object):
         for unit_name, rules in unit_rules.items():
             for rule in rules:
                 rule["labels"].update(
-                    AggregatorTopology.from_arguments(
+                    AggregatorTopology.create(
                         self.model.name, self.model.uuid, appname, unit_name
                     ).as_promql_label_dict()
                 )
