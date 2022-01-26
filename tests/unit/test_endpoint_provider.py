@@ -13,8 +13,8 @@ import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
-    JujuTopology,
     MetricsEndpointProvider,
+    ProviderTopology,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
@@ -212,7 +212,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("labels", rule)
@@ -220,6 +220,7 @@ class TestEndpointProvider(unittest.TestCase):
             self.assertIn("juju_model", labels)
             self.assertIn("juju_application", labels)
             self.assertIn("juju_model_uuid", labels)
+            self.assertIn("juju_charm", labels)
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_expression_is_topology_labeled(self, _):
@@ -229,7 +230,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 3)
+        self.assertEqual(len(alerts["groups"]), 4)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
@@ -237,6 +238,7 @@ class TestEndpointProvider(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
+                self.assertIn("juju_charm", labels)
 
 
 class CustomizableEndpointProviderCharm(CharmBase):
@@ -331,23 +333,23 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
             ("rules/prom/prom_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
         )
 
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def test_non_recursive_is_default(self):
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"))
         rules_file_dict = rules.as_dict()
         self.assertEqual({}, rules_file_dict)
 
     def test_non_recursive_lma_format_loading_from_root_dir(self):
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "lma_format"))
         rules_file_dict = rules.as_dict()
 
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -362,14 +364,14 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.assertEqual(expected_rules_file, rules_file_dict)
 
     def test_non_recursive_official_format_loading_from_root_dir(self):
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom", "prom_format"))
         rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
             "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -390,20 +392,20 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
           - For rules in lma format, core group name is the filename
           - For rules in official format, core group name is the group name in the file
         """
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"), recursive=True)
         rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
             "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_dict_with_promql_labels(),
+            "labels": self.topology.as_promql_label_dict(),
         }
 
         expected_rules_file = {
@@ -432,7 +434,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
 class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def setUp(self) -> None:
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def gen_rule(self, name, **extra):
         return {
@@ -450,7 +452,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -459,15 +461,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_1_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_2_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
@@ -487,7 +489,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -496,13 +498,12 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_my_group_alerts",
                     "rules": [
-                        self.gen_rule("same", labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule("same", labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
         }
-        self.maxDiff = None
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
     def test_duplicated_group_names_within_a_file_are_silently_accepted(self):
@@ -510,7 +511,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox = TempFolderSandbox()
         sandbox.put_file("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -519,20 +520,19 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels()),
-                        self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels()),
+                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
                     ],
                 },
             ]
         }
-        self.maxDiff = None
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
     def test_deeply_nested(self):
@@ -543,7 +543,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             ("rules/a/b/file.rule", yaml.safe_dump(self.gen_rule(2))),
         )
 
-        rules = AlertRules(self.topology)
+        rules = AlertRules(topology=self.topology)
         rules.add_path(os.path.join(sandbox.root, "rules"), recursive=True)
         rules_file_dict_read = rules.as_dict()
 
@@ -551,15 +551,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             "groups": [
                 {
                     "name": f"{self.topology.identifier}_file_alerts",
-                    "rules": [self.gen_rule(0, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(0, labels=self.topology.as_promql_label_dict())],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_file_alerts",
-                    "rules": [self.gen_rule(1, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(1, labels=self.topology.as_promql_label_dict())],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_b_file_alerts",
-                    "rules": [self.gen_rule(2, labels=self.topology.as_dict_with_promql_labels())],
+                    "rules": [self.gen_rule(2, labels=self.topology.as_promql_label_dict())],
                 },
             ]
         }

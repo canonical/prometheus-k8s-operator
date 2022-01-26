@@ -218,6 +218,7 @@ class TestEndpointConsumer(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
+                self.assertIn("juju_charm", labels)
 
             relabel_configs = job["relabel_configs"]
             self.assertEqual(len(relabel_configs), 1)
@@ -404,11 +405,12 @@ class TestEndpointConsumer(unittest.TestCase):
         )
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
-        with self.assertLogs(level="ERROR") as logger:
+        with self.assertLogs(level="WARNING") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts()
-            messages = sorted(logger.output)
-            self.assertEqual(len(messages), 1)
-            self.assertIn(f"Relation {rel_id} has invalid data", messages[0])
+            messages = logger.output
+            self.assertEqual(len(messages), 2)
+            self.assertIn(f"Relation {rel_id} has no 'scrape_metadata'", messages[0])
+            self.assertIn("No alert groups were found", messages[1])
 
 
 def juju_job_labels(job, num=0):
@@ -436,10 +438,11 @@ def job_name_suffix(job_name, labels, rel_id):
     Returns:
         string name of job as set by provider (if any)
     """
-    name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
+    name_prefix = "juju_{}_{}_{}_{}_prometheus_{}_scrape_".format(
         labels["juju_model"],
         labels["juju_model_uuid"][:7],
         labels["juju_application"],
+        labels["juju_charm"],
         rel_id,
     )
     return job_name[len(name_prefix) :]

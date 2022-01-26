@@ -635,5 +635,4 @@ class TestEndpointAggregator(unittest.TestCase):
                 ],
             },
         ]
-
         self.assertListEqual(groups, expected_groups)
