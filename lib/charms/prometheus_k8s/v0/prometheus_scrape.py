@@ -1068,14 +1068,21 @@ class MetricsEndpointConsumer(Object):
                     e,
                 )
 
+                if "groups" not in alert_rules:
+                    logger.warning("No alert groups were found in relation data")
+                    continue
                 # Construct an ID based on what's in the alert rules
-                labels = next(alert_rules["groups"])["labels"]
-                identifier = "{}_{}_{}".format(
-                    labels["juju_model"],
-                    labels["juju_model_uuid"],
-                    labels["juju_application"]
-                )
-                alerts[identifier] = alert_rules
+                for group in alert_rules["groups"]:
+                    try:
+                        labels = group["rules"][0]["labels"]
+                        identifier = "{}_{}_{}".format(
+                            labels["juju_model"],
+                            labels["juju_model_uuid"],
+                            labels["juju_application"],
+                        )
+                        alerts[identifier] = alert_rules
+                    except KeyError:
+                        logger.error("Alert rules were found but no usable labels were present")
 
         return alerts
 
