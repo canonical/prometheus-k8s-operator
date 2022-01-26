@@ -311,7 +311,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 14
+LIBPATCH = 15
 
 
 logger = logging.getLogger(__name__)
@@ -1215,7 +1215,10 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
     Look up the directory of the `main.py` file being executed. This is normally
     going to be the charm.py file of the charm including this library. Then, resolve
     the provided path elements and, if the result path exists and is a directory,
-    return its absolute path; otherwise, return `None`.
+    return its absolute path; otherwise, raise en exception.
+
+    Raises:
+        InvalidAlertRulePathError, if the path does not exist or is not a directory.
     """
     charm_dir = Path(str(charm.charm_dir))
     if not charm_dir.exists() or not charm_dir.is_dir():
@@ -1482,16 +1485,24 @@ class PrometheusRulesProvider(Object):
         self,
         charm: CharmBase,
         relation_name: str = DEFAULT_RELATION_NAME,
-        dir_path: str = None,
+        dir_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         recursive=True,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self.topology = JujuTopology.from_charm(charm)
-        self.dir_path = dir_path or _resolve_dir_against_charm_path(
-            charm, DEFAULT_ALERT_RULES_RELATIVE_PATH
-        )
+
+        try:
+            dir_path = _resolve_dir_against_charm_path(charm, dir_path)
+        except InvalidAlertRulePathError as e:
+            logger.warning(
+                "Invalid Prometheus alert rules folder at %s: %s",
+                e.alert_rules_absolute_path,
+                e.message,
+            )
+        self.dir_path = dir_path
+
         self._recursive = recursive
 
         events = self._charm.on[self._relation_name]
