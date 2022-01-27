@@ -5,16 +5,18 @@
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from ops.charm import (
     CharmBase,
     CharmEvents,
     RelationDepartedEvent,
+    RelationEvent,
     RelationJoinedEvent,
     RelationRole,
 )
 from ops.framework import (
+    BoundEvent,
     EventBase,
     EventSource,
     Object,
@@ -33,7 +35,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +195,7 @@ class GrafanaSourceProvider(Object):
     def __init__(
         self,
         charm: CharmBase,
-        refresh_event: CharmEvents,
+        refresh_event: BoundEvent,
         relation_name: str = DEFAULT_RELATION_NAME,
         source_type: Optional[str] = "prometheus",
         source_port: Optional[str] = "9090",
@@ -245,11 +247,11 @@ class GrafanaSourceProvider(Object):
         self._source_port = source_port
 
         self.framework.observe(events.relation_joined, self._set_sources)
-        self.framework.observe(refresh_event, self._set_unit_ip)  # type: ignore[arg-type]
+        self.framework.observe(refresh_event, self._set_unit_ip)
 
     def _set_sources(self, event: RelationJoinedEvent):
         """Inform the consumer about the source configuration."""
-        self._set_unit_ip(event)  # type: ignore[arg-type]
+        self._set_unit_ip(event)
 
         if not self._charm.unit.is_leader():
             return
@@ -272,17 +274,23 @@ class GrafanaSourceProvider(Object):
         }
         return data
 
-    def _set_unit_ip(self, event: CharmEvents):
+    def _set_unit_ip(self, _: Union[BoundEvent, RelationEvent]):
         """Set unit host address.
 
         Each time a provider charm container is restarted it updates its own host address in the
         unit relation data for the Prometheus consumer.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            relation.data[self._charm.unit]["grafana_source_host"] = "{}:{}".format(
-                str(self._charm.model.get_binding(relation).network.bind_address),
-                self._source_port,
-            )
+            # network.bind_address can return `None` and give us a bad string, so make sure
+            # that it's valid before passing it. Otherwise, we'll catch is on pebble_ready.
+            # The provider side already skips adding it if `grafana_source_host` is not set,
+            # so no additional guards needed
+            address = self._charm.model.get_binding(relation).network.bind_address
+            if address:
+                relation.data[self._charm.unit]["grafana_source_host"] = "{}:{}".format(
+                    str(address),
+                    self._source_port,
+                )
 
 
 class GrafanaSourceConsumer(Object):
