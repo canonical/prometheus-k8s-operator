@@ -1765,6 +1765,32 @@ class MetricsEndpointAggregator(Object):
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
+    def set_target_job_data(
+        self, targets: dict, app_name: str, additional_fields: Optional[dict] = None
+    ) -> None:
+        """Update scrape jobs in response to scrape target changes.
+
+        When there is any change in relation data with any scrape
+        target, the Prometheus scrape job, for that specific target is
+        updated. Additionally, if this method is called manually, do the
+        sameself.
+
+        Args:
+            target: a `dict` containing target information
+            app_name: a `str` identifying the applications
+            additional_fields: an optional `dict` containing extra annotations
+                to be added to the job configuration
+        """
+        # new scrape job for the relation that has changed
+        updated_job = self._static_scrape_job(targets, app_name, additional_fields)
+
+        for relation in self.model.relations[self._prometheus_relation]:
+            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            # list of scrape jobs that have not changed
+            jobs = [job for job in jobs if updated_job["job_name"] != job["job_name"]]
+            jobs.append(updated_job)
+            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+
     def _update_prometheus_jobs(self, event):
         """Update scrape jobs in response to scrape target changes.
 
@@ -1996,17 +2022,22 @@ class MetricsEndpointAggregator(Object):
 
         return labeled_rules
 
-    def _static_scrape_job(self, targets, application_name) -> dict:
+    def _static_scrape_job(
+        self, targets, application_name, additional_fields: Optional[dict] = None
+    ) -> dict:
         """Construct a static scrape job for an application.
 
         Args:
-            targets: a dictionary providing hostname and port for all
+            targets:
+                a dictionary providing hostname and port for all
                 scrape target. The keys of this dictionary are unit
                 names. Values corresponding to these keys are
                 themselves a dictionary with keys "hostname" and
                 "port".
             application_name: a string name of the application for
                 which this static scrape job is being constructed.
+            additional_fields: an optional dict containing extra fields
+                to add to the job, used primarily by NRPE
 
         Returns:
             A dictionary corresponding to a Prometheus static scrape
@@ -2014,6 +2045,7 @@ class MetricsEndpointAggregator(Object):
             dictionary may be transformed into YAML and appended to
             the list of any existing list of Prometheus static configs.
         """
+        additional_fields = additional_fields or {}
         juju_model = self.model.name
         juju_model_uuid = self.model.uuid
         job = {
@@ -2031,8 +2063,10 @@ class MetricsEndpointAggregator(Object):
                 }
                 for unit_name, target in targets.items()
             ],
-            "relabel_configs": self._relabel_configs,
+            "relabel_configs": self._relabel_configs
+            + additional_fields.get("relabel_configs", []),
         }
+        job.update(additional_fields.get("updates", {}))
 
         return job
 
