@@ -31,8 +31,8 @@ requires:
     interface: prometheus_scrape
   alertmanager:
     interface: alertmanager_dispatch
-  ingress:
-    interface: ingress
+  ingress-unit:
+    interface: ingress-unit
     limit: 1
 peers:
   prometheus-peers:
@@ -57,4 +57,3 @@ resources:
       Promql-transform binary for adding label selectors on arm64. Promql-transform is available
       as a stand-alone tool on https://github.com/canonical/promql-transform
     filename: promql-transform-arm64
-  

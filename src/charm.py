@@ -11,7 +11,7 @@ import re
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
-from charms.istio_pilot.v0.ingress import IngressRequirer
+from charms.traefik_k8s.v0.ingress_unit import IngressUnitRequirer
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
@@ -48,6 +48,9 @@ class PrometheusCharm(CharmBase):
 
         # Relation handler objects
 
+        # Manages ingress for this charm
+        self.ingress = IngressUnitRequirer(self, port=self._port)
+
         # Allows Grafana to aggregate metrics
         self.grafana_source_consumer = GrafanaSourceConsumer(
             charm=self,
@@ -69,19 +72,12 @@ class PrometheusCharm(CharmBase):
         # Maintains list of Alertmanagers to which alerts are forwarded
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
-        # Manages ingress for this charm
-        self.ingress = IngressRequirer(
-            self,
-            port = self._port,
-            per_unit_routes = True,
-        )
-
         # Event handlers
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.ingress.on.ready, self._configure)
-        self.framework.observe(self.ingress.on.removed, self._configure)
+        self.framework.observe(self.ingress.on.broken, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
@@ -194,10 +190,9 @@ class PrometheusCharm(CharmBase):
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
-        if self.model.get_relation("ingress"):
-            if unit_external_url := self.ingress.unit_url:
-                logger.debug(f"Setting external web URL to ingress-provided '{unit_external_url}'")
-                args.append(f"--web.external-url={unit_external_url}")
+        if unit_external_url := self.ingress.url:
+            logger.debug(f"Setting external web URL to ingress-provided '{unit_external_url}'")
+            args.append(f"--web.external-url={unit_external_url}")
 
         # enable remote write if an instance of the relation exists
         if self.model.relations["receive-remote-write"]:
@@ -349,7 +344,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _remote_write_address(self) -> str:
-        return self._external_hostname if self.model.get_relation("ingress") else None
+        return self._external_hostname if self.ingress.url else None
 
 
 if __name__ == "__main__":
