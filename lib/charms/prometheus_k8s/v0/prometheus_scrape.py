@@ -1765,7 +1765,7 @@ class MetricsEndpointAggregator(Object):
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
-    def set_target_job_data(self, targets: dict, app_name: str, **kwargs) -> None:
+    def _set_target_job_data(self, targets: dict, app_name: str, **kwargs) -> None:
         """Update scrape jobs in response to scrape target changes.
 
         When there is any change in relation data with any scrape
@@ -1775,7 +1775,7 @@ class MetricsEndpointAggregator(Object):
 
         Args:
             targets: a `dict` containing target information
-            app_name: a `str` identifying the applications
+            app_name: a `str` identifying the application
         """
         # new scrape job for the relation that has changed
         updated_job = self._static_scrape_job(targets, app_name, **kwargs)
@@ -2022,8 +2022,7 @@ class MetricsEndpointAggregator(Object):
         """Construct a static scrape job for an application.
 
         Args:
-            targets:
-                a dictionary providing hostname and port for all
+            targets: a dictionary providing hostname and port for all
                 scrape target. The keys of this dictionary are unit
                 names. Values corresponding to these keys are
                 themselves a dictionary with keys "hostname" and
