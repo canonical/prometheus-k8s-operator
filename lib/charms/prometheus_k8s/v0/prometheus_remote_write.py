@@ -182,7 +182,7 @@ class JujuTopology:
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
         # This is odd, but may have `None` as a model key
-        return "_".join([str(val) for val in self.as_dict().values()])
+        return "_".join([str(val) for val in self.as_dict().values()]).replace("/", "_")
 
     @property
     def promql_labels(self) -> str:
