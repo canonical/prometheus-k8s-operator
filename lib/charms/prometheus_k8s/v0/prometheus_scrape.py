@@ -298,7 +298,7 @@ import logging
 import os
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 from ops.charm import CharmBase, RelationRole
@@ -1052,34 +1052,63 @@ class MetricsEndpointConsumer(Object):
             if not alert_rules:
                 continue
 
+            identifier = None
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = alert_rules
             except KeyError as e:
-                logger.warning(
+                logger.debug(
                     "Relation %s has no 'scrape_metadata': %s",
                     relation.id,
                     e,
                 )
+                identifier = self._get_identifier_by_alert_rules(alert_rules)
 
-                if "groups" not in alert_rules:
-                    logger.warning("No alert groups were found in relation data")
-                    continue
-                # Construct an ID based on what's in the alert rules
-                for group in alert_rules["groups"]:
-                    try:
-                        labels = group["rules"][0]["labels"]
-                        identifier = "{}_{}_{}".format(
-                            labels["juju_model"],
-                            labels["juju_model_uuid"],
-                            labels["juju_application"],
-                        )
-                        alerts[identifier] = alert_rules
-                    except KeyError:
-                        logger.error("Alert rules were found but no usable labels were present")
+            if not identifier:
+                continue
+            alerts[identifier] = alert_rules
 
         return alerts
+
+    def _get_identifier_by_alert_rules(self, rules: dict) -> Union[str, None]:
+        """Determine an appropriate dict key for alert rules.
+
+        The key is used as the filename when writing alerts to disk, so the structure
+        and uniqueness is important.
+
+        Args:
+            rules: a dict of alert rules
+        """
+        if "groups" not in rules:
+            logger.warning("No alert groups were found in relation data")
+            return None
+
+        # Construct an ID based on what's in the alert rules if they have labels
+        for group in rules["groups"]:
+            try:
+                labels = group["rules"][0]["labels"]
+                identifier = "{}_{}_{}".format(
+                    labels["juju_model"],
+                    labels["juju_model_uuid"],
+                    labels["juju_application"],
+                )
+                return identifier
+            except KeyError:
+                logger.debug("Alert rules were found but no usable labels were present")
+                continue
+
+        logger.warning(
+            "No labeled alert rules were found, and no 'scrape_metadata'"
+            "was available. Using the alert group name as filename."
+        )
+        try:
+            for group in rules["groups"]:
+                return group["name"]
+        except KeyError:
+            logger.debug("No group name was found to use as identifier")
+
+        return None
 
     def _static_scrape_config(self, relation) -> list:
         """Generate the static scrape configuration for a single relation.
