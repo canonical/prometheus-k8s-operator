@@ -103,6 +103,28 @@ ALERT_RULES = {
         }
     ]
 }
+UNLABELED_ALERT_RULES = {
+    "groups": [
+        {
+            "name": "unlabeled_external_cpu_alerts",
+            "rules": [
+                {
+                    "alert": "CPUOverUse",
+                    "expr": 'process_cpu_seconds_total{juju_model="None"',
+                    "for": "0m",
+                    "labels": {
+                        "severity": "Low",
+                    },
+                    "annotations": {
+                        "summary": "Instance {{ $labels.instance }} CPU over use",
+                        "description": "{{ $labels.instance }} of job "
+                        "{{ $labels.job }} has used too much CPU.",
+                    },
+                },
+            ],
+        },
+    ]
+}
 OTHER_SCRAPE_JOBS = [
     {
         "metrics_path": "/other-path",
@@ -409,8 +431,35 @@ class TestEndpointConsumer(unittest.TestCase):
             _ = self.harness.charm.prometheus_consumer.alerts()
             messages = logger.output
             self.assertEqual(len(messages), 2)
-            self.assertIn(f"Relation {rel_id} has no 'scrape_metadata'", messages[0])
-            self.assertIn("No alert groups were found", messages[1])
+            self.assertIn(
+                "Alert rules were found but no usable group or identifier was present", messages[1]
+            )
+
+    def test_consumer_accepts_rules_with_no_identifier(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "alert_rules": json.dumps(UNLABELED_ALERT_RULES),
+            },
+        )
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+        with self.assertLogs(level="DEBUG") as logger:
+            _ = self.harness.charm.prometheus_consumer.alerts()
+            messages = logger.output
+            self.assertIn("Alert rules were found but no usable labels were present", messages[1])
+            self.assertIn(
+                "No labeled alert rules were found, and no 'scrape_metadata' "
+                "was available. Using the alert group name as filename.",
+                messages[2],
+            )
+        alerts = self.harness.charm.prometheus_consumer.alerts()
+        self.assertIn("unlabeled_external_cpu_alerts", alerts.keys())
+        self.assertEqual(UNLABELED_ALERT_RULES, alerts["unlabeled_external_cpu_alerts"])
 
 
 def juju_job_labels(job, num=0):

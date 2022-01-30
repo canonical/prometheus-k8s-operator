@@ -1066,6 +1066,9 @@ class MetricsEndpointConsumer(Object):
                 identifier = self._get_identifier_by_alert_rules(alert_rules)
 
             if not identifier:
+                logger.error(
+                    "Alert rules were found but no usable group or identifier was present"
+                )
                 continue
             alerts[identifier] = alert_rules
 
@@ -1099,7 +1102,7 @@ class MetricsEndpointConsumer(Object):
                 continue
 
         logger.warning(
-            "No labeled alert rules were found, and no 'scrape_metadata'"
+            "No labeled alert rules were found, and no 'scrape_metadata' "
             "was available. Using the alert group name as filename."
         )
         try:
