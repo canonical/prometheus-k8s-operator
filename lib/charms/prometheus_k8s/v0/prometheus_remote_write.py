@@ -13,9 +13,9 @@ should use the `PrometheusRemoteWriteProducer`.
 import json
 import logging
 import os
-from collections import OrderedDict
 import platform
 import subprocess
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
