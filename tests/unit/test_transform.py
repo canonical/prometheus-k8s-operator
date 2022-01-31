@@ -119,3 +119,12 @@ class TestTransform(unittest.TestCase):
             }
         )
         self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
+
+    def test_fetches_the_correct_expression(self):
+        self.harness.add_resource(
+            "promql-transform-amd64",
+            open("./promql-transform", "rb").read(),
+        )
+        transform = self.harness.charm.transformer
+        output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
+        assert output == 'up{juju_model="some_juju_model"}'

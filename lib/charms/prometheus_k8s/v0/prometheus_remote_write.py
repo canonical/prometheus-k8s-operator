@@ -1011,9 +1011,19 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
+<<<<<<< HEAD
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
+=======
+                # as this might very well contain multiple groups from different origins,
+                # and as such, with different topologies, we need to flatten the groups
+                # structure to be able to distinguish between what came from where.
+                for group in alert_rules["groups"]:
+                    alerts[group["name"]] = self._transformer.apply_label_matchers(
+                        {"groups": [group]}
+                    )
+>>>>>>> da885dd (fix spurious quoting and update contributing.md)
             except KeyError as e:
                 logger.warning(
                     "Relation %s has no 'scrape_metadata': %s",
@@ -1081,6 +1091,7 @@ class PromqlTransformer:
                 ]:
                     if label in rule["labels"]:
                         topology[label] = rule["labels"][label]
+
                 rule["expr"] = self._apply_label_matcher(rule["expr"], topology)
         return rules
 
@@ -1094,7 +1105,7 @@ class PromqlTransformer:
             return expression
         args = [str(self.path)]
         args.extend(
-            ['--label-matcher={}="{}"'.format(key, value) for key, value in topology.items()]
+            ['--label-matcher {}="{}"'.format(key, value) for key, value in topology.items()]
         )
 
         args.extend(["{}".format(expression)])
@@ -1103,6 +1114,8 @@ class PromqlTransformer:
             return self._exec(args)
         except Exception as e:
             logger.debug('Applying the expression failed: "{}", falling back to the original', e)
+            raise e
+
             return expression
 
     def _get_transformer_path(self) -> Optional[Path]:
@@ -1120,6 +1133,6 @@ class PromqlTransformer:
         return None
 
     def _exec(self, cmd):
-        result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE)
+        result = subprocess.run(" ".join(cmd), check=False, stdout=subprocess.PIPE, shell=True)
         output = result.stdout.decode("utf-8").strip()
         return output
