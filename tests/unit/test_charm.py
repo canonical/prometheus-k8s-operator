@@ -115,12 +115,14 @@ class TestCharm(unittest.TestCase):
 
         rel_id = self.harness.add_relation("ingress", "ingress")
         self.harness.add_relation_unit(rel_id, "ingress/0")
-        self.harness.update_relation_data(rel_id, "ingress", {
-            "url": None,
-            "unit_urls": {
-                self.harness.charm.unit.name: "http://prometheus-k8s:9090"
-            }
-        })
+        self.harness.update_relation_data(
+            rel_id,
+            "ingress",
+            {
+                "url": None,
+                "unit_urls": {self.harness.charm.unit.name: "http://prometheus-k8s:9090"},
+            },
+        )
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(

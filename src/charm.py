@@ -11,12 +11,12 @@ import re
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
-from charms.traefik_k8s.v0.ingress_unit import IngressUnitRequirer
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.traefik_k8s.v0.ingress_unit import IngressUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -121,10 +121,10 @@ class PrometheusCharm(CharmBase):
         # push alert rules if any
         self._set_alerts(container)
 
-        current_services = container.get_plan().services
+        # current_services = container.get_plan().services
         new_layer = self._prometheus_layer
 
-        ### TODO
+        # TODO
         # Fix this: updating the command args in manual tests did not result
         # in Prometheus restarting!
 
@@ -145,7 +145,7 @@ class PrometheusCharm(CharmBase):
         container.restart(self._name)
         logger.info("Prometheus (re)started")
 
-        ### END TODO
+        # END TODO
 
         # Ensure the right address is set on the remote_write relations
         self.remote_write_provider.update_endpoint()
