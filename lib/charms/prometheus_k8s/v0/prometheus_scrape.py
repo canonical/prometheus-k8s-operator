@@ -312,7 +312,7 @@ import platform
 import subprocess
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import yaml
 from ops.charm import CharmBase, RelationRole
@@ -329,7 +329,6 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 LIBPATCH = 15
-
 
 logger = logging.getLogger(__name__)
 
@@ -1073,35 +1072,67 @@ class MetricsEndpointConsumer(Object):
             if not alert_rules:
                 continue
 
+            identifier = None
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
 
             except KeyError as e:
-                logger.warning(
+                logger.debug(
                     "Relation %s has no 'scrape_metadata': %s",
                     relation.id,
                     e,
                 )
+                identifier = self._get_identifier_by_alert_rules(alert_rules)
 
-                if "groups" not in alert_rules:
-                    logger.warning("No alert groups were found in relation data")
-                    continue
-                # Construct an ID based on what's in the alert rules
-                for group in alert_rules["groups"]:
-                    try:
-                        labels = group["rules"][0]["labels"]
-                        identifier = "{}_{}_{}".format(
-                            labels["juju_model"],
-                            labels["juju_model_uuid"],
-                            labels["juju_application"],
-                        )
-                        alerts[identifier] = alert_rules
-                    except KeyError:
-                        logger.error("Alert rules were found but no usable labels were present")
+            if not identifier:
+                logger.error(
+                    "Alert rules were found but no usable group or identifier was present"
+                )
+                continue
+            alerts[identifier] = alert_rules
 
         return alerts
+
+    def _get_identifier_by_alert_rules(self, rules: dict) -> Union[str, None]:
+        """Determine an appropriate dict key for alert rules.
+
+        The key is used as the filename when writing alerts to disk, so the structure
+        and uniqueness is important.
+
+        Args:
+            rules: a dict of alert rules
+        """
+        if "groups" not in rules:
+            logger.warning("No alert groups were found in relation data")
+            return None
+
+        # Construct an ID based on what's in the alert rules if they have labels
+        for group in rules["groups"]:
+            try:
+                labels = group["rules"][0]["labels"]
+                identifier = "{}_{}_{}".format(
+                    labels["juju_model"],
+                    labels["juju_model_uuid"],
+                    labels["juju_application"],
+                )
+                return identifier
+            except KeyError:
+                logger.debug("Alert rules were found but no usable labels were present")
+                continue
+
+        logger.warning(
+            "No labeled alert rules were found, and no 'scrape_metadata' "
+            "was available. Using the alert group name as filename."
+        )
+        try:
+            for group in rules["groups"]:
+                return group["name"]
+        except KeyError:
+            logger.debug("No group name was found to use as identifier")
+
+        return None
 
     def _static_scrape_config(self, relation) -> list:
         """Generate the static scrape configuration for a single relation.
@@ -1804,6 +1835,28 @@ class MetricsEndpointAggregator(Object):
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
+    def _set_target_job_data(self, targets: dict, app_name: str, **kwargs) -> None:
+        """Update scrape jobs in response to scrape target changes.
+
+        When there is any change in relation data with any scrape
+        target, the Prometheus scrape job, for that specific target is
+        updated. Additionally, if this method is called manually, do the
+        sameself.
+
+        Args:
+            targets: a `dict` containing target information
+            app_name: a `str` identifying the application
+        """
+        # new scrape job for the relation that has changed
+        updated_job = self._static_scrape_job(targets, app_name, **kwargs)
+
+        for relation in self.model.relations[self._prometheus_relation]:
+            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            # list of scrape jobs that have not changed
+            jobs = [job for job in jobs if updated_job["job_name"] != job["job_name"]]
+            jobs.append(updated_job)
+            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+
     def _update_prometheus_jobs(self, event):
         """Update scrape jobs in response to scrape target changes.
 
@@ -2035,7 +2088,7 @@ class MetricsEndpointAggregator(Object):
 
         return labeled_rules
 
-    def _static_scrape_job(self, targets, application_name) -> dict:
+    def _static_scrape_job(self, targets, application_name, **kwargs) -> dict:
         """Construct a static scrape job for an application.
 
         Args:
@@ -2070,8 +2123,9 @@ class MetricsEndpointAggregator(Object):
                 }
                 for unit_name, target in targets.items()
             ],
-            "relabel_configs": self._relabel_configs,
+            "relabel_configs": self._relabel_configs + kwargs.get("relabel_configs", []),
         }
+        job.update(kwargs.get("updates", {}))
 
         return job
 
