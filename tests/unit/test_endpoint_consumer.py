@@ -57,6 +57,8 @@ SCRAPE_JOBS = [
         ],
     },
 ]
+
+
 ALERT_RULES = {
     "groups": [
         {
@@ -64,9 +66,7 @@ ALERT_RULES = {
             "rules": [
                 {
                     "alert": "CPUOverUse",
-                    "expr": 'process_cpu_seconds_total{juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
-                    'juju_application="consumer-tester"} > 0.12',
+                    "expr": "process_cpu_seconds_total > 0.12",
                     "for": "0m",
                     "labels": {
                         "severity": "Low",
@@ -82,9 +82,7 @@ ALERT_RULES = {
                 },
                 {
                     "alert": "PrometheusTargetMissing",
-                    "expr": 'up{juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
-                    'juju_application="consumer-tester"} == 0',
+                    "expr": "up == 0",
                     "for": "0m",
                     "labels": {
                         "severity": "critical",
@@ -160,6 +158,11 @@ class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
         metadata_file = open("metadata.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
+
+        self.harness.add_resource(
+            "promql-transform-amd64",
+            open("./promql-transform", "rb").read(),
+        )
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
@@ -408,7 +411,10 @@ class TestEndpointConsumer(unittest.TestCase):
 
         rules_file = self.harness.charm.prometheus_consumer.alerts()
         alerts = list(rules_file.values())[0]
-        self.assertEqual(ALERT_RULES, alerts)
+
+        alert_names = [x["alert"] for x in alerts["groups"][0]["rules"]]
+
+        self.assertEqual(alert_names, ["CPUOverUse", "PrometheusTargetMissing"])
 
     def test_consumer_logs_an_error_on_missing_alerting_data(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)

@@ -1,5 +1,5 @@
 alert: PrometheusTargetMissing
-expr: up{%%juju_topology%%} == 0
+expr: up == 0
 for: 0m
 labels:
   severity: critical
