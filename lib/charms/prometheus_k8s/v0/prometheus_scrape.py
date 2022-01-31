@@ -247,7 +247,7 @@ format is shown below.
 
 ```
 alert: HighRequestLatency
-expr: job:request_latency_seconds:mean5m{my_key=my_value, %%juju_topology%%} > 0.5
+expr: job:request_latency_seconds:mean5m{my_key=my_value} > 0.5
 for: 10m
 labels:
   severity: Medium
@@ -256,16 +256,27 @@ annotations:
   summary: High request latency for {{ $labels.instance }}.
 ```
 
-It is **very important** to note the `%%juju_topology%%` filter in the
-expression for the alert rule shown above. This filter is a stub that
-is automatically replaced by the metrics provider charm's Juju
-topology (application, model and its UUID). Such a topology filter is
-essential to ensure that alert rules submitted by one provider charm
-generates alerts only for that same charm.  The Prometheus charm may
-be related to multiple metrics provider charms. Without this, filter
-rules submitted by one provider charm will also result in
-corresponding alerts for other provider charms. Hence every alert rule
-expression must include such a topology filter stub.
+The `MetricsEndpointProvider` will read all available alert rules and
+also inject "filtering labels" into the alert expressions. The
+filtering labels ensure that alert rules are localised to the metrics
+provider charm's Juju topology (application, model and its UUID). Such
+a topology filter is essential to ensure that alert rules submitted by
+one provider charm generates alerts only for that same charm. When
+alert rules are embedded in a charm, and the charm is deployed as a
+Juju application, the alert rules from that application have their
+expressions automatically updated to filter for metrics coming from
+the units of that application alone. This remove risk of spurious
+evaluation, e.g., when you have multiple deployments of the same charm
+monitored by the same Prometheus.
+
+Not all alerts one may want to specify can be embedded in a
+charm. Some alert rules will be specific to a user's use case. This is
+the case, for example, of alert rules that are based on business
+constraints, like expecting a certain amount of requests to a specific
+API every five minutes. Such alert rules can be specified via the
+[COS Config Charm](https://charmhub.io/cos-configuration-k8s),
+which allows importing alert rules and other settings like dashboards
+from a Git repository.
 
 Gathering alert rules and generating rule files within the Prometheus
 charm is easily done using the `alerts()` method of
@@ -291,6 +302,7 @@ over unit relation data using the `prometheus_scrape_unit_name` and
 `prometheus_scrape_unit_address` keys. While the `scrape_metadata`,
 `scrape_jobs` and `alert_rules` keys in application relation data
 of Metrics provider charms hold eponymous information.
+
 """
 
 import json
@@ -511,6 +523,10 @@ class JujuTopology:
             application: an application name as a string
             unit: a unit name as a string
             charm_name: name of charm as a string
+
+        Note:
+            `JujuTopology` should not be constructed directly by charm code. Please
+            use `ProviderTopology` or `AggregatorTopology`.
         """
         self.model = model
         self.model_uuid = model_uuid
@@ -1116,6 +1132,10 @@ class MetricsEndpointConsumer(Object):
     def _static_scrape_config(self, relation) -> list:
         """Generate the static scrape configuration for a single relation.
 
+        If the relation data includes `scrape_metadata` then the value
+        of this key is used to annotate the scrape jobs with Juju
+        Topology labels before returning them.
+
         Args:
             relation: an `ops.model.Relation` object whose static
                 scrape configuration is required.
@@ -1440,26 +1460,21 @@ class MetricsEndpointProvider(Object):
         the  `MetricsEndpointProvider` logs an error and does not load the particular
         rule.
 
-        To avoid false positives and negatives in the evaluation of your alert rules,
-        you must always add the `%%juju_topology%%` token as label filters in the
-        PromQL expression, e.g.:
+        To avoid false positives and negatives in the evaluation of alert rules,
+        all ingested alert rule expressions are automatically qualified using Juju
+        Topology filters. This ensures that alert rules provided by your charm, trigger
+        alerts based only on data scrapped from your charm. For example an alert rule
+        such as the following
 
             alert: UnitUnavailable
-            expr: up{%%juju_topology%%} < 1
+            expr: up < 1
             for: 0m
-            labels:
-                severity: critical
-            annotations:
-              summary: Unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
-              description: >
-                The unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
 
-        The `%%juju_topology%%` token will be replaced with label filters ensuring that
-        the only timeseries evaluated are those scraped from this charm, and no other.
-        Failing to ensure that the `%%juju_topology%%` token is applied to each and every
-        queried timeseries which will lead to unpredictable alert rule evaluation
-        if your charm is deployed multiple times and all these instances are
-        monitored by the same Prometheus.
+        will be automatically transformed into something along the lines of the following
+
+            alert: UnitUnavailable
+            expr: up{juju_model=<model>, juju_model_uuid=<uuid-prefix>, juju_application=<app>} < 1
+            for: 0m
 
         Args:
             charm: a `CharmBase` object that manages this
@@ -1687,6 +1702,8 @@ class MetricsEndpointAggregator(Object):
     `prometheus_scrape` interface.
 
     2. Integrating one or more scrape targets through cross model
+    relations. Although the [Scrape Config Operator](https://charmhub.io/cos-configuration-k8s)
+    may also be used for the purpose of supporting cross model
     relations.
 
     Using `MetricsEndpointAggregator` to build a Prometheus charm client
@@ -1750,6 +1767,22 @@ class MetricsEndpointAggregator(Object):
     """
 
     def __init__(self, charm, relation_names, relabel_instance=True):
+        """Construct a `MetricsEndpointAggregator`.
+
+        Args:
+            charm: a `CharmBase` object that manages this
+                `MetricsEndpointAggregator` object. Typically this is
+                `self` in the instantiating class.
+            relation_names: a dictionary with three keys. The value
+                of the "scrape_target" and "alert_rules" keys are
+                the relation names over which scrape job and alert rule
+                information is gathered by this `MetricsEndpointAggregator`.
+                And the value of the "prometheus" key is the name of
+                the relation with a `MetricsEndpointConsumer` such as
+                the Prometheus charm.
+            relabel_instance: A boolean flag indicating if Prometheus
+                scrape job "instance" labels must refer to Juju Topology.
+        """
         super().__init__(charm, relation_names["prometheus"])
 
         self._charm = charm
