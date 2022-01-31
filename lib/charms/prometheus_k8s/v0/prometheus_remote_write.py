@@ -1011,19 +1011,9 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             try:
-<<<<<<< HEAD
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
                 alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
-=======
-                # as this might very well contain multiple groups from different origins,
-                # and as such, with different topologies, we need to flatten the groups
-                # structure to be able to distinguish between what came from where.
-                for group in alert_rules["groups"]:
-                    alerts[group["name"]] = self._transformer.apply_label_matchers(
-                        {"groups": [group]}
-                    )
->>>>>>> da885dd (fix spurious quoting and update contributing.md)
             except KeyError as e:
                 logger.warning(
                     "Relation %s has no 'scrape_metadata': %s",
