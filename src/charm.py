@@ -333,6 +333,7 @@ class PrometheusCharm(CharmBase):
         prometheus_config["scrape_configs"].append(default_config)  # type: ignore
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
+            job["honor_labels"] = True
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         return yaml.dump(prometheus_config)
