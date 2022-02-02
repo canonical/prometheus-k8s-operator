@@ -449,7 +449,7 @@ class AlertRules:
         Returns:
             List of files in `dir_path` that have one of the suffixes specified in `suffixes`.
         """
-        all_files_in_dir = Path(dir_path).glob("**/*" if recursive else "*")
+        all_files_in_dir = dir_path.glob("**/*" if recursive else "*")
         return list(filter(lambda f: f.is_file() and f.suffix in suffixes, all_files_in_dir))
 
     def _from_dir(self, dir_path: Path, recursive: bool) -> List[dict]:
