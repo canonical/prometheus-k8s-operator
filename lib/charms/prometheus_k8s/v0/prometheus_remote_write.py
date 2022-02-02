@@ -442,7 +442,7 @@ class AlertRules:
         """Helper function for getting all files in a directory that have a matching suffix.
 
         Args:
-            dir_path: path to the director to glob from.
+            dir_path: path to the directory to glob from.
             suffixes: list of suffixes to include in the glob (items should begin with a period).
             recursive: a flag indicating whether a glob is recursive (nested) or not.
 
