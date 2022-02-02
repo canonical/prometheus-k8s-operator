@@ -5,14 +5,14 @@
 from ops.model import Relation
 from sborl.testing import MockRemoteRelationMixin
 
-from .provides import IngressRequest, IngressUnitProvider
-from .requires import IngressUnitRequirer
+from .provides import IngressPerUnitProvider, IngressRequest
+from .requires import IngressPerUnitRequirer
 
 
-class MockIPUProvider(MockRemoteRelationMixin, IngressUnitProvider):
+class MockIPUProvider(MockRemoteRelationMixin, IngressPerUnitProvider):
     """Class to help with unit testing ingress requirer charms.
 
-    Exactly the same as the normal IngressUnitProvider but, acts as if it's on
+    Exactly the same as the normal IngressPerUnitProvider but, acts as if it's on
     the remote side of any relation, and it automatically triggers events when
     repsonses are sent.
     """
@@ -42,10 +42,10 @@ class MockIngressRequest(IngressRequest):
         return [self._provider.harness.charm.unit]
 
 
-class MockIPURequirer(MockRemoteRelationMixin, IngressUnitRequirer):
+class MockIPURequirer(MockRemoteRelationMixin, IngressPerUnitRequirer):
     """Class to help with unit testing ingress provider charms.
 
-    Exactly the same as the normal IngressUnitRequirer, but acts as if it's on
+    Exactly the same as the normal IngressPerUnitRequirer, but acts as if it's on
     the remote side of any relation, and it automatically triggers events when
     requests are sent.
     """

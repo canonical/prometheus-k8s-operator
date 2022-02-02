@@ -1,6 +1,6 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Requires side of ingress-unit relation."""
+"""Requires side of ingress_per_unit interface protocol."""
 
 import logging
 from functools import cached_property
@@ -12,11 +12,11 @@ from ops.charm import CharmBase
 logger = logging.getLogger(__name__)
 
 
-class IngressUnitRequirer(sborl.EndpointWrapper):
-    """Implementation of the requirer of ingress-unit."""
+class IngressPerUnitRequirer(sborl.EndpointWrapper):
+    """Implementation of the requirer of ingress_per_unit."""
 
     ROLE = "requires"
-    INTERFACE = "ingress-unit"
+    INTERFACE = "ingress_per_unit"
     SCHEMA = Path(__file__).parent / "schema.yaml"
     LIMIT = 1
 
@@ -39,7 +39,7 @@ class IngressUnitRequirer(sborl.EndpointWrapper):
             charm: the charm that is instantiating the library.
             endpoint: the name of the relation endpoint to bind to
                 (defaults to "ingress-per-unit"; relation must be of interface type
-                "ingress-per-unit" and have "limit: 1")
+                "ingress_per_unit" and have "limit: 1")
         Request Args:
             port: the port of the service (required if rewrite is given)
             rewrite: the path on the target service to map the request to; defaults

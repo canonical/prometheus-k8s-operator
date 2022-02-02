@@ -16,7 +16,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
-from charms.traefik_k8s.v0.ingress_unit import IngressUnitRequirer
+from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -27,9 +27,7 @@ from prometheus_server import Prometheus
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
-INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = (
-    "invalid combination of 'ingress', 'receive-remote-write' relations and multiple units"
-)
+INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = "invalid combination of 'ingress-per-unit', 'receive-remote-write' relations and multiple units"
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ class PrometheusCharm(CharmBase):
         # Relation handler objects
 
         # Manages ingress for this charm
-        self.ingress = IngressUnitRequirer(self, port=self._port)
+        self.ingress_per_unit = IngressPerUnitRequirer(self, port=self._port)
 
         # Allows Grafana to aggregate metrics
         self.grafana_source_consumer = GrafanaSourceConsumer(
@@ -76,8 +74,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ready, self._configure)
-        self.framework.observe(self.ingress.on.broken, self._configure)
+        self.framework.observe(self.ingress_per_unit.on.ready, self._configure)
+        self.framework.observe(self.ingress_per_unit.on.broken, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
@@ -190,7 +188,7 @@ class PrometheusCharm(CharmBase):
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
-        if unit_external_url := self.ingress.url:
+        if unit_external_url := self.ingress_per_unit.url:
             logger.debug(f"Setting external web URL to ingress-provided '{unit_external_url}'")
             args.append(f"--web.external-url={unit_external_url}")
 
@@ -340,11 +338,11 @@ class PrometheusCharm(CharmBase):
         # hostname will correspond to the deployed application name in the
         # model, but allow it to be set to something specific via config.
 
-        return self.config["web_external_url"] or f"{self.app.name}"
+        return self.config["web_external_url"] or self.ingress_per_unit.url or f"{self.app.name}"
 
     @property
     def _remote_write_address(self) -> str:
-        return self._external_hostname if self.ingress.url else None
+        return self._external_hostname if self.ingress_per_unit.url else None
 
 
 if __name__ == "__main__":

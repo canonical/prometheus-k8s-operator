@@ -1,6 +1,6 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Provides side of ingress-unit relation."""
+"""Provides side of ingress_per_unit interface protocol."""
 
 import logging
 from pathlib import Path
@@ -21,35 +21,35 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
-class IngressUnitRequestEvent(RelationEvent):
+class IngressPerUnitRequestEvent(RelationEvent):
     """Event representing an incoming request.
 
     This is equivalent to the "ready" event, but is more semantically meaningful.
     """
 
 
-class IngressUnitProviderEvents(sborl.events.EndpointWrapperEvents):
+class IngressPerUnitProviderEvents(sborl.events.EndpointWrapperEvents):
     """Container for IUP events."""
 
-    request = EventSource(IngressUnitRequestEvent)
+    request = EventSource(IngressPerUnitRequestEvent)
 
 
-class IngressUnitProvider(sborl.EndpointWrapper):
-    """Implementation of the provider of ingress-unit."""
+class IngressPerUnitProvider(sborl.EndpointWrapper):
+    """Implementation of the provider of ingress_per_unit."""
 
     ROLE = "provides"
-    INTERFACE = "ingress-unit"
+    INTERFACE = "ingress_per_unit"
     SCHEMA = Path(__file__).parent / "schema.yaml"
 
-    on = IngressUnitProviderEvents()
+    on = IngressPerUnitProviderEvents()
 
     def __init__(self, charm: CharmBase, endpoint: str = None):
-        """Constructor for IngressUnitProvider.
+        """Constructor for IngressPerUnitProvider.
 
         Args:
             charm: The charm that is instantiating the instance.
             endpoint: The name of the relation endpoint to bind to
-                (defaults to "ingress-unit").
+                (defaults to "ingress-per-unit").
         """
         super().__init__(charm, endpoint)
         self.framework.observe(self.on.ready, self._emit_request_event)
@@ -86,7 +86,7 @@ class IngressUnitProvider(sborl.EndpointWrapper):
 class IngressRequest:
     """A request for per-unit ingress."""
 
-    def __init__(self, provider: IngressUnitProvider, relation: Relation):
+    def __init__(self, provider: IngressPerUnitProvider, relation: Relation):
         """Construct an IngressRequest."""
         self._provider = provider
         self._relation = relation

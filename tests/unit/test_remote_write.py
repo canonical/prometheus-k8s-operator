@@ -9,11 +9,12 @@ from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServ
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
+from charms.traefik_k8s.v0.ingress_per_unit.testing import MockIPUProvider
 from ops.charm import CharmBase
-from ops.model import ActiveStatus, BlockedStatus
+from ops.model import ActiveStatus
 from ops.testing import Harness
 
-from charm import INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE, Prometheus, PrometheusCharm
+from charm import Prometheus, PrometheusCharm
 
 RELATION_NAME = "receive-remote-write"
 RELATION_INTERFACE = "prometheus_remote_write"
@@ -180,10 +181,21 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
         self.harness.update_config({"web_external_url": "my_happy_ingress"})
 
-        ingress_rel_id = self.harness.add_relation("ingress", "nginx-ingress")
-        self.harness.add_relation_unit(ingress_rel_id, "ingress/0")
+        ipu_provider = MockIPUProvider(self.harness)
 
         self.harness.begin_with_initial_hooks()
+
+        self.harness.set_leader(True)
+        relation = ipu_provider.relate()
+        request = ipu_provider.get_request(relation)
+        request.respond(request.units[0], "http://traefik-k8s:9090")
+
+        # Because the PrometheusRemoteWriteProvider is created during the charm's
+        # __init__, and the endpoint_address is calculated then, but the tests
+        # reuse the charm instance rather than creating a new one like a normal
+        # hook would, we have to manually update this.
+        charm = self.harness.charm
+        charm.remote_write_provider._endpoint_address = charm._remote_write_address
 
         cons_rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(cons_rel_id, "consumer/0")
@@ -206,10 +218,21 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
         self.harness.update_config({"web_external_url": "my_happy_ingress"})
 
-        ingress_rel_id = self.harness.add_relation("ingress", "nginx-ingress")
-        self.harness.add_relation_unit(ingress_rel_id, "ingress/0")
+        ipu_provider = MockIPUProvider(self.harness)
 
         self.harness.begin_with_initial_hooks()
+
+        self.harness.set_leader(True)
+        relation = ipu_provider.relate()
+        request = ipu_provider.get_request(relation)
+        request.respond(request.units[0], "http://traefik-k8s:9090")
+
+        # Because the PrometheusRemoteWriteProvider is created during the charm's
+        # __init__, and the endpoint_address is calculated then, but the tests
+        # reuse the charm instance rather than creating a new one like a normal
+        # hook would, we have to manually update this.
+        charm = self.harness.charm
+        charm.remote_write_provider._endpoint_address = charm._remote_write_address
 
         peers_rel_id = self.harness.charm.model.get_relation("prometheus-peers").id
         self.harness.add_relation_unit(peers_rel_id, "prometheus/1")
@@ -221,10 +244,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
             {"remote_write": json.dumps({"url": "http://my_happy_ingress:9090/api/v1/write"})},
         )
 
-        self.assertEqual(
-            self.harness.charm.unit.status,
-            BlockedStatus(INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE),
-        )
+        self.assertEqual(self.harness.charm.unit.status, ActiveStatus())
 
         self.harness.remove_relation_unit(peers_rel_id, "prometheus/1")
         self.assertEqual(self.harness.charm.unit.status, ActiveStatus())

@@ -4,8 +4,8 @@
 from textwrap import dedent
 from unittest.mock import Mock
 
-from charms.traefik_k8s.v0.ingress_unit import IngressUnitProvider
-from charms.traefik_k8s.v0.ingress_unit.testing import MockIPURequirer
+from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitProvider
+from charms.traefik_k8s.v0.ingress_per_unit.testing import MockIPURequirer
 from ops.charm import CharmBase
 from ops.model import Binding
 from ops.testing import Harness
@@ -16,15 +16,15 @@ class MockProviderCharm(CharmBase):
         """\
         name: test-provider
         provides:
-          ingress-unit:
-            interface: ingress-unit
+          ingress-per-unit:
+            interface: ingress_per_unit
             limit: 1
         """
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ipu = IngressUnitProvider(self)
+        self.ipu = IngressPerUnitProvider(self)
 
 
 def test_ingress_provider(monkeypatch):
@@ -69,10 +69,10 @@ def test_ingress_provider(monkeypatch):
 
     request = provider.get_request(relation)
     assert request.units[0] is requirer.charm.unit
-    assert request.app_name == "ingress-unit-remote"
+    assert request.app_name == "ingress-per-unit-remote"
     request.respond(requirer.charm.unit, "http://url/")
     assert requirer.is_available(relation)
     assert requirer.is_ready(relation)
     assert not requirer.is_failed(relation)
-    assert requirer.urls == {"ingress-unit-remote/0": "http://url/"}
+    assert requirer.urls == {"ingress-per-unit-remote/0": "http://url/"}
     assert requirer.url == "http://url/"

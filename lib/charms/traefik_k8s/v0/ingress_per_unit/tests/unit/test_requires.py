@@ -5,8 +5,8 @@ from ipaddress import IPv4Address
 from textwrap import dedent
 from unittest.mock import Mock
 
-from charms.traefik_k8s.v0.ingress_unit import IngressUnitRequirer
-from charms.traefik_k8s.v0.ingress_unit.testing import MockIPUProvider
+from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
+from charms.traefik_k8s.v0.ingress_per_unit.testing import MockIPUProvider
 from ops.charm import CharmBase
 from ops.model import Binding
 from ops.testing import Harness
@@ -17,15 +17,15 @@ class MockRequirerCharm(CharmBase):
         """\
         name: test-requirer
         requires:
-          ingress-unit:
-            interface: ingress-unit
+          ingress-per-unit:
+            interface: ingress_per_unit
             limit: 1
         """
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ipu = IngressUnitRequirer(self, port=80)
+        self.ipu = IngressPerUnitRequirer(self, port=80)
 
 
 def test_ingress_requirer(monkeypatch):

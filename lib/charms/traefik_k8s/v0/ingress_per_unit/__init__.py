@@ -1,9 +1,9 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""# Interface Library for ingress-unit
+"""# Interface Library for ingress_per_unit
 
-This library wraps relation endpoints using the `ingress-unit` interface
+This library wraps relation endpoints using the `ingress_per_unit` interface
 and provides a Python API for both requesting and providing per-unit
 ingress.
 
@@ -14,7 +14,7 @@ that you also need to add the `sborl` dependency to your charm's `requirements.t
 
 ```shell
 cd some-charm
-charmcraft fetch-lib charms.traefik-k8s.v0.ingress_unit
+charmcraft fetch-lib charms.traefik-k8s.v0.ingress_per_unit
 echo "sborl" >> requirements.txt
 ```
 
@@ -22,17 +22,17 @@ Then, to initialise the library:
 
 ```python
 # ...
-from charms.traefik-k8s.v0.ingress_unit import IngressUnitRequirer
+from charms.traefik-k8s.v0.ingress_per_unit import IngressUnitRequirer
 
 class SomeCharm(CharmBase):
   def __init__(self, *args):
     # ...
-    self.ingress_unit = IngressUnitRequirer(self, port=80)
-    self.framework.observe(self.ingress_unit.on.ready, self._handle_ingress_unit)
+    self.ingress_per_unit = IngressPerUnitRequirer(self, port=80)
+    self.framework.observe(self.ingress_per_unit.on.ready, self._handle_ingress_per_unit)
     # ...
 
-    def _handle_ingress_unit(self, event):
-        log.info("This unit's ingress URL: %s", self.ingress_unit.url)
+    def _handle_ingress_per_unit(self, event):
+        log.info("This unit's ingress URL: %s", self.ingress_per_unit.url)
 ```
 """
 
@@ -49,5 +49,5 @@ LIBPATCH = 1
 from . import testing
 
 # flake8: noqa: E401,E402
-from .provides import IngressUnitProvider
-from .requires import IngressUnitRequirer
+from .provides import IngressPerUnitProvider
+from .requires import IngressPerUnitRequirer

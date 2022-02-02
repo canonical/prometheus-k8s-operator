@@ -31,8 +31,8 @@ requires:
     interface: prometheus_scrape
   alertmanager:
     interface: alertmanager_dispatch
-  ingress-unit:
-    interface: ingress-unit
+  ingress-per-unit:
+    interface: ingress_per_unit
     limit: 1
 peers:
   prometheus-peers:

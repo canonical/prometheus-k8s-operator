@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import yaml
+from charms.traefik_k8s.v0.ingress_per_unit.testing import MockIPUProvider
 from ops.testing import Harness
 
 from charm import PrometheusCharm
@@ -18,8 +19,10 @@ SAMPLE_ALERTING_CONFIG = {
 
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    def setUp(self):
+    @patch("ops.model.Model.get_binding", **{"return_value.network.bind_address": "10.10.10.10"})
+    def setUp(self, _):
         self.harness = Harness(PrometheusCharm)
+        self.harness._backend.model_name = "test-model"  # why is this defaulted to None?
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
@@ -92,12 +95,14 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_ingress_relation_set_leader(self, *_):
+        provider = MockIPUProvider(self.harness)
+        relation = provider.relate()
         self.harness.set_leader(True)
 
         self.harness.update_config(MINIMAL_CONFIG.copy())
 
-        rel_id = self.harness.add_relation("ingress", "ingress")
-        self.harness.add_relation_unit(rel_id, "ingress/0")
+        request = provider.get_request(relation)
+        request.respond(request.units[0], "http://prometheus-k8s:9090")
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(
@@ -109,20 +114,15 @@ class TestCharm(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.push")
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_ingress_relation_set_follower(self, *_):
+        provider = MockIPUProvider(self.harness)
+        self.harness.set_leader(True)
+        relation = provider.relate()
         self.harness.set_leader(False)
 
         self.harness.update_config(MINIMAL_CONFIG.copy())
 
-        rel_id = self.harness.add_relation("ingress", "ingress")
-        self.harness.add_relation_unit(rel_id, "ingress/0")
-        self.harness.update_relation_data(
-            rel_id,
-            "ingress",
-            {
-                "url": None,
-                "unit_urls": {self.harness.charm.unit.name: "http://prometheus-k8s:9090"},
-            },
-        )
+        request = provider.get_request(relation)
+        request.respond(request.units[0], "http://prometheus-k8s:9090")
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(
