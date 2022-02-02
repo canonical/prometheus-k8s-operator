@@ -2229,7 +2229,7 @@ class PromqlTransformer:
             return expression
         args = [str(self.path)]
         args.extend(
-            ['--label-matcher {}="{}"'.format(key, value) for key, value in topology.items()]
+            ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
         )
 
         args.extend(["{}".format(expression)])
@@ -2238,8 +2238,6 @@ class PromqlTransformer:
             return self._exec(args)
         except Exception as e:
             logger.debug('Applying the expression failed: "{}", falling back to the original', e)
-            raise e
-
             return expression
 
     def _get_transformer_path(self) -> Optional[Path]:
@@ -2257,6 +2255,6 @@ class PromqlTransformer:
         return None
 
     def _exec(self, cmd):
-        result = subprocess.run(" ".join(cmd), check=False, stdout=subprocess.PIPE, shell=True)
+        result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE)
         output = result.stdout.decode("utf-8").strip()
         return output

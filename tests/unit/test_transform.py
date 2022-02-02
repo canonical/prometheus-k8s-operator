@@ -128,3 +128,32 @@ class TestTransform(unittest.TestCase):
         transform = self.harness.charm.transformer
         output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"}'
+
+    def test_handles_comparisons(self):
+        self.harness.add_resource(
+            "promql-transform-amd64",
+            open("./promql-transform", "rb").read(),
+        )
+        transform = self.harness.charm.transformer
+        output = transform._apply_label_matcher("up > 1", {"juju_model": "some_juju_model"})
+        assert output == 'up{juju_model="some_juju_model"} > 1'
+
+    def test_handles_multiple_labels(self):
+        self.harness.add_resource(
+            "promql-transform-amd64",
+            open("./promql-transform", "rb").read(),
+        )
+        transform = self.harness.charm.transformer
+        output = transform._apply_label_matcher(
+            "up > 1",
+            {
+                "juju_model": "some_juju_model",
+                "juju_model_uuid": "123ABC",
+                "juju_application": "some_application",
+                "juju_unit": "some_application/1",
+            },
+        )
+        assert (
+            output == 'up{juju_application="some_application",juju_model="some_juju_model"'
+            ',juju_model_uuid="123ABC",juju_unit="some_application/1"} > 1'
+        )
