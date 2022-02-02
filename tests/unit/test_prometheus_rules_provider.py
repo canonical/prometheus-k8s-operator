@@ -49,13 +49,8 @@ class TestReloadAlertRules(unittest.TestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.begin_with_initial_hooks()
         self.harness.set_leader(True)
-        self.rel_id = self.harness.add_relation("metrics-endpoint", "prom")
-
-        # need to manually emit relation changed
-        # https://github.com/canonical/operator/issues/682
-        self.harness.charm.on.metrics_endpoint_relation_changed.emit(
-            self.harness.charm.model.get_relation("metrics-endpoint")
-        )
+        rel_id = self.harness.add_relation("metrics-endpoint", "prom")
+        self.harness.add_relation_unit(rel_id, "prom/0")
 
     def test_reload_when_dir_is_still_empty_changes_nothing(self):
         """Scenario: The reload method is called when the alerts dir is still empty."""
@@ -132,3 +127,21 @@ class TestReloadAlertRules(unittest.TestCase):
         # THEN relation data is empty again
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
+
+    def test_only_files_with_rule_or_rules_suffixes_are_loaded(self):
+        """Scenario: User has both short-form rules (*.rule) and long-form rules (*.rules)."""
+        # GIVEN various tricky combinations of files present
+        filenames = ["alert.rule", "alert.rules", "alert.ruless", "alertrule", "alertrules"]
+        for filename in filenames:
+            alert_filename = os.path.join(self.alert_rules_path, filename)
+            rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
+            self.sandbox.put_file(alert_filename, rule_file)
+
+        # AND the reload method is called
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
+
+        # THEN only the *.rule and *.rules files are loaded
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
+        alert_names = [groups["rules"][0]["alert"] for groups in alert_rules["groups"]]
+        self.assertEqual(set(alert_names), {"alert.rule", "alert.rules"})
