@@ -9,7 +9,6 @@ import logging
 import shutil
 from collections import defaultdict
 from datetime import datetime
-from threading import Lock
 
 import pytest
 
@@ -33,28 +32,12 @@ class Store(defaultdict):
 
 
 store = Store()
-lock = Lock()
-locks = dict()
 
 
 def timed_memoizer(func):
-    global lock
-    global locks
-    # Seems unnecessary, but pytest needs this for fixtures
-
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        logger.info("Acquiring global lock")
-        lock.acquire()
         fname = func.__qualname__
-
-        # Guard locking since dict access is not in guaranteed order,
-        # then reduce the locking to per-wrapped-data
-        logger.info("Locking: %s" % fname)
-        locks[fname] = Lock()
-        locks[fname].acquire()
-        lock.release()
-        logger.info("Releasing global lock")
         logger.info("Started: %s" % fname)
         start_time = datetime.now()
         if fname in store.keys():
@@ -64,8 +47,6 @@ def timed_memoizer(func):
             ret = await func(*args, **kwargs)
             store[fname] = ret
         logger.info("Finished: {} in: {} seconds".format(fname, datetime.now() - start_time))
-        logger.info("Unlocking: %s" % fname)
-        locks[fname].release()
         return ret
 
     return wrapper
