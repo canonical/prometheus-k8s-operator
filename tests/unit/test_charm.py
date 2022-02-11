@@ -1,6 +1,7 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
 import unittest
 from unittest.mock import patch
 
@@ -9,8 +10,13 @@ from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
 
-SAMPLE_ALERTING_CONFIG = {
-    "alertmanagers": [{"static_configs": [{"targets": ["192.168.0.1:9093"]}]}]
+RELATION_NAME = "metrics-endpoint"
+DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
+SCRAPE_METADATA = {
+    "model": "provider-model",
+    "model_uuid": "abcdef",
+    "application": "provider",
+    "charm_name": "provider-charm",
 }
 
 
@@ -137,6 +143,24 @@ class TestCharm(unittest.TestCase):
         config = container.pull(PROMETHEUS_CONFIG)
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
+
+    def test_honor_labels_is_always_set_in_scrape_configs(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        self.harness.update_relation_data(
+            rel_id,
+            "provider",
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "scrape_jobs": json.dumps(DEFAULT_JOBS),
+            },
+        )
+
+        prometheus_scrape_config = yaml.safe_load(self.harness.charm._prometheus_config())
+        for job in prometheus_scrape_config["scrape_configs"]:
+            if job["job_name"] != "prometheus":
+                self.assertIn("honor_labels", job)
+                self.assertTrue(job["honor_labels"])
 
     @patch("prometheus_server.Prometheus.reload_configuration")
     def test_configuration_reload(self, trigger_configuration_reload):
