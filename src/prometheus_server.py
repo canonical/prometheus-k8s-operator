@@ -5,8 +5,11 @@
 
 import logging
 
-from requests import get, post
-from requests.exceptions import ConnectionError, ConnectTimeout
+from requests import Session, get
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ConnectionError, ConnectTimeout, HTTPError, ReadTimeout
+from requests.packages.urllib3.exceptions import MaxRetryError  # type: ignore
+from requests.packages.urllib3.util.retry import Retry  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +37,25 @@ class Prometheus:
           True if reload succeeded (returned 200 OK); False otherwise.
         """
         url = f"{self.base_url}/-/reload"
+        errors = list(range(400, 452)) + list(range(500, 512))
+        retries = 5
         try:
-            response = post(url, timeout=self.api_timeout)
+            s = Session()
+            retry = Retry(
+                total=retries,
+                read=retries,
+                connect=retries,
+                backoff_factor=0.1,
+                status_forcelist=errors,
+            )
+            s.mount("http://", HTTPAdapter(max_retries=retry))
+            response = s.post(url)
+            response.raise_for_status()
 
             if response.status_code == 200:
                 return True
-        except (ConnectionError, ConnectTimeout) as e:
-            logger.debug("config reload error via %s: %s", url, str(e))
+        except (ConnectionError, ConnectTimeout, ReadTimeout, HTTPError, MaxRetryError) as e:
+            logger.error("config reload error via %s: %s", url, str(e))
 
         return False
 
