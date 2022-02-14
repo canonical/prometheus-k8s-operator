@@ -40,7 +40,7 @@ class Prometheus:
             if response.status_code == 200:
                 return True
         except (ConnectionError, ConnectTimeout) as e:
-            logger.debug("config reload error via %s: %s", url, str(e))
+            logger.error("Configuration reload error via %s: %s", url, str(e))
 
         return False
 

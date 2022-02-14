@@ -16,7 +16,8 @@ options:
       Prometheus itself. If the URL has a path portion, it will be used to
       prefix all HTTP endpoints served by Prometheus.
 
-      If omitted, relevant URL components will be derived automatically.
+      This configuration option takes precedence over the URL provided over
+      the "ingress" relation.
     type: string
     default: ""
   metrics_retention_time:
