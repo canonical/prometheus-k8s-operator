@@ -37,7 +37,9 @@ class Prometheus:
           True if reload succeeded (returned 200 OK); False otherwise.
         """
         url = f"{self.base_url}/-/reload"
-        errors = list(range(400, 452)) + list(range(500, 512))
+        # http status codes see:
+        # https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+        http_errors_codes = list(range(400, 452)) + list(range(500, 512))
         retries = 5
         try:
             s = Session()
@@ -46,7 +48,7 @@ class Prometheus:
                 read=retries,
                 connect=retries,
                 backoff_factor=0.1,
-                status_forcelist=errors,
+                status_forcelist=http_errors_codes,
             )
             s.mount("http://", HTTPAdapter(max_retries=retry))
             response = s.post(url)
