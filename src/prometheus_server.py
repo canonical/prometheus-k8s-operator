@@ -6,7 +6,7 @@
 import logging
 
 from requests import get, post
-from requests.exceptions import ConnectionError, ConnectTimeout
+from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,8 @@ class Prometheus:
 
             if response.status_code == 200:
                 return True
-        except (ConnectionError, ConnectTimeout) as e:
-            logger.debug("config reload error via %s: %s", url, str(e))
+        except (ConnectionError, ConnectTimeout, ReadTimeout) as e:
+            logger.error("config reload error via %s: %s", url, str(e))
 
         return False
 
