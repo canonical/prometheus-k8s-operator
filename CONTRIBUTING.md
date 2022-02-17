@@ -80,7 +80,7 @@ charm directory. Official binaries are available from the
 ```bash
 $ juju deploy \
     ./prometheus-k8s_ubuntu-20.04-amd64.charm \
-    --resource prometheus-image=ubuntu/prometheus:latest
+    --resource prometheus-image=ubuntu/prometheus:latest \
     --resource promql-transform-amd64=./promql-transform
 ```
 
