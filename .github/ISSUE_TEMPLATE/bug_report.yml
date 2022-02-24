@@ -15,7 +15,11 @@ body:
       description: >
         If applicable, add screenshots to help explain your problem. If applicable, add screenshots to 
         help explain the problem you are facing.
-      placeholder: Tell us what you see!
+      placeholder: >
+        1. `juju deploy ...`
+        2. `juju relate ...`
+        3. `juju status --relations`
+      
     validations:
       required: true
   - type: textarea
