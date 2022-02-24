@@ -14,12 +14,7 @@ body:
       label: Bug Description
       description: >
         If applicable, add screenshots to help explain your problem. If applicable, add screenshots to 
-        help explain the problem you are facing.
-      placeholder: |
-        1. `juju deploy ...`
-        2. `juju relate ...`
-        3. `juju status --relations`
-      
+        help explain the problem you are facing.      
     validations:
       required: true
   - type: textarea
@@ -28,7 +23,10 @@ body:
       label: To Reproduce
       description: >
         Please provide a step-by-step instruction of how to reproduce the behavior.
-      placeholder: Tell us what you see!
+      placeholder: |
+        1. `juju deploy ...`
+        2. `juju relate ...`
+        3. `juju status --relations`
     validations:
       required: true
   - type: textarea
