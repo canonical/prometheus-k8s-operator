@@ -120,15 +120,18 @@ class TestTransform(unittest.TestCase):
         )
         self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
+    @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_fetches_the_correct_expression(self):
         self.harness.add_resource(
             "promql-transform-amd64",
             open("./promql-transform", "rb").read(),
         )
         transform = self.harness.charm.transformer
+        
         output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"}'
 
+    @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_comparisons(self):
         self.harness.add_resource(
             "promql-transform-amd64",
@@ -138,6 +141,7 @@ class TestTransform(unittest.TestCase):
         output = transform._apply_label_matcher("up > 1", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"} > 1'
 
+    @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_multiple_labels(self):
         self.harness.add_resource(
             "promql-transform-amd64",
