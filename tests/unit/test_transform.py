@@ -127,7 +127,7 @@ class TestTransform(unittest.TestCase):
             open("./promql-transform", "rb").read(),
         )
         transform = self.harness.charm.transformer
-        
+
         output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"}'
 
