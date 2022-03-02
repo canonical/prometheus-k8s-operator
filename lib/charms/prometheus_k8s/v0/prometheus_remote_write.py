@@ -32,13 +32,14 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 
 logger = logging.getLogger(__name__)
 
 
 DEFAULT_RELATION_NAME = "receive-remote-write"
+DEFAULT_CONSUMER_NAME = "send-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
@@ -732,7 +733,7 @@ class PrometheusRemoteWriteConsumer(Object):
     def __init__(
         self,
         charm: CharmBase,
-        relation_name: str = DEFAULT_RELATION_NAME,
+        relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
