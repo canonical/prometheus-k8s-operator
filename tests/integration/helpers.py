@@ -12,6 +12,9 @@ from workload import Prometheus
 log = logging.getLogger(__name__)
 
 
+TESTER_ALERT_RULES_PATH = "tests/integration/prometheus-tester/src/prometheus_alert_rules"
+
+
 async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     """Find unit address for any application.
 
@@ -118,7 +121,7 @@ def get_job_config_for(app_name: str, job_config: str) -> dict:
     return {}
 
 
-def get_rules_for(app_name: str, rule_groups: list) -> dict:
+def get_rules_for(app_name: str, rule_groups: list) -> list:
     """Find rule group for a specific application.
 
     Prometheus charm creates a rule group for each related scrape
@@ -132,10 +135,11 @@ def get_rules_for(app_name: str, rule_groups: list) -> dict:
     Returns:
         a dictionary (possibly empty) representing the rule group
     """
+    groups = []
     for group in rule_groups:
         if app_name in group["name"]:
-            return group
-    return {}
+            groups.append(group)
+    return groups
 
 
 def oci_image(metadata_file: str, image_name: str) -> str:
@@ -185,6 +189,43 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
         ops_test.model.applications[name].units[0].workload_status == "active"
         for name in app_names
     )
+
+
+def write_tester_alert_rule_file(rule, name):
+    """Inject a new alert rule into Prometheus Tester.
+
+    Args:
+        rule: a string containing Prometheus alert rule in YAML format.
+        name: a string name of alert rule file
+    """
+    rules_path = Path(TESTER_ALERT_RULES_PATH).joinpath(name)
+    with rules_path.open(mode="w") as f:
+        f.write(rule)
+
+
+def remove_tester_alert_rule_file(name):
+    """Remove an alert rule file from Prometheus Tester.
+
+    Args:
+        rule: a string containing Prometheus alert rule in YAML format.
+        name: a string name of alert rule file
+    """
+    rules_path = Path(TESTER_ALERT_RULES_PATH).joinpath(name)
+    rules_path.unlink()
+
+
+async def rebuild_prometheus_tester(ops_test):
+    """Build the Prometheus Tester charm.
+
+    Args:
+        ops_test: pytest-operator plugin
+
+    Returns:
+        pytest operator handle to the Prometheus tester charm
+    """
+    charm_path = "tests/integration/prometheus-tester"
+    charm = await ops_test.build_charm(charm_path)
+    return charm
 
 
 class IPAddressWorkaround:

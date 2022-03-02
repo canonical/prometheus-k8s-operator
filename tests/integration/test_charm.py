@@ -76,7 +76,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
-    assert tester_rules != {}
+    assert len(tester_rules) == 1
 
     await ops_test.model.applications[tester_app_name].remove()
     await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active")
