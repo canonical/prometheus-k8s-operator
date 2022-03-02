@@ -20,7 +20,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     RelationRoleMismatchError,
 )
 from deepdiff import DeepDiff
-from helpers import TempFolderSandbox
+from helpers import TempFolderSandbox, patch_network_get
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -144,41 +144,21 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
-    @patch("ops.testing._TestingModelBackend.network_get")
-    def test_provider_unit_sets_bind_address_on_pebble_ready(self, mock_net_get):
-        bind_address = "192.0.8.2"
-        fake_network = {
-            "bind-addresses": [
-                {
-                    "interface-name": "eth0",
-                    "addresses": [{"hostname": "prometheus-tester-0", "value": bind_address}],
-                }
-            ]
-        }
-        mock_net_get.return_value = fake_network
+    @patch_network_get(private_address="192.0.8.2")
+    def test_provider_unit_sets_bind_address_on_pebble_ready(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
-        self.assertEqual(data["prometheus_scrape_unit_address"], bind_address)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
 
-    @patch("ops.testing._TestingModelBackend.network_get")
-    def test_provider_unit_sets_bind_address_on_relation_joined(self, mock_net_get):
-        bind_address = "192.0.8.2"
-        fake_network = {
-            "bind-addresses": [
-                {
-                    "interface-name": "eth0",
-                    "addresses": [{"hostname": "prometheus-tester-0", "value": bind_address}],
-                }
-            ]
-        }
-        mock_net_get.return_value = fake_network
+    @patch_network_get(private_address="192.0.8.2")
+    def test_provider_unit_sets_bind_address_on_relation_joined(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
-        self.assertEqual(data["prometheus_scrape_unit_address"], bind_address)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
         self.assertIn("prometheus_scrape_unit_name", data)
 
     @patch("ops.testing._TestingModelBackend.network_get")

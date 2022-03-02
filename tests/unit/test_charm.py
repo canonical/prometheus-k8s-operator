@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 import yaml
+from helpers import patch_network_get
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -22,23 +23,20 @@ SCRAPE_METADATA = {
 
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    def setUp(self):
+    @patch_network_get(private_address="1.1.1.1")
+    def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin_with_initial_hooks()
 
-    @patch("ops.testing._TestingModelBackend.network_get")
-    def test_grafana_is_provided_port_and_source(self, mock_net_get):
-        ip = "1.1.1.1"
-        net_info = {"bind-addresses": [{"interface-name": "ens1", "addresses": [{"value": ip}]}]}
-        mock_net_get.return_value = net_info
-
+    @patch_network_get(private_address="1.1.1.1")
+    def test_grafana_is_provided_port_and_source(self, *unused):
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
         grafana_host = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
             "grafana_source_host"
         ]
-        self.assertEqual(grafana_host, "{}:{}".format(ip, "9090"))
+        self.assertEqual(grafana_host, "{}:{}".format("1.1.1.1", "9090"))
 
     def test_default_cli_log_level_is_info(self):
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -65,23 +63,43 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "warn")
 
+    @patch_network_get(private_address="1.1.1.1")
     def test_ingress_relation_not_set(self):
         self.harness.set_leader(True)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertIsNone(cli_arg(plan, "--web.external-url"))
+        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://1.1.1.1:9090")
 
+    @patch_network_get(private_address="1.1.1.1")
     def test_ingress_relation_set(self):
         self.harness.set_leader(True)
 
-        rel_id = self.harness.add_relation("ingress", "ingress")
-        self.harness.add_relation_unit(rel_id, "ingress/0")
+        rel_id = self.harness.add_relation("ingress", "traefik-ingress")
+        self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(
-            cli_arg(plan, "--web.external-url"),
-            "http://prometheus-k8s:9090",
-        )
+        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://1.1.1.1:9090")
+
+    @patch_network_get(private_address="1.1.1.1")
+    def test_web_external_url_has_precedence_over_ingress_relation(self):
+        self.harness.set_leader(True)
+
+        self.harness.update_config({"web_external_url": "http://test:80"})
+
+        rel_id = self.harness.add_relation("ingress", "traefik-ingress")
+        self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
+
+    @patch_network_get(private_address="1.1.1.1")
+    def test_web_external_url_set(self):
+        self.harness.set_leader(True)
+
+        self.harness.update_config({"web_external_url": "http://test:80"})
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
 
     def test_metrics_wal_compression_is_not_enabled_by_default(self):
         plan = self.harness.get_container_pebble_plan("prometheus")
