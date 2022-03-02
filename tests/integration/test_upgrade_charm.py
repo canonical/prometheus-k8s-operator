@@ -69,7 +69,7 @@ async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus
         await check_prometheus_is_ready(ops_test, PROMETHEUS_APP_NAME, 0)
 
 
-async def test_metrics_endpoint_provider_can_be_upgraded(ops_test, prometheus_tester_charm):
+async def test_upgrading_rules_provider_also_updates_rule_files(ops_test, prometheus_tester_charm):
     """Ensure scrape alert rules can be updated.
 
     This test upgrades the metrics provider charm and checks that
