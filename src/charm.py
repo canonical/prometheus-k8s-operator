@@ -8,11 +8,11 @@ import logging
 import os
 import re
 from typing import Dict
+from urllib.parse import urlparse
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
-from charms.nginx_ingress_integrator.v0.ingress import IngressRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
@@ -21,6 +21,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -31,7 +32,6 @@ from prometheus_server import Prometheus
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
-INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE = f"invalid combination of 'ingress', '{DEFAULT_REMOTE_WRITE_RELATION_NAME}' relations and multiple units"
 CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
@@ -60,45 +60,48 @@ class PrometheusCharm(CharmBase):
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
+        # Manages ingress for this charm
+        self.ingress = IngressPerUnitRequirer(self, endpoint="ingress", port=self._port)
+
+        external_url = urlparse(self._external_url)
+
         # Exposes remote write endpoints
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-            endpoint_address=self._remote_write_address,
-            endpoint_port=self._port,
+            endpoint_address=external_url.hostname or "",
+            endpoint_port=external_url.port or self._port,
+            endpoint_schema=external_url.scheme,
+            endpoint_path=f"{external_url.path}/api/v1/write",
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
         self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
 
-        # Manages ingress for this charm
-        self.ingress = IngressRequires(
-            self,
-            {
-                "service-hostname": self._external_hostname,
-                "service-name": self.app.name,
-                "service-port": str(self._port),
-            },
-        )
-
         # Event handlers
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.on.ingress_relation_joined, self._configure)
-        self.framework.observe(self.on.ingress_relation_changed, self._configure)
-        self.framework.observe(self.on.ingress_relation_broken, self._configure)
+        self.framework.observe(self.ingress.on.ingress_changed, self._on_ingress_changed)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
-        self.framework.observe(self.on.prometheus_peers_relation_joined, self._configure)
-        self.framework.observe(self.on.prometheus_peers_relation_departed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
     def _on_upgrade_charm(self, event):
         """Handler for the upgrade_charm event during which will update the K8s service."""
         self._configure(event)
+
+    def _on_ingress_changed(self, event):
+        self._configure(event)
+        # The remote_write_provider object has the update external URL,
+        # as the data from the ingress relation is looked up in the Charm
+        # constructor, and it is already updated. However, we do need to
+        # trigger the update of the endpoint to the remote_write clients,
+        # as remote_write_provider does not observe any ingress-specific
+        # events.
+        self.remote_write_provider.update_endpoint()
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -133,6 +136,7 @@ class PrometheusCharm(CharmBase):
         if current_services == new_layer.services:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
+                logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
             logger.info("Prometheus configuration reloaded")
@@ -141,31 +145,13 @@ class PrometheusCharm(CharmBase):
             container.replan()
             logger.info("Prometheus (re)started")
 
-        # Ensure the right address is set on the remote_write relations
-        self.remote_write_provider.update_endpoint()
-
-        if not self._validate_ingress_and_remote_write():
-            self.unit.status = BlockedStatus(INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE)
-            logger.error(
-                "Using the ingress relation and receiving remote_write relations with more than "
-                "one Prometheus unit; remote_write data is likely to be sent to only one unit."
-            )
-            return
-
-        if isinstance(self.unit.status, BlockedStatus) and self.unit.status.message not in [
-            INGRESS_MULTIPLE_UNITS_STATUS_MESSAGE,
-            CORRUPT_PROMETHEUS_CONFIG_MESSAGE,
-        ]:
+        if (
+            isinstance(self.unit.status, BlockedStatus)
+            and self.unit.status.message != CORRUPT_PROMETHEUS_CONFIG_MESSAGE
+        ):
             return
 
         self.unit.status = ActiveStatus()
-
-    def _validate_ingress_and_remote_write(self) -> bool:
-        """Validate that there's only one unit if ingress is used."""
-        if not (peer_relation := self.model.get_relation("prometheus-peers")):
-            return True
-
-        return not (self.model.get_relation("ingress") and len(peer_relation.units) > 0)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
@@ -216,11 +202,11 @@ class PrometheusCharm(CharmBase):
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
-        if self.model.get_relation("ingress"):
-            # TODO The ingress should communicate the externally-visible scheme
-            external_url = f"http://{self._external_hostname}:{self._port}"
+        external_url = self._external_url
+        args.append(f"--web.external-url={external_url}")
 
-            args.append(f"--web.external-url={external_url}")
+        if path := urlparse(external_url).path:
+            args.append(f"--web.route-prefix={path}")
 
         if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
             args.append("--enable-feature=remote-write-receiver")
@@ -362,17 +348,30 @@ class PrometheusCharm(CharmBase):
         return Layer(layer_config)
 
     @property
-    def _external_hostname(self) -> str:
-        """Return the external hostname to be passed to ingress via the relation."""
-        # It is recommended to default to `self.app.name` so that the external
-        # hostname will correspond to the deployed application name in the
-        # model, but allow it to be set to something specific via config.
+    def _pod_ip(self) -> str:
+        """Returns the pod ip of this unit."""
+        if bind_address := self.model.get_binding("prometheus-peers").network.bind_address:
+            bind_address = str(bind_address)
 
-        return self.config["web_external_url"] or f"{self.app.name}"
+        return bind_address
 
     @property
-    def _remote_write_address(self) -> str:
-        return self._external_hostname if self.model.get_relation("ingress") else ""
+    def _external_url(self) -> str:
+        """Return the external hostname to be passed to ingress via the relation."""
+        if "web_external_url" in self.model.config:
+            if web_external_url := self.model.config["web_external_url"]:
+                return web_external_url
+
+        if ingress_url := self.ingress.url:
+            return ingress_url
+
+        # If we do not have an ingress, then use the pod ip as hostname.
+        # The reason to prefer this over the pod name (which is the actual
+        # hostname visible from the pod) or a K8s service, is that those
+        # are routable virtually exclusively inside the cluster (as they rely)
+        # on the cluster's DNS service, while the ip address is _sometimes_
+        # routable from the outside, e.g., when deploying on MicroK8s on Linux.
+        return f"http://{self._pod_ip}:{self._port}"
 
 
 if __name__ == "__main__":

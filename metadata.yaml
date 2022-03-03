@@ -32,11 +32,10 @@ requires:
   alertmanager:
     interface: alertmanager_dispatch
   ingress:
-    interface: ingress
+    interface: ingress_per_unit
     limit: 1
 peers:
   prometheus-peers:
-    # Clustered prometheus is not yet supported
     interface: prometheus_peers
 storage:
   database:
