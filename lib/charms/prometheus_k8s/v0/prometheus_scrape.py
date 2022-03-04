@@ -328,7 +328,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 16
+LIBPATCH = 17
 
 logger = logging.getLogger(__name__)
 
@@ -585,16 +585,15 @@ class JujuTopology:
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
         # This is odd, but may have `None` as a model key
-        return "_".join([str(val) for val in self.as_dict().values()]).replace("/", "_")
+        return "_".join([str(val) for val in self.as_promql_label_dict().values()]).replace(
+            "/", "_"
+        )
 
     @property
     def promql_labels(self) -> str:
         """Format the topology information into a verbose string."""
         return ", ".join(
-            [
-                'juju_{}="{}"'.format(key, value)
-                for key, value in self.as_dict(rename_keys={"charm_name": "charm"}).items()
-            ]
+            ['{}="{}"'.format(key, value) for key, value in self.as_promql_label_dict().items()]
         )
 
     def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> OrderedDict:
@@ -634,6 +633,9 @@ class JujuTopology:
             "juju_{}".format(key): val
             for key, val in self.as_dict(rename_keys={"charm_name": "charm"}).items()
         }
+        # unit should never be specified in alert rules as the apply to the entire application
+        if "juju_unit" in vals:
+            vals.pop("juju_unit")
 
         return vals
 
@@ -683,9 +685,7 @@ class ProviderTopology(JujuTopology):
         """Format the topology information into a scrape identifier."""
         # This is used only by Metrics[Consumer|Provider] and does not need a
         # unit name, so only check for the charm name
-        return "juju_{}_prometheus_scrape".format(
-            "_".join([self.model, self.model_uuid[:7], self.application, self.charm_name])  # type: ignore
-        )
+        return "juju_{}_prometheus_scrape".format(self.identifier)
 
 
 class InvalidAlertRulePathError(Exception):

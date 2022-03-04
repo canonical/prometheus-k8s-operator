@@ -313,7 +313,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
             ("rules/prom/prom_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
         )
 
-        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyUnit", "MyCharm")
 
     def test_non_recursive_is_default(self):
         rules = AlertRules(topology=self.topology)
@@ -410,6 +410,14 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         }
 
         self.assertEqual({}, DeepDiff(expected_rules_file, rules_file_dict, ignore_order=True))
+
+    def test_unit_not_in_alert_labels(self):
+        rules = AlertRules(topology=self.topology)
+        rules.add_path(os.path.join(self.sandbox.root, "rules", "prom"), recursive=True)
+        rules_file_dict = rules.as_dict()
+        for group in rules_file_dict["groups"]:
+            for rule in group["rules"]:
+                self.assertTrue("juju_unit" not in rule["labels"])
 
 
 class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
