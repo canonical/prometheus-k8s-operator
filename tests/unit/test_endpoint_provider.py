@@ -201,6 +201,9 @@ class TestEndpointProvider(unittest.TestCase):
             self.assertIn("juju_application", labels)
             self.assertIn("juju_model_uuid", labels)
             self.assertIn("juju_charm", labels)
+            # alerts should not have unit information if not already present
+            self.assertNotIn("juju_unit", rule["labels"])
+            self.assertNotIn("juju_unit=", rule["expr"])
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_expression_is_topology_labeled(self, _):
@@ -552,3 +555,36 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             ]
         }
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
+
+
+class TestAlertRulesContainingUnitTopology(unittest.TestCase):
+    """Tests that check MetricsEndpointProvider does not remove unit topology.
+
+    Unit Topology information is not added to alert rules expressions and labels,
+    by the MetricsEndpointProvider. However if unit topology information is
+    present in the labels then it must not be removed since the client that
+    the alert be limited to a specific unit.
+    """
+
+    def setup(self, **kwargs):
+        bad_provider_charm = customize_endpoint_provider(
+            alert_rules_path=kwargs["alert_rules_path"]
+        )
+        self.harness = Harness(bad_provider_charm, meta=PROVIDER_META)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin()
+
+    @patch_network_get(private_address="192.0.8.2")
+    def test_unit_label_is_retained_if_hard_coded(self):
+        self.setup(alert_rules_path="./tests/unit/alert_rules_with_unit_topology")
+        rel_id = self.harness.add_relation("metrics-endpoint", "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # check unit topology is present in labels but not in alert rule expression
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
+        for group in alert_rules["groups"]:
+            for rule in group["rules"]:
+                self.assertIn("juju_unit", rule["labels"])
+                self.assertIn("juju_unit=", rule["expr"])
