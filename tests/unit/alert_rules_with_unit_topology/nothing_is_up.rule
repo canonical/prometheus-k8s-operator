@@ -1,4 +1,4 @@
-alert: AllUnitsDown
+alert: InactiveUnit
 expr: up[juju_unit="unit/42"] == 0
 labels:
   severity: Low
