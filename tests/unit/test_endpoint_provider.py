@@ -193,17 +193,17 @@ class TestEndpointProvider(unittest.TestCase):
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
         self.assertEqual(len(alerts["groups"]), 5)
-        group = alerts["groups"][0]
-        for rule in group["rules"]:
-            self.assertIn("labels", rule)
-            labels = rule["labels"]
-            self.assertIn("juju_model", labels)
-            self.assertIn("juju_application", labels)
-            self.assertIn("juju_model_uuid", labels)
-            self.assertIn("juju_charm", labels)
-            # alerts should not have unit information if not already present
-            self.assertNotIn("juju_unit", rule["labels"])
-            self.assertNotIn("juju_unit=", rule["expr"])
+        for group in alerts["groups"]:
+            for rule in group["rules"]:
+                self.assertIn("labels", rule)
+                labels = rule["labels"]
+                self.assertIn("juju_model", labels)
+                self.assertIn("juju_application", labels)
+                self.assertIn("juju_model_uuid", labels)
+                self.assertIn("juju_charm", labels)
+                # alerts should not have unit information if not already present
+                self.assertNotIn("juju_unit", rule["labels"])
+                self.assertNotIn("juju_unit=", rule["expr"])
 
     @patch("ops.testing._TestingModelBackend.network_get")
     def test_each_alert_expression_is_topology_labeled(self, _):
