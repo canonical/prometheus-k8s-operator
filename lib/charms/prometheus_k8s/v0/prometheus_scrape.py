@@ -633,7 +633,8 @@ class JujuTopology:
             "juju_{}".format(key): val
             for key, val in self.as_dict(rename_keys={"charm_name": "charm"}).items()
         }
-        # unit should never be specified in alert rules as the apply to the entire application
+        # The leader is the only unit that sets alert rules, if "juju_unit" is present,
+        # then the rules will only be evaluated for that unit
         if "juju_unit" in vals:
             vals.pop("juju_unit")
 
