@@ -581,7 +581,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
         rel_id = self.harness.add_relation("metrics-endpoint", "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
 
-        # check unit topology is present in labels but not in alert rule expression
+        # check unit topology is present in labels and in alert rule expression
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
         for group in alert_rules["groups"]:
