@@ -68,6 +68,7 @@ class Prometheus:
 
         try:
             response = get(url, timeout=self.api_timeout)
+
             if response.status_code == 200:
                 info = response.json()
                 if info and info["status"] == "success":
@@ -86,4 +87,4 @@ class Prometheus:
             empty string if Prometheus server is not reachable.
         """
         info = self._build_info()
-        return info.get(f"{self.base_url}/version", "")
+        return info.get("version", "")
