@@ -14,15 +14,26 @@ logger = logging.getLogger(__name__)
 class Prometheus:
     """A class that represents a running instance of Prometheus."""
 
-    def __init__(self, host: str = "localhost", port: int = 9090, api_timeout=2.0):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 9090,
+        web_route_prefix: str = "",
+        api_timeout=2.0,
+    ):
         """Utility to manage a Prometheus application.
 
         Args:
             host: Optional; host address of Prometheus application.
             port: Optional; port on which Prometheus service is exposed.
+            web_route_prefix: Optional; the root path added to the Prometheus API path, e.g.,
+              when we relate to an ingress.
             api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
         """
-        self.base_url = f"http://{host}:{port}"
+        if web_route_prefix and not web_route_prefix.startswith("/"):
+            web_route_prefix = f"/{web_route_prefix}"
+
+        self.base_url = f"http://{host}:{port}{web_route_prefix or ''}"
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
@@ -35,7 +46,7 @@ class Prometheus:
         """
         url = f"{self.base_url}/-/reload"
         try:
-            response = post(url, timeout=self.api_timeout)
+            response = post(url, timeout=self.api_timeout, allow_redirects=False)
 
             if response.status_code == 200:
                 return True
@@ -75,4 +86,4 @@ class Prometheus:
             empty string if Prometheus server is not reachable.
         """
         info = self._build_info()
-        return info.get("version", "")
+        return info.get(f"{self.base_url}/version", "")

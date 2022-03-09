@@ -45,7 +45,6 @@ class PrometheusCharm(CharmBase):
 
         self._name = "prometheus"
         self._port = 9090
-        self._prometheus_server = Prometheus()
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
 
@@ -134,7 +133,11 @@ class PrometheusCharm(CharmBase):
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
         if current_services == new_layer.services:
-            reloaded = self._prometheus_server.reload_configuration()
+            external_url = urlparse(self._external_url)
+
+            prometheus_server = Prometheus(web_route_prefix=external_url.path)
+
+            reloaded = prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
@@ -205,7 +208,16 @@ class PrometheusCharm(CharmBase):
         external_url = self._external_url
         args.append(f"--web.external-url={external_url}")
 
-        if path := urlparse(external_url).path:
+        if path := self._web_route_prefix.strip():
+            # We need to ensure there is a '/' character at the end
+            # of the path, or Prometheus will not correctly
+            # concatenate redirect headers, e.g., sending back a
+            # 'Location': '/test-prometheus-k8s-0-/reload' header
+            # (see the lack of '/' between '-/reload' and the previous
+            # part of the path)
+            if not path.endswith("/"):
+                path = f"{path}/"
+
             args.append(f"--web.route-prefix={path}")
 
         if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
@@ -354,6 +366,10 @@ class PrometheusCharm(CharmBase):
             bind_address = str(bind_address)
 
         return bind_address
+
+    @property
+    def _web_route_prefix(self) -> str:
+        return urlparse(self._external_url).path or ""
 
     @property
     def _external_url(self) -> str:
