@@ -31,7 +31,24 @@ class Prometheus:
               when we relate to an ingress.
             api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
         """
+        if web_route_prefix and not web_route_prefix.endswith("/"):
+            # If we do not add the '/' and the end, we will lose the last
+            # bit of the path:
+            #
+            # BAD:
+            #
+            # >>> urljoin('http://some/more', 'thing')
+            #   'http://some/thing'
+            #
+            # GOOD:
+            #
+            # >>> urljoin('http://some/more/', 'thing')
+            #   'http://some/more/thing'
+            #
+            web_route_prefix = f"{web_route_prefix}/"
+
         self.base_url = urljoin(f"http://{host}:{port}", web_route_prefix)
+        logger.error(f"Base URL: {self.base_url}")
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
@@ -42,7 +59,7 @@ class Prometheus:
         Returns:
           True if reload succeeded (returned 200 OK); False otherwise.
         """
-        url = urljoin(self.base_url, "/-/reload")
+        url = urljoin(self.base_url, "-/reload")
         try:
             response = post(url, timeout=self.api_timeout)
 
@@ -62,7 +79,7 @@ class Prometheus:
             instance is not reachable then an empty dictionary is
             returned.
         """
-        url = urljoin(self.base_url, "/api/v1/status/buildinfo")
+        url = urljoin(self.base_url, "api/v1/status/buildinfo")
 
         try:
             response = get(url, timeout=self.api_timeout)

@@ -8,85 +8,89 @@ import responses
 from prometheus_server import Prometheus
 
 
-class TestServer(unittest.TestCase):
-    class _TestServerWithoutRoutePrefix(unittest.TestCase):
-        def setUp(self):
-            self.prometheus = Prometheus("localhost", 9090)
+class TestServerPrefix(unittest.TestCase):
+    @responses.activate
+    def test_prometheus_server_without_route_prefix_returns_valid_data(self):
+        self.prometheus = Prometheus("localhost", 9090)
 
-        @responses.activate
-        def test_prometheus_server_returns_valid_data(self):
-            version = "1.0.0"
+        version = "1.0.0"
 
-            responses.add(
-                responses.GET,
-                "http://localhost:9090/api/v1/status/buildinfo",
-                json={
-                    "status": "success",
-                    "data": {"version": version},
-                },
-                status=200,
-            )
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/api/v1/status/buildinfo",
+            json={
+                "status": "success",
+                "data": {"version": version},
+            },
+            status=200,
+        )
 
-            got_version = self.prometheus.version()
-            self.assertEqual(got_version, version)
+        got_version = self.prometheus.version()
+        self.assertEqual(got_version, version)
 
-        @responses.activate
-        def test_prometheus_server_reload_configuration_success(self):
-            responses.add(
-                responses.POST,
-                "http://localhost:9090/-/reload",
-                status=200,
-            )
+    @responses.activate
+    def test_prometheus_server_without_route_prefix_reload_configuration_success(self):
+        self.prometheus = Prometheus("localhost", 9090)
 
-            self.assertTrue(self.prometheus.reload_configuration())
+        responses.add(
+            responses.POST,
+            "http://localhost:9090/-/reload",
+            status=200,
+        )
 
-        @responses.activate
-        def test_prometheus_server_reload_configuration_failure(self):
-            responses.add(
-                responses.POST,
-                "http://localhost:9090/-/reload",
-                status=500,
-            )
+        self.assertTrue(self.prometheus.reload_configuration())
 
-            self.assertFalse(self.prometheus.reload_configuration())
+    @responses.activate
+    def test_prometheus_server_without_route_prefix_reload_configuration_failure(self):
+        self.prometheus = Prometheus("localhost", 9090)
 
-    class _TestServerWithRoutePrefix(unittest.TestCase):
-        def setUp(self):
-            self.prometheus = Prometheus("localhost", 9090, "/foobar")
+        responses.add(
+            responses.POST,
+            "http://localhost:9090/-/reload",
+            status=500,
+        )
 
-        @responses.activate
-        def test_prometheus_server_returns_valid_data(self):
-            version = "1.0.0"
+        self.assertFalse(self.prometheus.reload_configuration())
 
-            responses.add(
-                responses.GET,
-                "http://localhost:9090/foobar/api/v1/status/buildinfo",
-                json={
-                    "status": "success",
-                    "data": {"version": version},
-                },
-                status=200,
-            )
+    @responses.activate
+    def test_prometheus_server_with_route_prefix_returns_valid_data(self):
+        self.prometheus = Prometheus("localhost", 9090, "/foobar")
 
-            got_version = self.prometheus.version()
-            self.assertEqual(got_version, version)
+        version = "1.0.0"
 
-        @responses.activate
-        def test_prometheus_server_reload_configuration_success(self):
-            responses.add(
-                responses.POST,
-                "http://localhost:9090/foobar/-/reload",
-                status=200,
-            )
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/foobar/api/v1/status/buildinfo",
+            json={
+                "status": "success",
+                "data": {"version": version},
+            },
+            status=200,
+        )
 
-            self.assertTrue(self.prometheus.reload_configuration())
+        got_version = self.prometheus.version()
+        self.assertEqual(got_version, version)
 
-        @responses.activate
-        def test_prometheus_server_reload_configuration_failure(self):
-            responses.add(
-                responses.POST,
-                "http://localhost:9090/foobar/-/reload",
-                status=500,
-            )
+    @responses.activate
+    def test_prometheus_server_with_route_prefix_reload_configuration_success(self):
+        self.prometheus = Prometheus("localhost", 9090, "/foobar")
 
-            self.assertFalse(self.prometheus.reload_configuration())
+        responses.add(
+            responses.POST,
+            "http://localhost:9090/foobar/-/reload",
+            status=200,
+        )
+
+        self.assertTrue(self.prometheus.reload_configuration())
+
+    @responses.activate
+    def test_prometheus_server_with_route_prefix_reload_configuration_failure(self):
+        self.prometheus = Prometheus("localhost", 9090, "/foobar")
+
+        responses.add(
+            responses.POST,
+            "http://localhost:9090/foobar/-/reload",
+            status=500,
+        )
+
+        self.assertFalse(self.prometheus.reload_configuration())
