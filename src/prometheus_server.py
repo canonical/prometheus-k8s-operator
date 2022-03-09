@@ -44,7 +44,7 @@ class Prometheus:
         """
         url = urljoin(self.base_url, "/-/reload")
         try:
-            response = post(url, timeout=self.api_timeout, allow_redirects=False)
+            response = post(url, timeout=self.api_timeout)
 
             if response.status_code == 200:
                 return True
