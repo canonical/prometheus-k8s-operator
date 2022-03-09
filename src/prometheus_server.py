@@ -4,6 +4,7 @@
 """Helper for interacting with Prometheus throughout the charm's lifecycle."""
 
 import logging
+from urllib.parse import urljoin
 
 from requests import get, post
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
@@ -30,10 +31,7 @@ class Prometheus:
               when we relate to an ingress.
             api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
         """
-        if web_route_prefix and not web_route_prefix.startswith("/"):
-            web_route_prefix = f"/{web_route_prefix}"
-
-        self.base_url = f"http://{host}:{port}{web_route_prefix or ''}"
+        self.base_url = urljoin(f"http://{host}:{port}", web_route_prefix)
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
@@ -44,7 +42,7 @@ class Prometheus:
         Returns:
           True if reload succeeded (returned 200 OK); False otherwise.
         """
-        url = f"{self.base_url}/-/reload"
+        url = urljoin(self.base_url, "/-/reload")
         try:
             response = post(url, timeout=self.api_timeout, allow_redirects=False)
 
@@ -64,7 +62,7 @@ class Prometheus:
             instance is not reachable then an empty dictionary is
             returned.
         """
-        url = f"{self.base_url}/api/v1/status/buildinfo"
+        url = urljoin(self.base_url, "/api/v1/status/buildinfo")
 
         try:
             response = get(url, timeout=self.api_timeout)

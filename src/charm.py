@@ -208,7 +208,7 @@ class PrometheusCharm(CharmBase):
         external_url = self._external_url
         args.append(f"--web.external-url={external_url}")
 
-        if path := self._web_route_prefix.strip():
+        if path := self._web_route_prefix:
             # We need to ensure there is a '/' character at the end
             # of the path, or Prometheus will not correctly
             # concatenate redirect headers, e.g., sending back a
@@ -368,7 +368,10 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _web_route_prefix(self) -> str:
-        return urlparse(self._external_url).path or ""
+        if path := urlparse(self._external_url):
+            return str(path).strip()
+
+        return None
 
     @property
     def _external_url(self) -> str:
