@@ -212,9 +212,8 @@ class PrometheusCharm(CharmBase):
             # We need to ensure there is a '/' character at the end
             # of the path, or Prometheus will not correctly
             # concatenate redirect headers, e.g., sending back a
-            # 'Location': '/test-prometheus-k8s-0-/reload' header
-            # (see the lack of '/' between '-/reload' and the previous
-            # part of the path)
+            # 'Location': '/test-prometheus-k8s-0-/reload' header instead of
+            # 'Location': '/test-prometheus-k8s-0/-/reload'
             if not path.endswith("/"):
                 path = f"{path}/"
 
