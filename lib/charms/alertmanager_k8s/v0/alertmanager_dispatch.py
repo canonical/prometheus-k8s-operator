@@ -40,7 +40,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -171,10 +171,12 @@ class AlertmanagerConsumer(RelationManagerBase):
     def get_cluster_info(self) -> List[str]:
         """Returns a list of ip addresses of all the alertmanager units."""
         alertmanagers = []  # type: List[str]
-        if not (relation := self.charm.model.get_relation(self.name)):
+        relation = self.charm.model.get_relation(self.name)
+        if not relation:
             return alertmanagers
         for unit in relation.units:
-            if address := relation.data[unit].get("public_address"):
+            address = relation.data[unit].get("public_address")
+            if address:
                 alertmanagers.append(address)
         return sorted(alertmanagers)
 

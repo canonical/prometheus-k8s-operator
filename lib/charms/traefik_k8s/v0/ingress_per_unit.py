@@ -1,7 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""# Interface Library for ingress_per_unit.
+r"""# Interface Library for ingress_per_unit.
 
 This library wraps relation endpoints using the `ingress_per_unit` interface
 and provides a Python API for both requesting and providing per-unit
@@ -9,21 +9,28 @@ ingress.
 
 ## Getting Started
 
-To get started using the library, you just need to fetch the library using `charmcraft`. **Note
-that you also need to add the `serialized_data_interface` dependency to your charm's
-`requirements.txt`.**
+To get started using the library, you just need to fetch the library using `charmcraft`.
+**Note that you also need to add the `serialized_data_interface` dependency to your
+charm's `requirements.txt`.**
 
 ```shell
 cd some-charm
-charmcraft fetch-lib charms.traefik-k8s.v0.ingress_per_unit
-echo "serialized_data_interface" >> requirements.txt
+charmcraft fetch-lib charms.traefik_k8s.v0.ingress_per_unit
+echo -e "serialized_data_interface\n" >> requirements.txt
+```
+
+```yaml
+requires:
+    ingress:
+        interface: ingress_per_unit
+        limit: 1
 ```
 
 Then, to initialise the library:
 
 ```python
 # ...
-from charms.traefik-k8s.v0.ingress_per_unit import IngressPerUnitRequirer
+from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 
 class SomeCharm(CharmBase):
   def __init__(self, *args):
@@ -33,12 +40,12 @@ class SomeCharm(CharmBase):
     # by this unit of `SomeCharm` changes or there is no longer an ingress
     # URL available, that is, `self.ingress_per_unit` would return `None`.
     self.framework.observe(
-        self.ingress_per_unit.on.ingress_change, self._handle_ingress_per_unit
+        self.ingress_per_unit.on.ingress_changed, self._handle_ingress_per_unit
     )
     # ...
 
     def _handle_ingress_per_unit(self, event):
-        log.info("This unit's ingress URL: %s", self.ingress_per_unit.url)
+        logger.info("This unit's ingress URL: %s", self.ingress_per_unit.url)
 ```
 """
 
@@ -48,9 +55,19 @@ from typing import Optional
 from ops.charm import CharmBase, RelationEvent, RelationRole
 from ops.framework import EventSource
 from ops.model import Relation, Unit
-from serialized_data_interface import EndpointWrapper
-from serialized_data_interface.errors import RelationDataError
-from serialized_data_interface.events import EndpointWrapperEvents
+
+try:
+    from serialized_data_interface import EndpointWrapper
+    from serialized_data_interface.errors import RelationDataError
+    from serialized_data_interface.events import EndpointWrapperEvents
+except ImportError:
+    import os
+
+    library_name = os.path.basename(__file__)
+    raise ModuleNotFoundError(
+        "To use the '{}' library, you must include "
+        "the '{}' package in your dependencies".format(library_name, "serialized_data_interface")
+    ) from None  # Suppress original ImportError
 
 try:
     # introduced in 3.9
@@ -68,7 +85,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 4
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +185,32 @@ class IngressPerUnitProvider(EndpointWrapper):
             if new_fields != prev_fields:
                 raise RelationDataMismatchError(relation, unit)
         return False
+
+    @property
+    def proxied_endpoints(self):
+        """Returns the ingress settings provided to units by this IngressPerUnitProvider.
+
+        For example, when this IngressPerUnitProvider has provided the
+        `http://foo.bar/my-model.my-app-1` and `http://foo.bar/my-model.my-app-2` URLs to
+        the two units of the my-app application, the returned dictionary will be:
+
+        ```
+        {
+            "my-app/1": {
+                "url": "http://foo.bar/my-model.my-app-1"
+            },
+            "my-app/2": {
+                "url": "http://foo.bar/my-model.my-app-2"
+            }
+        }
+        ```
+        """
+        results = {}
+
+        for ingress_relation in self.charm.model.relations[self.endpoint]:
+            results.update(self.unwrap(ingress_relation)[self.charm.app].get("ingress", {}))
+
+        return results
 
 
 class IngressRequest:
