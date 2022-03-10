@@ -212,18 +212,6 @@ class PrometheusCharm(CharmBase):
         external_url = self._external_url
         args.append(f"--web.external-url={external_url}")
 
-        path = self._web_route_prefix
-        if not external_url and path:
-            # We need to ensure there is a '/' character at the end
-            # of the path, or Prometheus will not correctly
-            # concatenate redirect headers, e.g., sending back a
-            # 'Location': '/test-prometheus-k8s-0-/reload' header instead of
-            # 'Location': '/test-prometheus-k8s-0/-/reload'
-            if not path.endswith("/"):
-                path = f"{path}/"
-
-            args.append(f"--web.route-prefix={path}")
-
         if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
             args.append("--enable-feature=remote-write-receiver")
 
@@ -370,13 +358,6 @@ class PrometheusCharm(CharmBase):
             bind_address = str(bind_address)
 
         return bind_address
-
-    @property
-    def _web_route_prefix(self) -> str:
-        if path := urlparse(self._external_url).path:
-            return str(path).strip()
-
-        return None
 
     @property
     def _external_url(self) -> str:
