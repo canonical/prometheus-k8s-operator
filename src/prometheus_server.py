@@ -48,7 +48,6 @@ class Prometheus:
             web_route_prefix = f"{web_route_prefix}/"
 
         self.base_url = urljoin(f"http://{host}:{port}", web_route_prefix)
-        logger.error(f"Base URL: {self.base_url}")
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:

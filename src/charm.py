@@ -145,8 +145,12 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
-            container.replan()
-            logger.info("Prometheus (re)started")
+            try:
+                container.replan()
+                logger.info("Prometheus (re)started")
+            except Exception as e:
+                logger.error(f"Failed to replan; pebble plan: {container.get_plan().to_dict()}")
+                raise e
 
         if (
             isinstance(self.unit.status, BlockedStatus)
@@ -208,7 +212,8 @@ class PrometheusCharm(CharmBase):
         external_url = self._external_url
         args.append(f"--web.external-url={external_url}")
 
-        if path := self._web_route_prefix:
+        path = self._web_route_prefix
+        if not external_url and path:
             # We need to ensure there is a '/' character at the end
             # of the path, or Prometheus will not correctly
             # concatenate redirect headers, e.g., sending back a
@@ -368,7 +373,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _web_route_prefix(self) -> str:
-        if path := urlparse(self._external_url):
+        if path := urlparse(self._external_url).path:
             return str(path).strip()
 
         return None
