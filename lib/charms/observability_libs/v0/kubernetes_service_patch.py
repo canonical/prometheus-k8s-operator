@@ -103,7 +103,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 PortDefinition = Union[Tuple[str, int], Tuple[str, int, int], Tuple[str, int, int, int]]
 ServiceType = Literal["ClusterIP", "LoadBalancer"]
@@ -118,6 +118,9 @@ class KubernetesServicePatch(Object):
         ports: Sequence[PortDefinition],
         service_name: str = None,
         service_type: ServiceType = "ClusterIP",
+        additional_labels: dict = None,
+        additional_selectors: dict = None,
+        additional_annotations: dict = None,
     ):
         """Constructor for KubernetesServicePatch.
 
@@ -128,11 +131,23 @@ class KubernetesServicePatch(Object):
                 application name will be used.
             service_type: desired type of K8s service. Default value is in line with ServiceSpec's
                 default value.
+            additional_labels: Labels to be added to the kubernetes service (by default only
+                "app.kubernetes.io/name" is set to the service name)
+            additional_selectors: Selectors to be added to the kubernetes service (by default only
+                "app.kubernetes.io/name" is set to the service name)
+            additional_annotations: Annotations to be added to the kubernetes service.
         """
         super().__init__(charm, "kubernetes-service-patch")
         self.charm = charm
         self.service_name = service_name if service_name else self._app
-        self.service = self._service_object(ports, service_name, service_type)
+        self.service = self._service_object(
+            ports,
+            service_name,
+            service_type,
+            additional_labels,
+            additional_selectors,
+            additional_annotations,
+        )
 
         # Make mypy type checking happy that self._patch is a method
         assert isinstance(self._patch, MethodType)
@@ -145,8 +160,11 @@ class KubernetesServicePatch(Object):
         ports: Sequence[PortDefinition],
         service_name: str = None,
         service_type: ServiceType = "ClusterIP",
+        additional_labels: dict = None,
+        additional_selectors: dict = None,
+        additional_annotations: dict = None,
     ) -> Service:
-        """Creates a valid Service representation for Alertmanager.
+        """Creates a valid Service representation.
 
         Args:
             ports: a list of tuples of the form (name, port) or (name, port, targetPort)
@@ -157,22 +175,34 @@ class KubernetesServicePatch(Object):
                 application name will be used.
             service_type: desired type of K8s service. Default value is in line with ServiceSpec's
                 default value.
+            additional_labels: Labels to be added to the kubernetes service (by default only
+                "app.kubernetes.io/name" is set to the service name)
+            additional_selectors: Selectors to be added to the kubernetes service (by default only
+                "app.kubernetes.io/name" is set to the service name)
+            additional_annotations: Annotations to be added to the kubernetes service.
 
         Returns:
             Service: A valid representation of a Kubernetes Service with the correct ports.
         """
         if not service_name:
             service_name = self._app
+        labels = {"app.kubernetes.io/name": self._app}
+        if additional_labels:
+            labels.update(additional_labels)
+        selector = {"app.kubernetes.io/name": self._app}
+        if additional_selectors:
+            selector.update(additional_selectors)
         return Service(
             apiVersion="v1",
             kind="Service",
             metadata=ObjectMeta(
                 namespace=self._namespace,
                 name=service_name,
-                labels={"app.kubernetes.io/name": service_name},
+                labels=labels,
+                annotations=additional_annotations,  # type: ignore[arg-type]
             ),
             spec=ServiceSpec(
-                selector={"app.kubernetes.io/name": service_name},
+                selector=selector,
                 ports=[
                     ServicePort(
                         name=p[0],
@@ -197,7 +227,9 @@ class KubernetesServicePatch(Object):
 
         client = Client()
         try:
-            client.patch(Service, self._app, self.service, patch_type=PatchType.MERGE)
+            if self.service_name != self._app:
+                self._delete_and_create_service(client)
+            client.patch(Service, self.service_name, self.service, patch_type=PatchType.MERGE)
         except ApiError as e:
             if e.status.code == 403:
                 logger.error("Kubernetes service patch failed: `juju trust` this application.")
@@ -205,6 +237,13 @@ class KubernetesServicePatch(Object):
                 logger.error("Kubernetes service patch failed: %s", str(e))
         else:
             logger.info("Kubernetes service '%s' patched successfully", self._app)
+
+    def _delete_and_create_service(self, client: Client):
+        service = client.get(Service, self._app, namespace=self._namespace)
+        service.metadata.name = self.service_name  # type: ignore[attr-defined]
+        service.metadata.resourceVersion = service.metadata.uid = None  # type: ignore[attr-defined]   # noqa: E501
+        client.delete(Service, self._app, namespace=self._namespace)
+        client.create(service)
 
     def is_patched(self) -> bool:
         """Reports if the service patch has been applied.

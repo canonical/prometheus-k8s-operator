@@ -1,7 +1,122 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""A library for working with Grafana datasources for charm authors."""
+"""## Overview.
+
+This document explains how to integrate with the Grafana charm
+for the purpose of providing a datasource which can be used by
+Grafana dashboards. It also explains the structure of the data
+expected by the `grafana-source` interface, and may provide a
+mechanism or reference point for providing a compatible interface
+or library by providing a definitive reference guide to the
+structure of relation data which is shared between the Grafana
+charm and any charm providing datasource information.
+
+## Provider Library Usage
+
+The Grafana charm interacts with its datasources using its charm
+library. The goal of this library is to be as simple to use as
+possible, and instantiation of the class with or without changing
+the default arguments provides a complete use case. For the simplest
+use case of a Prometheus (or Prometheus-compatible) datasource
+provider in a charm which `provides: grafana-source`, creation of a
+`GrafanaSourceProvider` object with the default arguments is sufficient.
+
+The default arguments are:
+
+    `charm`: `self` from the charm instantiating this library
+    `relation_name`: grafana-source
+    `refresh_event`: A `PebbleReady` event from `charm`, used to refresh
+        the IP address sent to Grafana on a charm lifecycle event or
+        pod restart
+    `source_type`: prometheus
+    `source_port`: 9090
+
+If your configuration requires any changes from these defaults, they
+may be set from the class constructor. It may be instantiated as
+follows:
+
+    from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+
+    class FooCharm:
+        def __init__(self, *args):
+            super().__init__(*args, **kwargs)
+            ...
+            self.grafana_source_provider = GrafanaSourceProvider(self)
+            ...
+
+The first argument (`self`) should be a reference to the parent (datasource)
+charm, as this charm's model will be used for relation data, IP addresses,
+and lifecycle events.
+
+An instantiated `GrafanaSourceProvider` will ensure that each unit of its
+parent charm is added as a datasource in the Grafana configuration once a
+relation is established, using the [Grafana datasource provisioning](
+https://grafana.com/docs/grafana/latest/administration/provisioning/#data-sources)
+specification via YAML files.
+
+This information is added to the relation data for the charms as serialized JSON
+from a dict, with a structure of:
+```
+{
+    "application": {
+        "model": charm.model.name, # from `charm` in the constructor
+        "model_uuid": charm.model.uuid,
+        "application": charm.model.app.name,
+        "type": source_type,
+    },
+    "unit/0": {
+        "uri": {ip_address}:{port} # `ip_address` is derived at runtime, `port` from the constructor
+    },
+```
+
+This is ingested by :class:`GrafanaSourceConsumer`, and is sufficient for configuration.
+
+
+## Consumer Library Usage
+
+The `GrafanaSourceConsumer` object may be used by Grafana
+charms to manage relations with available datasources. For this
+purpose, a charm consuming Grafana datasource information should do
+the following things:
+
+1. Instantiate the `GrafanaSourceConsumer` object by providing it a
+reference to the parent (Grafana) charm and, optionally, the name of
+the relation that the Grafana charm uses to interact with datasources.
+This relation must confirm to the `grafana-source` interface.
+
+For example a Grafana charm may instantiate the
+`GrafanaSourceConsumer` in its constructor as follows
+
+    from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        ...
+        self.grafana_source_consumer = GrafanaSourceConsumer(self)
+        ...
+
+2. A Grafana charm also needs to listen to the
+`GrafanaSourceEvents` events emitted by the `GrafanaSourceConsumer`
+by adding itself as an observer for these events:
+
+    self.framework.observe(
+        self.grafana_source_consumer.on.sources_changed,
+        self._on_sources_changed,
+    )
+    self.framework.observe(
+        self.grafana_source_consumer.on.sources_to_delete_changed,
+        self._on_sources_to_delete_change,
+    )
+
+The reason for two separate events is that Grafana keeps track of
+removed datasources in its [datasource provisioning](
+https://grafana.com/docs/grafana/latest/administration/provisioning/#data-sources).
+
+If your charm is merely implementing a `grafana-source`-compatible API,
+and is does not follow exactly the same semantics as Grafana, observing these
+events may not be needed.
+"""
 
 import json
 import logging
@@ -35,7 +150,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +310,7 @@ class GrafanaSourceProvider(Object):
     def __init__(
         self,
         charm: CharmBase,
-        refresh_event: BoundEvent,
+        refresh_event: Optional[BoundEvent] = None,
         relation_name: str = DEFAULT_RELATION_NAME,
         source_type: Optional[str] = "prometheus",
         source_port: Optional[str] = "9090",
@@ -242,6 +357,8 @@ class GrafanaSourceProvider(Object):
         self._charm = charm
         self._relation_name = relation_name
         events = self._charm.on[relation_name]
+
+        refresh_event = refresh_event or self._charm.on.pebble_ready
 
         self._source_type = source_type
         self._source_port = source_port
