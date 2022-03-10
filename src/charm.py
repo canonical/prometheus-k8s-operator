@@ -45,7 +45,6 @@ class PrometheusCharm(CharmBase):
 
         self._name = "prometheus"
         self._port = 9090
-        self._prometheus_server = Prometheus()
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
 
@@ -134,7 +133,11 @@ class PrometheusCharm(CharmBase):
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
         if current_services == new_layer.services:
-            reloaded = self._prometheus_server.reload_configuration()
+            external_url = urlparse(self._external_url)
+
+            prometheus_server = Prometheus(web_route_prefix=external_url.path)
+
+            reloaded = prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
@@ -142,8 +145,12 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus configuration reloaded")
         else:
             container.add_layer(self._name, new_layer, combine=True)
-            container.replan()
-            logger.info("Prometheus (re)started")
+            try:
+                container.replan()
+                logger.info("Prometheus (re)started")
+            except Exception as e:
+                logger.error(f"Failed to replan; pebble plan: {container.get_plan().to_dict()}")
+                raise e
 
         if (
             isinstance(self.unit.status, BlockedStatus)
@@ -204,9 +211,6 @@ class PrometheusCharm(CharmBase):
 
         external_url = self._external_url
         args.append(f"--web.external-url={external_url}")
-
-        if path := urlparse(external_url).path:
-            args.append(f"--web.route-prefix={path}")
 
         if self.model.get_relation(DEFAULT_REMOTE_WRITE_RELATION_NAME):
             args.append("--enable-feature=remote-write-receiver")
