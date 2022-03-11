@@ -22,6 +22,12 @@ For more information about CharmHub channels, refer to the [Juju charm store](ht
 Refer to the [Publish your operator in Charmhub](https://discourse.charmhub.io/t/publish-your-operator-in-charmhub) documentation.
 After a `latest/stable` release, it is expected that the version of the charm is the same as the one in `latest/candidate`, and those two channels will diverge again when we are ramping up through `latest/candidate` releases for a new `latest/stable` release.
 
+Using a `tox` environment, this a can be accomplished with
+
+```shell
+tox -e publish-edge -- --revision=19
+```
+
 ## A note on granularity of revisions
 
 We believe in shipping often and with confidence.
