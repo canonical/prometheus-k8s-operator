@@ -22,6 +22,16 @@ For more information about CharmHub channels, refer to the [Juju charm store](ht
 Refer to the [Publish your operator in Charmhub](https://discourse.charmhub.io/t/publish-your-operator-in-charmhub) documentation.
 After a `latest/stable` release, it is expected that the version of the charm is the same as the one in `latest/candidate`, and those two channels will diverge again when we are ramping up through `latest/candidate` releases for a new `latest/stable` release.
 
+It is **important** to note that when making new releases of this charm **two** resource need to be bound to it
+- The container OCI image : `prometheus-image`
+- The PromQL transform binary : `promql-transform-amd64`
+
+An example of the charmcraft command to publish a new release is shown below.
+```
+charmcraft release prometheus-k8s --channel=beta --revision=19 --resource=prometheus-image:1 --resource=promql-transform-amd64:3
+```
+Note: The charm revision and resource revisions will need to be set appropriately.
+
 ## A note on granularity of revisions
 
 We believe in shipping often and with confidence.
