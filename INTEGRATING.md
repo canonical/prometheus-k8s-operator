@@ -2,14 +2,13 @@
 
 Prometheus integrates with the following
 
-1. Any charm that supports the `prometheus_scrape` interface in
+1. Any charm that supports the `prometheus-scrape` interface in
 serving as a scrape target for Prometheus. This integration is done
-using the Prometheus Charm library. The documentation of the charm
-library, available through
-[Charmhub](https://charmhub.io/prometheus-k8s/libraries). A scrape
-target charm provides the Prometheus charm information necessary to
-construct scrape configurations for the target. This information
-exchanged through the `prometheus_scrape` interface can be broken down
+using the 
+[prometheus-scrape-interface](https://github.com/canonical/prometheus-scrape-interface).
+A scrape target charm provides the Prometheus charm information necessary
+to construct scrape configurations for the target. This information
+exchanged through the `prometheus-scrape` interface can be broken down
 into three parts
 
 - A scrape job specification that includes host addresses, ports and

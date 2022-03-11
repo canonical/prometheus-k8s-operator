@@ -1,2 +1,0 @@
-- alert
-  expr: up{%%juju_topology%%} == 0

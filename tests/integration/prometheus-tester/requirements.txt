@@ -1,1 +1,2 @@
 git+https://github.com/canonical/operator#egg=ops
+git+https://github.com/canonical/prometheus-scrape-interface#egg=prometheus-scrape

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
-    """Test basic functionality of prometheus_scrape relation interface."""
+    """Test basic functionality of prometheus-scrape relation interface."""
     prometheus_app_name = "prometheus"
     tester_app_name = "prometheus-tester"
     app_names = [prometheus_app_name, tester_app_name]

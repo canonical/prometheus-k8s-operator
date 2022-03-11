@@ -28,7 +28,7 @@ provides:
     interface: prometheus_remote_write
 requires:
   metrics-endpoint:
-    interface: prometheus_scrape
+    interface: prometheus-scrape
   alertmanager:
     interface: alertmanager_dispatch
   ingress:

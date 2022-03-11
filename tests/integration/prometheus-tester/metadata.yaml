@@ -18,4 +18,4 @@ resources:
     upstream-source: python:slim
 provides:
   metrics-endpoint:
-    interface: prometheus_scrape
+    interface: prometheus-scrape

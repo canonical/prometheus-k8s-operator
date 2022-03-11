@@ -7,11 +7,11 @@
 import logging
 from pathlib import Path
 
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Layer
+from prometheus_scrape import MetricsEndpointProvider
 
 logger = logging.getLogger(__name__)
 

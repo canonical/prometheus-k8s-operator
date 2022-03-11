@@ -2,17 +2,7 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import shutil
-
 import pytest
-
-
-@pytest.fixture(scope="module", autouse=True)
-def copy_prometheus_library_into_tester_charm(ops_test):
-    """Ensure that the tester charm uses the current Prometheus library."""
-    library_path = "lib/charms/prometheus_k8s/v0/prometheus_scrape.py"
-    install_path = "tests/integration/prometheus-tester/" + library_path
-    shutil.copyfile(library_path, install_path)
 
 
 @pytest.fixture(scope="module")

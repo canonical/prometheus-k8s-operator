@@ -124,7 +124,7 @@ validates all configurations options when provided before generating
 its config file.
 
 The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py).
+[prometheus-scrape-interface](https://github.com/canonical/prometheus-scrape-interface).
 
 ### Library Details
 

@@ -23,12 +23,12 @@ $ juju deploy prometheus-k8s
 
 By default the Prometheus Operator monitors itself, but it also
 accepts additional scrape targets over Juju relations with charms that
-support the `prometheus_scrape` interface and preferably use the
-Prometheus charm library. This [charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py)
-provides an `add_endpoint()` method that creates additional scrape
-targets. Each scrape target is expected to expose a `/metrics` HTTP
-path that exposes its metrics in a Prometheus compatible format. For
-example, the
+support the `prometheus-scrape` interface and preferably use the
+[prometheus-scrape-interface](https://github.com/canonical/prometheus-scrape-interface).
+This interface provides an `MetricsEndpointProvider` object that creates
+additional scrape targets. Each scrape target is expected to expose a 
+`/metrics` HTTP path that exposes its metrics in a Prometheus compatible
+format. For example, the
 [kube-state-metrics](https://charmhub.io/kube-state-metrics) charm
 integrates with the Prometheus K8S charm in a way that allows you
 import metrics about resources in a Kubernetes cluster by doing:
@@ -71,7 +71,7 @@ Currently supported relations are
   will evolve to use some other mechanism to be reachable from the outside
   of the hosting Kubernetes cluster.
 - In addition, this Prometheus charm allows relations with any
-  charm that supports the `prometheus_scrape` relation.
+  charm that supports the `prometheus-scrape` relation.
 - This Prometheus charm does not as yet support federation. This
   implies scaling the number of Prometheus units results in each unit
   scrape the same targets.
