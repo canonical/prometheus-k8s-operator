@@ -157,11 +157,10 @@ each job must be given a unique name. For example
 ]
 ```
 
-It is **important** to note that the `job_name` should be a fixed
-string (e.g. hardcoded literal). For instance, if you include your charm's
-`unit.name`, it would break the continuity of the metrics time series 
-gathered by Prometheus when the leader unit changes (e.g. on upgrade
-or rescale).
+**Important:** that the `job_name` should be a fixed string (e.g. hardcoded literal).
+For instance, if you include variable elements, like your `unit.name`, it may break
+the continuity of the metrics time series gathered by Prometheus when the leader unit
+changes (e.g. on upgrade or rescale).
 
 It is also possible to configure other scrape related parameters using
 these job specifications as described by the Prometheus
