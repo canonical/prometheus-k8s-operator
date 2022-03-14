@@ -45,7 +45,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 
 @pytest.mark.abort_on_fail
 async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest):
-    await ops_test.model.add_relation("prom:receive-remote-write", "av:receive-remote-write")
+    await ops_test.model.add_relation("prom:receive-remote-write", "av")
     await ops_test.model.wait_for_idle(apps=["av", "prom"], status="active")
 
     cmd = [
