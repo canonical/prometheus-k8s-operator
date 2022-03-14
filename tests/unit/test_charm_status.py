@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 from helpers import patch_network_get
 import hypothesis.strategies as st
-from hypothesis import given
+from hypothesis import given, assume
 from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
 from charm import PrometheusCharm
@@ -28,8 +28,11 @@ class TestActiveStatus(unittest.TestCase):
     @patch_network_get(private_address="1.1.1.1")
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @given(st.booleans(), st.integers(1, 5))
-    def test_unit_is_active_if_deployed_without_config_or_relations(self, is_leader, num_units):
-        """Scenario: Unit is deployed without any config or regular relations."""
+    def test_unit_is_active_when_deployed_in_isolation(self, is_leader, num_units):
+        """Scenario: Unit is deployed without any user-provided config or regular relations.
+
+        The charm should end up in ActiveState when deployed in isolation with defaults only.
+        """
         # without the try-finally, if any assertion fails, then hypothesis would reenter without
         # the cleanup, carrying forward the units that were previously added
         self.harness = Harness(PrometheusCharm)
@@ -67,6 +70,8 @@ class TestActiveStatus(unittest.TestCase):
     @given(st.booleans(), st.integers(1, 5))
     def test_unit_is_blocked_if_reload_configuration_fails(self, is_leader, num_units):
         """Scenario: Unit is deployed but reload configuration fails."""
+        assume(is_leader or num_units > 1)
+
         # without the try-finally, if any assertion fails, then hypothesis would reenter without
         # the cleanup, carrying forward the units that were previously added
         self.harness = Harness(PrometheusCharm)
