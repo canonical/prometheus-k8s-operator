@@ -5,12 +5,11 @@
 import logging
 import unittest
 from unittest.mock import patch
-
+from helpers import patch_network_get
 import hypothesis.strategies as st
 from hypothesis import given
 from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
-
 from charm import PrometheusCharm
 
 logger = logging.getLogger(__name__)
@@ -26,6 +25,7 @@ class TestActiveStatus(unittest.TestCase):
     def setUp(self) -> None:
         self.app_name = "prometheus-k8s"
 
+    @patch_network_get(private_address="1.1.1.1")
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @given(st.booleans(), st.integers(1, 5))
     def test_unit_is_active_if_deployed_without_config_or_relations(self, is_leader, num_units):
@@ -62,6 +62,7 @@ class TestActiveStatus(unittest.TestCase):
             # cleanup to prep for reentry by hypothesis' strategy
             self.harness.cleanup()
 
+    @patch_network_get(private_address="1.1.1.1")
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @given(st.booleans(), st.integers(1, 5))
     def test_unit_is_blocked_if_reload_configuration_fails(self, is_leader, num_units):
