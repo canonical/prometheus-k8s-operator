@@ -5,11 +5,13 @@
 import logging
 import unittest
 from unittest.mock import patch
-from helpers import patch_network_get
+
 import hypothesis.strategies as st
-from hypothesis import given, assume
+from helpers import patch_network_get
+from hypothesis import assume, given
 from ops.model import ActiveStatus, BlockedStatus
 from ops.testing import Harness
+
 from charm import PrometheusCharm
 
 logger = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ class TestActiveStatus(unittest.TestCase):
             # AND the current unit could be either a leader or not
             self.harness.set_leader(is_leader)
 
-            # AND reload configuration succeeds
+            # AND reload configuration fails
             with patch(
                 "prometheus_server.Prometheus.reload_configuration", lambda *a, **kw: False
             ):
@@ -95,7 +97,7 @@ class TestActiveStatus(unittest.TestCase):
 
                 # WHEN no config is provided or relations created
 
-                # THEN the unit goes into active state
+                # THEN the unit goes into blocked state
                 self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
 
                 # AND pebble plan is not empty
