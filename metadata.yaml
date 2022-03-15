@@ -15,6 +15,7 @@ description: |
   alerting. Prometheus provides its own dashboard for data
   visualization but a richer visualization interface may be obtained
   through a relation with the Grafana charm.
+docs: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
 containers:
   prometheus:
     resource: prometheus-image
@@ -63,4 +64,4 @@ resources:
       Promql-transform binary for adding label selectors on arm64. Promql-transform is available
       as a stand-alone tool on https://github.com/canonical/promql-transform
     filename: promql-transform-arm64
-  
+
