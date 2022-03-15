@@ -163,6 +163,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
+    @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get(private_address="1.1.1.1")
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
@@ -171,7 +172,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(
             self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
-            {"remote_write": json.dumps({"url": "http://1.1.1.1:9090/api/v1/write"})},
+            {"remote_write": json.dumps({"url": "http://fqdn:9090/api/v1/write"})},
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
