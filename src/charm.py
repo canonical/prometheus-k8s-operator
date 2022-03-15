@@ -7,6 +7,7 @@
 import logging
 import os
 import re
+import socket
 from typing import Dict
 from urllib.parse import urlparse
 
@@ -157,6 +158,12 @@ class PrometheusCharm(CharmBase):
             and self.unit.status.message != CORRUPT_PROMETHEUS_CONFIG_MESSAGE
         ):
             return
+
+        # On upgrade, make sure the remote write endpoint is changed. Note that
+        # this is only needed for upgrade from previous versions that
+        # use bind_address rather than the fqdn. If at some point we break the
+        # upgrade path, we should look into removing this.
+        self.remote_write_provider.update_endpoint()
 
         self.unit.status = ActiveStatus()
 
@@ -352,14 +359,6 @@ class PrometheusCharm(CharmBase):
         return Layer(layer_config)
 
     @property
-    def _pod_ip(self) -> str:
-        """Returns the pod ip of this unit."""
-        if bind_address := self.model.get_binding("prometheus-peers").network.bind_address:
-            bind_address = str(bind_address)
-
-        return bind_address
-
-    @property
     def _external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation."""
         if "web_external_url" in self.model.config:
@@ -375,7 +374,7 @@ class PrometheusCharm(CharmBase):
         # are routable virtually exclusively inside the cluster (as they rely)
         # on the cluster's DNS service, while the ip address is _sometimes_
         # routable from the outside, e.g., when deploying on MicroK8s on Linux.
-        return f"http://{self._pod_ip}:{self._port}"
+        return f"http://{socket.getfqdn()}:{self._port}"
 
 
 if __name__ == "__main__":
