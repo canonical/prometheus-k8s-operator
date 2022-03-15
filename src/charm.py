@@ -132,18 +132,7 @@ class PrometheusCharm(CharmBase):
 
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
-        if current_services == new_layer.services:
-            external_url = urlparse(self._external_url)
-
-            prometheus_server = Prometheus(web_route_prefix=external_url.path)
-
-            reloaded = prometheus_server.reload_configuration()
-            if not reloaded:
-                logger.error("Prometheus failed to reload the configuration")
-                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
-                return
-            logger.info("Prometheus configuration reloaded")
-        else:
+        if current_services != new_layer.services:
             container.add_layer(self._name, new_layer, combine=True)
             try:
                 container.replan()
@@ -152,12 +141,16 @@ class PrometheusCharm(CharmBase):
                 logger.error(f"Failed to replan; pebble plan: {container.get_plan().to_dict()}")
                 raise e
 
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message != CORRUPT_PROMETHEUS_CONFIG_MESSAGE
-        ):
+        # Now reload config to make sure it is valid
+        external_url = urlparse(self._external_url)
+        prometheus_server = Prometheus(web_route_prefix=external_url.path)
+        reloaded = prometheus_server.reload_configuration()
+        if not reloaded:
+            logger.error("Prometheus failed to reload the configuration")
+            self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
             return
 
+        logger.info("Prometheus configuration reloaded")
         self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
