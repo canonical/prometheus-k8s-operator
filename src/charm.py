@@ -167,7 +167,6 @@ class PrometheusCharm(CharmBase):
             BlockedStatus(REPLAN_FAILED_MESSAGE),
         ]:
             self.unit.status = ActiveStatus()
-        self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
