@@ -2,6 +2,7 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import datetime
 import logging
 import unittest
 from unittest.mock import Mock, patch
@@ -10,7 +11,7 @@ import hypothesis.strategies as st
 from helpers import patch_network_get
 from hypothesis import assume, given
 from ops.model import ActiveStatus, BlockedStatus
-from ops.pebble import ChangeError
+from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
 
 from charm import PrometheusCharm
@@ -88,10 +89,17 @@ class TestActiveStatus(unittest.TestCase):
             self.harness.set_leader(is_leader)
 
             # AND reload configuration fails
-
-            with patch("ops.model.Container.replan", Mock(side_effect=ChangeError)), patch(
+            # Construct mock objects
+            cid = ChangeID("0")
+            spawn_time = datetime.datetime.now()
+            change = Change(cid, "kind", "summary", "status", [], False, None, spawn_time, None)
+            replan_patch = patch(
+                "ops.model.Container.replan", Mock(side_effect=ChangeError("err", change))
+            )
+            reload_patch = patch(
                 "prometheus_server.Prometheus.reload_configuration", lambda *a, **kw: False
-            ):
+            )
+            with replan_patch, reload_patch:
                 self.harness.begin_with_initial_hooks()
 
                 # WHEN no config is provided or relations created
