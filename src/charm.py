@@ -82,26 +82,12 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ingress_changed, self._on_ingress_changed)
+        self.framework.observe(self.ingress.on.ingress_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
-
-    def _on_upgrade_charm(self, event):
-        """Handler for the upgrade_charm event during which will update the K8s service."""
-        self._configure(event)
-
-    def _on_ingress_changed(self, event):
-        self._configure(event)
-        # The remote_write_provider object has the update external URL,
-        # as the data from the ingress relation is looked up in the Charm
-        # constructor, and it is already updated. However, we do need to
-        # trigger the update of the endpoint to the remote_write clients,
-        # as remote_write_provider does not observe any ingress-specific
-        # events.
-        self.remote_write_provider.update_endpoint()
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -159,10 +145,7 @@ class PrometheusCharm(CharmBase):
         ):
             return
 
-        # On upgrade, make sure the remote write endpoint is changed. Note that
-        # this is only needed for upgrade from previous versions that
-        # use bind_address rather than the fqdn. If at some point we break the
-        # upgrade path, we should look into removing this.
+        # Make sure that if the remote_write endpoint changes, it is reflected in relation data.
         self.remote_write_provider.update_endpoint()
 
         self.unit.status = ActiveStatus()
