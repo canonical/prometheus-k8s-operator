@@ -161,8 +161,9 @@ class PrometheusCharm(CharmBase):
                 self.unit.status = BlockedStatus(REPLAN_FAILED_MESSAGE)
                 return
 
-        # Auto-heal from BlockedStatus set by this method
+        # Auto-heal only from statuses managed by this method
         if self.unit.status in [
+            WaitingStatus("Waiting for Pebble ready"),
             BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE),
             BlockedStatus(REPLAN_FAILED_MESSAGE),
         ]:
