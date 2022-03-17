@@ -24,7 +24,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import ChangeError, Layer
 
 from prometheus_server import Prometheus
@@ -166,6 +166,7 @@ class PrometheusCharm(CharmBase):
             WaitingStatus("Waiting for Pebble ready"),
             BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE),
             BlockedStatus(REPLAN_FAILED_MESSAGE),
+            MaintenanceStatus(""),  # Set by juju on startup and is expected to be overridden
         ]:
             self.unit.status = ActiveStatus()
 
