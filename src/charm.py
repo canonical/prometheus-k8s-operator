@@ -33,7 +33,6 @@ PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
 
 CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
-REPLAN_FAILED_MESSAGE = "Failed to (re)start Prometheus"
 
 logger = logging.getLogger(__name__)
 
@@ -158,17 +157,16 @@ class PrometheusCharm(CharmBase):
                 logger.error(
                     "Failed to replan; pebble plan: %s; %s", container.get_plan().to_dict(), str(e)
                 )
-                self.unit.status = BlockedStatus(REPLAN_FAILED_MESSAGE)
+                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
 
-        # Auto-heal only from statuses managed by this method
-        if self.unit.status in [
-            WaitingStatus("Waiting for Pebble ready"),
-            BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE),
-            BlockedStatus(REPLAN_FAILED_MESSAGE),
-            MaintenanceStatus(""),  # Set by juju on startup and is expected to be overridden
-        ]:
-            self.unit.status = ActiveStatus()
+        if (
+            isinstance(self.unit.status, BlockedStatus)
+            and self.unit.status.message != CORRUPT_PROMETHEUS_CONFIG_MESSAGE
+        ):
+            return
+
+        self.unit.status = ActiveStatus()
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
