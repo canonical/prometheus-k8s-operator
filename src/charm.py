@@ -148,7 +148,7 @@ class PrometheusCharm(CharmBase):
             # Layer changed - replan.
             container.add_layer(self._name, new_layer, combine=True)
             try:
-                # If a config is invalid then prometheus would exist immediately.
+                # If a config is invalid then prometheus would exit immediately.
                 # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
                 # would be raised.
                 container.replan()

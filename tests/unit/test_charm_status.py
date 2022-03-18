@@ -52,7 +52,7 @@ class TestActiveStatus(unittest.TestCase):
 
             # AND pebble plan is not empty
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
-            self.assertGreater(plan.to_dict().items(), {}.items())
+            self.assertTrue(plan.to_dict())
 
     @patch_network_get(private_address="1.1.1.1")
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
@@ -79,4 +79,4 @@ class TestActiveStatus(unittest.TestCase):
 
             # AND pebble plan is not empty
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
-            self.assertGreater(plan.to_dict().items(), {}.items())
+            self.assertTrue(plan.to_dict())
