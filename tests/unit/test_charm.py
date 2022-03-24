@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import json
+import socket
 import unittest
 from unittest.mock import patch
 
@@ -68,7 +69,8 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://1.1.1.1:9090")
+        fqdn = socket.getfqdn()
+        self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
     @patch_network_get(private_address="1.1.1.1")
     def test_ingress_relation_set(self):
@@ -78,7 +80,8 @@ class TestCharm(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://1.1.1.1:9090")
+        fqdn = socket.getfqdn()
+        self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
     @patch_network_get(private_address="1.1.1.1")
     def test_web_external_url_has_precedence_over_ingress_relation(self):
