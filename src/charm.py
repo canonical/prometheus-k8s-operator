@@ -26,7 +26,7 @@ from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
-from ops.pebble import Layer
+from ops.pebble import ChangeError, Layer
 
 from prometheus_server import Prometheus
 
@@ -120,24 +120,32 @@ class PrometheusCharm(CharmBase):
         # Restart prometheus only if command line arguments have changed,
         # otherwise just reload its configuration.
         if current_services == new_layer.services:
+            # No change in layer; reload config to make sure it is valid
             external_url = urlparse(self._external_url)
-
             prometheus_server = Prometheus(web_route_prefix=external_url.path)
-
             reloaded = prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
+
             logger.info("Prometheus configuration reloaded")
+
         else:
+            # Layer changed - replan.
             container.add_layer(self._name, new_layer, combine=True)
             try:
+                # If a config is invalid then prometheus would exit immediately.
+                # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
+                # would be raised.
                 container.replan()
                 logger.info("Prometheus (re)started")
-            except Exception as e:
-                logger.error(f"Failed to replan; pebble plan: {container.get_plan().to_dict()}")
-                raise e
+            except ChangeError as e:
+                logger.error(
+                    "Failed to replan; pebble plan: %s; %s", container.get_plan().to_dict(), str(e)
+                )
+                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
+                return
 
         if (
             isinstance(self.unit.status, BlockedStatus)

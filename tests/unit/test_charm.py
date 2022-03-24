@@ -47,12 +47,12 @@ class TestCharm(unittest.TestCase):
         bad_log_config = {"log_level": "bad-level"}
         with self.assertLogs(level="ERROR") as logger:
             self.harness.update_config(bad_log_config)
-            expected_logs = [
+            expected_logs = {
                 "ERROR:root:Invalid loglevel: bad-level given, "
                 "debug/info/warn/error/fatal allowed. "
                 "defaulting to DEBUG loglevel."
-            ]
-            self.assertEqual(sorted(logger.output), expected_logs)
+            }
+            self.assertGreaterEqual(set(logger.output), expected_logs)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "debug")
