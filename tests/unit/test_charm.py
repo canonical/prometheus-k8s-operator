@@ -45,8 +45,6 @@ class TestCharm(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
 
-        ingress_rel_id = self.harness.add_relation("ingress", "traefik-ingress")
-        self.harness.add_relation_unit(ingress_rel_id, "traefik-ingress/0")
         grafana_rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(grafana_rel_id, "grafana/0")
 
