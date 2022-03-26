@@ -74,7 +74,6 @@ class PrometheusCharm(CharmBase):
             charm=self,
             source_type="prometheus",
             source_url=self._external_url,
-            refresh_event=self.on.prometheus_pebble_ready,
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
