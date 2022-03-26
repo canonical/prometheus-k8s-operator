@@ -72,8 +72,9 @@ class PrometheusCharm(CharmBase):
         # Allows Grafana to aggregate metrics
         self.grafana_source_consumer = GrafanaSourceProvider(
             charm=self,
+            source_type="prometheus",
+            source_url=self._external_url,
             refresh_event=self.on.prometheus_pebble_ready,
-            source_uri=self._external_url,
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
