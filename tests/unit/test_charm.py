@@ -34,10 +34,25 @@ class TestCharm(unittest.TestCase):
     def test_grafana_is_provided_port_and_source(self, *unused):
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
+        fqdn = socket.getfqdn()
         grafana_host = self.harness.get_relation_data(rel_id, self.harness.model.unit.name)[
             "grafana_source_host"
         ]
-        self.assertEqual(grafana_host, "{}:{}".format("1.1.1.1", "9090"))
+        self.assertEqual(grafana_host, "http://{}:{}".format(fqdn, "9090"))
+
+    @patch_network_get(private_address="1.1.1.1")
+    def test_web_external_url_is_passed_to_grafana(self, *unused):
+        self.harness.set_leader(True)
+        self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
+
+        grafana_rel_id = self.harness.add_relation("grafana-source", "grafana")
+        self.harness.add_relation_unit(grafana_rel_id, "grafana/0")
+
+        grafana_host = self.harness.get_relation_data(
+            grafana_rel_id, self.harness.model.unit.name
+        )["grafana_source_host"]
+
+        self.assertEqual(grafana_host, "http://test:80/foo/bar")
 
     def test_default_cli_log_level_is_info(self):
         plan = self.harness.get_container_pebble_plan("prometheus")

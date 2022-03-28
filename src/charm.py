@@ -51,12 +51,6 @@ class PrometheusCharm(CharmBase):
 
         # Relation handler objects
 
-        # Allows Grafana to aggregate metrics
-        self.grafana_source_consumer = GrafanaSourceProvider(
-            charm=self,
-            refresh_event=self.on.prometheus_pebble_ready,
-        )
-
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
@@ -73,6 +67,13 @@ class PrometheusCharm(CharmBase):
             endpoint_port=external_url.port or self._port,
             endpoint_schema=external_url.scheme,
             endpoint_path=f"{external_url.path}/api/v1/write",
+        )
+
+        # Allows Grafana to aggregate metrics
+        self.grafana_source_consumer = GrafanaSourceProvider(
+            charm=self,
+            source_type="prometheus",
+            source_url=self._external_url,
         )
 
         # Maintains list of Alertmanagers to which alerts are forwarded
@@ -155,6 +156,7 @@ class PrometheusCharm(CharmBase):
 
         # Make sure that if the remote_write endpoint changes, it is reflected in relation data.
         self.remote_write_provider.update_endpoint()
+        self.grafana_source_consumer.update_source(self._external_url)
 
         self.unit.status = ActiveStatus()
 
