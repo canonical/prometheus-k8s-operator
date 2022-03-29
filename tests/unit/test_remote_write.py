@@ -153,7 +153,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         self.harness.update_relation_data(rel_id, "provider/0", {})
         assert list(self.harness.charm.remote_write_consumer.endpoints) == []
 
-    def test_alert_rule_is_correct(self):
+    def test_alert_rule_has_correct_labels(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         rules = json.loads(
@@ -181,7 +181,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         else:
             assert False  # Could not find the correct alert rule to check
 
-    def test_alert_rule_is_correct_with_unit(self):
+    def test_alert_rule_has_correct_labels_with_unit(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         rules = json.loads(
