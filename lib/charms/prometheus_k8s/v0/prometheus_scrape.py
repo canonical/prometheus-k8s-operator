@@ -126,7 +126,7 @@ name". However unit name is associated only with wildcard targets but
 not with fully qualified targets.
 
 Multiple jobs with different metrics paths and labels are allowed, but
-each job must be given a unique name. For example
+each job must be given a unique name:
 
 ```
 [
@@ -162,12 +162,10 @@ For instance, if you include variable elements, like your `unit.name`, it may br
 the continuity of the metrics time series gathered by Prometheus when the leader unit
 changes (e.g. on upgrade or rescale).
 
-It is also technically possible, but **strongly discouraged**, to configure the following
-scrape-related parameters as described by the
-[Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
+Additionally, it is also technically possible, but **strongly discouraged**, to
+configure the following scrape-related settings, which behave as described by the
+[Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config):
 
-- `job_name`
-- `metrics_path`
 - `static_configs`
 - `scrape_interval`
 - `scrape_timeout`
@@ -179,15 +177,10 @@ scrape-related parameters as described by the
 - `label_name_length_limit`
 - `label_value_length_limit`
 
-These options are technically allows to be
-specified over the relation interface to enable
-facilities like the [Prometheus Scrape Config](https://charmhub.io/prometheus-scrape-config-k8s)
-charm. These settings **should not** be exposed
-as configuration options for specific charms,
-as they would reduce the composability of the
-existing setup, duplicate functionality, and
-make more complicated than necessary the moving
-parts of your charms.
+The settings above are supported by the `prometheus_scrape` library only for the sake of
+specialized facilities like the [Prometheus Scrape Config](https://charmhub.io/prometheus-scrape-config-k8s)
+charm. Virtually all charms **should not** use these settings and definitely **should not**
+expose them to the Juju administrator via configuration options.
 
 ## Consumer Library Usage
 
