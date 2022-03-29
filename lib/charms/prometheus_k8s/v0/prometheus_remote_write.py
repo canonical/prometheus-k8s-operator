@@ -451,9 +451,8 @@ class AlertRules:
 
     def _is_already_modified(self, name: str) -> bool:
         """Detect whether a group name has already been modified with juju topology."""
-        uuid_regex = "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
-        final_regex = ".*_{}_.*_alerts".format(uuid_regex)
-        if re.match(final_regex, name) is not None:
+        modified_matcher = re.compile(r"^.*?_[\da-f]{8}-([\da-f]{4}-){3}[\da-f]{12}_.*?alerts$")
+        if modified_matcher.match(name) is not None:
             return True
         return False
 
