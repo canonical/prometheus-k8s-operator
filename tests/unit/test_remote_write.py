@@ -153,6 +153,63 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         self.harness.update_relation_data(rel_id, "provider/0", {})
         assert list(self.harness.charm.remote_write_consumer.endpoints) == []
 
+    def test_alert_rule_is_correct(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        rules = json.loads(
+            self.harness.get_relation_data(rel_id, self.harness.charm.app)["alert_rules"]
+        )
+        for group in rules["groups"]:
+            if group["name"].endswith("with_template_string_alerts"):
+                expr = group["rules"][0]["expr"]
+                self.assertIn("juju_model", expr)
+                self.assertIn("juju_model_uuid", expr)
+                self.assertIn("juju_application", expr)
+                self.assertIn("juju_charm", expr)
+                self.assertNotIn("juju_unit", expr)
+                self.assertEqual(
+                    set(group["rules"][0]["labels"]),
+                    {
+                        "juju_application",
+                        "juju_charm",
+                        "juju_model",
+                        "juju_model_uuid",
+                        "severity",
+                    },
+                )
+                break
+        else:
+            assert False  # Could not find the correct alert rule to check
+
+    def test_alert_rule_is_correct_with_unit(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        rules = json.loads(
+            self.harness.get_relation_data(rel_id, self.harness.charm.app)["alert_rules"]
+        )
+        for group in rules["groups"]:
+            if group["name"].endswith("with_template_string_and_unit_alerts"):
+                expr = group["rules"][0]["expr"]
+                self.assertIn("juju_model", expr)
+                self.assertIn("juju_model_uuid", expr)
+                self.assertIn("juju_application", expr)
+                self.assertIn("juju_charm", expr)
+                self.assertIn("juju_unit", expr)
+                self.assertEqual(
+                    set(group["rules"][0]["labels"]),
+                    {
+                        "juju_application",
+                        "juju_charm",
+                        "juju_model",
+                        "juju_model_uuid",
+                        "severity",
+                        "juju_unit",
+                    },
+                )
+                break
+        else:
+            assert False  # Could not find the correct alert rule to check
+
 
 class TestRemoteWriteProvider(unittest.TestCase):
     @patch_network_get(private_address="1.1.1.1")
