@@ -309,7 +309,7 @@ over unit relation data using the `prometheus_scrape_unit_name` and
 `scrape_jobs` and `alert_rules` keys in application relation data
 of Metrics provider charms hold eponymous information.
 
-"""
+"""  # noqa: W505
 
 import json
 import logging
