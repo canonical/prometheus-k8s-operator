@@ -179,7 +179,7 @@ configure the following scrape-related settings, which behave as described by th
 
 The settings above are supported by the `prometheus_scrape` library only for the sake of
 specialized facilities like the [Prometheus Scrape Config](https://charmhub.io/prometheus-scrape-config-k8s)
-charm. Virtually all charms **should not** use these settings and definitely **should not**
+charm. Virtually no charms should use these settings, and charmers definitely **should not**
 expose them to the Juju administrator via configuration options.
 
 ## Consumer Library Usage
