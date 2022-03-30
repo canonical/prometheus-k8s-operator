@@ -126,7 +126,7 @@ name". However unit name is associated only with wildcard targets but
 not with fully qualified targets.
 
 Multiple jobs with different metrics paths and labels are allowed, but
-each job must be given a unique name. For example
+each job must be given a unique name:
 
 ```
 [
@@ -162,14 +162,10 @@ For instance, if you include variable elements, like your `unit.name`, it may br
 the continuity of the metrics time series gathered by Prometheus when the leader unit
 changes (e.g. on upgrade or rescale).
 
-It is also possible to configure other scrape related parameters using
-these job specifications as described by the Prometheus
-[documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config).
-The permissible subset of job specific scrape configuration parameters
-supported in a `MetricsEndpointProvider` job specification are:
+Additionally, it is also technically possible, but **strongly discouraged**, to
+configure the following scrape-related settings, which behave as described by the
+[Prometheus documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config):
 
-- `job_name`
-- `metrics_path`
 - `static_configs`
 - `scrape_interval`
 - `scrape_timeout`
@@ -180,6 +176,11 @@ supported in a `MetricsEndpointProvider` job specification are:
 - `label_limit`
 - `label_name_length_limit`
 - `label_value_length_limit`
+
+The settings above are supported by the `prometheus_scrape` library only for the sake of
+specialized facilities like the [Prometheus Scrape Config](https://charmhub.io/prometheus-scrape-config-k8s)
+charm. Virtually no charms should use these settings, and charmers definitely **should not**
+expose them to the Juju administrator via configuration options.
 
 ## Consumer Library Usage
 
@@ -308,7 +309,7 @@ over unit relation data using the `prometheus_scrape_unit_name` and
 `scrape_jobs` and `alert_rules` keys in application relation data
 of Metrics provider charms hold eponymous information.
 
-"""
+"""  # noqa: W505
 
 import json
 import logging
