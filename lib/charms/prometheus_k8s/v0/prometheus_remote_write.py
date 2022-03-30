@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 from collections import OrderedDict
 from pathlib import Path
@@ -32,7 +33,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,10 @@ class JujuTopology:
             application: an application name as a string
             unit: a unit name as a string
             charm_name: name of charm as a string
+
+        Note:
+            `JujuTopology` should not be constructed directly by charm code. Please
+            use `ProviderTopology` or `AggregatorTopology`.
         """
         self.model = model
         self.model_uuid = model_uuid
@@ -167,6 +172,7 @@ class JujuTopology:
                 - "application"
                 - "unit"
                 - "charm_name"
+
                 `unit` and `charm_name` may be empty, but will result in more limited
                 labels. However, this allows us to support payload-only charms.
 
@@ -185,16 +191,15 @@ class JujuTopology:
     def identifier(self) -> str:
         """Format the topology information into a terse string."""
         # This is odd, but may have `None` as a model key
-        return "_".join([str(val) for val in self.as_dict().values()]).replace("/", "_")
+        return "_".join([str(val) for val in self.as_promql_label_dict().values()]).replace(
+            "/", "_"
+        )
 
     @property
     def promql_labels(self) -> str:
         """Format the topology information into a verbose string."""
         return ", ".join(
-            [
-                'juju_{}="{}"'.format(key, value)
-                for key, value in self.as_dict(rename_keys={"charm_name": "charm"}).items()
-            ]
+            ['{}="{}"'.format(key, value) for key, value in self.as_promql_label_dict().items()]
         )
 
     def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> OrderedDict:
@@ -234,6 +239,10 @@ class JujuTopology:
             "juju_{}".format(key): val
             for key, val in self.as_dict(rename_keys={"charm_name": "charm"}).items()
         }
+        # The leader is the only unit that sets alert rules, if "juju_unit" is present,
+        # then the rules will only be evaluated for that unit
+        if "juju_unit" in vals:
+            vals.pop("juju_unit")
 
         return vals
 
@@ -392,12 +401,13 @@ class AlertRules:
 
             # update rules with additional metadata
             for alert_group in alert_groups:
-                # update group name with topology and sub-path
-                alert_group["name"] = self._group_name(
-                    str(root_path),
-                    str(file_path),
-                    alert_group["name"],
-                )
+                if not self._is_already_modified(alert_group["name"]):
+                    # update group name with topology and sub-path
+                    alert_group["name"] = self._group_name(
+                        str(root_path),
+                        str(file_path),
+                        alert_group["name"],
+                    )
 
                 # add "juju_" topology labels
                 for alert_rule in alert_group["rules"]:
@@ -405,7 +415,10 @@ class AlertRules:
                         alert_rule["labels"] = {}
 
                     if self.topology:
-                        alert_rule["labels"].update(self.topology.as_promql_label_dict())
+                        # only insert labels that do not already exist
+                        for label, val in self.topology.as_promql_label_dict().items():
+                            if label not in alert_rule["labels"]:
+                                alert_rule["labels"][label] = val
                         # insert juju topology filters into a prometheus alert rule
                         alert_rule["expr"] = self.topology.render(alert_rule["expr"])
 
@@ -435,6 +448,13 @@ class AlertRules:
         group_name_parts.extend([rel_path, group_name, "alerts"])
         # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
+
+    def _is_already_modified(self, name: str) -> bool:
+        """Detect whether a group name has already been modified with juju topology."""
+        modified_matcher = re.compile(r"^.*?_[\da-f]{8}-([\da-f]{4}-){3}[\da-f]{12}_.*?alerts$")
+        if modified_matcher.match(name) is not None:
+            return True
+        return False
 
     @classmethod
     def _multi_suffix_glob(
@@ -793,7 +813,7 @@ class PrometheusRemoteWriteConsumer(Object):
     def _push_alerts_on_relation_joined(self, event: RelationEvent) -> None:
         self._push_alerts_to_relation_databag(event.relation)
 
-    def _push_alerts_to_all_relation_databags(self, _: HookEvent) -> None:
+    def _push_alerts_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
         for relation in self.model.relations[self._relation_name]:
             self._push_alerts_to_relation_databag(relation)
 
@@ -808,6 +828,10 @@ class PrometheusRemoteWriteConsumer(Object):
 
         if alert_rules_as_dict:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+
+    def reload_alerts(self) -> None:
+        """Reload alert rules from disk and push to relation data."""
+        self._push_alerts_to_all_relation_databags(None)
 
     @property
     def endpoints(self) -> List[Dict[str, str]]:
@@ -1027,32 +1051,24 @@ class PrometheusRemoteWriteProvider(Object):
             if not alert_rules:
                 continue
 
-            try:
-                scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
-                identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
-                alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
-            except KeyError as e:
-                logger.warning(
-                    "Relation %s has no 'scrape_metadata': %s",
-                    relation.id,
-                    e,
-                )
-
-                if "groups" not in alert_rules:
-                    logger.warning("No alert groups were found in relation data")
-                    continue
-                # Construct an ID based on what's in the alert rules
-                for group in alert_rules["groups"]:
-                    try:
-                        labels = group["rules"][0]["labels"]
-                        identifier = "{}_{}_{}".format(
-                            labels["juju_model"],
-                            labels["juju_model_uuid"],
-                            labels["juju_application"],
-                        )
-                        alerts[identifier] = alert_rules
-                    except KeyError:
-                        logger.error("Alert rules were found but no usable labels were present")
+            if "groups" not in alert_rules:
+                logger.warning("No alert groups were found in relation data")
+                continue
+            # Construct an ID based on what's in the alert rules
+            for group in alert_rules["groups"]:
+                try:
+                    labels = group["rules"][0]["labels"]
+                    identifier = "{}_{}_{}".format(
+                        labels["juju_model"],
+                        labels["juju_model_uuid"],
+                        labels["juju_application"],
+                    )
+                    if identifier not in alerts:
+                        alerts[identifier] = {"groups": [group]}
+                    else:
+                        alerts[identifier]["groups"].append(group)
+                except KeyError:
+                    logger.error("Alert rules were found but no usable labels were present")
 
         return alerts
 
