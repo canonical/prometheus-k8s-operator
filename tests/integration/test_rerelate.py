@@ -122,12 +122,12 @@ async def test_remove_related_app(ops_test: OpsTest):
             lambda: "alertmanager" not in ops_test.model.applications,
             lambda: "grafana" not in ops_test.model.applications,
             lambda: "grafana-agent" not in ops_test.model.applications,
-            timeout=60,
+            timeout=300,
         )
     except asyncio.exceptions.TimeoutError:
         logger.warning("Timeout reached while blocking!")
 
-    await ops_test.model.wait_for_idle(apps=[app_name], timeout=600)
+    await ops_test.model.wait_for_idle(status="active", timeout=600)
 
 
 @pytest.mark.abort_on_fail
