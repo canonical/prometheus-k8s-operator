@@ -2244,7 +2244,7 @@ class PromqlTransformer:
         try:
             return self._exec(args)
         except Exception as e:
-            logger.debug('Applying the expression failed: "{}", falling back to the original', e)
+            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
             return expression
 
     def _get_transformer_path(self) -> Optional[Path]:
