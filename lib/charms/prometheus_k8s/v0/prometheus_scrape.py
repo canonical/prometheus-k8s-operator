@@ -334,7 +334,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 17
+LIBPATCH = 18
 
 logger = logging.getLogger(__name__)
 
@@ -2244,7 +2244,7 @@ class PromqlTransformer:
         try:
             return self._exec(args)
         except Exception as e:
-            logger.debug('Applying the expression failed: "{}", falling back to the original', e)
+            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
             return expression
 
     def _get_transformer_path(self) -> Optional[Path]:
