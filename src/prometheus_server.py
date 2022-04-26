@@ -102,3 +102,39 @@ class Prometheus:
         """
         info = self._build_info()
         return info.get("version", "")
+
+    def is_healthy(self) -> bool:
+        """Check if the system is healthy.
+
+        Returns:
+            True or False
+        """
+        url = urljoin(self.base_url, "-/healthy")
+
+        try:
+            response = get(url, timeout=self.api_timeout)
+
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+        except Exception:
+            return False
+
+    def is_ready(self) -> bool:
+        """Check if the system is ready.
+
+        Returns:
+            True or False
+        """
+        url = urljoin(self.base_url, "-/ready")
+
+        try:
+            response = get(url, timeout=self.api_timeout)
+
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+        except Exception:
+            return False

@@ -25,7 +25,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, UnknownStatus, WaitingStatus
 from ops.pebble import ChangeError, Layer
 
 from prometheus_server import Prometheus
@@ -89,6 +89,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
+        self.framework.observe(self.on.update_status, self._update_status)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -159,6 +160,26 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_consumer.update_source(self._external_url)
 
         self.unit.status = ActiveStatus()
+
+    def _update_status(self, _):
+        """Update the status of the charm."""
+        # Run configure to reset the status
+        self._configure(_)
+
+        if not isinstance(self.unit.status, ActiveStatus):
+            # Status is already not active so do nothing.
+            return
+
+        external_url = urlparse(self._external_url)
+        prometheus_server = Prometheus(web_route_prefix=external_url.path)
+
+        if not prometheus_server.is_healthy():
+            self.unit.status = BlockedStatus("Prometheus failed health check")
+            return
+
+        if not prometheus_server.is_ready():
+            self.unit.status = UnknownStatus("Prometheus is not ready")
+            return
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.

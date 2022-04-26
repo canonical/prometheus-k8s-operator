@@ -94,3 +94,51 @@ class TestServerPrefix(unittest.TestCase):
         )
 
         self.assertFalse(self.prometheus.reload_configuration())
+
+    @responses.activate
+    def test_healthy(self):
+        self.prometheus = Prometheus("localhost", 9090)
+
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/-/healthy",
+            status=200,
+        )
+
+        self.assertTrue(self.prometheus.is_healthy())
+
+    @responses.activate
+    def test_not_healthy(self):
+        self.prometheus = Prometheus("localhost", 9090)
+
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/-/healthy",
+            status=500,
+        )
+
+        self.assertFalse(self.prometheus.is_healthy())
+
+    @responses.activate
+    def test_ready(self):
+        self.prometheus = Prometheus("localhost", 9090)
+
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/-/ready",
+            status=200,
+        )
+
+        self.assertTrue(self.prometheus.is_ready())
+
+    @responses.activate
+    def test_not_ready(self):
+        self.prometheus = Prometheus("localhost", 9090)
+
+        responses.add(
+            responses.GET,
+            "http://localhost:9090/-/ready",
+            status=500,
+        )
+
+        self.assertFalse(self.prometheus.is_ready())
