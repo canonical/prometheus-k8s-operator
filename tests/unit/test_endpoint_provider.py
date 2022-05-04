@@ -153,6 +153,22 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
 
     @patch_network_get(private_address="192.0.8.2")
+    def test_provider_unit_sets_bind_address_on_update_status(self, *unused):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.charm.on.update_status.emit()
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertIn("prometheus_scrape_unit_address", data)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
+
+    @patch_network_get(private_address=None)
+    def test_provider_does_not_set_invalid_unit_address(self, *unused):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.container_pebble_ready("prometheus-tester")
+        self.harness.charm.on.update_status.emit()
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertNotIn("prometheus_scrape_unit_address", data)
+
+    @patch_network_get(private_address="192.0.8.2")
     def test_provider_unit_sets_bind_address_on_relation_joined(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
