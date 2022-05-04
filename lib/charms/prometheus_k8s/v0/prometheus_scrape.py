@@ -311,6 +311,8 @@ of Metrics provider charms hold eponymous information.
 
 """  # noqa: W505
 
+import contextlib
+import ipaddress
 import json
 import logging
 import os
@@ -334,7 +336,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 18
+LIBPATCH = 19
 
 logger = logging.getLogger(__name__)
 
@@ -1569,6 +1571,10 @@ class MetricsEndpointProvider(Object):
                 self._set_unit_ip,
             )
 
+        # podspec charms do not have a pebble ready event so unit ips need to be set these events
+        self.framework.observe(self._charm.on.update_status, self._set_unit_ip)
+        self.framework.observe(self._charm.on.config_changed, self._set_unit_ip)
+
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
     def _set_scrape_job_spec(self, event):
@@ -1611,12 +1617,35 @@ class MetricsEndpointProvider(Object):
         event is actually needed.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = str(
-                self._charm.model.get_binding(relation).network.bind_address
-            )
+            unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
+
+            if not self._is_valid_unit_address(unit_ip):
+                # relation data will be updated later when a valid address becomes available
+                with contextlib.suppress(KeyError):
+                    del relation.data[self._charm.unit]["prometheus_scrape_unit_address"]
+                    del relation.data[self._charm.unit]["prometheus_scrape_unit_name"]
+                continue
+
+            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_ip
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
             )
+
+    def _is_valid_unit_address(self, address: str) -> bool:
+        """Validate a unit address.
+
+        At present only IP address validation is supported, but
+        this may be extended to DNS addresses also, as needed.
+
+        Args:
+            address: a string representing a unit address
+        """
+        try:
+            _ = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+
+        return True
 
     @property
     def _scrape_jobs(self) -> list:
