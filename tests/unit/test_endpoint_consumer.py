@@ -436,7 +436,7 @@ class TestEndpointConsumer(unittest.TestCase):
         with self.assertLogs(level="WARNING") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts()
             messages = logger.output
-            self.assertEqual(len(messages), 2)
+            self.assertEqual(len(messages), 1)
             self.assertIn(
                 "Alert rules were found but no usable group or identifier was present", messages[1]
             )
