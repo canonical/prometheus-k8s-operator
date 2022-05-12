@@ -256,7 +256,10 @@ class PrometheusCharm(CharmBase):
         Returns:
             True if time specification is valid and False otherwise.
         """
-        if not (matched := re.match(r"[1-9][0-9]*[ymwdhs]", timeval)):
+        timespec_re = re.compile(
+            r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
+        )
+        if not (matched := timespec_re.search(timeval)):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return bool(matched)
