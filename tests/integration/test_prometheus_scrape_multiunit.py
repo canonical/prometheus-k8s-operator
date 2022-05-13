@@ -16,9 +16,7 @@ This test scaling up/down both sides of the relation, and upgrading.
 """
 
 import asyncio
-import json
 import logging
-from typing import List
 
 import pytest
 from helpers import (
@@ -104,7 +102,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     # AND all prometheus units have the exact same targets
     # Only comparing the `labels` because comparing the entire `targets` dict would be cumbersome:
     # would need to pop 'lastScrape', 'lastScrapeDuration', whose values may differ across units.
-    labels = [[{'labels': d['labels']} for d in unit_targets] for unit_targets in targets_by_unit]
+    labels = [[{"labels": d["labels"]} for d in unit_targets] for unit_targets in targets_by_unit]
     for u in range(1, len(targets_by_unit)):
         assert labels[0] == labels[u]
     # Could use `set`, but that would produce unhelpful error messages.
