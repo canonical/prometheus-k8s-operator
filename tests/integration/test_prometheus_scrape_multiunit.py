@@ -15,13 +15,10 @@ This test scaling up/down both sides of the relation, and upgrading.
 
 import asyncio
 import logging
-from deepdiff import DeepDiff
+
 import pytest
-from helpers import (
-    check_prometheus_is_ready,
-    get_prometheus_active_targets,
-    oci_image,
-)
+from deepdiff import DeepDiff
+from helpers import check_prometheus_is_ready, get_prometheus_active_targets, oci_image
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -175,16 +172,11 @@ async def test_rescale_tester(ops_test: OpsTest):
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
-        *[
-            check_prometheus_is_ready(ops_test, prometheus_app_name, u)
-            for u in range(num_units)
-        ]
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
 
     # WHEN tester is scaled back down
-    await ops_test.model.applications[tester_app_name].scale(
-        scale_change=-num_additional_units
-    )
+    await ops_test.model.applications[tester_app_name].scale(scale_change=-num_additional_units)
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
