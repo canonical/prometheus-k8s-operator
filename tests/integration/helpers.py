@@ -4,6 +4,7 @@
 
 import logging
 from pathlib import Path
+from typing import List
 
 import yaml
 from pytest_operator.plugin import OpsTest
@@ -62,6 +63,25 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     prometheus = Prometheus(host=host)
     config = await prometheus.config()
     return config
+
+
+async def get_prometheus_active_targets(
+    ops_test: OpsTest, app_name: str, unit_num: int
+) -> List[dict]:
+    """Fetch Prometheus active scrape targets.
+
+    Args:
+        ops_test: pytest-operator plugin
+        app_name: string name of Prometheus application
+        unit_num: integer number of a Prometheus juju unit
+
+    Returns:
+        Prometheus YAML configuration in string format.
+    """
+    host = await unit_address(ops_test, app_name, unit_num)
+    prometheus = Prometheus(host=host)
+    targets = await prometheus.active_targets()
+    return targets
 
 
 async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_num: int = 0):

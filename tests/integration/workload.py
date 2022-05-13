@@ -130,6 +130,47 @@ class Prometheus:
                 # }
                 return result["data"]["alerts"] if result["status"] == "success" else []
 
+    async def active_targets(self) -> List[dict]:
+        """Send a GET request to get active scrape targets.
+
+        Returns:
+          A lists of targets.
+        """
+        url = f"{self.base_url}/api/v1/targets"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                result = await response.json()
+                # response looks like this:
+                #
+                # {
+                #   "status": "success",
+                #   "data": {
+                #     "activeTargets": [
+                #       {
+                #         "discoveredLabels": {
+                #           "__address__": "localhost:9090",
+                #           "__metrics_path__": "/metrics",
+                #           "__scheme__": "http",
+                #           "job": "prometheus"
+                #         },
+                #         "labels": {
+                #           "instance": "localhost:9090",
+                #           "job": "prometheus"
+                #         },
+                #         "scrapePool": "prometheus",
+                #         "scrapeUrl": "http://localhost:9090/metrics",
+                #         "globalUrl": "http://prom-0.prom-endpoints.m.svc.cluster.local:9090/metrics",
+                #         "lastError": "",
+                #         "lastScrape": "2022-05-12T16:54:19.019386006Z",
+                #         "lastScrapeDuration": 0.003985463,
+                #         "health": "up"
+                #       }
+                #     ],
+                #     "droppedTargets": []
+                #   }
+                # }
+                return result["data"]["activeTargets"] if result["status"] == "success" else []
+
     async def run_promql(self, query: str, disable_ssl: bool = True) -> list:
         prometheus = PrometheusConnect(url=self.base_url, disable_ssl=disable_ssl)
         return prometheus.custom_query(query=query)

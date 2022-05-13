@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""This test module tests the prometheus_scrape interface with multiple-to-multiple units related.
+
+This test scaling up/down both sides of the relation, and upgrading.
+
+1. Deploy several units of prometheus and several units of a "provider" charm, and relate them.
+2. Confirm all units of prometheus have the correct and same targets and rules.
+3. Upgrade prometheus, and confirm the same.
+4. Scale prometheus up, and confirm the same.
+5. Scale prometheus down, and confirm the same.
+6. Scale the "provider" charm up, and confirm the same.
+7. Scale the "provider" charm down, and confirm the same.
+"""
+
+import asyncio
+import json
+import logging
+from typing import List
+
+import pytest
+from helpers import (
+    check_prometheus_is_ready,
+    get_job_config_for,
+    get_prometheus_active_targets,
+    get_prometheus_config,
+    get_prometheus_rules,
+    get_rules_for,
+    initial_workload_is_ready,
+    oci_image,
+)
+from pytest_operator.plugin import OpsTest
+
+logger = logging.getLogger(__name__)
+
+prometheus_app_name = "prometheus"
+tester_app_name = "tester"
+num_units = 2  # Using the same number of units for both prometheus and the tester
+
+
+async def test_setup_env(ops_test: OpsTest):
+    await ops_test.model.set_config({"logging-config": "<root>=WARNING; unit=DEBUG"})
+
+
+@pytest.mark.abort_on_fail
+async def test_prometheus_scrape_relation_with_prometheus_tester(
+    ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
+):
+    """Relate several units of prometheus and several units of the tester charm."""
+    app_names = [prometheus_app_name, tester_app_name]
+
+    # GIVEN prometheus and the tester charm are deployed with two units each
+
+    await asyncio.gather(
+        ops_test.model.deploy(
+            prometheus_charm,
+            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            application_name=prometheus_app_name,
+            num_units=num_units,
+        ),
+        ops_test.model.deploy(
+            prometheus_tester_charm,
+            resources={
+                "prometheus-tester-image": oci_image(
+                    "./tests/integration/prometheus-tester/metadata.yaml",
+                    "prometheus-tester-image",
+                )
+            },
+            application_name=tester_app_name,
+            num_units=num_units,
+        ),
+    )
+
+    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=num_units)
+    await asyncio.gather(
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+
+    # WHEN prometheus is not related to anything
+    # THEN all prometheus units should have only one scrape target (self-scraping)
+    for unit_num in range(num_units):
+        targets = await get_prometheus_active_targets(ops_test, prometheus_app_name, unit_num)
+        assert len(targets) == 1
+        self_scrape = next(iter(targets))
+        assert self_scrape["labels"]["job"] == "prometheus"
+        assert self_scrape["labels"]["instance"] == "localhost:9090"
+
+    # WHEN prometheus is related to the tester
+    await ops_test.model.add_relation(prometheus_app_name, tester_app_name)
+    await ops_test.model.wait_for_idle(apps=app_names, status="active")
+
+    # THEN all prometheus units should have all tester units as targets (as well as self-scraping)
+    # `targets_by_unit` is a List[List[dict]]: every unit has a List[dict] targets.
+    targets_by_unit = await asyncio.gather(
+        *[
+            get_prometheus_active_targets(ops_test, prometheus_app_name, u)
+            for u in range(num_units)
+        ]
+    )
+    assert all(len(targets) == num_units + 1 for targets in targets_by_unit)
+
+    # AND all prometheus units have the exact same targets
+    # Only comparing the `labels` because comparing the entire `targets` dict would be cumbersome:
+    # would need to pop 'lastScrape', 'lastScrapeDuration', whose values may differ across units.
+    labels = [[{'labels': d['labels']} for d in unit_targets] for unit_targets in targets_by_unit]
+    for u in range(1, len(targets_by_unit)):
+        assert labels[0] == labels[u]
+    # Could use `set`, but that would produce unhelpful error messages.
+    # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
