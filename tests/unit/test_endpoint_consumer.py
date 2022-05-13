@@ -438,7 +438,7 @@ class TestEndpointConsumer(unittest.TestCase):
             messages = logger.output
             self.assertEqual(len(messages), 1)
             self.assertIn(
-                "Alert rules were found but no usable group or identifier was present", messages[1]
+                "Alert rules were found but no usable group or identifier was present", messages[0]
             )
 
     def test_consumer_accepts_rules_with_no_identifier(self):
