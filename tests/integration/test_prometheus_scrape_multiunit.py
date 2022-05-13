@@ -15,7 +15,7 @@ This test scaling up/down both sides of the relation, and upgrading.
 
 import asyncio
 import logging
-
+from deepdiff import DeepDiff
 import pytest
 from helpers import (
     check_prometheus_is_ready,
@@ -102,7 +102,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     # would need to pop 'lastScrape', 'lastScrapeDuration', whose values may differ across units.
     labels = [[{"labels": d["labels"]} for d in unit_targets] for unit_targets in targets_by_unit]
     for u in range(1, len(targets_by_unit)):
-        assert labels[0] == labels[u]
+        assert DeepDiff(labels[0], labels[u], ignore_order=True) == {}
     # Could use `set`, but that would produce unhelpful error messages.
     # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
 
@@ -154,6 +154,43 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
         apps=[prometheus_app_name], status="active", timeout=600, wait_for_exact_units=num_units
+    )
+    await ops_test.model.wait_for_idle(status="active")
+    await asyncio.gather(
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+
+
+@pytest.mark.abort_on_fail
+async def test_rescale_tester(ops_test: OpsTest):
+    # WHEN tester is scaled up
+    num_additional_units = 1
+    await ops_test.model.applications[tester_app_name].scale(scale_change=num_additional_units)
+    new_num_units = num_units + num_additional_units
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[tester_app_name],
+        status="active",
+        timeout=600,
+        wait_for_exact_units=new_num_units,
+    )
+    await ops_test.model.wait_for_idle(status="active")
+    await asyncio.gather(
+        *[
+            check_prometheus_is_ready(ops_test, prometheus_app_name, u)
+            for u in range(num_units)
+        ]
+    )
+
+    # WHEN tester is scaled back down
+    await ops_test.model.applications[tester_app_name].scale(
+        scale_change=-num_additional_units
+    )
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[tester_app_name], status="active", timeout=600, wait_for_exact_units=num_units
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
