@@ -30,7 +30,10 @@ class PrometheusTesterCharm(CharmBase):
                 "static_configs": [{"targets": ["*:8000"], "labels": {"name": self._name}}],
             }
         ]
-        self.prometheus = MetricsEndpointProvider(self, jobs=jobs)
+        logger.warning("Rules path is: %s", self.model.config["alert-rules-path"])
+        self.prometheus = MetricsEndpointProvider(
+            self, jobs=jobs, alert_rules_path=self.model.config["alert-rules-path"]
+        )
         self.framework.observe(
             self.on.prometheus_tester_pebble_ready, self._on_prometheus_tester_pebble_ready
         )

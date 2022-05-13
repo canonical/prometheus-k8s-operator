@@ -30,7 +30,7 @@ async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int):
+async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
@@ -44,7 +44,7 @@ async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: 
     host = await unit_address(ops_test, app_name, unit_num)
     prometheus = Prometheus(host=host)
     is_ready = await prometheus.is_ready()
-    assert is_ready
+    return is_ready
 
 
 async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
@@ -189,67 +189,3 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
         ops_test.model.applications[name].units[0].workload_status == "active"
         for name in app_names
     )
-
-
-def write_tester_alert_rule_file(rule, name):
-    """Inject a new alert rule into Prometheus Tester.
-
-    Args:
-        rule: a string containing Prometheus alert rule in YAML format.
-        name: a string name of alert rule file
-    """
-    rules_path = Path(TESTER_ALERT_RULES_PATH).joinpath(name)
-    with rules_path.open(mode="w") as f:
-        f.write(rule)
-
-
-def remove_tester_alert_rule_file(name):
-    """Remove an alert rule file from Prometheus Tester.
-
-    Args:
-        rule: a string containing Prometheus alert rule in YAML format.
-        name: a string name of alert rule file
-    """
-    rules_path = Path(TESTER_ALERT_RULES_PATH).joinpath(name)
-    rules_path.unlink()
-
-
-async def rebuild_prometheus_tester(ops_test):
-    """Build the Prometheus Tester charm.
-
-    Args:
-        ops_test: pytest-operator plugin
-
-    Returns:
-        pytest operator handle to the Prometheus tester charm
-    """
-    charm_path = "tests/integration/prometheus-tester"
-    charm = await ops_test.build_charm(charm_path)
-    return charm
-
-
-class IPAddressWorkaround:
-    """Context manager for deploying a charm that needs to have its IP address.
-
-    Due to a juju bug, occasionally some charms finish a startup sequence without
-    having an ip address returned by `bind_address`.
-    https://bugs.launchpad.net/juju/+bug/1929364
-
-    On entry, the context manager changes the update status interval to the minimum 10s, so that
-    the update_status hook is trigger shortly.
-    On exit, the context manager restores the interval to its previous value.
-    """
-
-    def __init__(self, ops_test: OpsTest):
-        self.ops_test = ops_test
-
-    async def __aenter__(self):
-        """On entry, the update status interval is set to the minimum 10s."""
-        config = await self.ops_test.model.get_config()
-        self.revert_to = config["update-status-hook-interval"]
-        await self.ops_test.model.set_config({"update-status-hook-interval": "10s"})
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, exc_traceback):
-        """On exit, the update status interval is reverted to its original value."""
-        await self.ops_test.model.set_config({"update-status-hook-interval": self.revert_to})
