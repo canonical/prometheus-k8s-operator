@@ -159,7 +159,7 @@ class Prometheus:
                 #         },
                 #         "scrapePool": "prometheus",
                 #         "scrapeUrl": "http://localhost:9090/metrics",
-                #         "globalUrl": "http://prom-0.prom-endpoints.m.svc.cluster.local:9090/metrics",
+                #         "globalUrl": "http://prom-0....local:9090/metrics",
                 #         "lastError": "",
                 #         "lastScrape": "2022-05-12T16:54:19.019386006Z",
                 #         "lastScrapeDuration": 0.003985463,
