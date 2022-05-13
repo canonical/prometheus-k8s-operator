@@ -116,9 +116,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     )
 
     # THEN nothing breaks
-    await ops_test.model.wait_for_idle(
-        status="active",
-    )
+    await ops_test.model.wait_for_idle(status="active", idle_period=60)
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
