@@ -103,6 +103,12 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     # Could use `set`, but that would produce unhelpful error messages.
     # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
 
+    # AND all prometheus units have the exact same config
+    # TODO
+
+    # AND all prometheus units have the exact same rules
+    # TODO
+
 
 @pytest.mark.abort_on_fail
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
@@ -130,7 +136,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[prometheus_app_name],
         status="active",
-        timeout=600,
+        timeout=120,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
@@ -148,7 +154,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name], status="active", timeout=600, wait_for_exact_units=num_units
+        apps=[prometheus_app_name], status="active", timeout=120, wait_for_exact_units=num_units
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
@@ -167,7 +173,7 @@ async def test_rescale_tester(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[tester_app_name],
         status="active",
-        timeout=600,
+        timeout=120,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
@@ -180,7 +186,7 @@ async def test_rescale_tester(ops_test: OpsTest):
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[tester_app_name], status="active", timeout=600, wait_for_exact_units=num_units
+        apps=[tester_app_name], status="active", timeout=120, wait_for_exact_units=num_units
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
