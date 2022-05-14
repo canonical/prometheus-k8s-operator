@@ -99,7 +99,8 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          juju-channel: 1.23/stable
+          channel: 1.23/stable
+          juju-channel: latest/stable
           provider: microk8s
       - name: Run Prometheus integration tests
         run: tox -vve integration
