@@ -32,7 +32,6 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
-
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
