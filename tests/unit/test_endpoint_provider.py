@@ -615,3 +615,25 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
             for rule in group["rules"]:
                 self.assertIn("juju_unit", rule["labels"])
                 self.assertIn("juju_unit=", rule["expr"])
+
+
+class TestNoLeader(unittest.TestCase):
+    """Tests the case where leader is not set immediately."""
+
+    def setUp(self):
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(False)
+        self.harness.begin_with_initial_hooks()
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_alert_rules(self, _):
+        """Verify alert rules are added when leader is elected after the relation is created."""
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        self.harness.set_leader(True)
+
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name).get(
+            "alert_rules"
+        )
+        self.assertGreater(len(data), 0)
