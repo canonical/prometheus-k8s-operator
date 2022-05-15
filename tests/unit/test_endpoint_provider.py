@@ -637,4 +637,4 @@ class TestNoLeader(unittest.TestCase):
             "alert_rules"
         )
         self.assertIsNotNone(data)
-        self.assertGreater(len(data), 0)
+        self.assertGreater(len(data), 0)  # type: ignore[arg-type]
