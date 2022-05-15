@@ -636,4 +636,5 @@ class TestNoLeader(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name).get(
             "alert_rules"
         )
+        self.assertIsNotNone(data)
         self.assertGreater(len(data), 0)
