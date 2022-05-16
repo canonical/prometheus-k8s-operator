@@ -26,6 +26,12 @@ logger = logging.getLogger(__name__)
 prometheus_app_name = "prometheus"
 prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
 tester_app_name = "tester"
+tester_resources = {
+    "prometheus-tester-image": oci_image(
+        "./tests/integration/prometheus-tester/metadata.yaml",
+        "prometheus-tester-image",
+    )
+}
 num_units = 2  # Using the same number of units for both prometheus and the tester
 
 
@@ -55,12 +61,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
-            resources={
-                "prometheus-tester-image": oci_image(
-                    "./tests/integration/prometheus-tester/metadata.yaml",
-                    "prometheus-tester-image",
-                )
-            },
+            resources=tester_resources,
             application_name=tester_app_name,
             num_units=num_units,
         ),
@@ -187,6 +188,102 @@ async def test_rescale_tester(ops_test: OpsTest):
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
         apps=[tester_app_name], status="active", timeout=120, wait_for_exact_units=num_units
+    )
+    await ops_test.model.wait_for_idle(status="active")
+    await asyncio.gather(
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+
+
+@pytest.mark.abort_on_fail
+async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prometheus_charm):
+    """Upgrade prometheus and rescale tester at the same time (without waiting for idle)."""
+    # WHEN prometheus is upgraded at the same time that the tester is scaled up
+    num_additional_units = 1
+    await asyncio.gather(
+        ops_test.model.applications[prometheus_app_name].refresh(
+            path=prometheus_charm, resources=prometheus_resources
+        ),
+        ops_test.model.applications[tester_app_name].scale(scale_change=num_additional_units),
+    )
+    new_num_units = num_units + num_additional_units
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[tester_app_name],
+        status="active",
+        idle_period=60,
+        timeout=120,
+        wait_for_exact_units=new_num_units,
+    )
+    await ops_test.model.wait_for_idle(status="active", idle_period=60)
+    await asyncio.gather(
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+
+    # WHEN prometheus is upgraded at the same time that the tester is scaled back down
+    await asyncio.gather(
+        ops_test.model.applications[prometheus_app_name].refresh(
+            path=prometheus_charm, resources=prometheus_resources
+        ),
+        ops_test.model.applications[tester_app_name].scale(scale_change=-num_additional_units),
+    )
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[tester_app_name], status="active", timeout=120, wait_for_exact_units=num_units
+    )
+    await ops_test.model.wait_for_idle(status="active", idle_period=60, timeout=120)
+    await asyncio.gather(
+        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+
+
+@pytest.mark.abort_on_fail
+async def test_rescale_prometheus_while_upgrading_tester(
+    ops_test: OpsTest, prometheus_tester_charm
+):
+    # WHEN prometheus is scaled up at the same time the tester is upgraded
+    num_additional_units = 1
+    await asyncio.gather(
+        ops_test.model.applications[prometheus_app_name].refresh(
+            path=prometheus_tester_charm, resources=tester_resources
+        ),
+        ops_test.model.applications[prometheus_app_name].scale(scale_change=num_additional_units),
+    )
+    new_num_units = num_units + num_additional_units
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[prometheus_app_name],
+        status="active",
+        idle_period=60,
+        timeout=120,
+        wait_for_exact_units=new_num_units,
+    )
+    await ops_test.model.wait_for_idle(status="active")
+    await asyncio.gather(
+        *[
+            check_prometheus_is_ready(ops_test, prometheus_app_name, u)
+            for u in range(new_num_units)
+        ]
+    )
+
+    # WHEN prometheus is scaled back down
+    await asyncio.gather(
+        ops_test.model.applications[prometheus_app_name].refresh(
+            path=prometheus_tester_charm, resources=tester_resources
+        ),
+        ops_test.model.applications[prometheus_app_name].scale(scale_change=-num_additional_units),
+    )
+
+    # THEN nothing breaks
+    await ops_test.model.wait_for_idle(
+        apps=[prometheus_app_name],
+        status="active",
+        idle_period=60,
+        timeout=120,
+        wait_for_exact_units=num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
