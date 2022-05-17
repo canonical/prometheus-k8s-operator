@@ -39,6 +39,7 @@ class Prometheus:
                         return response.status == 200
             except Exception:
                 continue
+        return False
 
     async def config(self) -> str:
         """Send a GET request to get Prometheus configuration.
