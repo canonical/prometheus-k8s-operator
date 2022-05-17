@@ -245,13 +245,16 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     # )
 
     # TODO remove log line
-    logger.info(
-        "Addresses after upgrade according to show-unit: %s",
-        [
-            (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
-            for unit_num in range(num_units)
-        ],
-    )
+    for i in range(3):
+        logger.info(
+            "[%d] Addresses after first upgrade according to show-unit: %s",
+            i,
+            [
+                (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
+                for unit_num in range(num_units)
+            ],
+        )
+        await asyncio.sleep(5)
 
     # THEN nothing breaks
     await asyncio.gather(
@@ -284,13 +287,16 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     # )
 
     # TODO remove log line
-    logger.info(
-        "Addresses after second upgrade according to show-unit: %s",
-        [
-            (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
-            for unit_num in range(num_units)
-        ],
-    )
+    for i in range(3):
+        logger.info(
+            "[%d] Addresses after second upgrade according to show-unit: %s",
+            i,
+            [
+                (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
+                for unit_num in range(num_units)
+            ],
+        )
+        await asyncio.sleep(5)
 
     # THEN nothing breaks
     await asyncio.gather(
