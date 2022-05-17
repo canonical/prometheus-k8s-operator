@@ -284,6 +284,7 @@ async def juju_show_unit(
     app_data_only: bool = False,
 ) -> dict:
     """Helper function for obtaining output of `juju show-unit`.
+
     Args:
         ops_test: pytest-operator fixture,
         unit_name: app name and unit num, e.g. "loki-tester/0".
