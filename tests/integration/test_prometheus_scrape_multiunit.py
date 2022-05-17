@@ -300,7 +300,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
     # WHEN prometheus is scaled up at the same time the tester is upgraded
     num_additional_units = 1
     await asyncio.gather(
-        ops_test.model.applications[prometheus_app_name].refresh(
+        ops_test.model.applications[tester_app_name].refresh(
             path=prometheus_tester_charm, resources=tester_resources
         ),
         ops_test.model.applications[prometheus_app_name].scale(scale_change=num_additional_units),
@@ -309,7 +309,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name],
+        apps=[tester_app_name],
         status="active",
         idle_period=60,
         timeout=300,
@@ -323,9 +323,9 @@ async def test_rescale_prometheus_while_upgrading_tester(
         ]
     )
 
-    # WHEN prometheus is scaled back down
+    # WHEN prometheus is scaled back down at the same time the tester is upgraded
     await asyncio.gather(
-        ops_test.model.applications[prometheus_app_name].refresh(
+        ops_test.model.applications[tester_app_name].refresh(
             path=prometheus_tester_charm, resources=tester_resources
         ),
         ops_test.model.applications[prometheus_app_name].scale(scale_change=-num_additional_units),
@@ -333,7 +333,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name],
+        apps=[tester_app_name],
         status="active",
         idle_period=60,
         timeout=300,
