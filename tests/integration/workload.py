@@ -30,6 +30,7 @@ class Prometheus:
           True if Prometheus is ready (returned 200 OK); False otherwise.
         """
         url = f"{self.base_url}/-/ready"
+        # timeout=aiohttp.ClientTimeout(total=5)
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 return response.status == 200
@@ -170,6 +171,34 @@ class Prometheus:
                 #   }
                 # }
                 return result["data"]["activeTargets"] if result["status"] == "success" else []
+
+    async def tsdb_head_stats(self) -> dict:
+        """Send a GET request to get the TSDB headStats.
+
+        Returns:
+          The headStats dict.
+        """
+        url = f"{self.base_url}/api/v1/status/tsdb"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                result = await response.json()
+                # response looks like this:
+                #
+                # {
+                #   "status": "success",
+                #   "data": {
+                #     "headStats": {
+                #       "numSeries": 610,
+                #       "numLabelPairs": 367,
+                #       "chunkCount": 5702,
+                #       "minTime": 1652720232481,
+                #       "maxTime": 1652724527481
+                #     },
+                #     "seriesCountByMetricName": [ ... ]
+                #     ...
+                #   }
+                # }
+                return result["data"]["headStats"] if result["status"] == "success" else {}
 
     async def run_promql(self, query: str, disable_ssl: bool = True) -> list:
         prometheus = PrometheusConnect(url=self.base_url, disable_ssl=disable_ssl)

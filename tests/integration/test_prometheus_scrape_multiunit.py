@@ -18,7 +18,13 @@ import logging
 
 import pytest
 from deepdiff import DeepDiff
-from helpers import check_prometheus_is_ready, get_prometheus_active_targets, oci_image
+from helpers import (
+    check_prometheus_is_ready,
+    get_prometheus_active_targets,
+    juju_show_unit,
+    oci_image,
+    unit_address,
+)
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -200,6 +206,16 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     """Upgrade prometheus and rescale tester at the same time (without waiting for idle)."""
     # WHEN prometheus is upgraded at the same time that the tester is scaled up
     num_additional_units = 1
+
+    # TODO remove log line
+    logger.info(
+        "Addresses before upgrade: %s",
+        [
+            await unit_address(ops_test, prometheus_app_name, unit_num)
+            for unit_num in range(num_units)
+        ],
+    )
+
     await asyncio.gather(
         ops_test.model.applications[prometheus_app_name].refresh(
             path=prometheus_charm, resources=prometheus_resources
@@ -213,10 +229,29 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
         apps=[tester_app_name],
         status="active",
         idle_period=60,
-        timeout=120,
+        timeout=300,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active", idle_period=60)
+
+    # # TODO remove log line
+    # logger.info(
+    #     "Addresses after upgrade: %s",
+    #     [
+    #         await unit_address(ops_test, prometheus_app_name, unit_num)
+    #         for unit_num in range(num_units)
+    #     ],
+    # )
+
+    # TODO remove log line
+    logger.info(
+        "Addresses after upgrade according to show-unit: %s",
+        [
+            (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
+            for unit_num in range(num_units)
+        ],
+    )
+
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
@@ -231,9 +266,28 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[tester_app_name], status="active", timeout=120, wait_for_exact_units=num_units
+        apps=[tester_app_name], status="active", timeout=300, wait_for_exact_units=num_units
     )
-    await ops_test.model.wait_for_idle(status="active", idle_period=60, timeout=120)
+    await ops_test.model.wait_for_idle(status="active", idle_period=60, timeout=300)
+
+    # TODO remove log line
+    # logger.info(
+    #     "Addresses after second upgrade: %s",
+    #     [
+    #         await unit_address(ops_test, prometheus_app_name, unit_num)
+    #         for unit_num in range(num_units)
+    #     ],
+    # )
+
+    # TODO remove log line
+    logger.info(
+        "Addresses after second upgrade according to show-unit: %s",
+        [
+            (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
+            for unit_num in range(num_units)
+        ],
+    )
+
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
@@ -258,7 +312,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
         apps=[prometheus_app_name],
         status="active",
         idle_period=60,
-        timeout=120,
+        timeout=300,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
@@ -282,7 +336,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
         apps=[prometheus_app_name],
         status="active",
         idle_period=60,
-        timeout=120,
+        timeout=300,
         wait_for_exact_units=num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
