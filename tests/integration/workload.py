@@ -23,6 +23,10 @@ class Prometheus:
         """
         self.base_url = f"http://{host}:{port}"
 
+        # Set a timeout of 5 second - should be sufficient for all the checks here.
+        # The default (5 min) prolongs itests unnecessarily.
+        self.timeout = aiohttp.ClientTimeout(total=5)
+
     async def is_ready(self) -> bool:
         """Send a GET request to check readiness.
 
@@ -31,7 +35,7 @@ class Prometheus:
         """
         url = f"{self.base_url}/-/ready"
 
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
             async with session.get(url) as response:
                 return response.status == 200
 
@@ -179,7 +183,7 @@ class Prometheus:
           The headStats dict.
         """
         url = f"{self.base_url}/api/v1/status/tsdb"
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
             async with session.get(url) as response:
                 result = await response.json()
                 # response looks like this:

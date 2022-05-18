@@ -48,6 +48,22 @@ async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: 
     assert is_ready
 
 
+async def get_head_stats(ops_test: OpsTest, app_name: str, unit_num: int) -> dict:
+    """Get prometheus head stats.
+
+    Args:
+        ops_test: pytest-operator plugin
+        app_name: string name of Prometheus application
+        unit_num: integer number of a Prometheus juju unit
+
+    Returns:
+        A dict of headStats.
+    """
+    host = await unit_address(ops_test, app_name, unit_num)
+    prometheus = Prometheus(host=host)
+    return await prometheus.tsdb_head_stats()
+
+
 async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     """Fetch Prometheus configuration.
 
