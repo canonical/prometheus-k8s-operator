@@ -35,6 +35,7 @@ provides:
     interface: prometheus_scrape
 """
 
+
 JOBS: List[dict] = [
     {
         "global": {"scrape_interval": "1h"},
@@ -144,18 +145,50 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
+    def test_provider_selects_correct_refresh_event_for_sidecar(self):
+        self.harness.add_relation(RELATION_NAME, "provider")
+
+        # This is gonna be a LITTLE bit of internals
+        # Get ready to poke at ops.framework guts to build it
+        # so we can assert it's really true
+        observer_details = (
+            str(self.harness.charm.provider.handle),
+            "_set_unit_ip",
+            str(self.harness.charm.on.handle.path),
+            f"{list(self.harness.charm.meta.containers.values())[0].name.replace('-', '_')}_pebble_ready",
+        )
+        self.assertIn(observer_details, self.harness.framework._observers)
+
+    def test_provider_selects_correct_refresh_event_for_podspec(self):
+        """Tests that Provider raises exception if the default relation has the wrong role."""
+        harness = Harness(
+            EndpointProviderCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta=f"""
+                 name: provider-tester
+                 containers:
+                   prometheus-tester:
+                 provides:
+                   {RELATION_NAME}:
+                     interface: prometheus_scrape
+                 series:
+                   - kubernetes
+         """,
+        )
+        harness.begin()
+        observer_details = (
+            str(harness.charm.provider.handle),
+            "_set_unit_ip",
+            str(harness.charm.on.handle.path),
+            "update_status",
+        )
+
+        self.assertIn(observer_details, harness.framework._observers)
+
     @patch_network_get(private_address="192.0.8.2")
     def test_provider_unit_sets_bind_address_on_pebble_ready(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
-        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
-        self.assertIn("prometheus_scrape_unit_address", data)
-        self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
-
-    @patch_network_get(private_address="192.0.8.2")
-    def test_provider_unit_sets_bind_address_on_update_status(self, *unused):
-        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
-        self.harness.charm.on.update_status.emit()
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")

@@ -324,7 +324,7 @@ from typing import Dict, List, Optional, Union
 
 import yaml
 from ops.charm import CharmBase, RelationRole
-from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 
 # The unique Charmhub library identifier, never change it
 from ops.model import ModelError
@@ -1432,6 +1432,7 @@ class MetricsEndpointProvider(Object):
         relation_name: str = DEFAULT_RELATION_NAME,
         jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+        refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1525,6 +1526,8 @@ class MetricsEndpointProvider(Object):
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved relative to the directory hosting the charm entry file.
                 The alert rules are automatically updated on charm upgrade.
+            refresh_event: an optional bound event or list of bound events which
+                will be observed to re-set scrape job data (IP address and others)
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -1563,6 +1566,28 @@ class MetricsEndpointProvider(Object):
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
         self.framework.observe(events.relation_changed, self._set_scrape_job_spec)
 
+        if not refresh_event:
+            if len(self._charm.meta.containers) == 1:
+                if "kubernetes" in self._charm.meta.series:
+                    refresh_event = [self._charm.on.update_status]
+                else:
+                    container = list(self._charm.meta.containers.values())[0]
+                    refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
+            else:
+                logger.warning(
+                    "%d containers are present in metadata.yaml and "
+                    "refresh_event was not specified. Defaulting to update_status. "
+                    "Metrics IP may not be set in a timely fashion."
+                )
+                refresh_event = [self._charm.on.update_status]
+
+        else:
+            if not isinstance(refresh_event, list):
+                refresh_event = [refresh_event]
+
+        for ev in refresh_event:
+            self.framework.observe(ev, self._set_unit_ip)
+
         # dirty fix: set the ip address when the containers start, as a workaround
         # for not being able to lookup the pod ip
         for container_name in charm.unit.containers:
@@ -1570,10 +1595,6 @@ class MetricsEndpointProvider(Object):
                 charm.on[container_name].pebble_ready,
                 self._set_unit_ip,
             )
-
-        # podspec charms do not have a pebble ready event so unit ips need to be set these events
-        self.framework.observe(self._charm.on.update_status, self._set_unit_ip)
-        self.framework.observe(self._charm.on.config_changed, self._set_unit_ip)
 
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
