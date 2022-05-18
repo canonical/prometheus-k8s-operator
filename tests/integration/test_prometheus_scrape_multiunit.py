@@ -18,13 +18,7 @@ import logging
 
 import pytest
 from deepdiff import DeepDiff
-from helpers import (
-    check_prometheus_is_ready,
-    get_prometheus_active_targets,
-    juju_show_unit,
-    oci_image,
-    unit_address,
-)
+from helpers import check_prometheus_is_ready, get_prometheus_active_targets, oci_image
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -40,9 +34,15 @@ tester_resources = {
 }
 num_units = 2  # Using the same number of units for both prometheus and the tester
 
+# The period of time required to be idle before `wait_for_idle` returns is set to 90 sec because
+# unit upgrades were observed to take place 40-70 seconds apart.
+idle_period = 90
+
 
 async def test_setup_env(ops_test: OpsTest):
-    await ops_test.model.set_config({"logging-config": "<root>=WARNING; unit=DEBUG"})
+    await ops_test.model.set_config(
+        {"logging-config": "<root>=WARNING; unit=DEBUG", "update-status-hook-interval": "60m"}
+    )
 
 
 @pytest.mark.abort_on_fail
@@ -126,7 +126,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     )
 
     # THEN nothing breaks
-    await ops_test.model.wait_for_idle(status="active", idle_period=60)
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
@@ -207,15 +207,7 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     # WHEN prometheus is upgraded at the same time that the tester is scaled up
     num_additional_units = 1
 
-    # TODO remove log line
-    logger.info(
-        "Addresses before upgrade: %s",
-        [
-            await unit_address(ops_test, prometheus_app_name, unit_num)
-            for unit_num in range(num_units)
-        ],
-    )
-
+    logger.info("Upgrading prometheus and scaling-up tester at the same time...")
     await asyncio.gather(
         ops_test.model.applications[prometheus_app_name].refresh(
             path=prometheus_charm, resources=prometheus_resources
@@ -225,6 +217,7 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     new_num_units = num_units + num_additional_units
 
     # AND tester becomes active/idle after scale-up
+    logger.info("Waiting for tester to become active/idle...")
     await ops_test.model.wait_for_idle(
         apps=[tester_app_name],
         status="active",
@@ -233,28 +226,8 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     )
 
     # AND all apps become idle after prometheus upgrade
-    await ops_test.model.wait_for_idle(status="active", idle_period=60)
-
-    # # TODO remove log line
-    # logger.info(
-    #     "Addresses after upgrade: %s",
-    #     [
-    #         await unit_address(ops_test, prometheus_app_name, unit_num)
-    #         for unit_num in range(num_units)
-    #     ],
-    # )
-
-    # TODO remove log line
-    for i in range(3):
-        logger.info(
-            "[%d] Addresses after first upgrade according to show-unit: %s",
-            i,
-            [
-                (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
-                for unit_num in range(num_units)
-            ],
-        )
-        await asyncio.sleep(5)
+    logger.info("Waiting for all apps to become active/idle...")
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
 
     # THEN nothing breaks
     await asyncio.gather(
@@ -262,6 +235,7 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     )
 
     # WHEN prometheus is upgraded at the same time that the tester is scaled back down
+    logger.info("Upgrading prometheus and scaling-down tester at the same time...")
     await asyncio.gather(
         ops_test.model.applications[prometheus_app_name].refresh(
             path=prometheus_charm, resources=prometheus_resources
@@ -270,33 +244,14 @@ async def test_upgrade_prometheus_while_rescaling_tester(ops_test: OpsTest, prom
     )
 
     # AND tester becomes active/idle after scale-down
+    logger.info("Waiting for tester to become active/idle...")
     await ops_test.model.wait_for_idle(
         apps=[tester_app_name], status="active", timeout=300, wait_for_exact_units=num_units
     )
 
     # AND all apps become idle after prometheus upgrade
-    await ops_test.model.wait_for_idle(status="active", idle_period=60, timeout=300)
-
-    # TODO remove log line
-    # logger.info(
-    #     "Addresses after second upgrade: %s",
-    #     [
-    #         await unit_address(ops_test, prometheus_app_name, unit_num)
-    #         for unit_num in range(num_units)
-    #     ],
-    # )
-
-    # TODO remove log line
-    for i in range(3):
-        logger.info(
-            "[%d] Addresses after second upgrade according to show-unit: %s",
-            i,
-            [
-                (await juju_show_unit(ops_test, f"{prometheus_app_name}/{unit_num}"))["address"]
-                for unit_num in range(num_units)
-            ],
-        )
-        await asyncio.sleep(5)
+    logger.info("Waiting for all apps to become active/idle...")
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
 
     # THEN nothing breaks
     await asyncio.gather(
@@ -327,7 +282,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
     )
 
     # AND all apps become idle after tester upgrade
-    await ops_test.model.wait_for_idle(status="active", idle_period=60)
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
 
     # THEN nothing breaks
     await asyncio.gather(
@@ -354,7 +309,7 @@ async def test_rescale_prometheus_while_upgrading_tester(
     )
 
     # AND all apps become idle after tester upgrade
-    await ops_test.model.wait_for_idle(status="active", idle_period=60)
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
 
     # THEN nothing breaks
     await asyncio.gather(
