@@ -16,6 +16,7 @@ This test scaling up/down both sides of the relation, and upgrading.
 import asyncio
 import logging
 from collections import namedtuple
+
 import pytest
 from deepdiff import DeepDiff
 from helpers import (
