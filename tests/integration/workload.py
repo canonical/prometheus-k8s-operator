@@ -30,16 +30,10 @@ class Prometheus:
           True if Prometheus is ready (returned 200 OK); False otherwise.
         """
         url = f"{self.base_url}/-/ready"
-        for attempt in range(3):
-            try:
-                async with aiohttp.ClientSession(
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as session:
-                    async with session.get(url) as response:
-                        return response.status == 200
-            except Exception:
-                continue
-        return False
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+            async with session.get(url) as response:
+                return response.status == 200
 
     async def config(self) -> str:
         """Send a GET request to get Prometheus configuration.
