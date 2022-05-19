@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Union
 import yaml
 from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import ModelError, Relation
+from ops.model import Relation
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -1144,13 +1144,13 @@ class PromqlTransformer:
         arch = "amd64" if arch == "x86_64" else arch
         res = "promql-transform-{}".format(arch)
         try:
-            path = self._charm.model.resources.fetch(res)
+            path = Path(res).resolve()
             os.chmod(path, 0o777)
             return path
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
-        except (NameError, ModelError):
-            logger.debug('No resource available for the platform "{}"'.format(arch))
+        except FileNotFoundError:
+            logger.debug('Could not locate promql transform at: "{}"'.format(res))
         return None
 
     def _exec(self, cmd):

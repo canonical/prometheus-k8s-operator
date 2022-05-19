@@ -12,3 +12,11 @@ parts:
   charm:
     build-packages:
       - git
+  promql-transform:
+    plugin: dump
+    source: .
+    build-packages:
+      - curl
+    override-pull: |
+      curl -L -O https://github.com/canonical/promql-transform/releases/download/rev6/promql-transform-${SNAP_ARCH}
+      chmod +x promql-transform-*
