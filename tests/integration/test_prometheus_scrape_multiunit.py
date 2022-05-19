@@ -161,20 +161,25 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
+    query = 'count_over_time(up{instance="localhost:9090",job="prometheus"}[1y])'
     up_before = await asyncio.gather(
         *[
-            run_promql(ops_test, 'up{instance="localhost:9090"}[2h]', prometheus_app_name, u)
+            run_promql(ops_test, query, prometheus_app_name, u)
             for u in range(num_units)
         ]
     )
     # Each response looks like this:
     # [
     #     {
-    #         "metric": {"__name__": "up", "instance": "localhost:9090", "job": "prometheus"},
-    #         "values": [[1652931430.156, "1"], [1652931435.156, "1"]],
+    #         "metric":{"instance":"localhost:9090","job":"prometheus"},
+    #         "value":[1652985131.383,"711"]
     #     }
     # ]
-    up_before = [next(iter(response))["values"] for response in up_before]
+    # Extract the count value and convert it to int
+    up_before = [int(next(iter(response))["value"][1]) for response in up_before]
+    # Sanity check: make sure it's not empty
+    assert len(up_before) > 0
+    assert all(up_before)
 
     # WHEN prometheus is upgraded
     await ops_test.model.applications[prometheus_app_name].refresh(
@@ -190,17 +195,14 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     # AND series continuity is maintained
     up_after = await asyncio.gather(
         *[
-            run_promql(ops_test, 'up{instance="localhost:9090"}[2h]', prometheus_app_name, u)
+            run_promql(ops_test, query, prometheus_app_name, u)
             for u in range(num_units)
         ]
     )
-    up_after = [next(iter(response))["values"] for response in up_after]
-    # Need to convert the list of lists to list of tuples to be able to use set.issubset, which
-    # doesn't work on lists because list is unhashable so cannot be a set element.
-    assert all(
-        set(map(tuple, up_before[i])).issubset(set(map(tuple, up_after[i])))
-        for i in range(num_units)
-    )
+    up_after = [int(next(iter(response))["value"][1]) for response in up_after]
+    # The count after an upgrade must be greater than or equal to the count before the upgrade, for
+    # every prometheus unit (units start at different times so the count across units may differ).
+    assert all([up_before[i] <= up_after[i] for i in range(num_units)])
 
 
 @pytest.mark.abort_on_fail
