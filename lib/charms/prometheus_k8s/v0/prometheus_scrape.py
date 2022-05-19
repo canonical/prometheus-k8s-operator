@@ -1579,7 +1579,8 @@ class MetricsEndpointProvider(Object):
                 logger.warning(
                     "%d containers are present in metadata.yaml and "
                     "refresh_event was not specified. Defaulting to update_status. "
-                    "Metrics IP may not be set in a timely fashion."
+                    "Metrics IP may not be set in a timely fashion.",
+                    len(self._charm.meta.containers),
                 )
                 refresh_event = [self._charm.on.update_status]
 
@@ -1589,12 +1590,6 @@ class MetricsEndpointProvider(Object):
 
         for ev in refresh_event:
             self.framework.observe(ev, self._set_unit_ip)
-
-        for container_name in charm.unit.containers:
-            self.framework.observe(
-                charm.on[container_name].pebble_ready,
-                self._set_unit_ip,
-            )
 
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 

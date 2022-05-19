@@ -73,6 +73,20 @@ class EndpointProviderCharm(CharmBase):
         )
 
 
+class EndpointProviderCharmWithMultipleEvents(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self,
+            jobs=JOBS,
+            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            refresh_event=[self.on.prometheus_tester_pebble_ready, self.on.config_changed],
+        )
+
+
 class TestEndpointProvider(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
@@ -145,32 +159,21 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
-    def test_provider_selects_correct_refresh_event_for_sidecar(self):
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_selects_correct_refresh_event_for_sidecar(self, mock_set_unit_ip):
         self.harness.add_relation(RELATION_NAME, "provider")
 
-        # This is gonna be a LITTLE bit of internals
-        # Get ready to poke at ops.framework guts to build it
-        # so we can assert it's really true
-        #
-        # The format of framework._observers (which is a list containing
-        # lookups when `self.framework.observe(...)` is called, and subsequently
-        # checked when an event is emitted is:
-        #
-        # (
-        #   <handle_to_object_observing_the_event>
-        #   <method_to_call>
-        #   <handle_path_to_object_being_observed>
-        #   <BoundEvent_which_is_being_observed>
-        # )
-        observer_details = (
-            str(self.harness.charm.provider.handle),
-            "_set_unit_ip",
-            str(self.harness.charm.on.handle.path),
-            f"{list(self.harness.charm.meta.containers.values())[0].name.replace('-', '_')}_pebble_ready",
-        )
-        self.assertIn(observer_details, self.harness.framework._observers)
+        self.harness.container_pebble_ready("prometheus-tester")
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
 
-    def test_provider_selects_correct_refresh_event_for_podspec(self):
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
             EndpointProviderCharm,
@@ -187,14 +190,36 @@ class TestEndpointProvider(unittest.TestCase):
          """,
         )
         harness.begin()
-        observer_details = (
-            str(harness.charm.provider.handle),
-            "_set_unit_ip",
-            str(harness.charm.on.handle.path),
-            "update_status",
-        )
+        harness.charm.on.update_status.emit()
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
 
-        self.assertIn(observer_details, harness.framework._observers)
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
+        harness = Harness(
+            EndpointProviderCharmWithMultipleEvents,
+            # No provider relation with `prometheus_scrape` as interface
+            meta=f"""
+                 name: provider-tester
+                 containers:
+                   prometheus-tester:
+                 provides:
+                   {RELATION_NAME}:
+                     interface: prometheus_scrape
+                 series:
+                   - kubernetes
+         """,
+        )
+        harness.begin()
+        harness.add_relation(RELATION_NAME, "provider")
+
+        harness.charm.on.config_changed.emit()
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
+
+        harness.container_pebble_ready("prometheus-tester")
+        self.assertEqual(mock_set_unit_ip.call_count, 2)
 
     @patch_network_get(private_address="192.0.8.2")
     def test_provider_unit_sets_bind_address_on_pebble_ready(self, *unused):
