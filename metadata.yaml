@@ -10,7 +10,7 @@ description: |
   supports aggregating high dimensional data and exposes a powerful
   query language PromQL. This charm deploys and operates Prometheus on
   Kubernetes clusters. Prometheus can raise alerts through a relation
-  with the Altermanager charm. Alerting rules for Prometheus need to
+  with the Alertmanager charm. Alerting rules for Prometheus need to
   be provided through a relation with the application that requires
   alerting. Prometheus provides its own dashboard for data
   visualization but a richer visualization interface may be obtained

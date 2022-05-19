@@ -243,7 +243,6 @@ def remove_tester_alert_rule_file(name):
     """Remove an alert rule file from Prometheus Tester.
 
     Args:
-        rule: a string containing Prometheus alert rule in YAML format.
         name: a string name of alert rule file
     """
     rules_path = Path(TESTER_ALERT_RULES_PATH).joinpath(name)
