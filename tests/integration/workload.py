@@ -46,6 +46,28 @@ class Prometheus:
           YAML config in string format or empty string
         """
         url = f"{self.base_url}/api/v1/status/config"
+        # Response looks like this:
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "yaml": "global:\n
+        #       scrape_interval: 1m\n
+        #       scrape_timeout: 10s\n
+        #       evaluation_interval: 1m\n
+        #       rule_files:\n
+        #       - /etc/prometheus/rules/juju_*.rules\n
+        #       scrape_configs:\n
+        #       - job_name: prometheus\n
+        #       honor_timestamps: true\n
+        #       scrape_interval: 5s\n
+        #       scrape_timeout: 5s\n
+        #       metrics_path: /metrics\n
+        #       scheme: http\n
+        #       static_configs:\n
+        #       - targets:\n
+        #       - localhost:9090\n"
+        #   }
+        # }
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 result = await response.json()

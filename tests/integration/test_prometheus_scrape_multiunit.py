@@ -17,10 +17,13 @@ import asyncio
 import logging
 
 import pytest
+import yaml
 from deepdiff import DeepDiff
 from helpers import (
     check_prometheus_is_ready,
     get_prometheus_active_targets,
+    get_prometheus_config,
+    get_prometheus_rules,
     oci_image,
     run_promql,
 )
@@ -117,10 +120,41 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
 
     # AND all prometheus units have the exact same config
-    # TODO
+    config_by_unit = await asyncio.gather(
+        *[get_prometheus_config(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+    # Convert the yaml strings into dicts
+    config_by_unit = list(map(yaml.safe_load, config_by_unit))
+
+    # assert all(config_by_unit[0] == config_by_unit[u] for u in range(1, num_units))
+    for u in range(1, num_units):
+        # assert config_by_unit[0] == config_by_unit[u]
+        # Exclude 'static_configs.targets', which are expected to differ (different IP address per
+        # unit)
+        assert (
+            DeepDiff(
+                config_by_unit[0],
+                config_by_unit[u],
+                exclude_regex_paths=r"\['static_configs'\]\['targets'\]|\['labels'\]\['juju_unit'\]",
+            )
+            == {}
+        )
 
     # AND all prometheus units have the exact same rules
-    # TODO
+    rules_by_unit = await asyncio.gather(
+        *[get_prometheus_rules(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    )
+    for u in range(1, len(rules_by_unit)):
+        # Some fields will most likely differ, such as "evaluationTime" and "lastEvaluation".
+        assert (
+            DeepDiff(
+                rules_by_unit[0],
+                rules_by_unit[u],
+                ignore_order=True,
+                exclude_regex_paths=r"evaluationTime|lastEvaluation|activeAt",
+            )
+            == {}
+        )
 
 
 @pytest.mark.abort_on_fail
