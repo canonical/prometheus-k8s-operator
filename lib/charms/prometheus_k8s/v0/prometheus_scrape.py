@@ -1577,6 +1577,9 @@ class MetricsEndpointProvider(Object):
 
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
+        # If there is no leader during relation_joined we will still need to set alert rules.
+        self.framework.observe(self._charm.on.leader_elected, self._set_scrape_job_spec)
+
     def _set_scrape_job_spec(self, event):
         """Ensure scrape target information is made available to prometheus.
 
