@@ -151,6 +151,17 @@ class TestEndpointProvider(unittest.TestCase):
         # This is gonna be a LITTLE bit of internals
         # Get ready to poke at ops.framework guts to build it
         # so we can assert it's really true
+        #
+        # The format of framework._observers (which is a list containing
+        # lookups when `self.framework.observe(...)` is called, and subsequently
+        # checked when an event is emitted is:
+        #
+        # (
+        #   <handle_to_object_observing_the_event>
+        #   <method_to_call>
+        #   <handle_path_to_object_being_observed>
+        #   <BoundEvent_which_is_being_observed>
+        # )
         observer_details = (
             str(self.harness.charm.provider.handle),
             "_set_unit_ip",
