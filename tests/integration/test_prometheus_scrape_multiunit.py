@@ -135,6 +135,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             DeepDiff(
                 config_by_unit[0],
                 config_by_unit[u],
+                ignore_order=True,
                 exclude_regex_paths=r"\['static_configs'\]\['targets'\]|\['labels'\]\['juju_unit'\]",
             )
             == {}
@@ -163,10 +164,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     # GIVEN an existing "up" timeseries
     query = 'count_over_time(up{instance="localhost:9090",job="prometheus"}[1y])'
     up_before = await asyncio.gather(
-        *[
-            run_promql(ops_test, query, prometheus_app_name, u)
-            for u in range(num_units)
-        ]
+        *[run_promql(ops_test, query, prometheus_app_name, u) for u in range(num_units)]
     )
     # Each response looks like this:
     # [
@@ -194,10 +192,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
 
     # AND series continuity is maintained
     up_after = await asyncio.gather(
-        *[
-            run_promql(ops_test, query, prometheus_app_name, u)
-            for u in range(num_units)
-        ]
+        *[run_promql(ops_test, query, prometheus_app_name, u) for u in range(num_units)]
     )
     up_after = [int(next(iter(response))["value"][1]) for response in up_after]
     # The count after an upgrade must be greater than or equal to the count before the upgrade, for
