@@ -15,22 +15,22 @@ This test scaling up/down both sides of the relation, and upgrading.
 
 import asyncio
 import logging
-from collections import namedtuple
 
 import pytest
 from deepdiff import DeepDiff
 from helpers import (
     check_prometheus_is_ready,
-    get_head_stats,
     get_prometheus_active_targets,
     oci_image,
+    run_promql,
 )
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 
 prometheus_app_name = "prometheus"
-prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+# prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+prometheus_resources = {"prometheus-image": "prom/prometheus:v2.35.0"}
 tester_app_name = "tester"
 tester_resources = {
     "prometheus-tester-image": oci_image(
@@ -126,17 +126,21 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 @pytest.mark.abort_on_fail
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
-    # GIVEN a certain number of series and label pairs
-    head_stats_before = await asyncio.gather(
-        *[get_head_stats(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    # GIVEN an existing "up" timeseries
+    up_before = await asyncio.gather(
+        *[
+            run_promql(ops_test, 'up{instance="localhost:9090"}[2h]', prometheus_app_name, u)
+            for u in range(num_units)
+        ]
     )
-    # Keep only numSeries, numLabelPairs
-    Stats = namedtuple("Stats", ["numSeries", "numLabelPairs"])
-    head_stats_before = {
-        Stats(itm["numSeries"], itm["numLabelPairs"]) for itm in head_stats_before
-    }
-    # Sanity check: all prometheus units should have the same number of series and label pairs
-    assert len(head_stats_before) == 1
+    # Each response looks like this:
+    # [
+    #     {
+    #         "metric": {"__name__": "up", "instance": "localhost:9090", "job": "prometheus"},
+    #         "values": [[1652931430.156, "1"], [1652931435.156, "1"]],
+    #     }
+    # ]
+    up_before = [next(iter(response))["values"] for response in up_before]
 
     # WHEN prometheus is upgraded
     await ops_test.model.applications[prometheus_app_name].refresh(
@@ -150,12 +154,19 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     )
 
     # AND series continuity is maintained
-    head_stats_after = await asyncio.gather(
-        *[get_head_stats(ops_test, prometheus_app_name, u) for u in range(num_units)]
+    up_after = await asyncio.gather(
+        *[
+            run_promql(ops_test, 'up{instance="localhost:9090"}[2h]', prometheus_app_name, u)
+            for u in range(num_units)
+        ]
     )
-    # Keep only numSeries, numLabelPairs
-    head_stats_after = {Stats(itm["numSeries"], itm["numLabelPairs"]) for itm in head_stats_after}
-    assert head_stats_before == head_stats_after
+    up_after = [next(iter(response))["values"] for response in up_after]
+    # Need to convert the list of lists to list of tuples to be able to use set.issubset, which
+    # doesn't work on lists because list is unhashable so cannot be a set element.
+    assert all(
+        set(map(tuple, up_before[i])).issubset(set(map(tuple, up_after[i])))
+        for i in range(num_units)
+    )
 
 
 @pytest.mark.abort_on_fail
