@@ -15,13 +15,14 @@ import logging
 import os
 import platform
 import re
+import socket
 import subprocess
 from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import yaml
-from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
+from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole, UpgradeCharmEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
@@ -953,12 +954,24 @@ class PrometheusRemoteWriteProvider(Object):
         on_relation = self._charm.on[self._relation_name]
         self.framework.observe(
             on_relation.relation_created,
-            self._set_endpoint_on_relation_change,
+            self._on_relation_change,
         )
         self.framework.observe(
             on_relation.relation_joined,
-            self._set_endpoint_on_relation_change,
+            self._on_relation_change,
         )
+        self.framework.observe(
+            self._charm.on.upgrade_charm,
+            self._on_upgrade_charm,
+        )
+
+    def _on_relation_change(self, event: RelationEvent) -> None:
+        self.update_endpoint(event.relation)
+
+    def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
+        import socket
+        logger.info("IN HERE +====+============== %s", socket.getfqdn())
+        self.update_endpoint()
 
     def update_endpoint(self, relation: Relation = None) -> None:
         """Triggers programmatically the update of the relation data.
@@ -979,19 +992,13 @@ class PrometheusRemoteWriteProvider(Object):
         for relation in relations:
             self._set_endpoint_on_relation(relation)
 
-    def _set_endpoint_on_relation_change(self, event: RelationEvent) -> None:
-        self._set_endpoint_on_relation(event.relation)
-
     def _set_endpoint_on_relation(self, relation: Relation) -> None:
-        """Set the the remote_write endpoint on relations.
+        """Set the remote_write endpoint on relations.
 
         Args:
-            relation: Optional relation. If provided, only this relation will be
-                updated. Otherwise, all instances of the `prometheus_remote_write`
-                relation managed by this `PrometheusRemoteWriteProvider` will be
-                updated.
+            relation: The relation whose data to update.
         """
-        address = self._endpoint_address or self._get_relation_bind_address()
+        address = self._endpoint_address or socket.getfqdn()
 
         path = self._endpoint_path or ""
         if path and not path.startswith("/"):
@@ -1006,10 +1013,6 @@ class PrometheusRemoteWriteProvider(Object):
                 "url": endpoint_url,
             }
         )
-
-    def _get_relation_bind_address(self):
-        network_binding = self._charm.model.get_binding(self._relation_name)
-        return network_binding.network.bind_address
 
     def alerts(self) -> dict:
         """Fetch alert rules from all relations.

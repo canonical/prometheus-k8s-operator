@@ -1,4 +1,5 @@
-git+https://github.com/canonical/operator#egg=ops
+#git+https://github.com/canonical/operator#egg=ops
+git+https://github.com/sed-i/operator@feature/harness_upgrade#egg=ops
 pyaml
 requests
 lightkube >= 0.8.1

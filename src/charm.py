@@ -362,9 +362,8 @@ class PrometheusCharm(CharmBase):
     @property
     def _external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation."""
-        if "web_external_url" in self.model.config:
-            if web_external_url := self.model.config["web_external_url"]:
-                return web_external_url
+        if web_external_url := self.model.config.get("web_external_url"):
+            return web_external_url
 
         if ingress_url := self.ingress.url:
             return ingress_url
