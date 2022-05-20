@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import yaml
-from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole, UpgradeCharmEvent
+from ops.charm import (
+    CharmBase,
+    HookEvent,
+    RelationEvent,
+    RelationMeta,
+    RelationRole,
+    UpgradeCharmEvent,
+)
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
@@ -970,6 +977,7 @@ class PrometheusRemoteWriteProvider(Object):
 
     def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         import socket
+
         logger.info("IN HERE +====+============== %s", socket.getfqdn())
         self.update_endpoint()
 
