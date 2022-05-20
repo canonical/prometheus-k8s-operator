@@ -18,5 +18,5 @@ parts:
     build-packages:
       - curl
     override-pull: |
-      curl -L -O https://github.com/canonical/promql-transform/releases/download/rev6/promql-transform-${SNAP_ARCH}
+      curl -L -O https://github.com/canonical/promql-transform/releases/download/rev6/promql-transform-${CHARM_TARGET_ARCH}
       chmod +x promql-transform-*

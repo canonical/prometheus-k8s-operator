@@ -1145,7 +1145,7 @@ class PromqlTransformer:
         res = "promql-transform-{}".format(arch)
         try:
             path = Path(res).resolve()
-            os.chmod(path, 0o777)
+            path.chmod(0o777)
             return path
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
