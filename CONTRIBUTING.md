@@ -65,11 +65,6 @@ $ juju deploy \
     --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
-
-```bash
-$ wget -O https://github.com/canonical/promql-transform/releases/download/rev6/promql-transform-amd64
-```
-
 ## Linting
 Flake8 and black linters may be run to check charm and test source code using the
 command
