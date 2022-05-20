@@ -976,9 +976,6 @@ class PrometheusRemoteWriteProvider(Object):
         self.update_endpoint(event.relation)
 
     def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
-        import socket
-
-        logger.info("IN HERE +====+============== %s", socket.getfqdn())
         self.update_endpoint()
 
     def update_endpoint(self, relation: Relation = None) -> None:
