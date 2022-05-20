@@ -256,7 +256,15 @@ class PrometheusCharm(CharmBase):
         Returns:
             True if time specification is valid and False otherwise.
         """
-        if not (matched := re.match(r"[1-9][0-9]*[ymwdhs]", timeval)):
+        # Prometheus checks here:
+        # https://github.com/prometheus/common/blob/627089d3a7af73be778847aa577192b937b8d89a/model/time.go#L186
+        # Which is where this regex is sourced from. The validation is done
+        # when parsing flags as part of binary invocation here:
+        # https://github.com/prometheus/prometheus/blob/c40e269c3e514953299e9ba1f6265e067ab43e64/cmd/prometheus/main.go#L302
+        timespec_re = re.compile(
+            r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
+        )
+        if not (matched := timespec_re.search(timeval)):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return bool(matched)

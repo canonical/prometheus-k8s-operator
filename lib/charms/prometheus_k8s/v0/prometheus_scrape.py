@@ -923,7 +923,7 @@ class AlertRules:
         elif path.is_file():
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            logger.warning("path does not exist: %s", path)
+            logger.debug("Alert rules path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1130,7 +1130,7 @@ class MetricsEndpointConsumer(Object):
             rules: a dict of alert rules
         """
         if "groups" not in rules:
-            logger.warning("No alert groups were found in relation data")
+            logger.debug("No alert groups were found in relation data")
             return None
 
         # Construct an ID based on what's in the alert rules if they have labels
@@ -1546,7 +1546,7 @@ class MetricsEndpointProvider(Object):
         try:
             alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
         except InvalidAlertRulePathError as e:
-            logger.warning(
+            logger.debug(
                 "Invalid Prometheus alert rules folder at %s: %s",
                 e.alert_rules_absolute_path,
                 e.message,
@@ -1592,6 +1592,9 @@ class MetricsEndpointProvider(Object):
             self.framework.observe(ev, self._set_unit_ip)
 
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
+
+        # If there is no leader during relation_joined we will still need to set alert rules.
+        self.framework.observe(self._charm.on.leader_elected, self._set_scrape_job_spec)
 
     def _set_scrape_job_spec(self, event):
         """Ensure scrape target information is made available to prometheus.
@@ -1718,7 +1721,7 @@ class PrometheusRulesProvider(Object):
         try:
             dir_path = _resolve_dir_against_charm_path(charm, dir_path)
         except InvalidAlertRulePathError as e:
-            logger.warning(
+            logger.debug(
                 "Invalid Prometheus alert rules folder at %s: %s",
                 e.alert_rules_absolute_path,
                 e.message,

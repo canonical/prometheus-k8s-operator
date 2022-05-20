@@ -59,8 +59,8 @@ $ charmcraft pack
 
 ### Deploy
 
-There are two ways of deploying the prometheus-k8s operator, with and without 
-promql-transform.  Deploying the charm without PromQL Transform means you won't 
+There are two ways of deploying the prometheus-k8s operator, with and without
+promql-transform.  Deploying the charm without PromQL Transform means you won't
 get any Juju topology labels  injected into your alert rule expressions.
 
 #### Without PromQL Transform
@@ -73,14 +73,30 @@ $ juju deploy \
 
 #### With PromQL Transform
 
-Place the binary of your selected promql-transform version in the root of the prometheus-k8s
-charm directory. Official binaries are available from the 
+Place the binary of your selected promql-transform version in the root of the
+prometheus-k8s charm directory. Official binaries are available from the
 [promql-transform repository](https://github.com/canonical/promql-transform).
+
+For example:
+
+```bash
+$ wget -O promql-transform https://github.com/canonical/promql-transform/releases/download/rev6/promql-transform-amd64
+```
+
+Then pass the downloaded file as a resource to `juju deploy`:
 
 ```bash
 $ juju deploy \
     ./prometheus-k8s_ubuntu-20.04-amd64.charm \
     --resource prometheus-image=ubuntu/prometheus:latest \
+    --resource promql-transform-amd64=./promql-transform
+```
+
+Similarly, to upgrade the charm,
+
+```bash
+juju refresh \
+    --path=./prometheus-k8s_ubuntu-20.04-amd64.charm \
     --resource promql-transform-amd64=./promql-transform
 ```
 
