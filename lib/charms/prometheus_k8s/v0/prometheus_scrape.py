@@ -2298,7 +2298,9 @@ class PromqlTransformer:
         arch = "amd64" if arch == "x86_64" else arch
         res = "promql-transform-{}".format(arch)
         try:
-            return Path(res).resolve()
+            path = Path(res).resolve()
+            path.chmod(0o777)
+            return path
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
         except FileNotFoundError:
