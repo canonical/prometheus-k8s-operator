@@ -967,16 +967,9 @@ class PrometheusRemoteWriteProvider(Object):
             on_relation.relation_joined,
             self._on_relation_change,
         )
-        self.framework.observe(
-            self._charm.on.upgrade_charm,
-            self._on_upgrade_charm,
-        )
 
     def _on_relation_change(self, event: RelationEvent) -> None:
         self.update_endpoint(event.relation)
-
-    def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
-        self.update_endpoint()
 
     def update_endpoint(self, relation: Relation = None) -> None:
         """Triggers programmatically the update of the relation data.
