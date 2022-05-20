@@ -47,17 +47,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=app_names, status="active")
-
-    # TODO: Should not be needed.
-    #       Drop once https://github.com/juju/python-libjuju/issues/574 is resolved
-    #       - SA 2021-11-23
-    await ops_test.model.block_until(
-        lambda: (
-            len(ops_test.model.applications[prometheus_app_name].units) > 0
-            and len(ops_test.model.applications[tester_app_name].units) > 0
-        )
-    )
+    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=1)
 
     assert initial_workload_is_ready(ops_test, app_names)
     await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
