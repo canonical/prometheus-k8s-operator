@@ -22,14 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import yaml
-from ops.charm import (
-    CharmBase,
-    HookEvent,
-    RelationEvent,
-    RelationMeta,
-    RelationRole,
-    UpgradeCharmEvent,
-)
+from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
