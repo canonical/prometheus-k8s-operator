@@ -518,7 +518,7 @@ class AlertRules:
         elif path.is_file():
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            logger.warning("path does not exist: %s", path)
+            logger.debug("Alert rules path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1052,7 +1052,7 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             if "groups" not in alert_rules:
-                logger.warning("No alert groups were found in relation data")
+                logger.debug("No alert groups were found in relation data")
                 continue
             # Construct an ID based on what's in the alert rules
             for group in alert_rules["groups"]:
