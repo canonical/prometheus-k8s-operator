@@ -33,10 +33,6 @@ requires:
         limit: 1
     receive-remote-write:
         interface: prometheus_remote_write
-resources:
-    promql-transform-amd64:
-        type: file
-        filename: promql-transform-amd64
 """
 
 
@@ -108,10 +104,6 @@ class RemoteWriteConsumerCharm(CharmBase):
 class TestRemoteWriteConsumer(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin_with_initial_hooks()

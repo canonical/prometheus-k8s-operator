@@ -159,10 +159,6 @@ class TestEndpointConsumer(unittest.TestCase):
         metadata_file = open("metadata.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
