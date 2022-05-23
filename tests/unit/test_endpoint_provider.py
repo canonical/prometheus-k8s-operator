@@ -35,6 +35,7 @@ provides:
     interface: prometheus_scrape
 """
 
+
 JOBS: List[dict] = [
     {
         "global": {"scrape_interval": "1h"},
@@ -69,6 +70,20 @@ class EndpointProviderCharm(CharmBase):
 
         self.provider = MetricsEndpointProvider(
             self, jobs=JOBS, alert_rules_path="./tests/unit/prometheus_alert_rules"
+        )
+
+
+class EndpointProviderCharmWithMultipleEvents(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self,
+            jobs=JOBS,
+            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            refresh_event=[self.on.prometheus_tester_pebble_ready, self.on.config_changed],
         )
 
 
@@ -144,18 +159,72 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_selects_correct_refresh_event_for_sidecar(self, mock_set_unit_ip):
+        self.harness.add_relation(RELATION_NAME, "provider")
+
+        self.harness.container_pebble_ready("prometheus-tester")
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
+
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
+        """Tests that Provider raises exception if the default relation has the wrong role."""
+        harness = Harness(
+            EndpointProviderCharm,
+            # No provider relation with `prometheus_scrape` as interface
+            meta=f"""
+                 name: provider-tester
+                 containers:
+                   prometheus-tester:
+                 provides:
+                   {RELATION_NAME}:
+                     interface: prometheus_scrape
+                 series:
+                   - kubernetes
+         """,
+        )
+        harness.begin()
+        harness.charm.on.update_status.emit()
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
+
+    @patch(
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        autospec=True,
+    )
+    def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
+        harness = Harness(
+            EndpointProviderCharmWithMultipleEvents,
+            # No provider relation with `prometheus_scrape` as interface
+            meta=f"""
+                 name: provider-tester
+                 containers:
+                   prometheus-tester:
+                 provides:
+                   {RELATION_NAME}:
+                     interface: prometheus_scrape
+                 series:
+                   - kubernetes
+         """,
+        )
+        harness.begin()
+        harness.add_relation(RELATION_NAME, "provider")
+
+        harness.charm.on.config_changed.emit()
+        self.assertEqual(mock_set_unit_ip.call_count, 1)
+
+        harness.container_pebble_ready("prometheus-tester")
+        self.assertEqual(mock_set_unit_ip.call_count, 2)
+
     @patch_network_get(private_address="192.0.8.2")
     def test_provider_unit_sets_bind_address_on_pebble_ready(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
-        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
-        self.assertIn("prometheus_scrape_unit_address", data)
-        self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
-
-    @patch_network_get(private_address="192.0.8.2")
-    def test_provider_unit_sets_bind_address_on_update_status(self, *unused):
-        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
-        self.harness.charm.on.update_status.emit()
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "192.0.8.2")
@@ -615,3 +684,26 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
             for rule in group["rules"]:
                 self.assertIn("juju_unit", rule["labels"])
                 self.assertIn("juju_unit=", rule["expr"])
+
+
+class TestNoLeader(unittest.TestCase):
+    """Tests the case where leader is not set immediately."""
+
+    def setUp(self):
+        self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(False)
+        self.harness.begin_with_initial_hooks()
+
+    @patch("ops.testing._TestingModelBackend.network_get")
+    def test_alert_rules(self, _):
+        """Verify alert rules are added when leader is elected after the relation is created."""
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        self.harness.set_leader(True)
+
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name).get(
+            "alert_rules"
+        )
+        self.assertIsNotNone(data)
+        self.assertGreater(len(data), 0)  # type: ignore[arg-type]
