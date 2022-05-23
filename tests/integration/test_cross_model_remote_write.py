@@ -5,14 +5,9 @@
 import asyncio
 import logging
 
-from juju.controller import Controller
-
 import pytest
-from helpers import (
-    check_prometheus_is_ready,
-    oci_image,
-    run_promql,
-)
+from helpers import check_prometheus_is_ready, oci_image, run_promql
+from juju.controller import Controller  # type: ignore
 
 logger = logging.getLogger(__name__)
 
