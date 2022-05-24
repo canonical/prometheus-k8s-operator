@@ -156,7 +156,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
         # invalid time value
-        retention_time = "0d"
+        retention_time = "5m1y2d"
         retention_time_config["metrics_retention_time"] = retention_time
 
         self.harness.update_config(retention_time_config)

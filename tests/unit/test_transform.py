@@ -9,13 +9,6 @@ from charms.prometheus_k8s.v0.prometheus_scrape import PromqlTransformer
 from ops.charm import CharmBase
 from ops.testing import Harness
 
-META = """
-resources:
-  promql-transform-amd64:
-    type: file
-    description: test
-"""
-
 
 # noqa: E302
 # pylint: disable=too-few-public-methods
@@ -31,10 +24,9 @@ class TestTransform(unittest.TestCase):
     """Test that the promql-transform implementation works."""
 
     def setUp(self):
-        self.harness = Harness(TransformProviderCharm, meta=META)
+        self.harness = Harness(TransformProviderCharm)
         self.harness.set_model_name("transform")
         self.addCleanup(self.harness.cleanup)
-        self.harness.add_resource("promql-transform-amd64", "dummy resource")
         self.harness.begin()
 
     # pylint: disable=protected-access
@@ -47,7 +39,7 @@ class TestTransform(unittest.TestCase):
     # pylint: disable=protected-access
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_gives_path_on_valid_arch(self):
-        """When given a valid arch, it should return the resource path."""
+        """When given a valid arch, it should return the binary path."""
         transformer = self.harness.charm.transformer
         self.assertIsInstance(transformer.path, PosixPath)
 
@@ -59,7 +51,7 @@ class TestTransform(unittest.TestCase):
         self.assertIsInstance(transform.path, PosixPath)
 
         p = str(transform.path)
-        self.assertTrue(p.startswith("/") and p.endswith("promql-transform-amd64"))
+        self.assertTrue(p.endswith("promql-transform-amd64"))
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     @unittest.mock.patch("subprocess.run")
@@ -94,7 +86,7 @@ class TestTransform(unittest.TestCase):
         self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
     @unittest.mock.patch("platform.processor", lambda: "invalid")
-    def test_uses_original_expression_when_resource_missing(self):
+    def test_uses_original_expression_when_binary_missing(self):
         transform = self.harness.charm.transformer
         output = transform.apply_label_matchers(
             {
@@ -122,10 +114,6 @@ class TestTransform(unittest.TestCase):
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_fetches_the_correct_expression(self):
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         transform = self.harness.charm.transformer
 
         output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
@@ -133,20 +121,12 @@ class TestTransform(unittest.TestCase):
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_comparisons(self):
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         transform = self.harness.charm.transformer
         output = transform._apply_label_matcher("up > 1", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"} > 1'
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_multiple_labels(self):
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         transform = self.harness.charm.transformer
         output = transform._apply_label_matcher(
             "up > 1",

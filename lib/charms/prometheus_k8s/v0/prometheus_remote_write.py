@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Union
 import yaml
 from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import ModelError, Relation
+from ops.model import Relation
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -518,7 +518,7 @@ class AlertRules:
         elif path.is_file():
             self.alert_groups.extend(self._from_file(path.parent, path))
         else:
-            logger.warning("path does not exist: %s", path)
+            logger.debug("Alert rules path does not exist: %s", path)
 
     def as_dict(self) -> dict:
         """Return standard alert rules file in dict representation.
@@ -1052,7 +1052,7 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             if "groups" not in alert_rules:
-                logger.warning("No alert groups were found in relation data")
+                logger.debug("No alert groups were found in relation data")
                 continue
             # Construct an ID based on what's in the alert rules
             for group in alert_rules["groups"]:
@@ -1144,13 +1144,13 @@ class PromqlTransformer:
         arch = "amd64" if arch == "x86_64" else arch
         res = "promql-transform-{}".format(arch)
         try:
-            path = self._charm.model.resources.fetch(res)
-            os.chmod(path, 0o777)
+            path = Path(res).resolve()
+            path.chmod(0o777)
             return path
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
-        except (NameError, ModelError):
-            logger.debug('No resource available for the platform "{}"'.format(arch))
+        except FileNotFoundError:
+            logger.debug('Could not locate promql transform at: "{}"'.format(res))
         return None
 
     def _exec(self, cmd):

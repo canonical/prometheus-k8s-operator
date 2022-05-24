@@ -50,7 +50,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=app_names, status="active")
+    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=1)
 
     assert initial_workload_is_ready(ops_test, app_names)
     assert check_prometheus_is_ready(ops_test, prometheus_app_name, 0)

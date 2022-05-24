@@ -159,10 +159,6 @@ class TestEndpointConsumer(unittest.TestCase):
         metadata_file = open("metadata.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
-        self.harness.add_resource(
-            "promql-transform-amd64",
-            open("./promql-transform", "rb").read(),
-        )
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
@@ -436,9 +432,9 @@ class TestEndpointConsumer(unittest.TestCase):
         with self.assertLogs(level="WARNING") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts()
             messages = logger.output
-            self.assertEqual(len(messages), 2)
+            self.assertEqual(len(messages), 1)
             self.assertIn(
-                "Alert rules were found but no usable group or identifier was present", messages[1]
+                "Alert rules were found but no usable group or identifier was present", messages[0]
             )
 
     def test_consumer_accepts_rules_with_no_identifier(self):

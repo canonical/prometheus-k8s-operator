@@ -11,7 +11,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus
-from ops.pebble import Layer
+from ops.pebble import ChangeError, ExecError, Layer
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +101,24 @@ class PrometheusTesterCharm(CharmBase):
             return
 
         process = container.exec([self._pip_path, "install", "prometheus_client"])
-        process.wait()
-        logger.debug("Installed prometheus client")
+        try:
+            _, stderr = process.wait_output()
+            logger.debug("Installed prometheus client")
+            if stderr:
+                logger.warning(stderr)
+            return
+
+        except ExecError as e:
+            logger.error(
+                "Failed to install prometheus client: exited with code %d. Stderr:", e.exit_code
+            )
+            for line in e.stderr.splitlines():
+                logger.error("    %s", line)
+            self.unit.status = BlockedStatus("Failed to install prometheus client (see debug-log)")
+
+        except ChangeError as e:
+            logger.error("Failed to install prometheus client: %s", str(e))
+            self.unit.status = BlockedStatus("Failed to install prometheus client (see debug-log)")
 
     def _metrics_exporter(self):
         """Generate the metrics exporter script."""
