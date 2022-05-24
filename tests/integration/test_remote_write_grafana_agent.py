@@ -12,7 +12,6 @@ from helpers import (
     oci_image,
     run_promql,
 )
-from tenacity import retry, stop_after_delay, wait_fixed
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     """Test that Prometheus can be related with the Grafana Agent over remote_write."""
     prometheus_name = "prometheus"
     agent_name = "grafana-agent"
+    apps = [prometheus_name, agent_name]
 
     await asyncio.gather(
         ops_test.model.deploy(
@@ -36,11 +36,12 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
         ),
     )
 
-    await ops_test.model.add_relation(prometheus_name, agent_name)
-    apps = [prometheus_name, agent_name]
     await ops_test.model.wait_for_idle(apps=apps, status="active")
     assert initial_workload_is_ready(ops_test, apps)
-    await check_prometheus_is_ready(ops_test, prometheus_name, 0)
+    assert check_prometheus_is_ready(ops_test, prometheus_name, 0)
+
+    await ops_test.model.add_relation(prometheus_name, agent_name)
+    await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=60)
 
     await has_metric(
         ops_test,
@@ -49,9 +50,6 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     )
 
 
-# TODO: Move this to a helper? It has dependencies on tenacity, so not really
-# sure - SA 2021-11-19
-@retry(wait=wait_fixed(10), stop=stop_after_delay(60 * 5))
 async def has_metric(ops_test, query: str, app_name: str) -> bool:
     # Throws if the query does not return any time series within 5 minutes,
     # and as a consequence, fails the test

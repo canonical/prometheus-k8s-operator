@@ -6,3 +6,7 @@ options:
     default: 1s
     description: "Prometheus job configuration for scrape interval"
     type: string
+  alert-rules-path:
+    default: src/prometheus_alert_rules
+    description: "Path for alert rules passed to the Provider"
+    type: string

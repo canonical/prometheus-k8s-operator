@@ -2,21 +2,16 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-
+import asyncio
 import logging
 
 import pytest
 from helpers import (
-    IPAddressWorkaround,
     check_prometheus_is_ready,
     get_prometheus_rules,
     get_rules_for,
     oci_image,
-    rebuild_prometheus_tester,
-    remove_tester_alert_rule_file,
-    write_tester_alert_rule_file,
 )
-from tenacity import RetryError, Retrying, retry_if_exception_type, stop_after_attempt
 
 logger = logging.getLogger(__name__)
 
@@ -27,102 +22,49 @@ tester_resources = {
     )
 }
 
-PROMETHEUS_APP_NAME = "prometheus-k8s"
-TESTER_APP_NAME = "prometheus-tester"
-
-# Please see https://github.com/canonical/prometheus-k8s-operator/issues/197
-TIMEOUT = 1000
-
-MISSING_TARGET_RULE = """alert: PrometheusTargetMissing
-expr: up == 0
-for: 0m
-labels:
-  severity: critical
-annotations:
-  summary: "Prometheus target missing (instance {{ $labels.instance }})"
-  description: "A Prometheus target has disappeared. An exporter might be crashed."
-"""
+prometheus_app_name = "prometheus-k8s"
+tester_app_name = "prometheus-tester"
+app_names = [prometheus_app_name, tester_app_name]
 
 
 @pytest.mark.abort_on_fail
-async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus_charm):
+async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus_tester_charm):
     """Build the charm-under-test and deploy it together with related charms.
 
     Assert on the unit status before any relations/configurations take place.
     """
-    async with IPAddressWorkaround(ops_test):
-        logger.debug("deploy charm from charmhub")
-        await ops_test.model.deploy(
-            f"ch:{PROMETHEUS_APP_NAME}", application_name=PROMETHEUS_APP_NAME, channel="edge"
-        )
-        await ops_test.model.wait_for_idle(
-            apps=[PROMETHEUS_APP_NAME], status="active", timeout=TIMEOUT
-        )
-
-        logger.debug("upgrade deployed charm with local charm %s", prometheus_charm)
-        await ops_test.model.applications[PROMETHEUS_APP_NAME].refresh(
-            path=prometheus_charm, resources=prometheus_resources
-        )
-        await ops_test.model.wait_for_idle(
-            apps=[PROMETHEUS_APP_NAME], status="active", timeout=TIMEOUT
-        )
-        await check_prometheus_is_ready(ops_test, PROMETHEUS_APP_NAME, 0)
-
-
-async def test_upgrading_rules_provider_also_updates_rule_files(ops_test, prometheus_tester_charm):
-    """Ensure scrape alert rules can be updated.
-
-    This test upgrades the metrics provider charm and checks that
-    updates to alert rules are propagated correctly.
-    """
-    await ops_test.model.deploy(
-        prometheus_tester_charm, resources=tester_resources, application_name=TESTER_APP_NAME
+    logger.debug("deploy charm from charmhub")
+    await asyncio.gather(
+        ops_test.model.deploy(
+            f"ch:{prometheus_app_name}", application_name=prometheus_app_name, channel="edge"
+        ),
+        ops_test.model.deploy(
+            prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name
+        ),
     )
-    await ops_test.model.wait_for_idle(apps=[TESTER_APP_NAME], status="active")
-    await ops_test.model.block_until(
-        lambda: len(ops_test.model.applications[TESTER_APP_NAME].units) > 0
-    )
-    assert ops_test.model.applications[TESTER_APP_NAME].units[0].workload_status == "active"
+    await ops_test.model.wait_for_idle(apps=app_names, status="active", timeout=300)
 
-    await ops_test.model.add_relation(PROMETHEUS_APP_NAME, TESTER_APP_NAME)
+    await ops_test.model.add_relation(prometheus_app_name, tester_app_name)
+    await ops_test.model.wait_for_idle(apps=app_names, status="active")
+    # Check only one alert rule exists
+    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
+    tester_rules = get_rules_for(tester_app_name, rules_with_relation)
+
+    assert len(tester_rules) == 1
+
+
+@pytest.mark.abort_on_fail
+async def test_rules_are_retained_after_upgrade(ops_test, prometheus_charm):
+    logger.debug("upgrade deployed charm with local charm %s", prometheus_charm)
+    await ops_test.model.applications[prometheus_app_name].refresh(
+        path=prometheus_charm, resources=prometheus_resources
+    )
     await ops_test.model.wait_for_idle(
-        apps=[PROMETHEUS_APP_NAME, TESTER_APP_NAME], status="active"
+        apps=app_names, status="active", timeout=300, idle_period=60
     )
+    assert check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
 
     # Check only one alert rule exists
-    tester_rules = []
-    for attempt in Retrying(
-        retry=retry_if_exception_type(AssertionError), stop=stop_after_attempt(3)
-    ):
-        try:
-            with attempt:
-                rules_with_relation = await get_prometheus_rules(ops_test, PROMETHEUS_APP_NAME, 0)
-                tester_rules = get_rules_for(TESTER_APP_NAME, rules_with_relation)
-                assert len(tester_rules) == 1
-        except RetryError:
-            pass
-
-    # Add new alert rule, rebuild and refresh prometheus tester charm
-    write_tester_alert_rule_file(MISSING_TARGET_RULE, "target_missing.rule")
-    tester_charm = await rebuild_prometheus_tester(ops_test)
-    await ops_test.model.applications[TESTER_APP_NAME].refresh(
-        path=tester_charm, resources=tester_resources
-    )
-    remove_tester_alert_rule_file("target_missing.rule")
-
-    await ops_test.model.wait_for_idle(
-        apps=[PROMETHEUS_APP_NAME, TESTER_APP_NAME], status="active"
-    )
-
-    # Check there are now two alert rules
-    tester_rules = []
-    for attempt in Retrying(
-        retry=retry_if_exception_type(AssertionError), stop=stop_after_attempt(3)
-    ):
-        try:
-            with attempt:
-                rules_with_relation = await get_prometheus_rules(ops_test, PROMETHEUS_APP_NAME, 0)
-                tester_rules = get_rules_for(TESTER_APP_NAME, rules_with_relation)
-                assert len(tester_rules) == 2
-        except RetryError:
-            pass
+    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
+    tester_rules = get_rules_for(tester_app_name, rules_with_relation)
+    assert len(tester_rules) == 1
