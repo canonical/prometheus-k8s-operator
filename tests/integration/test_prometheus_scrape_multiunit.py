@@ -273,7 +273,10 @@ async def test_rescale_tester(ops_test: OpsTest):
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[scrape_tester, remote_write_tester], status="active", timeout=120, wait_for_exact_units=num_units
+        apps=[scrape_tester, remote_write_tester],
+        status="active",
+        timeout=120,
+        wait_for_exact_units=num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
@@ -328,7 +331,10 @@ async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, pro
     # AND tester becomes active/idle after scale-down
     logger.info("Waiting for testers to become active/idle...")
     await ops_test.model.wait_for_idle(
-        apps=[scrape_tester, remote_write_tester], status="active", timeout=300, wait_for_exact_units=num_units
+        apps=[scrape_tester, remote_write_tester],
+        status="active",
+        timeout=300,
+        wait_for_exact_units=num_units,
     )
 
     # AND all apps become idle after prometheus upgrade
