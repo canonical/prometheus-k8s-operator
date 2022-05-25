@@ -1088,7 +1088,7 @@ class MetricsEndpointConsumer(Object):
         """
         alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
         for relation in self._charm.model.relations[self._relation_name]:
-            if not relation.units or not relation.app:
+            if not relation.units:
                 continue
 
             alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
@@ -1889,13 +1889,13 @@ class MetricsEndpointAggregator(Object):
         jobs = []  # list of scrape jobs, one per relation
         for relation in self.model.relations[self._target_relation]:
             targets = self._get_targets(relation)
-            if targets and relation.app:
+            if targets:
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
         groups = []  # list of alert rule groups, one group per relation
         for relation in self.model.relations[self._alert_rules_relation]:
             unit_rules = self._get_alert_rules(relation)
-            if unit_rules and relation.app:
+            if unit_rules:
                 appname = relation.app.name
                 rules = self._label_alert_rules(unit_rules, appname)
                 group = {"name": self._group_name(appname), "rules": rules}

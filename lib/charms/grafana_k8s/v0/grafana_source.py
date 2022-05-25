@@ -454,8 +454,7 @@ class GrafanaSourceProvider(Object):
             if self._source_url:
                 url = self._source_url
             else:
-                binding = self._charm.model.get_binding(relation)
-                address = binding.network.bind_address if binding else ""
+                address = self._charm.model.get_binding(relation).network.bind_address
                 if address:
                     url = "{}:{}".format(str(address), self._source_port)
 
@@ -544,9 +543,6 @@ class GrafanaSourceConsumer(Object):
 
     def _get_source_config(self, rel: Relation):
         """Generate configuration from data stored in relation data by providers."""
-        if not rel.app:
-            return
-
         source_data = json.loads(rel.data[rel.app].get("grafana_source_data", "{}"))
         if not source_data:
             return

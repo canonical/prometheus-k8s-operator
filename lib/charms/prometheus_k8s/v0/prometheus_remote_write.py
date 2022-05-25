@@ -1037,7 +1037,7 @@ class PrometheusRemoteWriteProvider(Object):
         """
         alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
         for relation in self._charm.model.relations[self._relation_name]:
-            if not relation.units or not relation.app:
+            if not relation.units:
                 continue
 
             alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
