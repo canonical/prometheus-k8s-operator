@@ -63,7 +63,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     - Deploy several units of prometheus and several units of a "provider" charm, and relate them.
     - Confirm all units of prometheus have the correct and same targets and rules.
     """
-    app_names = [prometheus_app_name, scrape_tester]
+    app_names = [prometheus_app_name, scrape_tester, remote_write_tester]
 
     # GIVEN prometheus and the tester charm are deployed with two units each
 
