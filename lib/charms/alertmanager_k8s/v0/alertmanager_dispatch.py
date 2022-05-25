@@ -258,9 +258,12 @@ class AlertmanagerProvider(RelationManagerBase):
 
     def _generate_relation_data(self, relation: Relation):
         """Helper function to generate relation data in the correct format."""
+        binding = self.charm.model.get_binding(relation)
+
         public_address = "{}:{}".format(
-            self.charm.model.get_binding(relation).network.bind_address, self.api_port
-        )
+            binding.network.bind_address, self.api_port
+        ) if binding else ""
+
         return {"public_address": public_address}
 
     def update_relation_data(self, event: RelationEvent = None):

@@ -253,6 +253,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
         with patch("socket.getfqdn", new=lambda *args: "fqdn.before"):
             self.harness.begin_with_initial_hooks()
+            self.harness.container_pebble_ready("prometheus")
 
         self.assertEqual(
             self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
