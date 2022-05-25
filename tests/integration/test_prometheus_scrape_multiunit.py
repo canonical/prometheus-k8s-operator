@@ -153,12 +153,15 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     )
     for u in range(1, len(rules_by_unit)):
         # Some fields will most likely differ, such as "evaluationTime" and "lastEvaluation".
+        # Also excluding "alerts" because the 'rules' endpoint returns a dict of firing alerts,
+        # which may vary across prometheus units given the share nothing and the units starting up
+        # at different times.
         assert (
             DeepDiff(
                 rules_by_unit[0],
                 rules_by_unit[u],
                 ignore_order=True,
-                exclude_regex_paths=r"evaluationTime|lastEvaluation|activeAt",
+                exclude_regex_paths=r"evaluationTime|lastEvaluation|activeAt|alerts",
             )
             == {}
         )
