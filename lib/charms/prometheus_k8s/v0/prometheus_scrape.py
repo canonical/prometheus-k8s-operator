@@ -1243,7 +1243,10 @@ def _dedupe_job_names(jobs):
     # Convert to a dict with job names as keys
     # I think this line is O(n^2) but it should be okay given the list sizes
     jobs_copy = copy.deepcopy(jobs)
-    jobs_dict = {job["job_name"]: list(filter(lambda x: x["job_name"] == job["job_name"], jobs_copy)) for job in jobs_copy}
+    jobs_dict = {
+        job["job_name"]: list(filter(lambda x: x["job_name"] == job["job_name"], jobs_copy))
+        for job in jobs_copy
+    }
 
     # If multiple jobs have the same name, convert the name to "name_<hash-of-job>"
     for key in jobs_dict:
@@ -1251,7 +1254,7 @@ def _dedupe_job_names(jobs):
             for job in jobs_dict[key]:
                 job_json = json.dumps(job)
                 hashed = hashlib.sha256(job_json.encode()).hexdigest()
-                job["job_name"] = '{}_{}'.format(job["job_name"], hashed)
+                job["job_name"] = "{}_{}".format(job["job_name"], hashed)
     new_jobs = []
     for key in jobs_dict:
         new_jobs.extend([i for i in jobs_dict[key]])
