@@ -1,4 +1,4 @@
-operator
+ops
 pyaml
 requests
 lightkube >= 0.8.1
