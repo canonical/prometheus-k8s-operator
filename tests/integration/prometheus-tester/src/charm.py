@@ -24,11 +24,16 @@ class PrometheusTesterCharm(CharmBase):
         self._name = "prometheus-tester"
         self._pip_path = "/usr/local/bin/pip"
         self._metrics_exporter_script = Path("src/metrics.py")
+        # The consumer lib should dedupe this properly
         jobs = [
             {
                 "scrape_interval": self.model.config["scrape-interval"],
                 "static_configs": [{"targets": ["*:8000"], "labels": {"name": self._name}}],
-            }
+            },
+            {
+                "scrape_interval": self.model.config["scrape-interval"],
+                "static_configs": [{"targets": ["*:8001"], "labels": {"name": self._name}}],
+            },
         ]
         logger.warning("Rules path is: %s", self.model.config["alert-rules-path"])
         self.prometheus = MetricsEndpointProvider(
