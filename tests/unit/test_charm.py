@@ -24,14 +24,13 @@ SCRAPE_METADATA = {
 
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch_network_get(private_address="1.1.1.1")
+    @patch_network_get()
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
         self.harness.begin_with_initial_hooks()
 
-    @patch_network_get(private_address="1.1.1.1")
-    def test_grafana_is_provided_port_and_source(self, *unused):
+    def test_grafana_is_provided_port_and_source(self):
         rel_id = self.harness.add_relation("grafana-source", "grafana")
         self.harness.add_relation_unit(rel_id, "grafana/0")
         fqdn = socket.getfqdn()
@@ -40,8 +39,7 @@ class TestCharm(unittest.TestCase):
         ]
         self.assertEqual(grafana_host, "http://{}:{}".format(fqdn, "9090"))
 
-    @patch_network_get(private_address="1.1.1.1")
-    def test_web_external_url_is_passed_to_grafana(self, *unused):
+    def test_web_external_url_is_passed_to_grafana(self):
         self.harness.set_leader(True)
         self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
 
@@ -79,7 +77,6 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "warn")
 
-    @patch_network_get(private_address="1.1.1.1")
     def test_ingress_relation_not_set(self):
         self.harness.set_leader(True)
 
@@ -87,7 +84,6 @@ class TestCharm(unittest.TestCase):
         fqdn = socket.getfqdn()
         self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
-    @patch_network_get(private_address="1.1.1.1")
     def test_ingress_relation_set(self):
         self.harness.set_leader(True)
 
@@ -98,7 +94,6 @@ class TestCharm(unittest.TestCase):
         fqdn = socket.getfqdn()
         self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
-    @patch_network_get(private_address="1.1.1.1")
     def test_web_external_url_has_precedence_over_ingress_relation(self):
         self.harness.set_leader(True)
 
@@ -110,7 +105,6 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
 
-    @patch_network_get(private_address="1.1.1.1")
     def test_web_external_url_set(self):
         self.harness.set_leader(True)
 

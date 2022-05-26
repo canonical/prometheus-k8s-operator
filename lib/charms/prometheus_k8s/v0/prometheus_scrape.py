@@ -311,12 +311,12 @@ of Metrics provider charms hold eponymous information.
 
 """  # noqa: W505
 
-import contextlib
 import ipaddress
 import json
 import logging
 import os
 import platform
+import socket
 import subprocess
 from collections import OrderedDict
 from pathlib import Path
@@ -334,7 +334,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 20
 
 logger = logging.getLogger(__name__)
 
@@ -1634,16 +1634,7 @@ class MetricsEndpointProvider(Object):
         event is actually needed.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
-
-            if not self._is_valid_unit_address(unit_ip):
-                # relation data will be updated later when a valid address becomes available
-                with contextlib.suppress(KeyError):
-                    del relation.data[self._charm.unit]["prometheus_scrape_unit_address"]
-                    del relation.data[self._charm.unit]["prometheus_scrape_unit_name"]
-                continue
-
-            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_ip
+            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = socket.getfqdn()
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
             )
