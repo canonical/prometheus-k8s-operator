@@ -16,6 +16,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from helpers import patch_network_get
+from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
 from ops.testing import Harness
@@ -204,7 +205,6 @@ class TestRemoteWriteConsumer(unittest.TestCase):
 
 
 class TestRemoteWriteProvider(unittest.TestCase):
-    @patch_network_get(private_address="1.1.1.1")
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.harness.set_model_info("lma", "123456")
@@ -213,7 +213,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
-    @patch_network_get(private_address="1.1.1.1")
+    @patch_network_get()
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
 
@@ -227,7 +227,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch_network_get(private_address="1.1.1.1")
+    @patch_network_get()
     def test_alert_rules(self, *unused):
         self.harness.begin_with_initial_hooks()
 
@@ -244,3 +244,44 @@ class TestRemoteWriteProvider(unittest.TestCase):
         alerts = list(alerts.values())[0]  # drop the topology identifier
         self.assertEqual(len(alerts), 1)
         self.assertDictEqual(alerts, ALERT_RULES)
+
+    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
+    @patch_network_get()
+    def test_address_is_updated_on_upgrade(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+
+        with patch("socket.getfqdn", new=lambda *args: "fqdn.before"):
+            self.harness.begin_with_initial_hooks()
+            self.harness.container_pebble_ready("prometheus")
+
+        self.assertEqual(
+            self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
+            {"remote_write": json.dumps({"url": "http://fqdn.before:9090/api/v1/write"})},
+        )
+
+        with patch("socket.getfqdn", new=lambda *args: "fqdn.after"):
+            # An "upgrade" helper is controversial, so rolling my own
+            # https://github.com/canonical/operator/pull/758
+            # self.harness.upgrade()
+
+            # Re-initialize charm
+            self.harness._framework = framework.Framework(
+                self.harness._storage,
+                self.harness._charm_dir,
+                self.harness._meta,
+                self.harness._model,
+            )
+            self.harness._charm = None
+            self.harness.begin()
+
+            # Emit upgrade events
+            self.harness.charm.on.upgrade_charm.emit()
+            self.harness.charm.on.config_changed.emit()
+            self.harness.charm.on.start.emit()
+
+        self.assertEqual(
+            self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
+            {"remote_write": json.dumps({"url": "http://fqdn.after:9090/api/v1/write"})},
+        )
