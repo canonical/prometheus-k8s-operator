@@ -107,6 +107,12 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
 
     def test_address_is_set(self):
@@ -209,6 +215,11 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.harness = Harness(PrometheusCharm)
         self.harness.set_model_info("lma", "123456")
         self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.mock_capacity.return_value = "1Gi"
+        self.addCleanup(patcher.stop)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)

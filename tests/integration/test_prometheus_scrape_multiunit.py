@@ -73,6 +73,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             resources=prometheus_resources,
             application_name=prometheus_app_name,
             num_units=num_units,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,

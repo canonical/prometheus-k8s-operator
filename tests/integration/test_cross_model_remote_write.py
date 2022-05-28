@@ -22,6 +22,7 @@ async def test_create_remote_write_models(ops_test, prometheus_charm):
         prometheus_charm,
         resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
         application_name=prometheus_name,
+        trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
     )
 
     # pytest_operator keeps a dict[str, ModelState] for internal reference, and they'll
@@ -43,7 +44,7 @@ async def test_create_remote_write_models(ops_test, prometheus_charm):
         consumer.model.wait_for_idle(apps=[agent_name], status="active"),
     )
 
-    assert check_prometheus_is_ready(ops_test, prometheus_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
 
 @pytest.mark.abort_on_fail

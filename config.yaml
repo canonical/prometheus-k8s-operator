@@ -20,9 +20,9 @@ options:
       e.g.:
 
       http://foo.bar/
-      
+
       Note, do *not* set this configuration to a specific to an API path, e.g.,
-      
+
       http://foo.bar//api/v1/write  # DO NOT TRY THIS AT HOME
 
       This configuration option takes precedence over the URL provided over
@@ -35,6 +35,15 @@ options:
       Units Supported: y, w, d, h, m, s
     type: string
     default: 15d
+  maximum_retention_size:
+    description: |
+      The maximum storage to retain, expressed as a percentage (0-100) of the PVC capacity (e.g.
+      "80%").
+      The percentage value is then converted to bytes and passed to prometheus with the
+      `--storage.tsdb.retention.size` argument.
+      Default is 80%.
+    type: string
+    default: "80%"
   metrics_wal_compression:
     description: |
       This flag enables compression of the write-ahead log (WAL).

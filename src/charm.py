@@ -8,9 +8,10 @@ import logging
 import os
 import re
 import socket
-from typing import Dict
+from typing import Dict, cast
 from urllib.parse import urlparse
 
+import bitmath
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
@@ -23,6 +24,9 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
+from lightkube import Client
+from lightkube.core.exceptions import ApiError as LightkubeApiError
+from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -236,16 +240,83 @@ class PrometheusCharm(CharmBase):
             args.append("--storage.tsdb.wal-compression")
 
         # Set time series retention time
-        if config.get("metrics_retention_time") and self._is_valid_timespec(
-            config["metrics_retention_time"]
-        ):
-            args.append(f"--storage.tsdb.retention.time={config['metrics_retention_time']}")
+        if self._is_valid_timespec(retention_time := config.get("metrics_retention_time", "")):
+            args.append(f"--storage.tsdb.retention.time={retention_time}")
+
+        # Set time series retention size
+        try:
+            ratio = self._percent_string_to_ratio(config.get("maximum_retention_size", ""))
+
+        except ValueError as e:
+            logger.warning(e)
+            self.unit.status = BlockedStatus(f"Invalid retention size: {e}")
+
+        else:
+            # `storage.tsdb.retention.size` uses the legacy binary format, so "GB" and not "GiB"
+            # https://github.com/prometheus/prometheus/issues/10768
+            # For simplicity, always communicate to prometheus in GiB
+            try:
+                capacity = self._convert_k8s_capacity_to_legacy_binary_gigabytes(
+                    self._get_pvc_capacity(), ratio
+                )
+            except ValueError as e:
+                self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
+            except LightkubeApiError as e:
+                self.unit.status = BlockedStatus(
+                    f"Error calculating retention size "
+                    f"(try running `juju trust` on this application): {e}"
+                )
+            else:
+                logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
+                args.append(f"--storage.tsdb.retention.size={capacity}")
 
         command = ["/bin/prometheus"] + args
 
         return " ".join(command)
 
-    def _is_valid_timespec(self, timeval) -> bool:
+    def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
+        # Reduce possible ambiguity in unit name by adding a trailing 'B'.
+        # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
+        if not capacity.endswith("B"):
+            capacity += "B"
+
+        # For simplicity, always communicate to prometheus in GiB
+        storage_value = multiplier * bitmath.parse_string(capacity).to_GiB().value
+        return f"{storage_value}GB"
+
+    def _get_pvc_capacity(self) -> str:
+        # Get PVC capacity from kubernetes
+        client = Client()
+        pod_name = self.unit.name.replace("/", "-", -1)
+
+        # Take the first volume whose name starts with "<app-name>-database-".
+        # The volumes array looks as follows for app "am" and storage "data":
+        # 'volumes': [{'name': 'am-data-d7f6a623',
+        #              'persistentVolumeClaim': {'claimName': 'am-data-d7f6a623-am-0'}}, ...]
+        pvc_name = ""
+        for volume in cast(
+            Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
+        ).spec.volumes:
+            # TODO: How to handle this when the store is not a singleton (i.e. when metadata
+            #  specifies "multiple: range: 1-10")?
+            if volume.persistentVolumeClaim.claimName.startswith(f"{self.app.name}-database-"):
+                pvc_name = volume.persistentVolumeClaim.claimName
+                break
+
+        if pvc_name:
+            capacity = cast(
+                PersistentVolumeClaim,
+                client.get(PersistentVolumeClaim, name=pvc_name, namespace=self.model.name),
+            ).status.capacity[
+                "storage"  # Storage name must match metadata.yaml
+            ]
+
+            return capacity
+
+        else:
+            raise ValueError("No PVC found for pod " + pod_name)
+
+    def _is_valid_timespec(self, timeval: str) -> bool:
         """Is a time interval unit and value valid.
 
         If time interval is not valid unit status is set to blocked.
@@ -268,6 +339,19 @@ class PrometheusCharm(CharmBase):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return bool(matched)
+
+    def _percent_string_to_ratio(self, percentage: str) -> float:
+        """Convert a string representation of percentage of 0-100%, to a 0-1 ratio.
+
+        Raises:
+            ValueError, if the percentage string is invalid or not within range.
+        """
+        if not percentage.endswith("%"):
+            raise ValueError("Percentage string must be a number followed by '%', e.g. '80%'")
+        value = float(percentage[:-1]) / 100.0
+        if value < 0 or value > 1:
+            raise ValueError("Percentage value must be in the range 0-100.")
+        return value
 
     def _prometheus_global_config(self) -> dict:
         """Construct Prometheus global configuration.
