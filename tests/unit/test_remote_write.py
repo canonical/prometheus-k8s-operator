@@ -214,7 +214,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get()
-    def test_port_is_set(self, *unused):
+    def test_port_is_set(self):
         self.harness.begin_with_initial_hooks()
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -228,7 +228,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
-    def test_alert_rules(self, *unused):
+    def test_alert_rules(self):
         self.harness.begin_with_initial_hooks()
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")

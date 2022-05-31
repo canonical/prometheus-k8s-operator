@@ -34,7 +34,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 
 logger = logging.getLogger(__name__)
@@ -922,8 +922,7 @@ class PrometheusRemoteWriteProvider(Object):
             endpoint_address: The URL host for your remote_write endpoint as reachable
                 from the client. This might be either the pod IP, or you might want to
                 expose an address routable from outside the Kubernetes cluster, e.g., the
-                host address of an Ingress. If not provided, it defaults to the relation's
-                `bind_address`.
+                host address of an Ingress. If not provided, it defaults to the unit's FQDN.
             endpoint_port: The URL port for your remote_write endpoint. Defaults to `9090`.
             endpoint_path: The URL path for your remote_write endpoint.
                 Defaults to `/api/v1/write`.

@@ -37,7 +37,7 @@ class TestActiveStatus(unittest.TestCase):
         # AND the current unit is a leader
         self.harness.set_leader(True)
 
-    @patch_network_get(private_address="1.1.1.1")
+    @patch_network_get()
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_active_if_deployed_without_relations_or_config(self):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
@@ -54,7 +54,7 @@ class TestActiveStatus(unittest.TestCase):
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
             self.assertTrue(plan.to_dict())
 
-    @patch_network_get(private_address="1.1.1.1")
+    @patch_network_get()
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_blocked_if_reload_configuration_fails(self):
         """Scenario: Unit is deployed but reload configuration fails."""
