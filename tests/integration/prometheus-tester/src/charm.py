@@ -4,6 +4,7 @@
 
 """A Charm to functionally test the Prometheus Operator."""
 
+import json
 import logging
 from pathlib import Path
 
@@ -25,16 +26,13 @@ class PrometheusTesterCharm(CharmBase):
         self._pip_path = "/usr/local/bin/pip"
         self._metrics_exporter_script = Path("src/metrics.py")
         # The consumer lib should dedupe this properly
-        jobs = [
-            {
-                "scrape_interval": self.model.config["scrape-interval"],
-                "static_configs": [{"targets": ["*:8000"], "labels": {"name": self._name}}],
-            },
-            {
-                "scrape_interval": self.model.config["scrape-interval"],
-                "static_configs": [{"targets": ["*:8001"], "labels": {"name": self._name}}],
-            },
-        ]
+        if not (jobs := json.loads(self.config["scrape_jobs"])):
+            jobs = [
+                {
+                    "scrape_interval": self.model.config["scrape-interval"],
+                    "static_configs": [{"targets": ["*:8000"], "labels": {"name": self._name}}],
+                }
+            ]
         logger.warning("Rules path is: %s", self.model.config["alert-rules-path"])
         self.prometheus = MetricsEndpointProvider(
             self, jobs=jobs, alert_rules_path=self.model.config["alert-rules-path"]
