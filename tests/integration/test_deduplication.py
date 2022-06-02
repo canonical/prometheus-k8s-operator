@@ -22,7 +22,7 @@ tester_resources = {
 async def test_multiple_scrape_jobs_in_constructor(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
-    """Test that job names are properly deduped when they are non-unique in the same consumer unit."""
+    """Test that job names are properly deduped when in the same consumer unit."""
     jobs = [
         {
             "scrape_interval": "10s",
