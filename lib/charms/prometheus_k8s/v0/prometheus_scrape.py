@@ -1239,7 +1239,7 @@ class MetricsEndpointConsumer(Object):
         return static_config
 
 
-def _dedupe_job_names(jobs):
+def _dedupe_job_names(jobs: List[dict]):
     """Deduplicate a list of dicts by appending a hash to the value of the 'job_name' key.
 
     Additionally fully dedeuplicate any identical jobs.
