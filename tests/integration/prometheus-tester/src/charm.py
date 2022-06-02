@@ -25,7 +25,6 @@ class PrometheusTesterCharm(CharmBase):
         self._name = "prometheus-tester"
         self._pip_path = "/usr/local/bin/pip"
         self._metrics_exporter_script = Path("src/metrics.py")
-        # The consumer lib should dedupe this properly
         if not (jobs := json.loads(self.config["scrape_jobs"])):
             jobs = [
                 {
