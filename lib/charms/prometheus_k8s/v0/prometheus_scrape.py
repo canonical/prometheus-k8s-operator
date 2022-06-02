@@ -1240,9 +1240,17 @@ class MetricsEndpointConsumer(Object):
 
 
 def _dedupe_job_names(jobs):
+    """Deduplicate a list of dicts by appending a hash to the value of the 'job_name' key.
+
+    Additionally fully dedeuplicate any identical jobs.
+
+    Args:
+        jobs: A list of prometheus scrape jobs
+    """
+    jobs_copy = copy.deepcopy(jobs)
+
     # Convert to a dict with job names as keys
     # I think this line is O(n^2) but it should be okay given the list sizes
-    jobs_copy = copy.deepcopy(jobs)
     jobs_dict = {
         job["job_name"]: list(filter(lambda x: x["job_name"] == job["job_name"], jobs_copy))
         for job in jobs_copy
@@ -1259,7 +1267,7 @@ def _dedupe_job_names(jobs):
     for key in jobs_dict:
         new_jobs.extend([i for i in jobs_dict[key]])
 
-    # Deduplicate jobs which are deeply equal
+    # Deduplicate jobs which are equal
     # Again this in O(n^2) but it should be okay
     deduped_jobs = []
     seen = []
