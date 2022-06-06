@@ -7,3 +7,4 @@ tox.ini
 CONTRIBUTING.md
 INTEGRATING.md
 RELEASE.md
+promql-transform-*

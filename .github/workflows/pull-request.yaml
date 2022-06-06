@@ -105,5 +105,6 @@ jobs:
         with:
           juju-channel: latest/stable
           provider: microk8s
+          bootstrap-options: "--agent-version 2.9.29"
       - name: Run Prometheus integration tests
         run: tox -vve integration
