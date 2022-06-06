@@ -303,18 +303,17 @@ class PrometheusCharm(CharmBase):
                 pvc_name = volume.persistentVolumeClaim.claimName
                 break
 
-        if pvc_name:
-            capacity = cast(
-                PersistentVolumeClaim,
-                client.get(PersistentVolumeClaim, name=pvc_name, namespace=self.model.name),
-            ).status.capacity[
-                "storage"  # Storage name must match metadata.yaml
-            ]
-
-            return capacity
-
-        else:
+        if not pvc_name:
             raise ValueError("No PVC found for pod " + pod_name)
+
+        capacity = cast(
+            PersistentVolumeClaim,
+            client.get(PersistentVolumeClaim, name=pvc_name, namespace=self.model.name),
+        ).status.capacity[
+            "storage"  # Storage name must match metadata.yaml
+        ]
+
+        return capacity
 
     def _is_valid_timespec(self, timeval: str) -> bool:
         """Is a time interval unit and value valid.
