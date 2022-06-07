@@ -59,7 +59,7 @@ class PrometheusCharm(CharmBase):
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
         # Manages ingress for this charm
-        self.ingress = IngressPerUnitRequirer(self, endpoint="ingress", port=self._port)
+        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
         external_url = urlparse(self._external_url)
 
