@@ -290,6 +290,7 @@ class PrometheusCharm(CharmBase):
         This may need to be handled differently once Juju supports multiple storage instances
         for k8s (https://bugs.launchpad.net/juju/+bug/1977775).
         """
+        # Assuming the storage name is "databases" (must match metadata.yaml).
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
         assert (
@@ -308,8 +309,12 @@ class PrometheusCharm(CharmBase):
         for volume in cast(
             Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
         ).spec.volumes:
+            if not volume.persistentVolumeClaim:
+                # The volumes 'charm-data' and 'kube-api-access-xxxxx' do not have PVCs - filter
+                # those out.
+                continue
             # claimName looks like this: 'prom-database-325a0ee8-prom-0'
-            matcher = re.compile(f"^{self.app.name}-database-.*?-{pod_name}$")
+            matcher = re.compile(rf"^{self.app.name}-database-.*?-{pod_name}$")
             if matcher.match(volume.persistentVolumeClaim.claimName):
                 pvc_name = volume.persistentVolumeClaim.claimName
                 break
@@ -320,9 +325,12 @@ class PrometheusCharm(CharmBase):
         capacity = cast(
             PersistentVolumeClaim,
             client.get(PersistentVolumeClaim, name=pvc_name, namespace=self.model.name),
-        ).status.capacity[
-            "storage"  # Storage name must match metadata.yaml
-        ]
+        ).status.capacity["storage"]
+
+        # The other kind of storage to query for is
+        # client.get(...).spec.resources.requests["storage"]
+        # but to ensure prometheus does not fill up storage we need to limit the actual value
+        # (status.capacity) and not the requested value (spec.resources.requests).
 
         return capacity
 
