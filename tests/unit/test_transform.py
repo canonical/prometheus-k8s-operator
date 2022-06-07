@@ -4,8 +4,9 @@
 import subprocess
 import unittest
 from pathlib import PosixPath
+from unittest.mock import patch
 
-from charms.prometheus_k8s.v0.prometheus_scrape import PromqlTransformer
+from charms.prometheus_k8s.v0.prometheus_scrape import CosTool
 from ops.charm import CharmBase
 from ops.testing import Harness
 
@@ -17,9 +18,10 @@ class TransformProviderCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.transformer = PromqlTransformer(self)
+        self.tool = CosTool(self)
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestTransform(unittest.TestCase):
     """Test that the promql-transform implementation works."""
 
@@ -32,26 +34,26 @@ class TestTransform(unittest.TestCase):
     # pylint: disable=protected-access
     @unittest.mock.patch("platform.processor", lambda: "teakettle")
     def test_disable_on_invalid_arch(self):
-        transform = self.harness.charm.transformer
-        self.assertIsNone(transform.path)
-        self.assertTrue(transform._disabled)
+        tool = self.harness.charm.tool
+        self.assertIsNone(tool.path)
+        self.assertTrue(tool._disabled)
 
     # pylint: disable=protected-access
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_gives_path_on_valid_arch(self):
         """When given a valid arch, it should return the binary path."""
-        transformer = self.harness.charm.transformer
+        transformer = self.harness.charm.tool
         self.assertIsInstance(transformer.path, PosixPath)
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_setup_transformer(self):
         """When setup it should know the path to the binary."""
-        transform = self.harness.charm.transformer
+        tool = self.harness.charm.tool
 
-        self.assertIsInstance(transform.path, PosixPath)
+        self.assertIsInstance(tool.path, PosixPath)
 
-        p = str(transform.path)
-        self.assertTrue(p.endswith("promql-transform-amd64"))
+        p = str(tool.path)
+        self.assertTrue(p.endswith("cos-tool-amd64"))
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     @unittest.mock.patch("subprocess.run")
@@ -60,8 +62,8 @@ class TestTransform(unittest.TestCase):
             returncode=10, cmd="promql-transform", stderr=""
         )
 
-        transform = self.harness.charm.transformer
-        output = transform.apply_label_matchers(
+        tool = self.harness.charm.tool
+        output = tool.apply_label_matchers(
             {
                 "groups": [
                     {
@@ -87,8 +89,8 @@ class TestTransform(unittest.TestCase):
 
     @unittest.mock.patch("platform.processor", lambda: "invalid")
     def test_uses_original_expression_when_binary_missing(self):
-        transform = self.harness.charm.transformer
-        output = transform.apply_label_matchers(
+        tool = self.harness.charm.tool
+        output = tool.apply_label_matchers(
             {
                 "groups": [
                     {
@@ -114,21 +116,21 @@ class TestTransform(unittest.TestCase):
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_fetches_the_correct_expression(self):
-        transform = self.harness.charm.transformer
+        tool = self.harness.charm.tool
 
-        output = transform._apply_label_matcher("up", {"juju_model": "some_juju_model"})
+        output = tool.inject_label_matchers("up", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"}'
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_comparisons(self):
-        transform = self.harness.charm.transformer
-        output = transform._apply_label_matcher("up > 1", {"juju_model": "some_juju_model"})
+        tool = self.harness.charm.tool
+        output = tool.inject_label_matchers("up > 1", {"juju_model": "some_juju_model"})
         assert output == 'up{juju_model="some_juju_model"} > 1'
 
     @unittest.mock.patch("platform.processor", lambda: "x86_64")
     def test_handles_multiple_labels(self):
-        transform = self.harness.charm.transformer
-        output = transform._apply_label_matcher(
+        tool = self.harness.charm.tool
+        output = tool.inject_label_matchers(
             "up > 1",
             {
                 "juju_model": "some_juju_model",

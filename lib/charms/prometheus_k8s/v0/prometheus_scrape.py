@@ -316,13 +316,15 @@ import json
 import logging
 import os
 import platform
+import re
 import socket
 import subprocess
-from collections import OrderedDict
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import yaml
+from charms.observability_libs.v0.juju_topology import JujuTopology
 from ops.charm import CharmBase, RelationRole
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 
@@ -496,205 +498,6 @@ def _sanitize_scrape_configuration(job) -> dict:
     return sanitized_job
 
 
-class JujuTopology:
-    """Class for storing and formatting juju topology information."""
-
-    STUB = "%%juju_topology%%"
-
-    def __new__(cls, *args, **kwargs):
-        """Reject instantiation of a base JujuTopology class. Children only."""
-        if cls is JujuTopology:
-            raise TypeError("only children of '{}' may be instantiated".format(cls.__name__))
-        return object.__new__(cls)
-
-    def __init__(
-        self,
-        model: str,
-        model_uuid: str,
-        application: str,
-        unit: Optional[str] = "",
-        charm_name: Optional[str] = "",
-    ):
-        """Build a JujuTopology object.
-
-        A `JujuTopology` object is used for storing and transforming
-        Juju Topology information. This information is used to
-        annotate Prometheus scrape jobs and alert rules. Such
-        annotation when applied to scrape jobs helps in identifying
-        the source of the scrapped metrics. On the other hand when
-        applied to alert rules topology information ensures that
-        evaluation of alert expressions is restricted to the source
-        (charm) from which the alert rules were obtained.
-
-        Args:
-            model: a string name of the Juju model
-            model_uuid: a globally unique string identifier for the Juju model
-            application: an application name as a string
-            unit: a unit name as a string
-            charm_name: name of charm as a string
-
-        Note:
-            `JujuTopology` should not be constructed directly by charm code. Please
-            use `ProviderTopology` or `AggregatorTopology`.
-        """
-        self.model = model
-        self.model_uuid = model_uuid
-        self.application = application
-        self.charm_name = charm_name
-        self.unit = unit
-
-    @classmethod
-    def from_charm(cls, charm):
-        """Factory method for creating `JujuTopology` children from a given charm.
-
-        Args:
-            charm: a `CharmBase` object for which the `JujuTopology` has to be constructed
-
-        Returns:
-            a `JujuTopology` object.
-        """
-        return cls(
-            model=charm.model.name,
-            model_uuid=charm.model.uuid,
-            application=charm.model.app.name,
-            unit=charm.model.unit.name,
-            charm_name=charm.meta.name,
-        )
-
-    @classmethod
-    def from_relation_data(cls, data: dict):
-        """Factory method for creating `JujuTopology` children from a dictionary.
-
-        Args:
-            data: a dictionary with four keys providing topology information. The keys are
-                - "model"
-                - "model_uuid"
-                - "application"
-                - "unit"
-                - "charm_name"
-
-                `unit` and `charm_name` may be empty, but will result in more limited
-                labels. However, this allows us to support payload-only charms.
-
-        Returns:
-            a `JujuTopology` object.
-        """
-        return cls(
-            model=data["model"],
-            model_uuid=data["model_uuid"],
-            application=data["application"],
-            unit=data.get("unit", ""),
-            charm_name=data.get("charm_name", ""),
-        )
-
-    @property
-    def identifier(self) -> str:
-        """Format the topology information into a terse string."""
-        # This is odd, but may have `None` as a model key
-        return "_".join([str(val) for val in self.as_promql_label_dict().values()]).replace(
-            "/", "_"
-        )
-
-    @property
-    def promql_labels(self) -> str:
-        """Format the topology information into a verbose string."""
-        return ", ".join(
-            ['{}="{}"'.format(key, value) for key, value in self.as_promql_label_dict().items()]
-        )
-
-    def as_dict(self, rename_keys: Optional[Dict[str, str]] = None) -> OrderedDict:
-        """Format the topology information into a dict.
-
-        Use an OrderedDict so we can rely on the insertion order on Python 3.5 (and 3.6,
-        which still does not guarantee it).
-
-        Args:
-            rename_keys: A dictionary mapping old key names to new key names, which will
-                be substituted when invoked.
-        """
-        ret = OrderedDict(
-            [
-                ("model", self.model),
-                ("model_uuid", self.model_uuid),
-                ("application", self.application),
-                ("unit", self.unit),
-                ("charm_name", self.charm_name),
-            ]
-        )
-
-        ret["unit"] or ret.pop("unit")
-        ret["charm_name"] or ret.pop("charm_name")
-
-        # If a key exists in `rename_keys`, replace the value
-        if rename_keys:
-            ret = OrderedDict(
-                (rename_keys.get(k), v) if rename_keys.get(k) else (k, v) for k, v in ret.items()  # type: ignore
-            )
-
-        return ret
-
-    def as_promql_label_dict(self):
-        """Format the topology information into a dict with keys having 'juju_' as prefix."""
-        vals = {
-            "juju_{}".format(key): val
-            for key, val in self.as_dict(rename_keys={"charm_name": "charm"}).items()
-        }
-        # The leader is the only unit that sets alert rules, if "juju_unit" is present,
-        # then the rules will only be evaluated for that unit
-        if "juju_unit" in vals:
-            vals.pop("juju_unit")
-
-        return vals
-
-    def render(self, template: str):
-        """Render a juju-topology template string with topology info."""
-        return template.replace(JujuTopology.STUB, self.promql_labels)
-
-
-class AggregatorTopology(JujuTopology):
-    """Class for initializing topology information for MetricsEndpointAggregator."""
-
-    @classmethod
-    def create(cls, model: str, model_uuid: str, application: str, unit: str):
-        """Factory method for creating the `AggregatorTopology` dataclass from a given charm.
-
-        Args:
-            model: a string representing the model
-            model_uuid: the model UUID as a string
-            application: the application name
-            unit: the unit name
-
-        Returns:
-            a `AggregatorTopology` object.
-        """
-        return cls(
-            model=model,
-            model_uuid=model_uuid,
-            application=application,
-            unit=unit,
-        )
-
-    def as_promql_label_dict(self):
-        """Format the topology information into a dict with keys having 'juju_' as prefix."""
-        vals = {"juju_{}".format(key): val for key, val in self.as_dict().items()}
-
-        # FIXME: Why is this different? I have no idea. The uuid length should be the same
-        vals["juju_model_uuid"] = vals["juju_model_uuid"][:7]
-
-        return vals
-
-
-class ProviderTopology(JujuTopology):
-    """Class for initializing topology information for MetricsEndpointProvider."""
-
-    @property
-    def scrape_identifier(self):
-        """Format the topology information into a scrape identifier."""
-        # This is used only by Metrics[Consumer|Provider] and does not need a
-        # unit name, so only check for the charm name
-        return "juju_{}_prometheus_scrape".format(self.identifier)
-
-
 class InvalidAlertRulePathError(Exception):
     """Raised if the alert rules folder cannot be found or is otherwise invalid."""
 
@@ -780,6 +583,7 @@ class AlertRules:
             topology: an optional `JujuTopology` instance that is used to annotate all alert rules.
         """
         self.topology = topology
+        self.tool = CosTool(None)
         self.alert_groups = []  # type: List[dict]
 
     def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
@@ -828,9 +632,12 @@ class AlertRules:
                         alert_rule["labels"] = {}
 
                     if self.topology:
-                        alert_rule["labels"].update(self.topology.as_promql_label_dict())
+                        alert_rule["labels"].update(self.topology.label_matcher_dict)
                         # insert juju topology filters into a prometheus alert rule
-                        alert_rule["expr"] = self.topology.render(alert_rule["expr"])
+                        alert_rule["expr"] = self.tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                            self.topology.label_matcher_dict,
+                        )
 
             return alert_groups
 
@@ -990,7 +797,7 @@ class MetricsEndpointConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._transformer = PromqlTransformer(self._charm)
+        self._transformer = CosTool(self._charm)
         events = self._charm.on[relation_name]
         self.framework.observe(events.relation_changed, self._on_metrics_provider_relation_changed)
         self.framework.observe(
@@ -1098,7 +905,7 @@ class MetricsEndpointConsumer(Object):
             identifier = None
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
-                identifier = ProviderTopology.from_relation_data(scrape_metadata).identifier
+                identifier = JujuTopology.from_dict(scrape_metadata).identifier
                 alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
 
             except KeyError as e:
@@ -1186,8 +993,9 @@ class MetricsEndpointConsumer(Object):
         if not scrape_metadata:
             return scrape_jobs
 
-        job_name_prefix = ProviderTopology.from_relation_data(scrape_metadata).scrape_identifier
-
+        job_name_prefix = "juju_{}_prometheus_scrape".format(
+            JujuTopology.from_dict(scrape_metadata).identifier
+        )
         hosts = self._relation_hosts(relation)
 
         labeled_job_configs = []
@@ -1319,9 +1127,7 @@ class MetricsEndpointConsumer(Object):
             topology information with the exception of unit name.
         """
         juju_labels = labels.copy()  # deep copy not needed
-        juju_labels.update(
-            ProviderTopology.from_relation_data(scrape_metadata).as_promql_label_dict()
-        )
+        juju_labels.update(JujuTopology.from_dict(scrape_metadata).label_matcher_dict)
 
         return juju_labels
 
@@ -1551,7 +1357,7 @@ class MetricsEndpointProvider(Object):
             )
 
         super().__init__(charm, relation_name)
-        self.topology = ProviderTopology.from_charm(charm)
+        self.topology = JujuTopology.from_charm(charm)
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
@@ -1704,7 +1510,7 @@ class PrometheusRulesProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self.topology = ProviderTopology.from_charm(charm)
+        self.topology = JujuTopology.from_charm(charm)
         self._recursive = recursive
 
         try:
@@ -2139,11 +1945,14 @@ class MetricsEndpointAggregator(Object):
         labeled_rules = []
         for unit_name, rules in unit_rules.items():
             for rule in rules:
-                rule["labels"].update(
-                    AggregatorTopology.create(
-                        self.model.name, self.model.uuid, appname, unit_name
-                    ).as_promql_label_dict()
-                )
+                # the new JujuTopology removed this, so build it up by hand
+                matchers = {
+                    "juju_{}".format(k): v
+                    for k, v in JujuTopology(self.model.name, self.model.uuid, appname, unit_name)
+                    .as_dict(excluded_keys=["charm_name"])
+                    .items()
+                }
+                rule["labels"].update(matchers.items())
                 labeled_rules.append(rule)
 
         return labeled_rules
@@ -2219,28 +2028,28 @@ class MetricsEndpointAggregator(Object):
         )
 
 
-class PromqlTransformer:
-    """Uses promql-transform to inject label matchers into alert rule expressions."""
+class CosTool:
+    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
 
     _path = None
     _disabled = False
 
+    def __init__(self, charm):
+        self._charm = charm
+
     @property
     def path(self):
-        """Lazy lookup of the path of promql-transform."""
+        """Lazy lookup of the path of cos-tool."""
         if self._disabled:
             return None
         if not self._path:
-            self._path = self._get_transformer_path()
+            self._path = self._get_tool_path()
             if not self._path:
                 logger.debug("Skipping injection of juju topology as label matchers")
                 self._disabled = True
         return self._path
 
-    def __init__(self, charm):
-        self._charm = charm
-
-    def apply_label_matchers(self, rules):
+    def apply_label_matchers(self, rules) -> dict:
         """Will apply label matchers to the expression of all alerts in all supplied groups."""
         if not self.path:
             return rules
@@ -2260,18 +2069,36 @@ class PromqlTransformer:
                     if label in rule["labels"]:
                         topology[label] = rule["labels"][label]
 
-                rule["expr"] = self._apply_label_matcher(rule["expr"], topology)
+                rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
         return rules
 
-    def _apply_label_matcher(self, expression, topology):
+    def valid_alert_rule(self, rule: dict) -> bool:
+        """Will validate correctness of a rule, returning a boolean."""
+        if not self.path:
+            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
+            return True
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rule_path = Path(tmpdir + "/validate_rule.yaml")
+            rule_path.write_text(yaml.dump(rule))
+
+            args = [str(self.path), "v", str(rule_path)]
+            # noinspection PyBroadException
+            try:
+                self._exec(args)
+                return True
+            except subprocess.CalledProcessError as e:
+                logger.debug("Validating the rule failed: %s", e.output)
+                return False
+
+    def inject_label_matchers(self, expression, topology) -> str:
+        """Add label matchers to an expression."""
         if not topology:
             return expression
         if not self.path:
-            logger.debug(
-                "`promql-transform` unavailable. leaving expression unchanged: %s", expression
-            )
+            logger.debug("`cos-tool` unavailable. leaving expression unchanged: %s", expression)
             return expression
-        args = [str(self.path)]
+        args = [str(self.path), "t"]
         args.extend(
             ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
         )
@@ -2280,14 +2107,15 @@ class PromqlTransformer:
         # noinspection PyBroadException
         try:
             return self._exec(args)
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
             logger.debug('Applying the expression failed: "%s", falling back to the original', e)
+            print('Applying the expression failed: "%s", falling back to the original', e)
             return expression
 
-    def _get_transformer_path(self) -> Optional[Path]:
+    def _get_tool_path(self) -> Optional[Path]:
         arch = platform.processor()
         arch = "amd64" if arch == "x86_64" else arch
-        res = "promql-transform-{}".format(arch)
+        res = "cos-tool-{}".format(arch)
         try:
             path = Path(res).resolve()
             path.chmod(0o777)
@@ -2295,10 +2123,10 @@ class PromqlTransformer:
         except NotImplementedError:
             logger.debug("System lacks support for chmod")
         except FileNotFoundError:
-            logger.debug('Could not locate promql transform at: "{}"'.format(res))
+            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
         return None
 
-    def _exec(self, cmd):
-        result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE)
+    def _exec(self, cmd) -> str:
+        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
         output = result.stdout.decode("utf-8").strip()
         return output
