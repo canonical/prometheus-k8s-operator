@@ -128,6 +128,7 @@ events may not be needed.
 import json
 import logging
 import re
+import socket
 from typing import Any, Dict, List, Optional, Union
 
 from ops.charm import (
@@ -159,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 logger = logging.getLogger(__name__)
 
@@ -446,22 +447,8 @@ class GrafanaSourceProvider(Object):
         unit relation data for the Prometheus consumer.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            # network.bind_address can return `None` and give us a bad string, so make sure
-            # that it's valid before passing it. Otherwise, we'll catch is on pebble_ready.
-            # The provider side already skips adding it if `grafana_source_host` is not set,
-            # so no additional guards needed
-            url = None
-            if self._source_url:
-                url = self._source_url
-            else:
-                address = self._charm.model.get_binding(relation).network.bind_address
-                if address:
-                    url = "{}:{}".format(str(address), self._source_port)
-
-            # If _source_url was not set in the constructor and there are no units in the
-            # relation or pebble or address was not bound, this may not be set
-            if url:
-                relation.data[self._charm.unit]["grafana_source_host"] = url
+            url = self._source_url or "{}:{}".format(socket.getfqdn(), self._source_port)
+            relation.data[self._charm.unit]["grafana_source_host"] = url
 
 
 class GrafanaSourceConsumer(Object):
