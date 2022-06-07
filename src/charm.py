@@ -285,6 +285,17 @@ class PrometheusCharm(CharmBase):
         return f"{storage_value}GB"
 
     def _get_pvc_capacity(self) -> str:
+        """Get PVC capacity from pod name.
+
+        This may need to be handled differently once Juju supports multiple storage instances
+        for k8s (https://bugs.launchpad.net/juju/+bug/1977775).
+        """
+        # This assertion would be picked up by every integration test so no concern this would
+        # reach production.
+        assert (
+            "database" in self.model.storages
+        ), "The 'database' storage is no longer in metadata: must update literals in charm code."
+
         # Get PVC capacity from kubernetes
         client = Client()
         pod_name = self.unit.name.replace("/", "-", -1)
@@ -297,9 +308,9 @@ class PrometheusCharm(CharmBase):
         for volume in cast(
             Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
         ).spec.volumes:
-            # TODO: How to handle this when the store is not a singleton (i.e. when metadata
-            #  specifies "multiple: range: 1-10")?
-            if volume.persistentVolumeClaim.claimName.startswith(f"{self.app.name}-database-"):
+            # claimName looks like this: 'prom-database-325a0ee8-prom-0'
+            matcher = re.compile(f"^{self.app.name}-database-.*?-{pod_name}$")
+            if matcher.match(volume.persistentVolumeClaim.claimName):
                 pvc_name = volume.persistentVolumeClaim.claimName
                 break
 
