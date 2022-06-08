@@ -18,8 +18,9 @@ import re
 import socket
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -750,7 +751,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         super().__init__(charm, relation_name)
         self._charm = charm
-        self._transformer = CosTool(self._charm)
+        self.tool = CosTool(self._charm)
         self._relation_name = relation_name
         self._endpoint_schema = endpoint_schema
         self._endpoint_address = endpoint_address
@@ -855,6 +856,7 @@ class PrometheusRemoteWriteProvider(Object):
                 logger.debug("No alert groups were found in relation data")
                 continue
             # Construct an ID based on what's in the alert rules
+            identifier = ""
             for group in alert_rules["groups"]:
                 try:
                     labels = group["rules"][0]["labels"]
@@ -869,6 +871,13 @@ class PrometheusRemoteWriteProvider(Object):
                         alerts[identifier]["groups"].append(group)
                 except KeyError:
                     logger.error("Alert rules were found but no usable labels were present")
+
+            _, errmsg = self.tool.validate_alert_rules(alert_rules)
+            if errmsg:
+                if alerts[identifier]:
+                    del alerts[identifier]
+                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                continue
 
         return alerts
 
@@ -918,24 +927,39 @@ class CosTool:
                 rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
         return rules
 
-    def valid_alert_rule(self, rule: dict) -> bool:
-        """Will validate correctness of a rule, returning a boolean."""
+    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
+        """Will validate correctness alert rules, returning a boolean and any errors."""
         if not self.path:
             logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True
+            return True, ""
 
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_path = Path(tmpdir + "/validate_rule.yaml")
-            rule_path.write_text(yaml.dump(rule))
+
+            # Smash "our" rules format into what upstream actually uses, which is more like:
+            #
+            # groups:
+            #   - name: foo
+            #     rules:
+            #       - alert: BlahBlah
+            #         expr: up
+            #       - alert: Haha
+            #         expr: up
+            transformed_rules = {"groups": []}  # type: ignore
+            for rule in rules["groups"]:
+                transformed = {"name": str(uuid.uuid4()), "rules": [rule]}
+                transformed_rules["groups"].append(transformed)
+
+            rule_path.write_text(yaml.dump(rules))
 
             args = [str(self.path), "v", str(rule_path)]
             # noinspection PyBroadException
             try:
                 self._exec(args)
-                return True
+                return True, ""
             except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rule failed: %s", e.output)
-                return False
+                logger.debug("Validating the rules failed: %s", e.output)
+                return False, ", ".join([line for line in e.output if "error validating" in line])
 
     def inject_label_matchers(self, expression, topology):
         """Add label matchers to an expression."""

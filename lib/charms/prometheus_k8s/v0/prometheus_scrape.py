@@ -320,8 +320,9 @@ import re
 import socket
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -415,6 +416,36 @@ class RelationRoleMismatchError(Exception):
         )
 
         super().__init__(self.message)
+
+
+class InvalidAlertRuleEvent(EventBase):
+    """Event emitted when alert rule files are not parsable.
+
+    Enables us to set a clear status on the provider.
+    """
+
+    def __init__(self, handle, errors: str = "", valid: bool = False):
+        super().__init__(handle)
+        self.errors = errors
+        self.valid = valid
+
+    def snapshot(self) -> Dict:
+        """Save alert rule information."""
+        return {
+            "valid": self.valid,
+            "errors": self.errors,
+        }
+
+    def restore(self, snapshot):
+        """Restore alert rule information."""
+        self.valid = snapshot["valid"]
+        self.errors = snapshot["errors"]
+
+
+class MetricsEndpointProviderEvents(ObjectEvents):
+    """Events raised by :class:`InvalidAlertRuleEvent`s."""
+
+    alert_rule_status_changed = EventSource(InvalidAlertRuleEvent)
 
 
 def _validate_relation_by_interface_and_direction(
@@ -797,7 +828,7 @@ class MetricsEndpointConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._transformer = CosTool(self._charm)
+        self._tool = CosTool(self._charm)
         events = self._charm.on[relation_name]
         self.framework.observe(events.relation_changed, self._on_metrics_provider_relation_changed)
         self.framework.observe(
@@ -906,7 +937,7 @@ class MetricsEndpointConsumer(Object):
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                alerts[identifier] = self._transformer.apply_label_matchers(alert_rules)
+                alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
             except KeyError as e:
                 logger.debug(
@@ -921,6 +952,14 @@ class MetricsEndpointConsumer(Object):
                     "Alert rules were found but no usable group or identifier was present"
                 )
                 continue
+
+            _, errmsg = self._tool.validate_alert_rules(alert_rules)
+            if errmsg:
+                if alerts[identifier]:
+                    del alerts[identifier]
+                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                continue
+
             alerts[identifier] = alert_rules
 
         return alerts
@@ -1230,6 +1269,8 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
 class MetricsEndpointProvider(Object):
     """A metrics endpoint for Prometheus."""
 
+    on = MetricsEndpointProviderEvents()
+
     def __init__(
         self,
         charm,
@@ -1311,6 +1352,15 @@ class MetricsEndpointProvider(Object):
             expr: up{juju_model=<model>, juju_model_uuid=<uuid-prefix>, juju_application=<app>} < 1
             for: 0m
 
+        An attempt will be made to validate alert rules prior to loading them into Prometheus.
+        If they are invalid, an event will be emitted from this object which charms can respond
+        to in order to set a meaningful status for administrators.
+
+        This can be observed via `consumer.on.alert_rule_status_changed` which contains:
+            - The error(s) encountered when validating as `errors`
+            - A `valid` attribute, which can be used to reset the state of charms if alert rules
+              are updated via another mechanism (e.g. `cos-config`) and refreshed.
+
         Args:
             charm: a `CharmBase` object that manages this
                 `MetricsEndpointProvider` object. Typically this is
@@ -1368,7 +1418,7 @@ class MetricsEndpointProvider(Object):
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
-        self.framework.observe(events.relation_changed, self._set_scrape_job_spec)
+        self.framework.observe(events.relation_changed, self._on_relation_changed)
 
         if not refresh_event:
             if len(self._charm.meta.containers) == 1:
@@ -1399,6 +1449,22 @@ class MetricsEndpointProvider(Object):
 
         # If there is no leader during relation_joined we will still need to set alert rules.
         self.framework.observe(self._charm.on.leader_elected, self._set_scrape_job_spec)
+
+    def _on_relation_changed(self, event):
+        """Check for alert rule messages in the relation data before moving on."""
+        if self._charm.unit.is_leader():
+            ev = json.loads(event.relation.data[event.app].get("event", "{}"))
+
+            if ev:
+                valid = bool(ev.get("valid", True))
+                errors = ev.get("errors", "")
+
+                if valid and not errors:
+                    self.on.alert_rule_status_changed.emit(valid=valid)
+                else:
+                    self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
+
+        self._set_scrape_job_spec(event)
 
     def _set_scrape_job_spec(self, event):
         """Ensure scrape target information is made available to prometheus.
@@ -2072,24 +2138,39 @@ class CosTool:
                 rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
         return rules
 
-    def valid_alert_rule(self, rule: dict) -> bool:
-        """Will validate correctness of a rule, returning a boolean."""
+    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
+        """Will validate correctness of alert rules, returning a boolean and any errors."""
         if not self.path:
             logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True
+            return True, ""
 
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_path = Path(tmpdir + "/validate_rule.yaml")
-            rule_path.write_text(yaml.dump(rule))
+
+            # Smash "our" rules format into what upstream actually uses, which is more like:
+            #
+            # groups:
+            #   - name: foo
+            #     rules:
+            #       - alert: BlahBlah
+            #         expr: up
+            #       - alert: Haha
+            #         expr: up
+            transformed_rules = {"groups": []}  # type: ignore
+            for rule in rules["groups"]:
+                transformed = {"name": str(uuid.uuid4()), "rules": [rule]}
+                transformed_rules["groups"].append(transformed)
+
+            rule_path.write_text(yaml.dump(transformed_rules))
 
             args = [str(self.path), "v", str(rule_path)]
             # noinspection PyBroadException
             try:
                 self._exec(args)
-                return True
+                return True, ""
             except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rule failed: %s", e.output)
-                return False
+                logger.debug("Validating the rules failed: %s", e.output)
+                return False, ", ".join([line for line in e.output if "error validating" in line])
 
     def inject_label_matchers(self, expression, topology) -> str:
         """Add label matchers to an expression."""

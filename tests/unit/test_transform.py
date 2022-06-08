@@ -13,7 +13,7 @@ from ops.testing import Harness
 
 # noqa: E302
 # pylint: disable=too-few-public-methods
-class TransformProviderCharm(CharmBase):
+class ToolProviderCharm(CharmBase):
     """Container charm for running the integration test."""
 
     def __init__(self, *args):
@@ -23,10 +23,10 @@ class TransformProviderCharm(CharmBase):
 
 @patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestTransform(unittest.TestCase):
-    """Test that the promql-transform implementation works."""
+    """Test that the cos-tool implementation works."""
 
     def setUp(self):
-        self.harness = Harness(TransformProviderCharm)
+        self.harness = Harness(ToolProviderCharm)
         self.harness.set_model_name("transform")
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
@@ -59,7 +59,7 @@ class TestTransform(unittest.TestCase):
     @unittest.mock.patch("subprocess.run")
     def test_returns_original_expression_when_subprocess_call_errors(self, mocked_run):
         mocked_run.side_effect = subprocess.CalledProcessError(
-            returncode=10, cmd="promql-transform", stderr=""
+            returncode=10, cmd="cos-tool", stderr=""
         )
 
         tool = self.harness.charm.tool
@@ -143,3 +143,58 @@ class TestTransform(unittest.TestCase):
             output == 'up{juju_application="some_application",juju_model="some_juju_model"'
             ',juju_model_uuid="123ABC",juju_unit="some_application/1"} > 1'
         )
+
+
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
+class TestValidateAlerts(unittest.TestCase):
+    """Test that the cos-tool validation works."""
+
+    def setUp(self):
+        self.harness = Harness(ToolProviderCharm)
+        self.harness.set_model_name("validate")
+        self.addCleanup(self.harness.cleanup)
+        self.harness.begin()
+
+    @unittest.mock.patch("platform.processor", lambda: "x86_64")
+    def test_returns_errors_on_bad_rule_file(self):
+        tool = self.harness.charm.tool
+        valid, errs = tool.validate_alert_rules(
+            {
+                "groups": [
+                    {
+                        "alert": "BadSyntax",
+                        "expr": "process_cpu_seconds_total{) > 0.12",
+                    }
+                ]
+            }
+        )
+        self.assertEqual(valid, False)
+        self.assertIn(errs, "error validating:")
+
+    @unittest.mock.patch("platform.processor", lambda: "x86_64")
+    def test_successfully_validates_good_alert_rules(self):
+        tool = self.harness.charm.tool
+        valid, errs = tool.validate_alert_rules(
+            {
+                "groups": [
+                    {
+                        "alert": "CPUOverUse",
+                        "expr": "process_cpu_seconds_total > 0.12",
+                        "for": "0m",
+                        "labels": {
+                            "severity": "Low",
+                            "juju_model": "None",
+                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                            "juju_application": "consumer-tester",
+                        },
+                        "annotations": {
+                            "summary": "Instance {{ $labels.instance }} CPU over use",
+                            "description": "{{ $labels.instance }} of job "
+                            "{{ $labels.job }} has used too much CPU.",
+                        },
+                    }
+                ]
+            }
+        )
+        self.assertEqual(errs, "")
+        self.assertEqual(valid, True)
