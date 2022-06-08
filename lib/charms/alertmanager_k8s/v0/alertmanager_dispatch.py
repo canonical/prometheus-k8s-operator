@@ -25,6 +25,7 @@ class SomeApplication(CharmBase):
 ```
 """
 import logging
+import socket
 from typing import List
 
 import ops
@@ -40,7 +41,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -258,9 +259,7 @@ class AlertmanagerProvider(RelationManagerBase):
 
     def _generate_relation_data(self, relation: Relation):
         """Helper function to generate relation data in the correct format."""
-        public_address = "{}:{}".format(
-            self.charm.model.get_binding(relation).network.bind_address, self.api_port
-        )
+        public_address = "{}:{}".format(socket.getfqdn(), self.api_port)
         return {"public_address": public_address}
 
     def update_relation_data(self, event: RelationEvent = None):
@@ -279,7 +278,12 @@ class AlertmanagerProvider(RelationManagerBase):
             # a single consumer charm's unit may be related to multiple providers
             if self.name in self.charm.model.relations:
                 for relation in self.charm.model.relations[self.name]:
+                    # Sometimes (e.g. when an app is removed with `--force`), there is a dangling
+                    # relation, for which we get the following error:
+                    # ops.model.ModelError: b'ERROR relation 17 not found (not found)\n'
+                    # when trying to `network-get alerting`.
                     relation.data[self.charm.unit].update(self._generate_relation_data(relation))
+
         else:
             # update relation data only for the newly joined relation
             event.relation.data[self.charm.unit].update(

@@ -19,8 +19,6 @@ jobs:
         with:
           credentials: "${{ secrets.CHARMHUB_TOKEN }}"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          comment-on-pr: false
-          fail-build: true
 
   static-lib:
     name: Static analysis of /lib for Python 3.5
@@ -107,5 +105,6 @@ jobs:
         with:
           juju-channel: latest/stable
           provider: microk8s
+          bootstrap-options: "--agent-version 2.9.29"
       - name: Run Prometheus integration tests
         run: tox -vve integration

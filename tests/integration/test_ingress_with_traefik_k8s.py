@@ -28,6 +28,7 @@ async def test_ingress_traefik_k8s(ops_test, prometheus_charm):
             prometheus_charm,
             resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
             application_name=prometheus_name,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             "traefik-k8s",
@@ -43,7 +44,7 @@ async def test_ingress_traefik_k8s(ops_test, prometheus_charm):
     apps = [prometheus_name, traefik_name]
     await ops_test.model.wait_for_idle(apps=apps, status="active")
     assert initial_workload_is_ready(ops_test, apps)
-    assert check_prometheus_is_ready(ops_test, prometheus_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await ops_test.model.add_relation(traefik_name, f"{prometheus_name}:ingress")
 
