@@ -2163,7 +2163,7 @@ class CosTool:
 
             rule_path.write_text(yaml.dump(transformed_rules))
 
-            args = [str(self.path), "v", str(rule_path)]
+            args = [str(self.path), "validate", str(rule_path)]
             # noinspection PyBroadException
             try:
                 self._exec(args)
@@ -2177,9 +2177,9 @@ class CosTool:
         if not topology:
             return expression
         if not self.path:
-            logger.debug("`cos-tool` unavailable. leaving expression unchanged: %s", expression)
+            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
             return expression
-        args = [str(self.path), "t"]
+        args = [str(self.path), "transform"]
         args.extend(
             ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
         )

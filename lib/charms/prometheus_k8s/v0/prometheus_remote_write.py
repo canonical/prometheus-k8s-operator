@@ -219,12 +219,10 @@ class AlertRules:
                         alert_rule["labels"] = {}
 
                     if self.topology:
-                        alert_rule["labels"].update(self.topology.label_matcher_dict)
                         # only insert labels that do not already exist
                         for label, val in self.topology.label_matcher_dict.items():
                             if label not in alert_rule["labels"]:
                                 alert_rule["labels"][label] = val
-                        # insert juju topology filters into a prometheus alert rule
                         # insert juju topology filters into a prometheus alert rule
                         alert_rule["expr"] = self.tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
@@ -952,7 +950,7 @@ class CosTool:
 
             rule_path.write_text(yaml.dump(rules))
 
-            args = [str(self.path), "v", str(rule_path)]
+            args = [str(self.path), "validate", str(rule_path)]
             # noinspection PyBroadException
             try:
                 self._exec(args)
@@ -966,9 +964,9 @@ class CosTool:
         if not topology:
             return expression
         if not self.path:
-            logger.debug("`cos-tool` unavailable. leaving expression unchanged: %s", expression)
+            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
             return expression
-        args = [str(self.path), "t"]
+        args = [str(self.path), "transform"]
         args.extend(
             ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
         )
