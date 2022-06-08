@@ -37,6 +37,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             prometheus_charm,
             resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
             application_name=prometheus_app_name,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
@@ -53,7 +54,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=1)
 
     assert initial_workload_is_ready(ops_test, app_names)
-    assert check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
 
     global initial_config, initial_rules
     initial_config, initial_rules = await asyncio.gather(

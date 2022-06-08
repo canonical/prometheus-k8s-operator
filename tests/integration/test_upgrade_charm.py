@@ -36,7 +36,10 @@ async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus
     logger.debug("deploy charm from charmhub")
     await asyncio.gather(
         ops_test.model.deploy(
-            f"ch:{prometheus_app_name}", application_name=prometheus_app_name, channel="edge"
+            f"ch:{prometheus_app_name}",
+            application_name=prometheus_app_name,
+            channel="edge",
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name
@@ -62,7 +65,7 @@ async def test_rules_are_retained_after_upgrade(ops_test, prometheus_charm):
     await ops_test.model.wait_for_idle(
         apps=app_names, status="active", timeout=300, idle_period=60
     )
-    assert check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
 
     # Check only one alert rule exists
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)

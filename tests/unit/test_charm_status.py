@@ -37,6 +37,11 @@ class TestActiveStatus(unittest.TestCase):
         # AND the current unit is a leader
         self.harness.set_leader(True)
 
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.mock_capacity.return_value = "1Gi"
+        self.addCleanup(patcher.stop)
+
     @patch_network_get()
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_active_if_deployed_without_relations_or_config(self):

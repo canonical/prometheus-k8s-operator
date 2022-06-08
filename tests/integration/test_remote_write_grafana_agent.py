@@ -24,6 +24,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
             prometheus_charm,
             resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
             application_name=prometheus_name,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             "grafana-agent-k8s",
@@ -33,7 +34,7 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     )
 
     await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
-    assert check_prometheus_is_ready(ops_test, prometheus_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await ops_test.model.add_relation(prometheus_name, agent_name)
 

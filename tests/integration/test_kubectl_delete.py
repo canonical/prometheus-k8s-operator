@@ -24,9 +24,12 @@ async def test_deploy_from_local_path(ops_test, prometheus_charm):
     """Deploy the charm-under-test."""
     logger.debug("deploy local charm")
 
-    await ops_test.model.deploy(prometheus_charm, application_name=app_name, resources=resources)
+    # Need trust = True otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
+    await ops_test.model.deploy(
+        prometheus_charm, application_name=app_name, resources=resources, trust=True
+    )
     await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=TIMEOUT)
-    assert check_prometheus_is_ready(ops_test, app_name, 0)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
 @pytest.mark.abort_on_fail
@@ -49,4 +52,4 @@ async def test_kubectl_delete_pod(ops_test, prometheus_charm):
     logger.debug(stdout)
     await ops_test.model.block_until(lambda: len(ops_test.model.applications[app_name].units) > 0)
     await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=TIMEOUT)
-    assert check_prometheus_is_ready(ops_test, app_name, 0)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)

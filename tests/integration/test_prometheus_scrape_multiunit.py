@@ -73,6 +73,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             resources=prometheus_resources,
             application_name=prometheus_app_name,
             num_units=num_units,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
@@ -153,15 +154,17 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     )
     for u in range(1, len(rules_by_unit)):
         # Some fields will most likely differ, such as "evaluationTime" and "lastEvaluation".
-        # Also excluding "alerts" because the 'rules' endpoint returns a dict of firing alerts,
-        # which may vary across prometheus units given the share nothing and the units starting up
-        # at different times.
+        # Also excluding:
+        # - "alerts" because the 'rules' endpoint returns a dict of firing alerts,
+        #   which may vary across prometheus units given the share nothing and the units starting
+        #   up at different times.
+        # - "health", which takes time to switch from "unknown" to "ok" and occasionally fails CI.
         assert (
             DeepDiff(
                 rules_by_unit[0],
                 rules_by_unit[u],
                 ignore_order=True,
-                exclude_regex_paths=r"evaluationTime|lastEvaluation|activeAt|alerts",
+                exclude_regex_paths=r"evaluationTime|lastEvaluation|activeAt|alerts|health",
             )
             == {}
         )

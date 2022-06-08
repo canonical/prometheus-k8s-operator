@@ -22,6 +22,7 @@ async def test_create_remote_write_models(ops_test, prometheus_charm):
         prometheus_charm,
         resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
         application_name=prometheus_name,
+        trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
     )
 
     # pytest_operator keeps a dict[str, ModelState] for internal reference, and they'll
@@ -43,7 +44,7 @@ async def test_create_remote_write_models(ops_test, prometheus_charm):
         consumer.model.wait_for_idle(apps=[agent_name], status="active"),
     )
 
-    assert check_prometheus_is_ready(ops_test, prometheus_name, 0)
+    assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
 
 @pytest.mark.abort_on_fail
@@ -67,12 +68,13 @@ async def test_offer_and_consume_remote_write(ops_test):
     await consumer.model.consume(f"admin/{offer.model_name}.{prometheus_name}", "prom")
     await consumer.model.relate(agent_name, "prom")
 
+    # Idle period of 60s is not enough - github CI fails for has_metric with idle_period=60.
     await asyncio.gather(
-        offer.model.wait_for_idle(apps=[prometheus_name], status="active", idle_period=60),
-        consumer.model.wait_for_idle(apps=[agent_name], status="active", idle_period=60),
+        offer.model.wait_for_idle(apps=[prometheus_name], status="active", idle_period=90),
+        consumer.model.wait_for_idle(apps=[agent_name], status="active", idle_period=90),
     )
 
-    await has_metric(
+    assert await has_metric(
         ops_test,
         f'up{{juju_model="{consumer.model_name}",juju_application="{agent_name}"}}',
         prometheus_name,
@@ -91,4 +93,4 @@ async def has_metric(ops_test, query: str, app_name: str) -> bool:
         if timeseries.get("metric"):
             return True
 
-    raise Exception
+    return False

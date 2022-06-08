@@ -31,6 +31,12 @@ charmcraft release prometheus-k8s --channel=beta --revision=19 --resource=promet
 ```
 Note: The charm revision and resource revisions will need to be set appropriately.
 
+### Publish charm libraries
+```shell
+charmcraft publish-lib charms.prometheus_k8s.v0.prometheus_scrape
+charmcraft publish-lib charms.prometheus_k8s.v0.prometheus_remote_write
+```
+
 ## A note on granularity of revisions
 
 We believe in shipping often and with confidence.

@@ -28,6 +28,12 @@ class TestCharm(unittest.TestCase):
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
 
     def test_grafana_is_provided_port_and_source(self):
@@ -232,3 +238,53 @@ def cli_arg(plan, cli_opt):
         if len(opt_list) == 1 and opt_list[0] == cli_opt:
             return opt_list[0]
     return None
+
+
+class TestConfigMaximumRetentionSize(unittest.TestCase):
+    """Test the config.yaml option 'maximum_retention_size'."""
+
+    def setUp(self):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch_network_get()
+    def test_default_maximum_retention_size_is_80_percent(self):
+        """This test is here to guarantee backwards compatibility.
+
+        Since config.yaml provides a default (which forms a contract), we need to prevent changing
+        it unintentionally.
+        """
+        # GIVEN a capacity limit in binary notation (k8s notation)
+        self.mock_capacity.return_value = "1Gi"
+
+        # AND the maximum_retention_size config is left unspecified (let it keep its default)
+        # WHEN the charm starts
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        # THEN the pebble plan has the adjusted capacity of 80%
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch_network_get()
+    def test_multiplication_factor_applied_to_pvc_capacity(self):
+        """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
+        # GIVEN a capacity limit in binary notation (k8s notation)
+        self.mock_capacity.return_value = "1Gi"
+
+        # AND a multiplication factor as a config option
+        self.harness.update_config({"maximum_retention_size": "50%"})
+
+        # WHEN the charm starts
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        # THEN the pebble plan the adjusted capacity
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")

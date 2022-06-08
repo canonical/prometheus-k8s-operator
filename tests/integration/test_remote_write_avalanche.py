@@ -23,7 +23,12 @@ async def test_charm_successfully_relates_to_avalanche(ops_test: OpsTest, promet
     resources = {"prometheus-image": METADATA["resources"]["prometheus-image"]["upstream-source"]}
 
     # deploy prometheus
-    await ops_test.model.deploy(prometheus_charm, resources=resources, application_name="prom")
+    await ops_test.model.deploy(
+        prometheus_charm,
+        resources=resources,
+        application_name="prom",
+        trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
+    )
     await ops_test.model.wait_for_idle(apps=["prom"], status="active")
 
     # deploy avalanche
