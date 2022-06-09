@@ -38,9 +38,10 @@ options:
   maximum_retention_size:
     description: |
       The maximum storage to retain, expressed as a percentage (0-100) of the PVC capacity (e.g.
-      "80%").
-      The percentage value is then converted to bytes and passed to prometheus with the
-      `--storage.tsdb.retention.size` argument.
+      "80%") or as an absolute value in either binary (e.g. "1Gi" or "1GiB") or decimal
+      (e.g. "1GB") notation. The value is then converted to GiB and passed to prometheus with the
+      `--storage.tsdb.retention.size` argument. That argument expects values in legacy binary
+      notation (e.g. "1GB" in legacy binary notation stands for "1Gi").
       Default is 80%.
     type: string
     default: "80%"

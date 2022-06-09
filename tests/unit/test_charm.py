@@ -259,7 +259,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         Since config.yaml provides a default (which forms a contract), we need to prevent changing
         it unintentionally.
         """
-        # GIVEN a capacity limit in binary notation (k8s notation)
+        # GIVEN a pvc capacity limit in binary notation (k8s notation)
         self.mock_capacity.return_value = "1Gi"
 
         # AND the maximum_retention_size config is left unspecified (let it keep its default)
@@ -267,7 +267,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
 
-        # THEN the pebble plan has the adjusted capacity of 80%
+        # THEN the pebble plan has the adjusted capacity of 80%, but in legacy binary notation (GB)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
@@ -275,7 +275,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch_network_get()
     def test_multiplication_factor_applied_to_pvc_capacity(self):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
-        # GIVEN a capacity limit in binary notation (k8s notation)
+        # GIVEN a pvc capacity limit in binary notation (k8s notation)
         self.mock_capacity.return_value = "1Gi"
 
         # AND a multiplication factor as a config option
@@ -285,6 +285,48 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
 
-        # THEN the pebble plan the adjusted capacity
+        # THEN the pebble plan has the adjusted capacity of 50%, but in legacy binary notation (GB)
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch_network_get()
+    def test_absolute_storage_value_in_binary_notation(self):
+        """The config option must also accept capacity limit as an absolute value."""
+        # GIVEN a pvc capacity limit in binary notation (k8s notation)
+        self.mock_capacity.return_value = "1Gi"
+
+        # WHEN the charm starts
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        # AND an absolute storage limit is set as a config option
+        for setpoint in ["0.5Ti", "0.5TiB", str(0.5 * 1024**4)]:
+            with self.subTest(setpoint=setpoint):
+                self.harness.update_config({"maximum_retention_size": setpoint})
+
+                # THEN the pebble plan has the capacity in GiB, but in legacy binary notation (GB)
+                plan = self.harness.get_container_pebble_plan("prometheus")
+                self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "512.0GB")
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch_network_get()
+    def test_absolute_storage_value_in_decimal_notation(self):
+        """The config option must accept capacity limit as absolute value in decimal notation."""
+        # GIVEN a pvc capacity limit in binary notation (k8s notation)
+        self.mock_capacity.return_value = "1Gi"
+
+        # WHEN the charm starts
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        # AND an absolute storage limit is set as a config option
+        for setpoint in ["500GB", "0.5TB"]:
+            with self.subTest(setpoint=setpoint):
+                self.harness.update_config({"maximum_retention_size": setpoint})
+
+                # THEN the pebble plan has the capacity in GiB, but in legacy binary notation (GB)
+                plan = self.harness.get_container_pebble_plan("prometheus")
+                arg = cli_arg(plan, "--storage.tsdb.retention.size")
+                self.assertTrue(arg.endswith("GB"))
+                self.assertEqual(arg[:5], "465.6")

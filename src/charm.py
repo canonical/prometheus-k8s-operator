@@ -244,37 +244,45 @@ class PrometheusCharm(CharmBase):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
 
         # Set time series retention size
+        retention_size_setpoint = config.get("maximum_retention_size", "")
+
         try:
-            ratio = self._percent_string_to_ratio(config.get("maximum_retention_size", ""))
+            if retention_size_setpoint.endswith("%"):
+                ratio = self._percent_string_to_ratio(retention_size_setpoint)
+
+                # storage.tsdb.retention.size uses the legacy binary format, so "GB" and not "GiB"
+                # https://github.com/prometheus/prometheus/issues/10768
+                # For simplicity, always communicate to prometheus in GiB
+                capacity = self._convert_capacity_str_to_legacy_binary_gigabytes(
+                    self._get_pvc_capacity(), ratio
+                )
+            else:
+                # Retention size is given as an absolute value
+                ratio = 1.0
+                capacity = self._convert_capacity_str_to_legacy_binary_gigabytes(
+                    retention_size_setpoint, 1.0
+                )
 
         except ValueError as e:
             logger.warning(e)
-            self.unit.status = BlockedStatus(f"Invalid retention size: {e}")
-
+            self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
+        except LightkubeApiError as e:
+            logger.warning(e)
+            self.unit.status = BlockedStatus(
+                f"Error calculating retention size "
+                f"(try running `juju trust` on this application): {e}"
+            )
         else:
-            # `storage.tsdb.retention.size` uses the legacy binary format, so "GB" and not "GiB"
-            # https://github.com/prometheus/prometheus/issues/10768
-            # For simplicity, always communicate to prometheus in GiB
-            try:
-                capacity = self._convert_k8s_capacity_to_legacy_binary_gigabytes(
-                    self._get_pvc_capacity(), ratio
-                )
-            except ValueError as e:
-                self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
-            except LightkubeApiError as e:
-                self.unit.status = BlockedStatus(
-                    f"Error calculating retention size "
-                    f"(try running `juju trust` on this application): {e}"
-                )
-            else:
-                logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
-                args.append(f"--storage.tsdb.retention.size={capacity}")
+            logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
+            args.append(f"--storage.tsdb.retention.size={capacity}")
 
         command = ["/bin/prometheus"] + args
 
         return " ".join(command)
 
-    def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
+    def _convert_capacity_str_to_legacy_binary_gigabytes(
+        self, capacity: str, multiplier: float
+    ) -> str:
         # Reduce possible ambiguity in unit name by adding a trailing 'B'.
         # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
         if not capacity.endswith("B"):
