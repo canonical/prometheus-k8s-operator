@@ -35,7 +35,7 @@ jobs:
         run: |
           id="${{ github.event.issue.html_url }}"
           title="${{ github.event.issue.title }}"
-          component="gh2jira"
+          component="prometheus"
               
           description="${{ github.event.issue.body }}
           Opened by ${{ github.event.issue.user.login }}."
