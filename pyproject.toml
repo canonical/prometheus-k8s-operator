@@ -56,3 +56,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["charms.grafana_k8s.*", "charms.alertmanager_k8s.*"]
 follow_imports = "silent"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
