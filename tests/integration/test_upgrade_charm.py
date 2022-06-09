@@ -84,7 +84,9 @@ async def test_check_data_persist_on_charm_upgrade(ops_test, prometheus_charm):
     await ops_test.model.applications[prometheus_app_name].refresh(
         path=prometheus_charm, resources=prometheus_resources
     )
-    await ops_test.model.wait_for_idle(apps=app_names, status="active", timeout=300, idle_period=60)
+    await ops_test.model.wait_for_idle(
+        apps=app_names, status="active", timeout=300, idle_period=60
+    )
     assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
 
     total1 = await run_promql(ops_test, query, prometheus_app_name)
