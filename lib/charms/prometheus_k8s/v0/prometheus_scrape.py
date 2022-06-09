@@ -953,14 +953,14 @@ class MetricsEndpointConsumer(Object):
                 )
                 continue
 
+            alerts[identifier] = alert_rules
+
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 if alerts[identifier]:
                     del alerts[identifier]
                 relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
                 continue
-
-            alerts[identifier] = alert_rules
 
         return alerts
 

@@ -99,6 +99,30 @@ class RelationRoleMismatchError(Exception):
         super().__init__(self.message)
 
 
+class InvalidAlertRuleEvent(EventBase):
+    """Event emitted when alert rule files are not parsable.
+
+    Enables us to set a clear status on the provider.
+    """
+
+    def __init__(self, handle, errors: str = "", valid: bool = False):
+        super().__init__(handle)
+        self.errors = errors
+        self.valid = valid
+
+    def snapshot(self) -> Dict:
+        """Save alert rule information."""
+        return {
+            "valid": self.valid,
+            "errors": self.errors,
+        }
+
+    def restore(self, snapshot):
+        """Restore alert rule information."""
+        self.valid = snapshot["valid"]
+        self.errors = snapshot["errors"]
+
+
 def _is_official_alert_rule_format(rules_dict: dict) -> bool:
     """Are alert rules in the upstream format as supported by Prometheus.
 
@@ -456,6 +480,7 @@ class PrometheusRemoteWriteConsumerEvents(ObjectEvents):
     """Event descriptor for events raised by `PrometheusRemoteWriteConsumer`."""
 
     endpoints_changed = EventSource(PrometheusRemoteWriteEndpointsChangedEvent)
+    alert_rule_status_changed = EventSource(InvalidAlertRuleEvent)
 
 
 class PrometheusRemoteWriteConsumer(Object):
@@ -615,6 +640,18 @@ class PrometheusRemoteWriteConsumer(Object):
         )
 
     def _handle_endpoints_changed(self, event: RelationEvent) -> None:
+        if self._charm.unit.is_leader():
+            ev = json.loads(event.relation.data[event.app].get("event", "{}"))
+
+            if ev:
+                valid = bool(ev.get("valid", True))
+                errors = ev.get("errors", "")
+
+                if valid and not errors:
+                    self.on.alert_rule_status_changed.emit(valid=valid)
+                else:
+                    self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
+
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
     def _push_alerts_on_relation_joined(self, event: RelationEvent) -> None:
@@ -854,7 +891,7 @@ class PrometheusRemoteWriteProvider(Object):
                 logger.debug("No alert groups were found in relation data")
                 continue
             # Construct an ID based on what's in the alert rules
-            identifier = ""
+            error_messages = []
             for group in alert_rules["groups"]:
                 try:
                     labels = group["rules"][0]["labels"]
@@ -863,6 +900,12 @@ class PrometheusRemoteWriteProvider(Object):
                         labels["juju_model_uuid"],
                         labels["juju_application"],
                     )
+
+                    _, errmsg = self.tool.validate_alert_rules({"groups": [group]})
+
+                    if errmsg:
+                        error_messages.append(errmsg)
+                        continue
                     if identifier not in alerts:
                         alerts[identifier] = {"groups": [group]}
                     else:
@@ -870,11 +913,10 @@ class PrometheusRemoteWriteProvider(Object):
                 except KeyError:
                     logger.error("Alert rules were found but no usable labels were present")
 
-            _, errmsg = self.tool.validate_alert_rules(alert_rules)
-            if errmsg:
-                if alerts[identifier]:
-                    del alerts[identifier]
-                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+            if error_messages:
+                relation.data[self._charm.app]["event"] = json.dumps(
+                    {"errors": "; ".join(error_messages)}
+                )
                 continue
 
         return alerts
