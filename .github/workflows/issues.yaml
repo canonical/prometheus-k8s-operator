@@ -1,0 +1,51 @@
+name: Issues
+
+on: [issues]
+
+jobs:
+  update:
+    name: Update Issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump Github Context
+        run: |
+          echo '${{ toJSON(github) }}'
+          echo "update=false" >> $GITHUB_ENV
+          
+          if [ ${{ github.event_name }} != "issues" ]; then
+            echo "This action only operates on issues"
+            exit 0
+          fi
+          
+          echo "update=true" >> $GITHUB_ENV
+      - name: Determine action
+        run: |
+          if [ ${{ github.event.action }} == "opened" ]; then
+            echo "action=open" >> $GITHUB_ENV
+          fi
+          if [ ${{ github.event.action }} == "reopened" ]; then
+            echo "action=reopen" >> $GITHUB_ENV
+          fi
+          if [ ${{ github.event.action }} == "closed" ]; then
+            echo "action=close" >> $GITHUB_ENV
+          fi
+          
+      - name: Update
+        if: ${{ env.update == 'true' }}
+        run: |
+          id="${{ github.event.issue.html_url }}"
+          title="${{ github.event.issue.title }}"
+          component="prometheus"
+              
+          description="${{ github.event.issue.body }}
+          Opened by ${{ github.event.issue.user.login }}."
+          
+          data=$(jq -n \
+            --arg id "$id" \
+            --arg action "${{ env.action }}" \
+            --arg title "$title" \
+            --arg description "$description" \
+            --arg component "$component" \
+            '{data: {id: $id, action: $action, title: $title, description: $description, component: $component}}')
+          
+          curl -X POST -H 'Content-type: application/json' --data "${data}" "${{ secrets.JIRA_URL }}"
