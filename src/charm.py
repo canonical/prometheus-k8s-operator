@@ -273,7 +273,12 @@ class PrometheusCharm(CharmBase):
                 f"(try running `juju trust` on this application): {e}"
             )
         else:
-            logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
+            logger.info(
+                "Retention size limit set to legacy binary notation '%s' "
+                "(converted from user input: '%s')",
+                capacity,
+                retention_size_setpoint,
+            )
             args.append(f"--storage.tsdb.retention.size={capacity}")
 
         command = ["/bin/prometheus"] + args
