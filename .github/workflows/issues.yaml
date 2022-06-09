@@ -36,9 +36,8 @@ jobs:
           id="${{ github.event.issue.html_url }}"
           title="${{ github.event.issue.title }}"
           component="prometheus"
-              
-          description="${{ github.event.issue.body }}
-          Opened by ${{ github.event.issue.user.login }}."
+          
+          description="${{ github.event.issue.html_url }}\nOpened by ${{ github.event.issue.user.login }}."
           
           data=$(jq -n \
             --arg id "$id" \
