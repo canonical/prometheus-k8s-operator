@@ -1704,7 +1704,6 @@ class PrometheusRulesProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self.topology = ProviderTopology.from_charm(charm)
         self._recursive = recursive
 
         try:
