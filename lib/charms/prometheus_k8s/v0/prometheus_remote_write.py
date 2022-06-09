@@ -981,9 +981,9 @@ class CosTool:
             # groups:
             #   - name: foo
             #     rules:
-            #       - alert: BlahBlah
+            #       - alert: SomeAlert
             #         expr: up
-            #       - alert: Haha
+            #       - alert: OtherAlert
             #         expr: up
             transformed_rules = {"groups": []}  # type: ignore
             for rule in rules["groups"]:
