@@ -666,7 +666,7 @@ class AlertRules:
                         alert_rule["labels"].update(self.topology.label_matcher_dict)
                         # insert juju topology filters into a prometheus alert rule
                         alert_rule["expr"] = self.tool.inject_label_matchers(
-                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                            re.sub(r"%%juju_topology%%(,?)", r"\1", alert_rule["expr"]),
                             self.topology.label_matcher_dict,
                         )
 
@@ -2190,7 +2190,6 @@ class CosTool:
             return self._exec(args)
         except subprocess.CalledProcessError as e:
             logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            print('Applying the expression failed: "%s", falling back to the original', e)
             return expression
 
     def _get_tool_path(self) -> Optional[Path]:
