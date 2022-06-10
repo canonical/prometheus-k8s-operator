@@ -13,10 +13,56 @@ logger = logging.getLogger(__name__)
 
 prometheus_name = "prometheus"
 agent_name = "grafana-agent"
+zinc_name = "zinc"
+apps = [prometheus_name, agent_name, zinc_name]
 
 
 @pytest.mark.abort_on_fail
-async def test_create_remote_write_models(ops_test, prometheus_charm):
+async def test_remote_write_with_zinc(ops_test, prometheus_charm, zinc_charm):
+    """Test that Prometheus can be related with the Grafana Agent over remote_write."""
+    await asyncio.gather(
+        ops_test.model.deploy(
+            prometheus_charm,
+            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            application_name=prometheus_name,
+            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
+        ),
+        ops_test.model.deploy(
+            "grafana-agent-k8s",
+            application_name=agent_name,
+            channel="edge",
+        ),
+        ops_test.model.deploy(
+            zinc_charm,
+            resources={"zinc-image": "jnsgruk/zinc:0.1.9"},
+            application_name=zinc_name,
+        ),
+    )
+
+    await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
+    assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
+
+    await asyncio.gather(
+        ops_test.model.add_relation(prometheus_name, agent_name),
+        ops_test.model.add_relation(
+            f"{agent_name}:metrics-endpoint", f"{zinc_name}:metrics-endpoint"
+        ),
+    )
+
+    await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=90)
+
+    assert await has_metric(
+        ops_test,
+        f'up{{juju_model="{ops_test.model_name}",juju_application="{agent_name}"}}',
+        prometheus_name,
+    )
+
+    await ops_test.model.reset()
+    await ops_test.model.wait_for_idle(idle_period=90)
+
+
+@pytest.mark.abort_on_fail
+async def test_create_remote_write_models_for_zinc(ops_test, prometheus_charm, zinc_charm):
     """Test that Prometheus can be related with the Grafana Agent over remote_write."""
     await ops_test.model.deploy(
         prometheus_charm,
@@ -33,22 +79,30 @@ async def test_create_remote_write_models(ops_test, prometheus_charm):
     await ops_test.track_model("consumer")
 
     offer, consumer = ops_test.models.get("main"), ops_test.models.get("consumer")
-    await consumer.model.deploy(
-        "grafana-agent-k8s",
-        application_name=agent_name,
-        channel="edge",
+    await asyncio.gather(
+        consumer.model.deploy(
+            "grafana-agent-k8s",
+            application_name=agent_name,
+            channel="edge",
+        ),
+        consumer.model.deploy(
+            zinc_charm,
+            resources={"zinc-image": "jnsgruk/zinc:0.1.9"},
+            application_name=zinc_name,
+        ),
     )
 
     await asyncio.gather(
         offer.model.wait_for_idle(apps=[prometheus_name], status="active"),
-        consumer.model.wait_for_idle(apps=[agent_name], status="active"),
+        consumer.model.wait_for_idle(
+            apps=[agent_name, zinc_name], status="active", idle_period=90
+        ),
     )
-
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
 
 @pytest.mark.abort_on_fail
-async def test_offer_and_consume_remote_write(ops_test):
+async def test_offer_and_consume_remote_write_with_zinc(ops_test):
     offer, consumer = ops_test.models.get("main"), ops_test.models.get("consumer")
 
     # This looks weird, but it's a bug in libjuju. If we don't do this, then
@@ -68,10 +122,18 @@ async def test_offer_and_consume_remote_write(ops_test):
     await consumer.model.consume(f"admin/{offer.model_name}.{prometheus_name}", "prom")
     await consumer.model.relate(agent_name, "prom")
 
-    # Idle period of 60s is not enough - github CI fails for has_metric with idle_period=60.
+    # grafana-agent will block if it's related to anything with a remote_write relation
+    # to prometheus, so establish this first
     await asyncio.gather(
         offer.model.wait_for_idle(apps=[prometheus_name], status="active", idle_period=90),
         consumer.model.wait_for_idle(apps=[agent_name], status="active", idle_period=90),
+    )
+
+    await consumer.model.add_relation(
+        f"{agent_name}:metrics-endpoint", f"{zinc_name}:metrics-endpoint"
+    )
+    await consumer.model.wait_for_idle(
+        apps=[agent_name, zinc_name], status="active", idle_period=90
     )
 
     assert await has_metric(
