@@ -12,7 +12,7 @@ parts:
   charm:
     build-packages:
       - git
-  promql-transform:
+  cos-tool:
     plugin: dump
     source: .
     build-packages:
