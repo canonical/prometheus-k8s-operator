@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import yaml
 from helpers import patch_network_get
+from ops.model import BlockedStatus
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -330,3 +331,28 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
                 arg = cli_arg(plan, "--storage.tsdb.retention.size")
                 self.assertTrue(arg.endswith("GB"))
                 self.assertEqual(arg[:5], "465.6")
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch_network_get()
+    def test_invalid_input(self):
+        """Invalid config option must send the charm into blocked status."""
+        # GIVEN a pvc capacity limit in binary notation (k8s notation)
+        self.mock_capacity.return_value = "1Gi"
+
+        # WHEN the charm starts
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        # AND an invalid input is set as a config option
+        for setpoint in ["-88Gi", "-88%", "twenty_gigs", "55%%", "$@(*&)"]:
+            with self.subTest(setpoint=setpoint):
+                self.harness.update_config({"maximum_retention_size": setpoint})
+
+                # THEN the pebble plan does not set capacity
+                # TODO: FIXME
+                plan = self.harness.get_container_pebble_plan("prometheus")
+                # self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
+                self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), None)
+
+                # AND the charm is in blocked status
+                self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)

@@ -288,8 +288,15 @@ class PrometheusCharm(CharmBase):
         return " ".join(command)
 
     def _convert_capacity_str_to_legacy_binary_gigabytes(
-        self, capacity: str, multiplier: float
+        self, capacity: str, multiplier: float = 1.0
     ) -> str:
+        """Convert capacity string to legacy binary notation in GB.
+
+        Args:
+            capacity: Any string that bitmath can parse, with or without a trailing 'B', e.g.
+             '1Gi', '1 Gi', '1GiB', '1 GB'.
+            multiplier: an optional multiplicative adjustment factor.
+        """
         # Reduce possible ambiguity in unit name by adding a trailing 'B'.
         # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
         if not capacity.endswith("B"):
@@ -297,6 +304,8 @@ class PrometheusCharm(CharmBase):
 
         # For simplicity, always communicate to prometheus in GiB
         storage_value = multiplier * bitmath.parse_string(capacity).to_GiB().value
+        if storage_value < 0:
+            raise ValueError(f"Invalid capacity '{capacity}': must be non-negative")
         return f"{storage_value}GB"
 
     def _get_pvc_capacity(self) -> str:
