@@ -5,7 +5,6 @@ import json
 import unittest
 from unittest.mock import patch
 
-from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
 )
@@ -22,6 +21,8 @@ from ops.model import ActiveStatus
 from ops.testing import Harness
 
 from charm import Prometheus, PrometheusCharm
+
+CL_PATH = "charms.observability_libs.v1.kubernetes_service_patch.KubernetesServicePatch"
 
 METADATA = f"""
 name: consumer-tester
@@ -221,7 +222,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch(f"{CL_PATH}._service_object", lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get()
@@ -236,7 +237,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch(f"{CL_PATH}._service_object", lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
     def test_alert_rules(self):
@@ -256,7 +257,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertDictEqual(alerts, ALERT_RULES)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch(f"{CL_PATH}._service_object", lambda *args: None)
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
     def test_address_is_updated_on_upgrade(self):

@@ -15,7 +15,7 @@ import bitmath
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
-from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.observability_libs.v1.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
@@ -26,6 +26,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
+from lightkube.models.core_v1 import ServicePort
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import CharmBase
 from ops.main import main
@@ -51,7 +52,8 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
 
-        self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+        port_patch = ServicePort(self._port, name=f"{self.app.name}")
+        self.service_patch = KubernetesServicePatch(self, [port_patch])
 
         # Relation handler objects
 
