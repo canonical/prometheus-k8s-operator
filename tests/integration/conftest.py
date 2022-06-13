@@ -4,7 +4,6 @@
 
 import functools
 import logging
-import os
 import shutil
 from collections import defaultdict
 from datetime import datetime
@@ -83,17 +82,6 @@ async def prometheus_charm(ops_test):
 async def prometheus_tester_charm(ops_test):
     """A charm to integration test the Prometheus charm."""
     charm_path = "tests/integration/prometheus-tester"
-    clean_cmd = ["charmcraft", "clean", "-p", charm_path]
-    await ops_test.run(*clean_cmd)
-    charm = await ops_test.build_charm(charm_path)
-    return charm
-
-
-@pytest.fixture(scope="module")
-@timed_memoizer
-async def zinc_charm(ops_test):
-    """A charm to integration test the Prometheus charm."""
-    charm_path = os.environ["ZINC_DIR"]
     clean_cmd = ["charmcraft", "clean", "-p", charm_path]
     await ops_test.run(*clean_cmd)
     charm = await ops_test.build_charm(charm_path)

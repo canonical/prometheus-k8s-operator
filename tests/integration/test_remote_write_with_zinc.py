@@ -21,7 +21,7 @@ remote_apps = [agent_remote_name, zinc_remote_name]
 
 
 @pytest.mark.abort_on_fail
-async def test_remote_write_with_zinc(ops_test, prometheus_charm, zinc_charm):
+async def test_remote_write_with_zinc(ops_test, prometheus_charm):
     """Test that Prometheus can be related with the Grafana Agent over remote_write."""
     await asyncio.gather(
         ops_test.model.deploy(
@@ -36,8 +36,8 @@ async def test_remote_write_with_zinc(ops_test, prometheus_charm, zinc_charm):
             channel="edge",
         ),
         ops_test.model.deploy(
-            zinc_charm,
-            resources={"zinc-image": "jnsgruk/zinc:0.1.9"},
+            "zinc-k8s",
+            channel="edge",
             application_name=zinc_name,
         ),
     )
@@ -67,7 +67,7 @@ async def test_remote_write_with_zinc(ops_test, prometheus_charm, zinc_charm):
 
 
 @pytest.mark.abort_on_fail
-async def test_create_remote_write_models_for_zinc(ops_test, zinc_charm):
+async def test_create_remote_write_models_for_zinc(ops_test):
     """Test that Prometheus can be related with the Grafana Agent over remote_write."""
     # pytest_operator keeps a dict[str, ModelState] for internal reference, and they'll
     # all get cleaned up just like the automatic one. The alias for the first one is
@@ -84,8 +84,8 @@ async def test_create_remote_write_models_for_zinc(ops_test, zinc_charm):
             channel="edge",
         ),
         consumer.model.deploy(
-            zinc_charm,
-            resources={"zinc-image": "jnsgruk/zinc:0.1.9"},
+            "zinc-k8s",
+            channel="edge",
             application_name=zinc_remote_name,
         ),
     )
