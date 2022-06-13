@@ -1,0 +1,9 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusTargetScrapingSlow
+expr: prometheus_target_interval_length_seconds{quantile="0.9", %%juju_topology%%} > 60
+for: 5m
+labels:
+  severity: warning
+annotations:
+  summary: Prometheus target scraping slow (instance {{ $labels.instance }})
+  description: "Prometheus is scraping exporters slowly\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

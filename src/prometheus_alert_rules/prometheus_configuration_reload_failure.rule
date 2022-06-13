@@ -1,0 +1,9 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusConfigurationReloadFailure
+expr: prometheus_config_last_reload_successful{%%juju_topology%%} != 1
+for: 0m
+labels:
+  severity: warning
+annotations:
+  summary: Prometheus configuration reload failure (instance {{ $labels.instance }})
+  description: "Prometheus configuration reload error\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

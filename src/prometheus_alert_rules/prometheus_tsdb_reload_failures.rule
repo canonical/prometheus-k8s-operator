@@ -1,0 +1,9 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusTsdbReloadFailures
+expr: increase(prometheus_tsdb_reloads_failures_total{%%juju_topology%%}[1m]) > 0
+for: 0m
+labels:
+  severity: critical
+annotations:
+  summary: Prometheus TSDB reload failures (instance {{ $labels.instance }})
+  description: "Prometheus encountered {{ $value }} TSDB reload failures\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"

@@ -22,6 +22,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
@@ -54,6 +55,13 @@ class PrometheusCharm(CharmBase):
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
 
         # Relation handler objects
+
+        # Self-monitoring
+        self._scraping = MetricsEndpointProvider(
+            self,
+            relation_name="self-monitoring-metrics-endpoint",
+            jobs=[{"static_configs": [{"targets": [f"*:{self._port}"]}]}],
+        )
 
         # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)

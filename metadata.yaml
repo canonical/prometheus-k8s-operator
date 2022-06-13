@@ -22,11 +22,15 @@ containers:
     mounts:
       - storage: database
         location: /var/lib/prometheus
+
 provides:
+  self-monitoring-metrics-endpoint:
+    interface: prometheus_scrape
   grafana-source:
     interface: grafana_datasource
   receive-remote-write:
     interface: prometheus_remote_write
+
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
@@ -35,12 +39,15 @@ requires:
   ingress:
     interface: ingress_per_unit
     limit: 1
+
 peers:
   prometheus-peers:
     interface: prometheus_peers
+
 storage:
   database:
     type: filesystem
+
 resources:
   prometheus-image:
     type: oci-image
