@@ -22,8 +22,10 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointConsumer,
+    MetricsEndpointProvider,
+)
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
