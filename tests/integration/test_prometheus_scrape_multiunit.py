@@ -105,8 +105,13 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
     # WHEN prometheus is related to the testers
     await asyncio.gather(
-        ops_test.model.add_relation(prometheus_app_name, scrape_tester),
-        ops_test.model.add_relation(prometheus_app_name, remote_write_tester),
+        ops_test.model.add_relation(
+            f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint"
+        ),
+        ops_test.model.add_relation(
+            f"{prometheus_app_name}:receive-remote-write",
+            f"{remote_write_tester}:send-remote-write",
+        ),
     )
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
 

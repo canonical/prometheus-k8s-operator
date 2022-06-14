@@ -36,7 +36,9 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
     await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
-    await ops_test.model.add_relation(prometheus_name, agent_name)
+    await ops_test.model.add_relation(
+        f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
+    )
 
     # A considerable idle_period is needed to guarantee metrics show up in prometheus
     # (60 sec was not enough).
