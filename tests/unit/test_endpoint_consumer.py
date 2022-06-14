@@ -3,6 +3,7 @@
 
 import json
 import unittest
+from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
@@ -154,6 +155,7 @@ class EndpointConsumerCharm(CharmBase):
         return "1.0.0"
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
         metadata_file = open("metadata.yaml")
@@ -489,11 +491,10 @@ def job_name_suffix(job_name, labels, rel_id):
     Returns:
         string name of job as set by provider (if any)
     """
-    name_prefix = "juju_{}_{}_{}_{}_prometheus_{}_scrape_".format(
+    name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
         labels["juju_model"],
         labels["juju_model_uuid"][:7],
         labels["juju_application"],
-        labels["juju_charm"],
         rel_id,
     )
     return job_name[len(name_prefix) :]

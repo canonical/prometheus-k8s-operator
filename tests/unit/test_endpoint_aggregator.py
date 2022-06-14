@@ -3,6 +3,7 @@
 
 import json
 import unittest
+from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
 from ops.charm import CharmBase
@@ -77,10 +78,11 @@ class EndpointAggregatorCharm(CharmBase):
         )
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointAggregator(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(EndpointAggregatorCharm, meta=AGGREGATOR_META)
-        self.harness.set_model_info(name="testmodel", uuid="1234567890")
+        self.harness.set_model_info(name="testmodel", uuid="1234567")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin_with_initial_hooks()
@@ -115,7 +117,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
@@ -169,6 +171,7 @@ class TestEndpointAggregator(unittest.TestCase):
                 }
             ],
         }
+        self.maxDiff = None
         self.assertDictEqual(group, expected_group)
 
     def test_adding_target_then_prometheus_forwards_a_labeled_scrape_job(self):
@@ -201,7 +204,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
@@ -297,7 +300,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app-1",
                             "juju_unit": "target-app-1/0",
                             "host": "scrape_target_0",
@@ -313,7 +316,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_1:5678"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app-2",
                             "juju_unit": "target-app-2/0",
                             "host": "scrape_target_1",
@@ -445,7 +448,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app-1",
                             "juju_unit": "target-app-1/0",
                             "host": "scrape_target_0",
@@ -565,7 +568,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567890",
+                            "juju_model_uuid": "1234567",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
