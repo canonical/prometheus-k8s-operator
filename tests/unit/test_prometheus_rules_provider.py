@@ -5,6 +5,7 @@ import json
 import os
 import textwrap
 import unittest
+from unittest.mock import patch
 
 import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
@@ -13,6 +14,7 @@ from ops.charm import CharmBase
 from ops.testing import Harness
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestReloadAlertRules(unittest.TestCase):
     """Feature: Provider charm can manually invoke reloading of alerts.
 
@@ -26,6 +28,9 @@ class TestReloadAlertRules(unittest.TestCase):
     # use a short-form free-standing alert, for brevity
     ALERT = yaml.safe_dump({"alert": "free_standing", "expr": "avg(some_vector[5m]) > 5"})
 
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self):
         self.sandbox = TempFolderSandbox()
         alert_rules_path = os.path.join(self.sandbox.root, "alerts")

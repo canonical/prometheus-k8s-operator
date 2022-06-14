@@ -102,7 +102,11 @@ class RemoteWriteConsumerCharm(CharmBase):
         pass
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestRemoteWriteConsumer(unittest.TestCase):
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
         self.addCleanup(self.harness.cleanup)
@@ -113,6 +117,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
         self.mock_capacity.return_value = "1Gi"
+        self.harness.set_model_name("test")
         self.harness.begin_with_initial_hooks()
 
     def test_address_is_set(self):
@@ -210,7 +215,11 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             assert False  # Could not find the correct alert rule to check
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestRemoteWriteProvider(unittest.TestCase):
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.harness.set_model_info("lma", "123456")

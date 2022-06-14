@@ -10,11 +10,11 @@ from typing import List
 from unittest.mock import patch
 
 import yaml
+from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
     MetricsEndpointProvider,
-    ProviderTopology,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
@@ -87,13 +87,21 @@ class EndpointProviderCharmWithMultipleEvents(CharmBase):
         )
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointProvider(unittest.TestCase):
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
+        self.harness.set_model_name("MyUUID")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
 
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def test_provider_default_scrape_relations_not_in_meta(self):
         """Tests that the Provider raises exception when no promethes_scrape in meta."""
         harness = Harness(
@@ -112,6 +120,9 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationNotFoundError, harness.begin)
 
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def test_provider_default_scrape_relation_wrong_interface(self):
         """Tests that Provider raises exception if the default relation has the wrong interface."""
         harness = Harness(
@@ -130,6 +141,9 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationInterfaceMismatchError, harness.begin)
 
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def test_provider_default_scrape_relation_wrong_role(self):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
@@ -172,6 +186,9 @@ class TestEndpointProvider(unittest.TestCase):
         "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
         autospec=True,
     )
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
@@ -196,6 +213,9 @@ class TestEndpointProvider(unittest.TestCase):
         "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
         autospec=True,
     )
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
         harness = Harness(
             EndpointProviderCharmWithMultipleEvents,
@@ -211,6 +231,7 @@ class TestEndpointProvider(unittest.TestCase):
                    - kubernetes
          """,
         )
+        harness.set_model_name("MyUUID")
         harness.begin()
         harness.add_relation(RELATION_NAME, "provider")
 
@@ -327,12 +348,14 @@ def customize_endpoint_provider(*args, **kwargs):
     return CustomizedEndpointProvider
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestNonStandardProviders(unittest.TestCase):
     def setup(self, **kwargs):
         bad_provider_charm = customize_endpoint_provider(
             alert_rules_path=kwargs["alert_rules_path"]
         )
         self.harness = Harness(bad_provider_charm, meta=PROVIDER_META)
+        self.harness.set_model_name("MyUUID")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
@@ -358,6 +381,11 @@ class TestNonStandardProviders(unittest.TestCase):
             self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
 
 
+def sorted_matchers(matchers) -> str:
+    parts = [m.strip() for m in matchers.split(",")]
+    return ",".join(sorted(parts))
+
+
 def expression_labels(expr):
     """Extract labels from an alert rule expression.
 
@@ -376,7 +404,11 @@ def expression_labels(expr):
         yield labels
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self) -> None:
         free_standing_rule = {
             "alert": "free_standing",
@@ -397,7 +429,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
             ("rules/prom/prom_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)),
         )
 
-        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyUnit", "MyCharm")
+        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyUnit", "MyCharm")
 
     def test_non_recursive_is_default(self):
         rules = AlertRules(topology=self.topology)
@@ -413,13 +445,13 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_promql_label_dict(),
+            "labels": self.topology.label_matcher_dict,
         }
 
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_free_standing_rule_alerts",
+                    "name": f"{sorted_matchers(self.topology.identifier)}_free_standing_rule_alerts",
                     "rules": [expected_freestanding_rule],
                 },
             ]
@@ -434,8 +466,8 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
-            "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_promql_label_dict(),
+            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.label_matchers)}}} > 0.12",
+            "labels": self.topology.label_matcher_dict,
         }
 
         expected_rules_file = {
@@ -446,7 +478,6 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
                 },
             ]
         }
-
         self.assertEqual(expected_rules_file, rules_file_dict)
 
     def test_alerts_in_both_formats_are_recursively_aggregated(self):
@@ -462,14 +493,14 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
-            "expr": f"process_cpu_seconds_total{{{self.topology.promql_labels}}} > 0.12",
-            "labels": self.topology.as_promql_label_dict(),
+            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.label_matchers)}}} > 0.12",
+            "labels": self.topology.label_matcher_dict,
         }
 
         expected_freestanding_rule = {
             "alert": "free_standing",
             "expr": "avg(some_vector[5m]) > 5",
-            "labels": self.topology.as_promql_label_dict(),
+            "labels": self.topology.label_matcher_dict,
         }
 
         expected_rules_file = {
@@ -504,14 +535,18 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
                 self.assertTrue("juju_unit" not in rule["labels"])
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self) -> None:
-        self.topology = ProviderTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
 
     def gen_rule(self, name, **extra):
         return {
             "alert": f"CPUOverUse_{name}",
-            "expr": "process_cpu_seconds_total > 0.12",
+            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.label_matchers)}}} > 0.12",
             **extra,
         }
 
@@ -533,15 +568,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_1_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
-                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
+                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_2_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
-                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
+                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
             ]
@@ -570,8 +605,8 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_my_group_alerts",
                     "rules": [
-                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
-                        self.gen_rule("same", labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule("same", labels=self.topology.label_matcher_dict),
+                        self.gen_rule("same", labels=self.topology.label_matcher_dict),
                     ],
                 },
             ]
@@ -592,15 +627,15 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
-                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
+                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
                 {
                     "name": f"{self.topology.identifier}_group_same_alerts",
                     "rules": [
-                        self.gen_rule(1, labels=self.topology.as_promql_label_dict()),
-                        self.gen_rule(2, labels=self.topology.as_promql_label_dict()),
+                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
+                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
             ]
@@ -623,21 +658,22 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
             "groups": [
                 {
                     "name": f"{self.topology.identifier}_file_alerts",
-                    "rules": [self.gen_rule(0, labels=self.topology.as_promql_label_dict())],
+                    "rules": [self.gen_rule(0, labels=self.topology.label_matcher_dict)],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_file_alerts",
-                    "rules": [self.gen_rule(1, labels=self.topology.as_promql_label_dict())],
+                    "rules": [self.gen_rule(1, labels=self.topology.label_matcher_dict)],
                 },
                 {
                     "name": f"{self.topology.identifier}_a_b_file_alerts",
-                    "rules": [self.gen_rule(2, labels=self.topology.as_promql_label_dict())],
+                    "rules": [self.gen_rule(2, labels=self.topology.label_matcher_dict)],
                 },
             ]
         }
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesContainingUnitTopology(unittest.TestCase):
     """Tests that check MetricsEndpointProvider does not remove unit topology.
 
@@ -652,6 +688,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
             alert_rules_path=kwargs["alert_rules_path"]
         )
         self.harness = Harness(bad_provider_charm, meta=PROVIDER_META)
+        self.harness.set_model_name("MyUUID")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin()
@@ -670,11 +707,16 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
                 self.assertIn("juju_unit=", rule["expr"])
 
 
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestNoLeader(unittest.TestCase):
     """Tests the case where leader is not set immediately."""
 
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
+        self.harness.set_model_name("MyUUID")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(False)
         self.harness.begin_with_initial_hooks()
