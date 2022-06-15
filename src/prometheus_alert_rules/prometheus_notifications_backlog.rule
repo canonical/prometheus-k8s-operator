@@ -6,4 +6,7 @@ labels:
   severity: warning
 annotations:
   summary: Prometheus notifications backlog (instance {{ $labels.instance }})
-  description: "The Prometheus notification queue has not been empty for 10 minutes\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  description: |
+    The Prometheus notification queue has not been empty for 10 minutes
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
