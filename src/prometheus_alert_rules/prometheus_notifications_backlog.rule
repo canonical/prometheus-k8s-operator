@@ -1,6 +1,6 @@
 # Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
 alert: PrometheusNotificationsBacklog
-expr: min_over_time(prometheus_notifications_queue_length{%%juju_topology%%}[10m]) > 0
+expr: min_over_time(prometheus_notifications_queue_length{}[10m]) > 0
 for: 0m
 labels:
   severity: warning
