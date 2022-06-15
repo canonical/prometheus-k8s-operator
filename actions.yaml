@@ -1,0 +1,5 @@
+validate-configuration:
+  description: |
+    Run `promtool` inside the workload to validate the Prometheus configuration file, and
+    return the resulting output. This can be used to troubleshoot a Prometheus instance
+    which will not start due to a bad configuration.
