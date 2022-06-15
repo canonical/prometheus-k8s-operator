@@ -1,6 +1,6 @@
 # Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
 alert: PrometheusLargeScrape
-expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total{%%juju_topology%%}[10m]) > 10
+expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total{}[10m]) > 10
 for: 5m
 labels:
   severity: warning
