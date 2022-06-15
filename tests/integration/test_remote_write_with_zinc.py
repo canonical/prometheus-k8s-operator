@@ -46,7 +46,9 @@ async def test_remote_write_with_zinc(ops_test, prometheus_charm):
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await asyncio.gather(
-        ops_test.model.add_relation(prometheus_name, agent_name),
+        ops_test.model.add_relation(
+            f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
+        ),
         ops_test.model.add_relation(
             f"{agent_name}:metrics-endpoint", f"{zinc_name}:metrics-endpoint"
         ),
