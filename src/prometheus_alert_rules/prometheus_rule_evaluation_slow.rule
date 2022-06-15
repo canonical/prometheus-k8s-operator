@@ -1,6 +1,6 @@
 # Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
 alert: PrometheusRuleEvaluationSlow
-expr: prometheus_rule_group_last_duration_seconds{%%juju_topology%%} > prometheus_rule_group_interval_seconds{%%juju_topology%%}
+expr: prometheus_rule_group_last_duration_seconds{} > prometheus_rule_group_interval_seconds{}
 for: 5m
 labels:
   severity: warning
