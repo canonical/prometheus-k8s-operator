@@ -1,6 +1,6 @@
 # Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
 alert: PrometheusJobMissing
-expr: absent(up{%%juju_topology%%})
+expr: absent(up{})
 for: 0m
 labels:
   severity: warning
