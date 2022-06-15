@@ -6,4 +6,8 @@ labels:
   severity: warning
 annotations:
   summary: Prometheus rule evaluation slow (instance {{ $labels.instance }})
-  description: "Prometheus rule evaluation took more time than the scheduled interval. It indicates a slower storage backend access or too complex query.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  description: |
+    Prometheus rule evaluation took more time than the scheduled interval.
+    It indicates a slower storage backend access or too complex query.
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
