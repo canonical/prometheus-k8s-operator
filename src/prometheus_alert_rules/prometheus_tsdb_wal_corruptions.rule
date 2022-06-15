@@ -6,4 +6,7 @@ labels:
   severity: critical
 annotations:
   summary: Prometheus TSDB WAL corruptions (instance {{ $labels.instance }})
-  description: "Prometheus encountered {{ $value }} TSDB WAL corruptions\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  description: |
+    Prometheus encountered {{ $value }} TSDB WAL corruptions.
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
