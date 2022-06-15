@@ -59,7 +59,8 @@ async def test_good_config_validates_successfully(
     res = (await action.wait()).results
 
     assert res == {
-        "result": "Checking /etc/prometheus/prometheus.yml\n  SUCCESS: 0 rule files found\n\n",
+        "result": "Checking /etc/prometheus/prometheus.yml\n  SUCCESS: /etc/prometheus/prometheus.yml is "
+        + "valid prometheys config file syntax\n\n",
         "error-message": "",
         "valid": "True",
         "Code": "0",
