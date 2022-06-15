@@ -61,7 +61,7 @@ class PrometheusCharm(CharmBase):
         # Self-monitoring
         self._scraping = MetricsEndpointProvider(
             self,
-            relation_name="self-monitoring-metrics-endpoint",
+            relation_name="self-metrics-endpoint",
             jobs=[{"static_configs": [{"targets": [f"*:{self._port}"]}]}],
         )
 
