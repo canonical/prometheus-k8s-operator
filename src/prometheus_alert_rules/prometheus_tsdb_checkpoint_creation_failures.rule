@@ -6,4 +6,7 @@ labels:
   severity: critical
 annotations:
   summary: Prometheus TSDB checkpoint creation failures (instance {{ $labels.instance }})
-  description: "Prometheus encountered {{ $value }} checkpoint creation failures\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  description: |
+    Prometheus encountered {{ $value }} checkpoint creation failures
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
