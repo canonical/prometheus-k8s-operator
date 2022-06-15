@@ -6,4 +6,7 @@ labels:
   severity: warning
 annotations:
   summary: Prometheus large scrape (instance {{ $labels.instance }})
-  description: "Prometheus has many scrapes that exceed the sample limit\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  description: |
+    Prometheus has many scrapes that exceed the sample limit
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
