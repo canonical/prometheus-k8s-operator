@@ -24,7 +24,7 @@ containers:
         location: /var/lib/prometheus
 
 provides:
-  self-monitoring-metrics-endpoint:
+  self-metrics-endpoint:
     interface: prometheus_scrape
   grafana-source:
     interface: grafana_datasource
