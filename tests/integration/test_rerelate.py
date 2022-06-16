@@ -72,7 +72,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
         ops_test.model.add_relation(app_name, tester_app_name),
         ops_test.model.add_relation(app_name, "alertmanager"),
         ops_test.model.add_relation(app_name, "grafana:grafana-source"),
-        ops_test.model.add_relation(app_name, "grafana-agent:prometheus-remote-write"),
+        ops_test.model.add_relation(app_name, "grafana-agent:send-remote-write"),
     )
     await ops_test.model.wait_for_idle(status="active", timeout=600)
 
@@ -96,7 +96,7 @@ async def test_rerelate(ops_test: OpsTest):
         ops_test.model.add_relation(app_name, tester_app_name),
         ops_test.model.add_relation(app_name, "alertmanager"),
         ops_test.model.add_relation(app_name, "grafana:grafana-source"),
-        ops_test.model.add_relation(app_name, "grafana-agent:prometheus-remote-write"),
+        ops_test.model.add_relation(app_name, "grafana-agent:send-remote-write"),
     )
     await ops_test.model.wait_for_idle(status="active", timeout=600)
 
@@ -156,6 +156,6 @@ async def test_rerelate_app(ops_test: OpsTest, prometheus_tester_charm):
         ops_test.model.add_relation(app_name, tester_app_name),
         ops_test.model.add_relation(app_name, "alertmanager"),
         ops_test.model.add_relation(app_name, "grafana:grafana-source"),
-        ops_test.model.add_relation(app_name, "grafana-agent:prometheus-remote-write"),
+        ops_test.model.add_relation(app_name, "grafana-agent:send-remote-write"),
     )
     await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=600)
