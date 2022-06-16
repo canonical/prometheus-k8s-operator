@@ -43,7 +43,11 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
     """Build the charm-under-test and deploy it together with related charms."""
     await asyncio.gather(
         ops_test.model.deploy(
-            prometheus_charm, resources=resources, application_name=app_name, num_units=2, trust=True
+            prometheus_charm,
+            resources=resources,
+            application_name=app_name,
+            num_units=2,
+            trust=True,
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
@@ -134,7 +138,7 @@ async def test_rerelate_app(ops_test: OpsTest, prometheus_tester_charm):
             prometheus_tester_charm,
             resources=tester_resources,
             application_name=tester_app_name,
-            trust=True
+            trust=True,
         ),
         ops_test.model.deploy(
             "ch:alertmanager-k8s",
