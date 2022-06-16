@@ -132,7 +132,6 @@ async def test_remove_related_app(ops_test: OpsTest):
 
 @pytest.mark.abort_on_fail
 async def test_rerelate_app(ops_test: OpsTest, prometheus_tester_charm):
-    # TODO remove the "-new" suffix (otherwise it's not fully a "rerelate" test)
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_tester_charm,
@@ -163,4 +162,4 @@ async def test_rerelate_app(ops_test: OpsTest, prometheus_tester_charm):
         ops_test.model.add_relation(app_name, "grafana:grafana-source"),
         ops_test.model.add_relation(app_name, "grafana-agent:send-remote-write"),
     )
-    await ops_test.model.wait_for_idle(apps=[app_name], status="active", timeout=600)
+    await ops_test.model.wait_for_idle(status="active", timeout=600)
