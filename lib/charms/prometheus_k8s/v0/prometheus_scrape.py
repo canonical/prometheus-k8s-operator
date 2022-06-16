@@ -2192,7 +2192,7 @@ class CosTool:
             return expression
 
     def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.processor()
+        arch = platform.machine()
         arch = "amd64" if arch == "x86_64" else arch
         res = "cos-tool-{}".format(arch)
         try:
