@@ -1,6 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import copy
 import unittest
 
 import deepdiff
@@ -36,6 +37,7 @@ class TestFunctions(unittest.TestCase):
                 "scrape_interval": "5s",
             },
         ]
+        jobs_original = copy.deepcopy(jobs)
         expected = [
             {
                 "job_name": "job0_6f9f1c305506707b952aef3885fa099fe36158f6359b8a06634068270645aefd",
@@ -59,3 +61,5 @@ class TestFunctions(unittest.TestCase):
             },
         ]
         self.assertTrue(len(deepdiff.DeepDiff(_dedupe_job_names(jobs), expected)) == 0)
+        # Make sure the function does not modify its argument
+        self.assertEqual(jobs, jobs_original)
