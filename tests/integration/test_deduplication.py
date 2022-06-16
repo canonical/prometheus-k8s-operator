@@ -42,6 +42,7 @@ async def test_multiple_scrape_jobs_in_constructor(
             prometheus_charm,
             resources=prometheus_resources,
             application_name=prometheus_app_name,
+            trust=True,
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
