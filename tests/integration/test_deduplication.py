@@ -57,3 +57,20 @@ async def test_multiple_scrape_jobs_in_constructor(
     targets = await get_prometheus_active_targets(ops_test, prometheus_app_name)
     # Two unique jobs above plus an additional an additional job for self scraping.
     assert len(targets) == 3
+
+
+async def test_same_app_related_two_ways(
+    ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
+):
+    """Test that the deduplication works when the same app is related twice."""
+    await asyncio.gather(
+        ops_test.model.applications[tester_app_name].set_config({"scrape_jobs": "[]"}),
+        ops_test.model.deploy(
+            "prometheus-scrape-config-k8s", channel="edge", application_name="scrape-config"
+        ),
+    )
+    await asyncio.gather(
+        ops_test.model.add_relation(prometheus_app_name, "scrape-config"),
+        ops_test.model.add_relation("scrape-config", tester_app_name),
+    )
+    await ops_test.model.wait_for_idle(status="active")
