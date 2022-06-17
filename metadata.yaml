@@ -28,6 +28,8 @@ provides:
     interface: prometheus_scrape
   grafana-source:
     interface: grafana_datasource
+  grafana-dashboard:
+    interface: grafana_dashboard
   receive-remote-write:
     interface: prometheus_remote_write
 
