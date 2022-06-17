@@ -107,27 +107,44 @@ async def test_rerelate(ops_test: OpsTest):
 
 @pytest.mark.abort_on_fail
 async def test_remove_related_app(ops_test: OpsTest):
-    await asyncio.gather(
-        ops_test.model.applications[tester_app_name].remove(),
-        ops_test.model.applications["alertmanager"].remove(),
-        ops_test.model.applications["grafana"].remove(),
-        ops_test.model.applications["grafana-agent"].remove(),
-    )
-    logger.debug("Applications removed. Blocking for 60 seconds then force removing...")
-    # Block until it is really gone. Added after an itest failed when tried to redeploy:
-    # juju.errors.JujuError: ['cannot add application "...": application already exists']
+    apps_to_remove = {tester_app_name, "alertmanager", "grafana", "grafana-agent"}
+    await asyncio.gather(*[ops_test.model.applications[app].remove() for app in apps_to_remove])
+    logger.info("Trying to remove related applications")
     try:
         await ops_test.model.block_until(
-            lambda: tester_app_name not in ops_test.model.applications,
-            lambda: "alertmanager" not in ops_test.model.applications,
-            lambda: "grafana" not in ops_test.model.applications,
-            lambda: "grafana-agent" not in ops_test.model.applications,
+            lambda: apps_to_remove.intersection(ops_test.model.applications.keys()) == set(),
             timeout=300,
         )
     except asyncio.exceptions.TimeoutError:
-        logger.warning("Timeout reached while blocking!")
+        logger.warning(
+            "Failed to remove applications: %s",
+            ", ".join([app for app in ops_test.model.applications if app in apps_to_remove]),
+        )
+        hung_apps = [
+            name
+            for name, app in ops_test.model.applications.items()
+            if len(app.units) == 0 and app.status == "active"
+        ]
+        if hung_apps:
+            for app in hung_apps:
+                logger.warning("%s stuck removing. Forcing...", app)
+                cmd = [
+                    "juju",
+                    "remove-application",
+                    "--destroy-storage",
+                    "--force",
+                    "--no-wait",
+                    app,
+                ]
+                logger.info("Forcibly removing {}".format(app))
+                await ops_test.run(*cmd)
+        else:
+            raise
 
-    await ops_test.model.wait_for_idle(status="active", timeout=600)
+    try:
+        await ops_test.model.wait_for_idle(status="active", timeout=300)
+    except asyncio.exceptions.TimeoutError:
+        logger.warning("Timeout waiting for idle, ignoring it.")
 
 
 @pytest.mark.abort_on_fail
