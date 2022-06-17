@@ -82,7 +82,7 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
 
 
 async def get_prometheus_active_targets(
-    ops_test: OpsTest, app_name: str, unit_num: int
+    ops_test: OpsTest, app_name: str, unit_num: int = 0
 ) -> List[dict]:
     """Fetch Prometheus active scrape targets.
 

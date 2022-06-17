@@ -311,6 +311,8 @@ of Metrics provider charms hold eponymous information.
 
 """  # noqa: W505
 
+import copy
+import hashlib
 import ipaddress
 import json
 import logging
@@ -881,6 +883,8 @@ class MetricsEndpointConsumer(Object):
             if static_scrape_jobs:
                 scrape_jobs.extend(static_scrape_jobs)
 
+        scrape_jobs = _dedupe_job_names(scrape_jobs)
+
         return scrape_jobs
 
     def alerts(self) -> dict:
@@ -1233,6 +1237,49 @@ class MetricsEndpointConsumer(Object):
             static_config["targets"] = [host_address]  # type: ignore
 
         return static_config
+
+
+def _dedupe_job_names(jobs: List[dict]):
+    """Deduplicate a list of dicts by appending a hash to the value of the 'job_name' key.
+
+    Additionally fully dedeuplicate any identical jobs.
+
+    Args:
+        jobs: A list of prometheus scrape jobs
+    """
+    jobs_copy = copy.deepcopy(jobs)
+
+    # Convert to a dict with job names as keys
+    # I think this line is O(n^2) but it should be okay given the list sizes
+    jobs_dict = {
+        job["job_name"]: list(filter(lambda x: x["job_name"] == job["job_name"], jobs_copy))
+        for job in jobs_copy
+    }
+
+    # If multiple jobs have the same name, convert the name to "name_<hash-of-job>"
+    for key in jobs_dict:
+        if len(jobs_dict[key]) > 1:
+            for job in jobs_dict[key]:
+                job_json = json.dumps(job)
+                hashed = hashlib.sha256(job_json.encode()).hexdigest()
+                job["job_name"] = "{}_{}".format(job["job_name"], hashed)
+    new_jobs = []
+    for key in jobs_dict:
+        new_jobs.extend([i for i in jobs_dict[key]])
+
+    # Deduplicate jobs which are equal
+    # Again this in O(n^2) but it should be okay
+    deduped_jobs = []
+    seen = []
+    for job in new_jobs:
+        job_json = json.dumps(job)
+        hashed = hashlib.sha256(job_json.encode()).hexdigest()
+        if hashed in seen:
+            continue
+        seen.append(hashed)
+        deduped_jobs.append(job)
+
+    return deduped_jobs
 
 
 def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
