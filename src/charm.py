@@ -30,10 +30,10 @@ from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops.charm import CharmBase
+from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
-from ops.pebble import ChangeError, Layer
+from ops.pebble import ChangeError, ExecError, Layer
 
 from prometheus_server import Prometheus
 
@@ -103,6 +103,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
+        self.framework.observe(
+            self.on.validate_configuration_action, self._on_validate_configuration
+        )
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -283,6 +286,27 @@ class PrometheusCharm(CharmBase):
         command = ["/bin/prometheus"] + args
 
         return " ".join(command)
+
+    def _on_validate_configuration(self, event: ActionEvent) -> None:
+        """Runs `promtool check config` inside the workload."""
+        container = self.unit.get_container(self._name)
+
+        if not container.can_connect():
+            event.fail("Could not connect to the Prometheus workload!")
+            return
+
+        proc = container.exec(
+            ["/usr/bin/promtool", "check", "config", "/etc/prometheus/prometheus.yml"]
+        )
+        output = err = ""
+        try:
+            output, err = proc.wait_output()
+        except ExecError as e:
+            output, err = e.stdout, e.stderr
+
+        event.set_results(
+            {"result": output, "error-message": err, "valid": False if err else True}
+        )
 
     def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
         # Reduce possible ambiguity in unit name by adding a trailing 'B'.
