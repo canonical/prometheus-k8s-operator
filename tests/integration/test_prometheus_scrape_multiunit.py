@@ -101,7 +101,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         assert len(targets) == 1
         self_scrape = next(iter(targets))
         assert self_scrape["labels"]["job"] == "prometheus"
-        assert self_scrape["labels"]["instance"] == "localhost:9090"
+        assert self_scrape["labels"]["host"] == "localhost"
 
     # WHEN prometheus is related to the testers
     await asyncio.gather(
@@ -180,7 +180,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
-    query = 'count_over_time(up{instance="localhost:9090",job="prometheus"}[1y])'
+    query = 'count_over_time(up{host="localhost",job="prometheus"}[1y])'
     up_before = await asyncio.gather(
         *[run_promql(ops_test, query, prometheus_app_name, u) for u in range(num_units)]
     )
