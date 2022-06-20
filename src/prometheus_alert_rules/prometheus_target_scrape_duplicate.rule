@@ -10,6 +10,6 @@ labels:
 annotations:
   summary: Prometheus target scrape duplicate (instance {{ $labels.instance }})
   description: |
-    Prometheus has many samples rejected due to duplicate timestamps but differening values
+    Prometheus has many samples rejected due to duplicate timestamps but differing values
     VALUE = {{ $value }}
     LABELS = {{ $labels }}
