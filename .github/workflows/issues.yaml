@@ -31,7 +31,7 @@ jobs:
           fi
       - name: Determine type
         run: |
-          if [ ${{ contains(github.event.*.labels.*.name, 'Type: Bug') }}; then
+          if [ ${{ contains(github.event.*.labels.*.name, 'Type: Bug') }} ]; then
             echo "type=bug" >> $GITHUB_ENV"
           else
             echo "type=story" >> $GITHUB_ENV"
