@@ -64,7 +64,7 @@ async def test_same_app_related_two_ways(
 ):
     """Test that the deduplication works when the same app is related twice."""
     await asyncio.gather(
-        ops_test.model.applications[tester_app_name].set_config({"scrape_jobs": "[]"}),
+        ops_test.model.applications[tester_app_name].reset_config(["scrape_jobs"]),
         ops_test.model.deploy(
             "prometheus-scrape-config-k8s", channel="edge", application_name="scrape-config"
         ),
