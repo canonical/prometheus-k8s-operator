@@ -51,7 +51,7 @@ jobs:
             --arg title "$title" \
             --arg description "$description" \
             --arg component "$component" \
-            --arg type "$type" \
+            --arg type "${{ env.type }}" \
             '{data: {id: $id, action: $action, title: $title, description: $description, component: $component, type: $type}}')
           
           curl -X POST -H 'Content-type: application/json' --data "${data}" "${{ secrets.JIRA_URL }}"
