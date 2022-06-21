@@ -24,6 +24,7 @@ SCRAPE_METADATA = {
 
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch("charm.KubernetesComputeResourcesPatch")
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -251,7 +252,8 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    def test_default_maximum_retention_size_is_80_percent(self):
+    @patch("charm.KubernetesComputeResourcesPatch")
+    def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
         Since config.yaml provides a default (which forms a contract), we need to prevent changing
@@ -270,7 +272,8 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    def test_multiplication_factor_applied_to_pvc_capacity(self):
+    @patch("charm.KubernetesComputeResourcesPatch")
+    def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)
         self.mock_capacity.return_value = "1Gi"

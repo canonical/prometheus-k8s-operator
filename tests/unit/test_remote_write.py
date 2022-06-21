@@ -230,10 +230,11 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesComputeResourcesPatch")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get()
-    def test_port_is_set(self):
+    def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -245,9 +246,10 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesComputeResourcesPatch")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
-    def test_alert_rules(self):
+    def test_alert_rules(self, *unused):
         self.harness.begin_with_initial_hooks()
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
@@ -265,9 +267,10 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.assertDictEqual(alerts, ALERT_RULES)
 
     @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesComputeResourcesPatch")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
-    def test_address_is_updated_on_upgrade(self):
+    def test_address_is_updated_on_upgrade(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
 

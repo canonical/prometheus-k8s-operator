@@ -56,3 +56,15 @@ options:
       How frequently rules will be evaluated.
     type: string
     default: 1m
+  cpu:
+    description: |
+      K8s cpu resource limit, e.g. "1" or "500m".
+      See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+    type: string
+    default: "1"
+  memory:
+    description: |
+      K8s memory resource limit, e.g. "1Gi".
+      See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+    type: string
+    default: 1Gi

@@ -17,6 +17,9 @@ from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsume
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.observability_libs.v0.juju_topology import JujuTopology
+from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
+    KubernetesComputeResourcesPatch,
+)
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
@@ -57,6 +60,13 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+        self.resources_patch = KubernetesComputeResourcesPatch(
+            self,
+            self._name,
+            limits={"cpu": self.model.config["cpu"], "memory": self.model.config["memory"]},
+            requests={"cpu": self.model.config["cpu"], "memory": self.model.config["memory"]},
+        )
+
         self._topology = JujuTopology.from_charm(self)
 
         # Relation handler objects
@@ -126,7 +136,7 @@ class PrometheusCharm(CharmBase):
         """
         container = self.unit.get_container(self._name)
 
-        if not container.can_connect():
+        if not self.resources_patch.is_ready() or not container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
