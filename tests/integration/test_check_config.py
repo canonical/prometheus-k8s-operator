@@ -87,7 +87,9 @@ async def test_bad_config_sets_action_results(ops_test, prometheus_charm, promet
 
     await asyncio.gather(
         ops_test.model.add_relation(bad_scrape_tester, scrape_shim),
-        ops_test.model.add_relation(prometheus_app_name, scrape_shim),
+        ops_test.model.add_relation(
+            f"{prometheus_app_name}:metrics-endpoint", f"{scrape_shim}:metrics-endpoint"
+        ),
     )
     await ops_test.model.wait_for_idle(apps=[prometheus_app_name, scrape_shim, bad_scrape_tester])
 

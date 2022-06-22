@@ -1,0 +1,12 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusJobMissing
+expr: absent(up{})
+for: 0m
+labels:
+  severity: warning
+annotations:
+  summary: Prometheus job missing (instance {{ $labels.instance }})
+  description: |
+    A Prometheus job has disappeared
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}

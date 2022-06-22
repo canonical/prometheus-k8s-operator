@@ -1,0 +1,15 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusTsdbHeadTruncationsFailed
+expr: |
+  increase(
+    prometheus_tsdb_head_truncations_failed_total{}[1m]
+  ) > 0
+for: 0m
+labels:
+  severity: critical
+annotations:
+  summary: Prometheus TSDB head truncations failed (instance {{ $labels.instance }})
+  description: |
+    Prometheus encountered {{ $value }} TSDB head truncation failures.
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}

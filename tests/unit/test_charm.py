@@ -4,10 +4,10 @@
 import json
 import socket
 import unittest
+import uuid
 from unittest.mock import patch
 
 import yaml
-from helpers import patch_network_get
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -16,16 +16,14 @@ RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
 SCRAPE_METADATA = {
     "model": "provider-model",
-    "model_uuid": "abcdef",
+    "model_uuid": str(uuid.uuid4()),
     "application": "provider",
     "charm_name": "provider-charm",
 }
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch_network_get()
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -33,7 +31,7 @@ class TestCharm(unittest.TestCase):
         patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
         self.mock_capacity = patcher.start()
         self.addCleanup(patcher.stop)
-
+        self.harness.set_model_name("prometheus_model")
         self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
 
@@ -253,7 +251,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch_network_get()
     def test_default_maximum_retention_size_is_80_percent(self):
         """This test is here to guarantee backwards compatibility.
 
@@ -273,7 +270,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch_network_get()
     def test_multiplication_factor_applied_to_pvc_capacity(self):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)
