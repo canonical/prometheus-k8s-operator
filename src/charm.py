@@ -478,6 +478,7 @@ class PrometheusCharm(CharmBase):
                     },
                 }
             ],
+            # Replace the value of the "instance" label with a juju topology identifier
             "relabel_configs": [
                 {
                     "source_labels": [
