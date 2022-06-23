@@ -70,6 +70,7 @@ import logging
 from types import MethodType
 from typing import List, Optional, TypedDict, Union
 
+import bitmath
 from lightkube import ApiError, Client
 from lightkube.core import exceptions
 from lightkube.models.apps_v1 import StatefulSetSpec
@@ -84,7 +85,7 @@ from lightkube.resources.core_v1 import Pod
 from lightkube.types import PatchType
 from ops.charm import CharmBase
 from ops.framework import BoundEvent, Object
-
+from math import ceil
 logger = logging.getLogger(__name__)
 
 # The unique Charmhub library identifier, never change it
@@ -230,6 +231,52 @@ class KubernetesComputeResourcesPatch(Object):
         client = Client()
         return self._is_patched(client)
 
+    @classmethod
+    def _conv_res_req(cls, res_req: ResourceRequirements) -> ResourceRequirements:
+        """Convert ResourceRequirements to comparable form.
+
+        - Convert "memory" to GiB.
+        - Convert "cpu" to float.
+
+        When patching the StatefulSet with {"memory": "0.9Gi"}, the actual PodSpec has
+        {"memory": "966367641600m"}; similarly, {"cpu": "0.30000000000000004"} -> {"cpu": "301m"}.
+        So need to parse the strings and convert before comparing.
+        """
+        def _conv(dct: ResourceSpecDict) -> Optional[ResourceSpecDict]:
+            """Convert the memory value of a ResourceSpecDict to GiB representation."""
+            if not dct:
+                return None
+            copy = dct.copy()
+
+            if memory := copy.get("memory"):
+                if memory.endswith("m"):
+                    # This is milli. Divide by 1000.
+                    value = bitmath.Byte(float(memory[:-1]) / 1000).to_GiB().value
+                else:
+                    if not memory.endswith("B"):
+                        # Bitmath doesn't recognize e.g. Gi/G - needs to be GiB/GB.
+                        memory += "B"
+                    value = bitmath.parse_string(memory).to_GiB().value
+
+                copy["memory"] = f"{str(value)}Gi"
+
+            if cpu := copy.get("cpu"):
+                # TODO need to take into account m, k/K, M, G, T, P and E, but for CPU count it's
+                # probably ok to only support "m" and plain decimals for now.
+                # https://github.com/gtsystem/lightkube/issues/36
+                if cpu.endswith("m"):
+                    # This is milli. Divide by 1000.
+                    value = int(cpu[:-1]) / 1000.0
+                else:
+                    # Round up to whole millis (e.g. 0.30000000000000004 -> 0.301)
+                    value = ceil(float(cpu) * 1000) / 1000.0
+
+                copy["cpu"] = str(value)
+
+            return copy
+
+        return ResourceRequirements(limits=_conv(res_req.limits), requests=_conv(res_req.requests))
+
     def is_ready(self):
         """Reports if the resource patch has been applied and is in effect.
 
@@ -239,7 +286,9 @@ class KubernetesComputeResourcesPatch(Object):
         client = Client()
         pod = client.get(Pod, name=self._pod, namespace=self._namespace)
         podspec = self._get_container(self.container_name, pod.spec.containers)  # type: ignore[attr-defined]
-        return self._is_patched(client) and self.resource_reqs == podspec.resources
+
+        ready = self._conv_res_req(self.resource_reqs) == self._conv_res_req(podspec.resources)
+        return self._is_patched(client) and ready
 
     @classmethod
     def _get_container(cls, container_name: str, containers: List[Container]) -> Container:
@@ -266,7 +315,8 @@ class KubernetesComputeResourcesPatch(Object):
             self.container_name,
             statefulset.spec.template.spec.containers,  # type: ignore[attr-defined]
         )
-        return podspec_tpl.resources == self.resource_reqs
+
+        return self._conv_res_req(podspec_tpl.resources) == self._conv_res_req(self.resource_reqs)
 
     @property
     def _app(self) -> str:
