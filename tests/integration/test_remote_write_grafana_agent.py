@@ -6,18 +6,27 @@ import asyncio
 import logging
 
 import pytest
-from helpers import check_prometheus_is_ready, oci_image, run_promql
+from helpers import (
+    check_prometheus_is_ready,
+    get_prometheus_rules,
+    get_rules_for,
+    oci_image,
+    run_promql,
+)
 
 logger = logging.getLogger(__name__)
 prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
 
 
 @pytest.mark.abort_on_fail
-async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
+async def test_remote_write_with_grafana_agent(
+    ops_test, prometheus_charm, prometheus_tester_charm
+):
     """Test that Prometheus can be related with the Grafana Agent over remote_write."""
     prometheus_name = "prometheus"
     agent_name = "grafana-agent"
-    apps = [prometheus_name, agent_name]
+    tester_name = "prometheus-tester"
+    apps = [prometheus_name, agent_name, tester_name]
 
     await asyncio.gather(
         ops_test.model.deploy(
@@ -31,18 +40,41 @@ async def test_remote_write_with_grafana_agent(ops_test, prometheus_charm):
             application_name=agent_name,
             channel="edge",
         ),
+        ops_test.model.deploy(
+            prometheus_tester_charm,
+            resources={
+                "prometheus-tester-image": oci_image(
+                    "./tests/integration/prometheus-tester/metadata.yaml",
+                    "prometheus-tester-image",
+                )
+            },
+            application_name=tester_name,
+        ),
     )
 
     await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
-    await ops_test.model.add_relation(
-        f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
+    await asyncio.gather(
+        ops_test.model.add_relation(
+            f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
+        ),
+        ops_test.model.add_relation(tester_name, agent_name),
     )
 
     # A considerable idle_period is needed to guarantee metrics show up in prometheus
     # (60 sec was not enough).
     await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=90)
+
+    # Make sure topology labels are present
+    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_name, 0)
+    tester_rules = get_rules_for(tester_name, rules_with_relation)[0]["rules"][0]
+
+    expr = tester_rules["query"]
+    topology_labels = [
+        f'{k}="{v}"' for k, v in tester_rules["labels"].items() if k.startswith("juju_")
+    ]
+    assert all([field in expr for field in topology_labels])
 
     assert await has_metric(
         ops_test,

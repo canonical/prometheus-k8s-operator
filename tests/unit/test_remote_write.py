@@ -44,9 +44,9 @@ ALERT_RULES = {
             "rules": [
                 {
                     "alert": "CPUOverUse",
-                    "expr": 'process_cpu_seconds_total{juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
-                    'juju_application="consumer-tester"} > 0.12',
+                    "expr": 'process_cpu_seconds_total{juju_application="consumer-tester",'
+                    'juju_model="None",'
+                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004"} > 0.12',
                     "for": "0m",
                     "labels": {
                         "severity": "Low",
@@ -62,9 +62,8 @@ ALERT_RULES = {
                 },
                 {
                     "alert": "PrometheusTargetMissing",
-                    "expr": 'up{juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004",'
-                    'juju_application="consumer-tester"} == 0',
+                    "expr": 'up{juju_application="consumer-tester",juju_model="None",'
+                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004"} == 0',
                     "for": "0m",
                     "labels": {
                         "severity": "critical",

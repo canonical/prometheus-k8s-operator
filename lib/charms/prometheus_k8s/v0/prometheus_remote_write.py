@@ -282,7 +282,7 @@ class AlertRules:
 
     def _is_already_modified(self, name: str) -> bool:
         """Detect whether a group name has already been modified with juju topology."""
-        modified_matcher = re.compile(r"^.*?_[\da-f]{8}-([\da-f]{4}-){3}[\da-f]{12}_.*?alerts$")
+        modified_matcher = re.compile(r"^.*?_[\da-f]{8}_.*?alerts$")
         if modified_matcher.match(name) is not None:
             return True
         return False
@@ -892,14 +892,39 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
             # Construct an ID based on what's in the alert rules
             error_messages = []
+            tool = CosTool(self._charm)
             for group in alert_rules["groups"]:
+
+                # Copy off rules so we don't modify an object we're iterating over
+                rules = group["rules"]
+                for idx, alert_rule in enumerate(rules):
+                    labels = alert_rule.get("labels")
+
+                    if labels:
+                        topology = JujuTopology(
+                            model=labels.get("juju_model", ""),
+                            model_uuid=labels.get("juju_model_uuid", ""),
+                            application=labels.get("juju_application", ""),
+                            unit=labels.get("juju_unit", ""),
+                            charm_name=labels.get("juju_charm", ""),
+                        )
+
+                        # Inject topology and put it back in the list
+                        alert_rule["expr"] = tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                            topology.label_matcher_dict,
+                        )
+
+                        group["rules"][idx] = alert_rule
                 try:
                     labels = group["rules"][0]["labels"]
-                    identifier = "{}_{}_{}".format(
-                        labels["juju_model"],
-                        labels["juju_model_uuid"],
-                        labels["juju_application"],
-                    )
+                    identifier = JujuTopology(
+                        model=labels.get("juju_model", ""),
+                        model_uuid=labels.get("juju_model_uuid", ""),
+                        application=labels.get("juju_application", ""),
+                        unit=labels.get("juju_unit", ""),
+                        charm_name=labels.get("juju_charm", ""),
+                    ).identifier
 
                     _, errmsg = self.tool.validate_alert_rules({"groups": [group]})
 
