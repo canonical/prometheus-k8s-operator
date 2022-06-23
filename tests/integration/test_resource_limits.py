@@ -6,11 +6,12 @@
 
 import logging
 from pathlib import Path
-from lightkube.resources.core_v1 import Pod
-from lightkube import Client
+
 import pytest
 import yaml
-from helpers import oci_image, check_prometheus_is_ready
+from helpers import check_prometheus_is_ready, oci_image
+from lightkube import Client
+from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -64,4 +65,3 @@ async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
     # assert podspec.resources.requests == custom_limits
 
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
-
