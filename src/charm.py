@@ -18,6 +18,7 @@ from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
+    K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
 )
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
@@ -121,7 +122,11 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(
             self.on.validate_configuration_action, self._on_validate_configuration
         )
-        self.framework.observe(self.on.update_status, self._update_status)
+		self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
+
+    def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
+        self.unit.status = BlockedStatus(event.message)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -136,7 +141,12 @@ class PrometheusCharm(CharmBase):
         """
         container = self.unit.get_container(self._name)
 
-        if not self.resources_patch.is_ready() or not container.can_connect():
+        if not self.resources_patch.is_ready():
+            if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
+                self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
+            return
+
+        if not container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 

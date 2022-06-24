@@ -46,8 +46,7 @@ class SomeCharm(CharmBase):
         self,
         "container-name",
         limits={"cpu": "1", "mem": "2Gi"},
-        requests={"cpu": "1", "mem": "2Gi"},
-        refresh_event=self.on.config_changed
+        requests={"cpu": "1", "mem": "2Gi"}
     )
     # ...
 ```
@@ -69,7 +68,7 @@ def setUp(self, *unused):
 import logging
 from math import ceil
 from types import MethodType
-from typing import List, Optional, TypedDict, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 import bitmath
 from lightkube import ApiError, Client
@@ -85,7 +84,7 @@ from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import Pod
 from lightkube.types import PatchType
 from ops.charm import CharmBase
-from ops.framework import BoundEvent, Object
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +111,32 @@ class ResourceSpecDict(TypedDict, total=False):
     memory: str
 
 
+class K8sResourcePatchFailedEvent(EventBase):
+    """Emitted when patching fails."""
+
+    def __init__(self, handle, message=None):
+        super().__init__(handle)
+        self.message = message
+
+    def snapshot(self) -> Dict:
+        """Save grafana source information."""
+        return {"message": self.message}
+
+    def restore(self, snapshot):
+        """Restore grafana source information."""
+        self.message = snapshot["message"]
+
+
+class K8sResourcePatchEvents(ObjectEvents):
+    """Events raised by :class:`K8sResourcePatchEvents`."""
+
+    patch_failed = EventSource(K8sResourcePatchFailedEvent)
+
+
 class KubernetesComputeResourcesPatch(Object):
     """A utility for patching the Kubernetes compute resources set up by Juju."""
+
+    on = K8sResourcePatchEvents()
 
     def __init__(
         self,
@@ -192,15 +215,12 @@ class KubernetesComputeResourcesPatch(Object):
 
     def _patch(self, _) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
+        # Need to ignore invalid input, otherwise the statefulset gives "FailedCreate" and the
+        # charm would be stuck in unknown/lost.
         try:
             client = Client()
-        except exceptions.ConfigError as e:
-            logger.warning("Error creating k8s client: %s", e)
-            return
-        if self._is_patched(client):
-            return
-
-        try:
+            if self._is_patched(client):
+                return
 
             client.patch(
                 StatefulSet,
@@ -210,11 +230,27 @@ class KubernetesComputeResourcesPatch(Object):
                 patch_type=PatchType.APPLY,
                 field_manager=self.__class__.__name__,
             )
+
+        except exceptions.ConfigError as e:
+            msg = f"Error creating k8s client: {e}"
+            logger.error(msg)
+            self.on.patch_failed.emit(message=msg)
+            return
+
         except ApiError as e:
             if e.status.code == 403:
-                logger.error("Kubernetes resources patch failed: `juju trust` this application.")
+                msg = f"Kubernetes resources patch failed: `juju trust` this application. {e}"
             else:
-                logger.error("Kubernetes resources patch failed: %s", str(e))
+                msg = f"Kubernetes resources patch failed: {e}"
+
+            logger.error(msg)
+            self.on.patch_failed.emit(message=msg)
+
+        except ValueError as e:
+            msg = f"Kubernetes resources patch failed: {e}"
+            logger.error(msg)
+            self.on.patch_failed.emit(message=msg)
+
         else:
             logger.info(
                 "Kubernetes resources for app '%s', container '%s' patched successfully: %s",
@@ -222,15 +258,6 @@ class KubernetesComputeResourcesPatch(Object):
                 self.container_name,
                 self.resource_reqs,
             )
-
-    def is_patched(self) -> bool:
-        """Reports if the resource patch has been applied.
-
-        Returns:
-            bool: A boolean indicating if the service patch has been applied.
-        """
-        client = Client()
-        return self._is_patched(client)
 
     @classmethod
     def _conv_res_req(cls, res_req: ResourceRequirements) -> ResourceRequirements:
@@ -245,7 +272,11 @@ class KubernetesComputeResourcesPatch(Object):
         """
 
         def _conv(dct: ResourceSpecDict) -> Optional[ResourceSpecDict]:
-            """Convert the memory value of a ResourceSpecDict to GiB representation."""
+            """Convert the memory value of a ResourceSpecDict to GiB representation.
+
+            Raises:
+                ValueError, for invalid input.
+            """
             if not dct:
                 return None
             copy = dct.copy()
@@ -260,6 +291,11 @@ class KubernetesComputeResourcesPatch(Object):
                         memory += "B"
                     value = bitmath.parse_string(memory).to_GiB().value
 
+                if value < 0:
+                    raise ValueError(
+                        "Failed to apply memory resource limit patch: "
+                        "value must be greater than or equal to 0"
+                    )
                 copy["memory"] = f"{str(value)}Gi"
 
             if cpu := copy.get("cpu"):
@@ -273,6 +309,11 @@ class KubernetesComputeResourcesPatch(Object):
                     # Round up to whole millis (e.g. 0.30000000000000004 -> 0.301)
                     value = ceil(float(cpu) * 1000) / 1000.0
 
+                if value < 0:
+                    raise ValueError(
+                        "Failed to apply cpu resource limit patch: "
+                        "value must be greater than or equal to 0"
+                    )
                 copy["cpu"] = str(value)
 
             return copy
@@ -289,8 +330,16 @@ class KubernetesComputeResourcesPatch(Object):
         pod = client.get(Pod, name=self._pod, namespace=self._namespace)
         podspec = self._get_container(self.container_name, pod.spec.containers)  # type: ignore[attr-defined]
 
-        ready = self._conv_res_req(self.resource_reqs) == self._conv_res_req(podspec.resources)
-        return self._is_patched(client) and ready
+        try:
+            ready = self._conv_res_req(self.resource_reqs) == self._conv_res_req(podspec.resources)
+            patched = self._is_patched(client)
+        except (ValueError, ApiError) as e:
+            msg = f"Failed to apply resource limit patch: {e}"
+            logger.error(msg)
+            self.on.patch_failed.emit(message=msg)
+            return False
+
+        return patched and ready
 
     @classmethod
     def _get_container(cls, container_name: str, containers: List[Container]) -> Container:

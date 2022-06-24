@@ -65,3 +65,20 @@ async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
     # assert podspec.resources.requests == custom_limits
 
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
+
+
+@pytest.mark.abort_on_fail
+@pytest.mark.parametrize("cpu,memory", [("-1", "1Gi"), ("1", "-1Gi"), ("4x", "1Gi"), ("1", "1Gx")])
+async def test_invalid_resource_limits_put_charm_in_blocked_status(ops_test: OpsTest, cpu, memory):
+    custom_limits = {"cpu": cpu, "memory": memory}
+    await ops_test.model.applications[app_name].set_config(custom_limits)
+    await ops_test.model.wait_for_idle(status="blocked", timeout=300)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
+
+
+@pytest.mark.abort_on_fail
+async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
+    custom_limits = {"cpu": "1", "memory": "1Gi"}
+    await ops_test.model.applications[app_name].set_config(custom_limits)
+    await ops_test.model.wait_for_idle(status="active", timeout=300)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
