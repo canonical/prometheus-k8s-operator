@@ -58,7 +58,13 @@ present, and could break your tests. The easiest way to do this is during your t
 ```python
 # ...
 
-@patch("charm.KubernetesComputeResourcesPatch")
+@patch.multiple(
+    "charm.KubernetesComputeResourcesPatch",
+    _namespace="test-namespace",
+    _is_patched=lambda *a, **kw: True,
+    is_ready=lambda *a, **kw: True,
+)
+@patch("lightkube.core.client.GenericSyncClient")
 def setUp(self, *unused):
     self.harness = Harness(SomeCharm)
     # ...
