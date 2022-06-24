@@ -22,7 +22,7 @@ prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "promet
 async def test_remote_write_with_grafana_agent(
     ops_test, prometheus_charm, prometheus_tester_charm
 ):
-    """Test that Prometheus can be related with the Grafana Agent over remote_write."""
+    """Test that apps related with Grafana Agent over remote_write have correct expressions."""
     prometheus_name = "prometheus"
     agent_name = "grafana-agent"
     tester_name = "prometheus-tester"
@@ -81,6 +81,21 @@ async def test_remote_write_with_grafana_agent(
         f'up{{juju_model="{ops_test.model_name}",juju_application="{agent_name}"}}',
         prometheus_name,
     )
+
+
+async def test_remote_write_alerts_deduplicate(ops_test):
+    """Test that alerts for applications with multiple paths deduplicate."""
+    prometheus_name = "prometheus"
+    tester_name = "prometheus-tester"
+    apps = [prometheus_name, tester_name]
+
+    await ops_test.model.add_relation(tester_name, prometheus_name)
+    await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=90)
+
+    # Make sure only one copy of the alerts is present
+    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_name, 0)
+    tester_rules = get_rules_for(tester_name, rules_with_relation)[0]["rules"]
+    assert len(tester_rules) == 1
 
 
 @pytest.mark.abort_on_fail
