@@ -7,7 +7,7 @@ import logging
 import unittest
 from unittest.mock import Mock, patch
 
-from helpers import patch_network_get
+from helpers import k8s_resource_multipatch, patch_network_get
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
@@ -45,7 +45,8 @@ class TestActiveStatus(unittest.TestCase):
 
     @patch_network_get()
     @patch("charm.Prometheus.version", lambda x: "1.0.0")
-    @patch("charm.KubernetesComputeResourcesPatch")
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
@@ -75,7 +76,8 @@ class TestActiveStatus(unittest.TestCase):
         self.assertEqual(self.harness.get_workload_version(), "1.0.0")
 
     @patch_network_get()
-    @patch("charm.KubernetesComputeResourcesPatch")
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_unit_is_blocked_if_reload_configuration_fails(self, *unused):
         """Scenario: Unit is deployed but reload configuration fails."""
         # GIVEN reload configuration fails

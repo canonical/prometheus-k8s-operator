@@ -8,6 +8,7 @@ import uuid
 from unittest.mock import patch
 
 import yaml
+from helpers import k8s_resource_multipatch
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -24,7 +25,8 @@ SCRAPE_METADATA = {
 
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch("charm.KubernetesComputeResourcesPatch")
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -45,7 +47,9 @@ class TestCharm(unittest.TestCase):
         ]
         self.assertEqual(grafana_host, "http://{}:{}".format(fqdn, "9090"))
 
-    def test_web_external_url_is_passed_to_grafana(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_web_external_url_is_passed_to_grafana(self, *unused):
         self.harness.set_leader(True)
         self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
 
@@ -62,7 +66,9 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "info")
 
-    def test_invalid_log_level_defaults_to_debug(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_invalid_log_level_defaults_to_debug(self, *unused):
         bad_log_config = {"log_level": "bad-level"}
         with self.assertLogs(level="ERROR") as logger:
             self.harness.update_config(bad_log_config)
@@ -76,7 +82,9 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "debug")
 
-    def test_valid_log_level_is_accepted(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_valid_log_level_is_accepted(self, *unused):
         valid_log_config = {"log_level": "warn"}
         self.harness.update_config(valid_log_config)
 
@@ -100,7 +108,9 @@ class TestCharm(unittest.TestCase):
         fqdn = socket.getfqdn()
         self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
-    def test_web_external_url_has_precedence_over_ingress_relation(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_web_external_url_has_precedence_over_ingress_relation(self, *unused):
         self.harness.set_leader(True)
 
         self.harness.update_config({"web_external_url": "http://test:80"})
@@ -111,7 +121,9 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
 
-    def test_web_external_url_set(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_web_external_url_set(self, *unused):
         self.harness.set_leader(True)
 
         self.harness.update_config({"web_external_url": "http://test:80"})
@@ -123,7 +135,9 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.wal-compression"), None)
 
-    def test_metrics_wal_compression_can_be_enabled(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_metrics_wal_compression_can_be_enabled(self, *unused):
         compress_config = {"metrics_wal_compression": True}
         self.harness.update_config(compress_config)
 
@@ -133,7 +147,9 @@ class TestCharm(unittest.TestCase):
             "--storage.tsdb.wal-compression",
         )
 
-    def test_valid_metrics_retention_times_can_be_set(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_valid_metrics_retention_times_can_be_set(self, *unused):
         retention_time_config = {}
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -144,7 +160,9 @@ class TestCharm(unittest.TestCase):
             plan = self.harness.get_container_pebble_plan("prometheus")
             self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), retention_time)
 
-    def test_invalid_metrics_retention_times_can_not_be_set(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_invalid_metrics_retention_times_can_not_be_set(self, *unused):
         retention_time_config = {}
 
         # invalid unit
@@ -163,7 +181,9 @@ class TestCharm(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.time"), None)
 
-    def test_global_evaluation_interval_can_be_set(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_global_evaluation_interval_can_be_set(self, *unused):
         evalint_config = {}
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
         for unit in acceptable_units:
@@ -180,7 +200,9 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = scrape_config(config, "prometheus")
         self.assertIsNotNone(prometheus_scrape_config, "No default config found")
 
-    def test_honor_labels_is_always_set_in_scrape_configs(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_honor_labels_is_always_set_in_scrape_configs(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.update_relation_data(
@@ -198,8 +220,10 @@ class TestCharm(unittest.TestCase):
                 self.assertIn("honor_labels", job)
                 self.assertTrue(job["honor_labels"])
 
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration")
-    def test_configuration_reload(self, trigger_configuration_reload):
+    def test_configuration_reload(self, trigger_configuration_reload, *unused):
         self.harness.container_pebble_ready("prometheus")
 
         trigger_configuration_reload.assert_called()
@@ -252,7 +276,8 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch("charm.KubernetesComputeResourcesPatch")
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
@@ -272,7 +297,8 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
-    @patch("charm.KubernetesComputeResourcesPatch")
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)

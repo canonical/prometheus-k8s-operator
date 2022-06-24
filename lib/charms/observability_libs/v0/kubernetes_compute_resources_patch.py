@@ -161,8 +161,8 @@ class KubernetesComputeResourcesPatch(Object):
                 will be observed to re-apply the patch.
         """
         super().__init__(charm, "kubernetes-compute-resource-patch")
-        self.charm = charm
-        self.container_name = container_name
+        self._charm = charm
+        self._container_name = container_name
         self.resource_reqs = ResourceRequirements(
             limits=limits,  # type: ignore[arg-type]
             requests=requests,  # type: ignore[arg-type]
@@ -170,7 +170,7 @@ class KubernetesComputeResourcesPatch(Object):
         self.patched_delta = self._patched_delta(
             namespace=self._namespace,
             app_name=self._app,
-            container_name=self.container_name,
+            container_name=self._container_name,
             resource_reqs=self.resource_reqs,
         )
 
@@ -255,7 +255,7 @@ class KubernetesComputeResourcesPatch(Object):
             logger.info(
                 "Kubernetes resources for app '%s', container '%s' patched successfully: %s",
                 self._app,
-                self.container_name,
+                self._container_name,
                 self.resource_reqs,
             )
 
@@ -328,7 +328,7 @@ class KubernetesComputeResourcesPatch(Object):
         """
         client = Client()
         pod = client.get(Pod, name=self._pod, namespace=self._namespace)
-        podspec = self._get_container(self.container_name, pod.spec.containers)  # type: ignore[attr-defined]
+        podspec = self._get_container(self._container_name, pod.spec.containers)  # type: ignore[attr-defined]
 
         try:
             ready = self._conv_res_req(self.resource_reqs) == self._conv_res_req(podspec.resources)
@@ -363,7 +363,7 @@ class KubernetesComputeResourcesPatch(Object):
         """
         statefulset = client.get(StatefulSet, name=self._app, namespace=self._namespace)
         podspec_tpl = self._get_container(
-            self.container_name,
+            self._container_name,
             statefulset.spec.template.spec.containers,  # type: ignore[attr-defined]
         )
 
@@ -376,7 +376,7 @@ class KubernetesComputeResourcesPatch(Object):
         Returns:
             str: A string containing the name of the current Juju application.
         """
-        return self.charm.app.name
+        return self._charm.app.name
 
     @property
     def _pod(self) -> str:
@@ -385,14 +385,14 @@ class KubernetesComputeResourcesPatch(Object):
         Returns:
             str: A string containing the name of the current unit's pod.
         """
-        return "-".join(self.charm.unit.name.rsplit("/", 1))
+        return "-".join(self._charm.unit.name.rsplit("/", 1))
 
     @property
     def _namespace(self) -> str:
         """The Kubernetes namespace we're running in.
 
         If a charm is deployed into the controller model (which certainly could happen as we move
-        to representing the controller as a charm) then self.charm.model.name !== k8s namespace.
+        to representing the controller as a charm) then self._charm.model.name !== k8s namespace.
         Instead, the model name is controller in Juju and controller-<controller-name> for the
         namespace in K8s.
 
