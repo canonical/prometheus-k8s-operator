@@ -70,7 +70,7 @@ async def test_same_app_related_two_ways(
         ),
     )
     await asyncio.gather(
-        ops_test.model.add_relation(prometheus_app_name, "scrape-config"),
+        ops_test.model.add_relation(prometheus_app_name, "scrape-config:metrics-endpoint"),
         ops_test.model.add_relation("scrape-config", tester_app_name),
     )
     await ops_test.model.wait_for_idle(status="active")
