@@ -123,7 +123,7 @@ class TestCharm(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.wal-compression"), None)
 
     def test_metrics_wal_compression_can_be_enabled(self):
-        compress_config = {"metrics_wal_compression": "True"}
+        compress_config = {"metrics_wal_compression": True}
         self.harness.update_config(compress_config)
 
         plan = self.harness.get_container_pebble_plan("prometheus")
