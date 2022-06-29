@@ -76,11 +76,9 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
         ops_test.model.add_relation(
             f"{app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
         ),
-        ops_test.model.add_relation(f"{app_name}:alertmanager", "alertmanager:alerting"),
-        ops_test.model.add_relation(f"{app_name}:grafana-source", "grafana:grafana-source"),
-        ops_test.model.add_relation(
-            f"{app_name}:receive-remote-write", "grafana-agent:send-remote-write"
-        ),
+        ops_test.model.add_relation(f"{app_name}:alertmanager", "alertmanager"),
+        ops_test.model.add_relation(f"{app_name}:grafana-source", "grafana"),
+        ops_test.model.add_relation({app_name}:receive-remote-write, "grafana-agent"),
     )
     await ops_test.model.wait_for_idle(status="active", timeout=600)
 
@@ -104,10 +102,8 @@ async def test_rerelate(ops_test: OpsTest):
         ops_test.model.add_relation(
             f"{app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
         ),
-        ops_test.model.add_relation(f"{app_name}:alertmanager", "alertmanager:alerting"),
-        ops_test.model.add_relation(f"{app_name}:grafana-source", "grafana:grafana-source"),
-        ops_test.model.add_relation(
-            f"{app_name}:receive-remote-write", "grafana-agent:send-remote-write"
-        ),
+        ops_test.model.add_relation(f"{app_name}:alertmanager", "alertmanager"),
+        ops_test.model.add_relation(f"{app_name}:grafana-source", "grafana"),
+        ops_test.model.add_relation(f"{app_name}:receive-remote-write", "grafana-agent"),
     )
     await ops_test.model.wait_for_idle(status="active", timeout=600)
