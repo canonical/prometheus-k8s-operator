@@ -354,12 +354,15 @@ class KubernetesComputeResourcesPatch(Object):
         Typically, *.spec.containers[0] is the charm container, and [1] is the (only) workload.
 
         Raises:
-            StopIteration, if the user-provided container name does not exist in the list.
+            ValueError, if the user-provided container name does not exist in the list.
 
         Returns:
             An instance of :class:`Container` whose name matches the given name.
         """
-        return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
+        try:
+            return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
+        except StopIteration:
+            raise ValueError(f"Container '{container_name}' not found")
 
     def _is_patched(self, client: Client) -> bool:
         """Reports if the resource patch has been applied to the StatefulSet.
