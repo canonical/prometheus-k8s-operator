@@ -73,7 +73,6 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             resources=prometheus_resources,
             application_name=prometheus_app_name,
             num_units=num_units,
-            config={"cpu": "0.5", "memory": "0.5Gi"},  # otherwise not enough resources for 3 units
             trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
         ops_test.model.deploy(

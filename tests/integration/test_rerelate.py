@@ -48,7 +48,6 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
             application_name=app_name,
             num_units=2,
             trust=True,
-            config={"cpu": "0.5", "memory": "0.5Gi"},  # otherwise not enough resources
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,
