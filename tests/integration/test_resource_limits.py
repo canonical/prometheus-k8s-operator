@@ -18,6 +18,10 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 app_name = METADATA["name"]
 resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
 
+# GitHub runner is 2cpu7gb and occasionally times out when using 300 sec.
+deploy_timeout = 600
+resched_timeout = 600
+
 # CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
 # default_limits = {
 #     "cpu": CONFIG["options"]["cpu"].get("default"),
@@ -40,7 +44,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
         trust=True,
     )
 
-    await ops_test.model.wait_for_idle(status="active", timeout=600)
+    await ops_test.model.wait_for_idle(status="active", timeout=deploy_timeout)
 
 
 @pytest.mark.abort_on_fail
@@ -52,13 +56,13 @@ async def test_default_resource_limits_applied(ops_test: OpsTest):
 
 
 @pytest.mark.abort_on_fail
-@pytest.mark.parametrize("cpu,memory", [("900m", "0.9Gi"), ("0.30000000000000004", "0.9G")])
+@pytest.mark.parametrize("cpu,memory", [("500m", "0.5Gi"), ("0.30000000000000004", "0.5G")])
 async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
     custom_limits = {"cpu": cpu, "memory": memory}
     await ops_test.model.applications[app_name].set_config(custom_limits)
-    await ops_test.model.wait_for_idle(status="active", timeout=300)
+    await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
 
-    # Not comparing limits (for now) because the strings may differ (0.9G vs 900Mi)
+    # Not comparing limits (for now) because the strings may differ (0.9G vs 900M)
     # Comparison is done inside the k8s resource patch.
     # client = Client()
     # pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
@@ -74,22 +78,22 @@ async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
 async def test_invalid_resource_limits_put_charm_in_blocked_status(ops_test: OpsTest, cpu, memory):
     custom_limits = {"cpu": cpu, "memory": memory}
     await ops_test.model.applications[app_name].set_config(custom_limits)
-    await ops_test.model.wait_for_idle(status="blocked", timeout=300)
+    await ops_test.model.wait_for_idle(status="blocked", timeout=resched_timeout)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
 @pytest.mark.abort_on_fail
 async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
-    custom_limits = {"cpu": "1", "memory": "1Gi"}
+    custom_limits = {"cpu": "500m", "memory": "0.5Gi"}
     await ops_test.model.applications[app_name].set_config(custom_limits)
-    await ops_test.model.wait_for_idle(status="active", timeout=300)
+    await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied_after_resetting_config(ops_test: OpsTest):
     await ops_test.model.applications[app_name].reset_config(["cpu", "memory"])
-    await ops_test.model.wait_for_idle(status="active", timeout=300)
+    await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
 
     podspec = get_podspec(ops_test, app_name, "prometheus")
     assert podspec.resources.limits == default_limits
