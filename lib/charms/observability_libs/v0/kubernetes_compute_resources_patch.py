@@ -113,8 +113,27 @@ class ResourceSpecDict(TypedDict, total=False):
     - https://gtsystem.github.io/lightkube-models/1.23/models/core_v1/#resourcerequirements
     """
 
-    cpu: str
-    memory: str
+    cpu: Optional[str]
+    memory: Optional[str]
+
+
+def sanitize_resource_spec_dict(dct: Optional[ResourceSpecDict]) -> Optional[ResourceSpecDict]:
+    """Make sure only recognized keys are present, and drop all keys whose value is empty."""
+    if not dct:
+        return dct
+
+    d = dct.copy()
+    if any(k not in ResourceSpecDict.__annotations__.keys() for k in d.keys()):
+        raise ValueError(
+            "Invalid resource limits dict: must have keys {}".format(
+                ", ".join(ResourceSpecDict.__annotations__.keys())
+            )
+        )
+    for k, v in dct.items():
+        if v == "" or v is None:
+            # Remove key, otherwise it will be serialized as 0 and pod won't be scheduled.
+            del d[k]  # type: ignore
+    return d
 
 
 class K8sResourcePatchFailedEvent(EventBase):
@@ -170,8 +189,8 @@ class KubernetesComputeResourcesPatch(Object):
         self._charm = charm
         self._container_name = container_name
         self.resource_reqs = ResourceRequirements(
-            limits=limits,  # type: ignore[arg-type]
-            requests=requests,  # type: ignore[arg-type]
+            limits=sanitize_resource_spec_dict(limits),  # type: ignore[arg-type]
+            requests=sanitize_resource_spec_dict(requests),  # type: ignore[arg-type]
         )
         self.patched_delta = self._patched_delta(
             namespace=self._namespace,

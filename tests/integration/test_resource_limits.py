@@ -9,9 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from helpers import check_prometheus_is_ready, oci_image
-from lightkube import Client
-from lightkube.resources.core_v1 import Pod
+from helpers import check_prometheus_is_ready, get_podspec, oci_image
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -19,6 +17,13 @@ logger = logging.getLogger(__name__)
 METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 app_name = METADATA["name"]
 resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+
+# CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
+# default_limits = {
+#     "cpu": CONFIG["options"]["cpu"].get("default"),
+#     "memory": CONFIG["options"]["memory"].get("default"),
+# }
+default_limits = None
 
 
 async def test_setup_env(ops_test: OpsTest):
@@ -40,10 +45,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied(ops_test: OpsTest):
-    client = Client()
-    pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
-    podspec = next(iter(filter(lambda ctr: ctr.name == "prometheus", pod.spec.containers)))
-    default_limits = {"cpu": "1", "memory": "1Gi"}
+    podspec = get_podspec(ops_test, app_name, "prometheus")
     assert podspec.resources.limits == default_limits
     assert podspec.resources.requests == default_limits
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
@@ -81,4 +83,17 @@ async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
     custom_limits = {"cpu": "1", "memory": "1Gi"}
     await ops_test.model.applications[app_name].set_config(custom_limits)
     await ops_test.model.wait_for_idle(status="active", timeout=300)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
+
+
+@pytest.mark.abort_on_fail
+async def test_default_resource_limits_applied_after_resetting_config(ops_test: OpsTest):
+    await ops_test.model.applications[app_name].reset_config(["cpu", "memory"])
+    await ops_test.model.wait_for_idle(status="active", timeout=300)
+
+    podspec = get_podspec(ops_test, app_name, "prometheus")
+    assert podspec.resources.limits == default_limits
+    assert podspec.resources.requests == default_limits
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
+
     assert await check_prometheus_is_ready(ops_test, app_name, 0)

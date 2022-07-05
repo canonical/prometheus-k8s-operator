@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List
 
 import yaml
+from lightkube import Client
+from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 from workload import Prometheus
 
@@ -225,3 +227,10 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
         ops_test.model.applications[name].units[0].workload_status == "active"
         for name in app_names
     )
+
+
+def get_podspec(ops_test: OpsTest, app_name, container_name):
+    client = Client()
+    pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
+    podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))
+    return podspec
