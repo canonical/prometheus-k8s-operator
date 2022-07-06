@@ -34,7 +34,7 @@ from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.pebble import ChangeError, ExecError, Layer
 
 from prometheus_server import Prometheus
@@ -125,7 +125,7 @@ class PrometheusCharm(CharmBase):
         container = self.unit.get_container(self._name)
 
         if not container.can_connect():
-            self.unit.status = WaitingStatus("Waiting for Pebble ready")
+            self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
         # push Prometheus config file to workload
