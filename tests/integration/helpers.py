@@ -229,7 +229,7 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
     )
 
 
-def get_podspec(ops_test: OpsTest, app_name, container_name):
+def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
     client = Client()
     pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
     podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))

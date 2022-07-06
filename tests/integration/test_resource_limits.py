@@ -50,6 +50,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied(ops_test: OpsTest):
     podspec = get_podspec(ops_test, app_name, "prometheus")
+    # TODO use `equals_canonically` when becomes available
     assert podspec.resources.limits == default_limits
     assert podspec.resources.requests == default_limits
     assert await check_prometheus_is_ready(ops_test, app_name, 0)

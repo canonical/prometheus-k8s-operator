@@ -3,12 +3,12 @@
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
-
 import logging
 import os
 import re
 import socket
-from typing import Dict, cast
+from decimal import Decimal
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import bitmath
@@ -62,17 +62,16 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
-        resource_limit = ResourceSpecDict(
-            {
-                "cpu": self.model.config.get("cpu"),
-                "memory": self.model.config.get("memory"),
-            }
+        resource_limits = ResourceSpecDict(
+            cpu=self.model.config.get("cpu"),
+            memory=self.model.config.get("memory"),
         )
+        resource_requests = self._limits_to_requests(resource_limits)
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
             self._name,
-            limits=resource_limit,
-            requests=resource_limit,
+            limits=resource_limits,
+            requests=resource_requests,
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -131,6 +130,67 @@ class PrometheusCharm(CharmBase):
         )
 		self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
+
+    @classmethod
+    def _limits_to_requests(cls, resource_limits: ResourceSpecDict):
+        """Calculate "requests" from a "limits" dict.
+
+        By default, we set the "requests" portion of the resource limits to a sensible value, while
+        keeping the "limits" portion unspecified.
+        If the use specifies a "limits" (via config options), then the "requests" portion is
+        calculated to maintain a monotone function, as follows:
+        - Calculate the adjusted limit by multiplying the user value by 0.8.
+        - If the adjusted value is larger than the default "requests", use the adjusted value for
+          the "requests".
+        - Otherwise, if the user value is larger than the default "requests", use the default value
+          for the "requests".
+        - Otherwise (the use value is smaller than the default), use the user value for the
+          "requests".
+        """
+
+        def monotonize(value, default_value, multiplier):
+            """
+            >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
+            800.0
+            >>> monotonize(260, 200, 0.8)  # take 0.8 * 260 (input value still > default / 0.8)
+            208.0
+            >>> monotonize(250, 200, 0.8)  # take the default, 200 (input value <= default / 0.8)
+            200
+            >>> monotonize(200, 200, 0.8)
+            200
+            >>> monotonize(150, 200, 0.8)  # return the input value (input value < default)
+            150
+            """
+            if value is None:
+                return default_value
+
+            adjusted_value = value * multiplier
+            if adjusted_value > default_value:
+                return adjusted_value
+
+            if value > default_value:
+                return default_value
+
+            return value
+
+        multiplier = Decimal("0.8")  # 0 < multiplier <= 1
+        default_requests = ResourceSpecDict(cpu="0.25", memory="200Mi")
+
+        if resource_limits is None:
+            return default_requests
+
+        return ResourceSpecDict(
+            {
+                # Construct a "requests" dict from a "limits" dict (user input).
+                # Default "requests" values will be used for any missing key in "limits".
+                k: monotonize(
+                    parse_quantity(resource_limits.get(k)),
+                    parse_quantity(default_requests[k]),
+                    multiplier,
+                )
+                for k in default_requests
+            }
+        )
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
