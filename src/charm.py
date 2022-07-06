@@ -2,7 +2,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""A Juju charm for Charmed Magma Prometheus."""
+"""A Juju charm for Prometheus with Prometheus Configurer."""
 
 import logging
 import os
