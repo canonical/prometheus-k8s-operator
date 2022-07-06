@@ -85,11 +85,11 @@ import logging
 from types import MethodType
 from typing import Literal, Sequence, Tuple, Union
 
-from lightkube import ApiError, Client
-from lightkube.models.core_v1 import ServicePort, ServiceSpec
-from lightkube.models.meta_v1 import ObjectMeta
-from lightkube.resources.core_v1 import Service
-from lightkube.types import PatchType
+from lightkube import ApiError, Client  # type: ignore[import]
+from lightkube.models.core_v1 import ServicePort, ServiceSpec  # type: ignore[import]
+from lightkube.models.meta_v1 import ObjectMeta  # type: ignore[import]
+from lightkube.resources.core_v1 import Service  # type: ignore[import]
+from lightkube.types import PatchType  # type: ignore[import]
 from ops.charm import CharmBase
 from ops.framework import Object
 
@@ -199,7 +199,7 @@ class KubernetesServicePatch(Object):
                 namespace=self._namespace,
                 name=service_name,
                 labels=labels,
-                annotations=additional_annotations,  # type: ignore[arg-type]
+                annotations=additional_annotations,
             ),
             spec=ServiceSpec(
                 selector=selector,
@@ -208,7 +208,7 @@ class KubernetesServicePatch(Object):
                         name=p[0],
                         port=p[1],
                         targetPort=p[2] if len(p) > 2 else p[1],  # type: ignore[misc]
-                        nodePort=p[3] if len(p) > 3 else None,  # type: ignore[arg-type, misc]
+                        nodePort=p[3] if len(p) > 3 else None,  # type: ignore[misc]
                     )
                     for p in ports
                 ],
@@ -240,8 +240,8 @@ class KubernetesServicePatch(Object):
 
     def _delete_and_create_service(self, client: Client):
         service = client.get(Service, self._app, namespace=self._namespace)
-        service.metadata.name = self.service_name  # type: ignore[attr-defined]
-        service.metadata.resourceVersion = service.metadata.uid = None  # type: ignore[attr-defined]   # noqa: E501
+        service.metadata.name = self.service_name
+        service.metadata.resourceVersion = service.metadata.uid = None
         client.delete(Service, self._app, namespace=self._namespace)
         client.create(service)
 
@@ -257,7 +257,7 @@ class KubernetesServicePatch(Object):
         # Construct a list of expected ports, should the patch be applied
         expected_ports = [(p.port, p.targetPort) for p in self.service.spec.ports]
         # Construct a list in the same manner, using the fetched service
-        fetched_ports = [(p.port, p.targetPort) for p in service.spec.ports]  # type: ignore[attr-defined]  # noqa: E501
+        fetched_ports = [(p.port, p.targetPort) for p in service.spec.ports]
         return expected_ports == fetched_ports
 
     @property

@@ -1,27 +1,31 @@
-# Copyright 2021 Canonical Ltd.
+# Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
-name: prometheus-k8s
-display-name: Prometheus
-summary: Prometheus for Kubernetes clusters
-maintainers:
-  - Balbir Thomas <balbir.thomas@canonical.com>
+
+name: prometheus-with-configurer
+summary: Prometheus with additional configurer container
 description: |
-  Prometheus is an open source monitoring solution. Prometheus
-  supports aggregating high dimensional data and exposes a powerful
-  query language PromQL. This charm deploys and operates Prometheus on
-  Kubernetes clusters. Prometheus can raise alerts through a relation
-  with the Alertmanager charm. Alerting rules for Prometheus need to
-  be provided through a relation with the application that requires
-  alerting. Prometheus provides its own dashboard for data
-  visualization but a richer visualization interface may be obtained
-  through a relation with the Grafana charm.
-docs: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+  This charm is a fork of the prometheus-k8s-operator charm.
+  Prometheus is an open source monitoring solution. Prometheus supports aggregating high 
+  dimensional data and exposes a powerful query language PromQL. This charm deploys and operates 
+  Prometheus on Kubernetes clusters. Prometheus can raise alerts through a relation with the 
+  Alertmanager charm. 
+  In addition to the bare Prometheus, this charm includes prometheus-configurer container providing
+  an HTTP API for managing alerting rules. API documentation is available at
+  https://github.com/facebookarchive/prometheus-configmanager/blob/main/prometheus/docs/swagger-v1.yml.
+
 containers:
   prometheus:
     resource: prometheus-image
     mounts:
       - storage: database
         location: /var/lib/prometheus
+      - storage: rules
+        location: /etc/prometheus/rules
+  prometheus-configurer:
+    resource: prometheus-configurer-image
+    mounts:
+      - storage: rules
+        location: /etc/prometheus/rules
 
 provides:
   self-metrics-endpoint:
@@ -49,9 +53,16 @@ peers:
 storage:
   database:
     type: filesystem
+  rules:
+    location: /etc/prometheus/rules
+    type: filesystem
 
 resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
     upstream-source: docker.io/ubuntu/prometheus:2.33-22.04_beta
+  prometheus-configurer-image:
+    type: oci-image
+    description: Container image for Prometheus Configurer
+    upstream-source: docker.io/facebookincubator/prometheus-configurer:1.0.4

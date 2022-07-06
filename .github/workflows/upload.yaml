@@ -1,0 +1,31 @@
+name: Upload charm prometheus-with-configurer
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  prometheus-with-configurer-upload:
+    runs-on: ubuntu-latest
+    name: Charmhub upload prometheus-with-configurer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Check libraries
+        uses: canonical/charming-actions/check-libraries@1.0.2
+        with:
+          credentials: "${{ secrets.CHARMCRAFT_AUTH }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Select charmhub channel
+        uses: canonical/charming-actions/channel@1.0.2
+        id: channel
+
+      - name: Upload charm to charmhub
+        uses: canonical/charming-actions/upload-charm@1.0.2
+        with:
+          credentials: "${{ secrets.CHARMCRAFT_AUTH }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          channel: "${{ steps.channel.outputs.name }}"

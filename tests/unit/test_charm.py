@@ -5,7 +5,7 @@ import json
 import socket
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import yaml
 from ops.testing import Harness
@@ -205,6 +205,29 @@ class TestCharm(unittest.TestCase):
 
         self.harness.update_config({"log_level": "INFO"})
         trigger_configuration_reload.assert_called()
+
+    @patch("prometheus_server.Prometheus.reload_configuration", Mock())
+    def test_given_prometheus_configurer_pebble_ready_when_get_plan_then_plan_contains_updated_pebble_layer(  # noqa: E501
+        self,
+    ):
+        expected_plan = {
+            "services": {
+                "prometheus-configurer": {
+                    "override": "replace",
+                    "startup": "enabled",
+                    "command": "prometheus_configurer "
+                    "-port=9100 "
+                    "-rules-dir=/etc/prometheus/rules/ "
+                    "-prometheusURL=magma-orc8r-prometheus:9090 "
+                    "-multitenant-label=networkID "
+                    "-restrict-queries",
+                }
+            }
+        }
+        self.harness.container_pebble_ready("prometheus-configurer")
+
+        updated_plan = self.harness.get_container_pebble_plan("prometheus-configurer").to_dict()
+        self.assertEqual(expected_plan, updated_plan)
 
 
 def alerting_config(config):

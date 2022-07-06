@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# Copyright 2020 Canonical Ltd.
+# Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""A Juju charm for Prometheus on Kubernetes."""
+"""A Juju charm for Charmed Magma Prometheus."""
 
 import logging
 import os
@@ -29,9 +29,14 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
 )
 from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
-from lightkube import Client
-from lightkube.core.exceptions import ApiError as LightkubeApiError
-from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
+from lightkube import Client  # type: ignore[import]
+from lightkube.core.exceptions import (
+    ApiError as LightkubeApiError,  # type: ignore[import]
+)
+from lightkube.resources.core_v1 import (  # type: ignore[import]
+    PersistentVolumeClaim,
+    Pod,
+)
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -54,10 +59,28 @@ class PrometheusCharm(CharmBase):
         super().__init__(*args)
 
         self._name = "prometheus"
-        self._port = 9090
+        self._prometheus_port = 9090
+        self._prometheus_configurer_port = 9100
 
-        self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+        self.service_patch = KubernetesServicePatch(
+            self,
+            [
+                (f"{self.app.name}", self._prometheus_port),
+                (
+                    "prom-configmanager",
+                    self._prometheus_configurer_port,
+                    self._prometheus_configurer_port,
+                ),
+            ]
+        )
         self._topology = JujuTopology.from_charm(self)
+
+        # Prometheus Configurer
+
+        self._configurer_container_name = (
+            self._configurer_layer_name
+        ) = self._configurer_service_name = "prometheus-configurer"
+        self._configurer_container = self.unit.get_container(self._configurer_container_name)
 
         # Relation handler objects
 
@@ -65,7 +88,7 @@ class PrometheusCharm(CharmBase):
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
-            jobs=[{"static_configs": [{"targets": [f"*:{self._port}"]}]}],
+            jobs=[{"static_configs": [{"targets": [f"*:{self._prometheus_port}"]}]}],
         )
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
 
@@ -73,7 +96,11 @@ class PrometheusCharm(CharmBase):
         self.metrics_consumer = MetricsEndpointConsumer(self)
 
         # Manages ingress for this charm
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+        self.ingress = IngressPerUnitRequirer(
+            self,
+            relation_name="ingress",
+            port=self._prometheus_port,
+        )
 
         external_url = urlparse(self._external_url)
 
@@ -82,7 +109,7 @@ class PrometheusCharm(CharmBase):
             self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             endpoint_address=external_url.hostname or "",
-            endpoint_port=external_url.port or self._port,
+            endpoint_port=external_url.port or self._prometheus_port,
             endpoint_schema=external_url.scheme,
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
@@ -99,6 +126,7 @@ class PrometheusCharm(CharmBase):
 
         # Event handlers
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
+        self.framework.observe(self.on.prometheus_configurer_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.ingress.on.ingress_changed, self._configure)
@@ -111,7 +139,7 @@ class PrometheusCharm(CharmBase):
             self.on.validate_configuration_action, self._on_validate_configuration
         )
 
-    def _configure(self, _):
+    def _configure(self, event):
         """Reconfigure and either reload or restart Prometheus.
 
         In response to any configuration change, such as a new consumer
@@ -175,6 +203,22 @@ class PrometheusCharm(CharmBase):
         ):
             return
 
+        # Prometheus configurer
+        if self._configurer_container.can_connect():
+            pebble_layer = self._prometheus_configurer_layer
+            plan = self._configurer_container.get_plan()
+            if plan.services != pebble_layer.services:
+                self._configurer_container.add_layer(
+                    self._configurer_container_name, pebble_layer, combine=True
+                )
+                self._configurer_container.restart(self._configurer_service_name)
+                logger.info(f"Restarted container {self._configurer_service_name}")
+        else:
+            self.unit.status = WaitingStatus(
+                f"Waiting for {self._configurer_container_name} container to be ready"
+            )
+            event.defer()
+
         # Make sure that if the remote_write endpoint changes, it is reflected in relation data.
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self._external_url)
@@ -189,12 +233,11 @@ class PrometheusCharm(CharmBase):
                 alert rule files need to be created. This container
                 must be in a pebble ready state.
         """
-        container.remove_path(RULES_DIR, recursive=True)
-
         self._push_alert_rules(container, self.metrics_consumer.alerts())
         self._push_alert_rules(container, self.remote_write_provider.alerts())
 
-    def _push_alert_rules(self, container, alerts):
+    @staticmethod
+    def _push_alert_rules(container, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
 
         Args:
@@ -312,7 +355,8 @@ class PrometheusCharm(CharmBase):
             {"result": output, "error-message": err, "valid": False if err else True}
         )
 
-    def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
+    @staticmethod
+    def _convert_k8s_capacity_to_legacy_binary_gigabytes(capacity: str, multiplier) -> str:
         # Reduce possible ambiguity in unit name by adding a trailing 'B'.
         # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
         if not capacity.endswith("B"):
@@ -389,14 +433,15 @@ class PrometheusCharm(CharmBase):
         # when parsing flags as part of binary invocation here:
         # https://github.com/prometheus/prometheus/blob/c40e269c3e514953299e9ba1f6265e067ab43e64/cmd/prometheus/main.go#L302
         timespec_re = re.compile(
-            r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
+            r"^(((\d+)y)?((\d+)w)?((\d+)d)?((\d+)h)?((\d+)m)?((\d+)s)?((\d+)ms)?|0)$"
         )
         if not (matched := timespec_re.search(timeval)):
             self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return bool(matched)
 
-    def _percent_string_to_ratio(self, percentage: str) -> float:
+    @staticmethod
+    def _percent_string_to_ratio(percentage: str) -> float:
         """Convert a string representation of percentage of 0-100%, to a 0-1 ratio.
 
         Raises:
@@ -450,7 +495,11 @@ class PrometheusCharm(CharmBase):
         """
         prometheus_config = {
             "global": self._prometheus_global_config(),
-            "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
+            "rule_files": [
+                os.path.join(RULES_DIR, "*.rules"),
+                os.path.join(RULES_DIR, "*.rule"),
+                os.path.join(RULES_DIR, "*.yml"),
+            ],
             "scrape_configs": [],
         }
 
@@ -468,7 +517,7 @@ class PrometheusCharm(CharmBase):
             "scheme": "http",
             "static_configs": [
                 {
-                    "targets": [f"localhost:{self._port}"],
+                    "targets": [f"localhost:{self._prometheus_port}"],
                     "labels": {
                         "juju_model": self._topology.model,
                         "juju_model_uuid": self._topology.model_uuid,
@@ -503,7 +552,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _prometheus_layer(self) -> Layer:
-        """Construct the pebble layer.
+        """Construct the pebble layer for Prometheus.
 
         Returns:
             a Pebble layer specification for the Prometheus workload container.
@@ -525,6 +574,32 @@ class PrometheusCharm(CharmBase):
         return Layer(layer_config)
 
     @property
+    def _prometheus_configurer_layer(self) -> Layer:
+        """Construct the pebble layer for Prometheus configurer.
+
+        Returns:
+            a Pebble layer specification for the Prometheus configurer workload container.
+        """
+        return Layer(
+            {
+                "summary": "Prometheus Configurer layer",
+                "description": "Pebble layer configuration for Prometheus Configurer",
+                "services": {
+                    self._configurer_service_name: {
+                        "override": "replace",
+                        "startup": "enabled",
+                        "command": "prometheus_configurer "
+                        f"-port={str(self._prometheus_configurer_port)} "
+                        f"-rules-dir={RULES_DIR}/ "
+                        f"-prometheusURL={self.app.name}:{self._prometheus_port} "
+                        "-multitenant-label=networkID "
+                        "-restrict-queries",
+                    }
+                },
+            }
+        )
+
+    @property
     def _external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation."""
         if web_external_url := self.model.config.get("web_external_url"):
@@ -539,7 +614,7 @@ class PrometheusCharm(CharmBase):
         # are routable virtually exclusively inside the cluster (as they rely)
         # on the cluster's DNS service, while the ip address is _sometimes_
         # routable from the outside, e.g., when deploying on MicroK8s on Linux.
-        return f"http://{socket.getfqdn()}:{self._port}"
+        return f"http://{socket.getfqdn()}:{self._prometheus_port}"
 
 
 if __name__ == "__main__":
