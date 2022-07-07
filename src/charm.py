@@ -8,7 +8,7 @@ import os
 import re
 import socket
 from decimal import Decimal
-from typing import Dict, Optional, cast
+from typing import Dict, cast
 from urllib.parse import urlparse
 
 import bitmath
@@ -41,7 +41,7 @@ from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.pebble import ChangeError, ExecError, Layer
-
+from quantity import parse_quantity  # FIXME: delete
 from prometheus_server import Prometheus
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
@@ -149,7 +149,8 @@ class PrometheusCharm(CharmBase):
         """
 
         def monotonize(value, default_value, multiplier):
-            """
+            """A continuous function from the given value to a multiplies-adjusted value.
+
             >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
             800.0
             >>> monotonize(260, 200, 0.8)  # take 0.8 * 260 (input value still > default / 0.8)
@@ -179,15 +180,15 @@ class PrometheusCharm(CharmBase):
         if resource_limits is None:
             return default_requests
 
-        return ResourceSpecDict(
+        return ResourceSpecDict(  # type: ignore
             {
                 # Construct a "requests" dict from a "limits" dict (user input).
                 # Default "requests" values will be used for any missing key in "limits".
-                k: monotonize(
+                k: str(monotonize(
                     parse_quantity(resource_limits.get(k)),
                     parse_quantity(default_requests[k]),
                     multiplier,
-                )
+                ))
                 for k in default_requests
             }
         )

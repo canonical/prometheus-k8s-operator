@@ -1,7 +1,7 @@
 import decimal
 import re
-from typing import Optional, overload
 from dataclasses import fields
+from typing import Optional, overload
 
 from lightkube.models.core_v1 import ResourceRequirements
 
@@ -19,7 +19,6 @@ MULTIPLIERS = {
     "E": (10, 18),  # 1000^6
     "Z": (10, 21),  # 1000^7
     "Y": (10, 24),  # 1000^8
-
     # Bibytes
     "Ki": (1024, 1),  # 2^10
     "Mi": (1024, 2),  # 2^20
@@ -32,7 +31,7 @@ MULTIPLIERS = {
 }
 
 # Pre-calculate multipliers and store as decimals.
-MULTIPLIERS = {k: decimal.Decimal(v[0])**v[1] for k, v in MULTIPLIERS.items()}
+MULTIPLIERS = {k: decimal.Decimal(v[0]) ** v[1] for k, v in MULTIPLIERS.items()}
 
 
 def parse_quantity(quantity: Optional[str]) -> Optional[decimal.Decimal]:
@@ -102,24 +101,30 @@ def equals_canonically(first, second):
 
     **returns**  True, if both arguments are numerically equal; False otherwise.
     """
+
     def is_eq(first_dict: Optional[dict], second_dict: Optional[dict]) -> bool:
         if first_dict == second_dict:
             # This covers two cases: (1) both args are None; (2) both args are identical dicts.
             return True
         if first_dict and second_dict:
             ks = ("cpu", "memory")
-            return all(parse_quantity(first_dict.get(k)) == parse_quantity(second_dict.get(k)) for k in ks)
+            return all(
+                parse_quantity(first_dict.get(k)) == parse_quantity(second_dict.get(k)) for k in ks
+            )
         if not first_dict and not second_dict:
             # This covers cases such as first=None and second={}
             return True
         return False
 
-    if isinstance(first, Optional[dict]) and isinstance(second, Optional[dict]):
+    if isinstance(first, Optional[dict]) and isinstance(second, Optional[dict]):  # type: ignore
         return is_eq(first, second)
     elif isinstance(first, ResourceRequirements) and isinstance(second, ResourceRequirements):
         ks = [f.name for f in fields(ResourceRequirements)]  # limits, requests
         return all(is_eq(getattr(first, k), getattr(second, k)) for k in ks)
     else:
-        raise TypeError("unsupported operand type(s) for canonical comparison: '{}' and '{}'".format(
-            first.__class__.__name__, second.__class__.__name__,
-        ))
+        raise TypeError(
+            "unsupported operand type(s) for canonical comparison: '{}' and '{}'".format(
+                first.__class__.__name__,
+                second.__class__.__name__,
+            )
+        )

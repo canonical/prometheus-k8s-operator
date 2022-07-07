@@ -133,6 +133,9 @@ def sanitize_resource_spec_dict(dct: Optional[ResourceSpecDict]) -> Optional[Res
         if v == "" or v is None:
             # Remove key, otherwise it will be serialized as 0 and pod won't be scheduled.
             del d[k]  # type: ignore
+
+    # fractional byte value "858993459200m" (0.8Gi) is invalid, must be an integer
+    # FIXME: round up memory two whole bytes
     return d
 
 
