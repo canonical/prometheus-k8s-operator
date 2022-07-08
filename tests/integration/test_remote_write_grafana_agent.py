@@ -151,10 +151,12 @@ async def test_check_data_not_persist_on_scale_0(ops_test, prometheus_charm):
     # the timestamp and the value itself.
     num_head_chunks_before = int(total0[0]["value"][1])
 
-    await ops_test.model.applications[prometheus_app_name].scale(scale_change=0)
+    logger.info("Scaling down %s to zero units", prometheus_app_name)
+    await ops_test.model.applications[prometheus_app_name].scale(scale=0)
     await ops_test.model.block_until(
         lambda: len(ops_test.model.applications[prometheus_app_name].units) == 0
     )
+    logger.info("Scaling up %s units to 1", prometheus_app_name)
     await ops_test.model.applications[prometheus_app_name].scale(scale_change=1)
     await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active", timeout=120)
     assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
