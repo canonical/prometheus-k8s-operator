@@ -46,7 +46,9 @@ async def test_ingress_traefik_k8s(ops_test, prometheus_charm):
     assert initial_workload_is_ready(ops_test, apps)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
-    await ops_test.model.add_relation(traefik_name, f"{prometheus_name}:ingress")
+    await ops_test.model.add_relation(
+        f"{traefik_name}:ingress-per-unit", f"{prometheus_name}:ingress"
+    )
 
     # Wait a little more than usual, there are various rounds of relation_changed
     # to be processed.

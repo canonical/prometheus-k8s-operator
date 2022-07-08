@@ -59,7 +59,9 @@ async def test_remote_write_with_grafana_agent(
         ops_test.model.add_relation(
             f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
         ),
-        ops_test.model.add_relation(tester_name, agent_name),
+        ops_test.model.add_relation(
+            f"{tester_name}:metrics-endpoint", f"{agent_name}:metrics-endpoint"
+        ),
     )
 
     # A considerable idle_period is needed to guarantee metrics show up in prometheus
@@ -89,7 +91,9 @@ async def test_remote_write_alerts_deduplicate(ops_test):
     tester_name = "prometheus-tester"
     apps = [prometheus_name, tester_name]
 
-    await ops_test.model.add_relation(tester_name, prometheus_name)
+    await ops_test.model.add_relation(
+        f"{tester_name}:metrics-endpoint", f"{prometheus_name}:metrics-endpoint"
+    )
     await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=90)
 
     # Make sure only one copy of the alerts is present
@@ -147,10 +151,12 @@ async def test_check_data_not_persist_on_scale_0(ops_test, prometheus_charm):
     # the timestamp and the value itself.
     num_head_chunks_before = int(total0[0]["value"][1])
 
-    await ops_test.model.applications[prometheus_app_name].scale(scale_change=0)
+    logger.info("Scaling down %s to zero units", prometheus_app_name)
+    await ops_test.model.applications[prometheus_app_name].scale(scale=0)
     await ops_test.model.block_until(
         lambda: len(ops_test.model.applications[prometheus_app_name].units) == 0
     )
+    logger.info("Scaling up %s units to 1", prometheus_app_name)
     await ops_test.model.applications[prometheus_app_name].scale(scale_change=1)
     await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active", timeout=120)
     assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)

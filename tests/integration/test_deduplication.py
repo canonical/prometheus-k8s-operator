@@ -51,7 +51,9 @@ async def test_multiple_scrape_jobs_in_constructor(
             config={"scrape_jobs": json.dumps(jobs)},
         ),
     )
-    await ops_test.model.add_relation(prometheus_app_name, tester_app_name)
+    await ops_test.model.add_relation(
+        f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
+    )
     await ops_test.model.wait_for_idle(status="active")
 
     targets = await get_prometheus_active_targets(ops_test, prometheus_app_name)
@@ -70,7 +72,11 @@ async def test_same_app_related_two_ways(
         ),
     )
     await asyncio.gather(
-        ops_test.model.add_relation(prometheus_app_name, "scrape-config:metrics-endpoint"),
-        ops_test.model.add_relation("scrape-config", tester_app_name),
+        ops_test.model.add_relation(
+            f"{prometheus_app_name}:metrics-endpoint", "scrape-config:metrics-endpoint"
+        ),
+        ops_test.model.add_relation(
+            "scrape-config:configurable-scrape-jobs", f"{tester_app_name}:metrics-endpoint"
+        ),
     )
     await ops_test.model.wait_for_idle(status="active")
