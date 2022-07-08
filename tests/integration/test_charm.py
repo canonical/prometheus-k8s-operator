@@ -62,7 +62,9 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         get_prometheus_rules(ops_test, prometheus_app_name, 0),
     )
 
-    await ops_test.model.add_relation(prometheus_app_name, tester_app_name)
+    await ops_test.model.add_relation(
+        f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
+    )
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
 
     config_with_relation = await get_prometheus_config(ops_test, prometheus_app_name, 0)

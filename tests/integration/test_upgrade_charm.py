@@ -48,7 +48,9 @@ async def test_deploy_from_edge_and_upgrade_from_local_path(ops_test, prometheus
     )
     await ops_test.model.wait_for_idle(apps=app_names, status="active", timeout=300)
 
-    await ops_test.model.add_relation(prometheus_app_name, tester_app_name)
+    await ops_test.model.add_relation(
+        f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
+    )
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
     # Check only one alert rule exists
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)

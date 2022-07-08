@@ -59,7 +59,9 @@ async def test_remote_write_with_grafana_agent(
         ops_test.model.add_relation(
             f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
         ),
-        ops_test.model.add_relation(tester_name, agent_name),
+        ops_test.model.add_relation(
+            f"{tester_name}:metrics-endpoint", f"{agent_name}:metrics-endpoint"
+        ),
     )
 
     # A considerable idle_period is needed to guarantee metrics show up in prometheus
@@ -89,7 +91,9 @@ async def test_remote_write_alerts_deduplicate(ops_test):
     tester_name = "prometheus-tester"
     apps = [prometheus_name, tester_name]
 
-    await ops_test.model.add_relation(tester_name, prometheus_name)
+    await ops_test.model.add_relation(
+        f"{tester_name}:metrics-endpoint", f"{prometheus_name}:metrics-endpoint"
+    )
     await ops_test.model.wait_for_idle(apps=apps, status="active", idle_period=90)
 
     # Make sure only one copy of the alerts is present
