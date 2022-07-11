@@ -18,7 +18,7 @@ The Prometheus Operator may be deployed using the Juju command line as
 in
 
 ```sh
-$ juju deploy prometheus-k8s
+$ juju deploy prometheus-k8s --trust
 ```
 
 By default the Prometheus Operator monitors itself, but it also
