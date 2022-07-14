@@ -72,11 +72,9 @@ def setUp(self, *unused):
 """
 
 import logging
-from math import ceil
 from types import MethodType
 from typing import Dict, List, Optional, TypedDict, Union
 
-import bitmath
 from lightkube import ApiError, Client
 from lightkube.core import exceptions
 from lightkube.models.apps_v1 import StatefulSetSpec
@@ -89,6 +87,7 @@ from lightkube.models.core_v1 import (
 from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import Pod
 from lightkube.types import PatchType
+from lightkube.utils.quantity import equals_canonically
 from ops.charm import CharmBase
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 
@@ -291,67 +290,6 @@ class KubernetesComputeResourcesPatch(Object):
                 self.resource_reqs,
             )
 
-    @classmethod
-    def _conv_res_req(cls, res_req: ResourceRequirements) -> ResourceRequirements:
-        """Convert ResourceRequirements to comparable form.
-
-        - Convert "memory" to GiB.
-        - Convert "cpu" to float.
-
-        When patching the StatefulSet with {"memory": "0.9Gi"}, the actual PodSpec has
-        {"memory": "966367641600m"}; similarly, {"cpu": "0.30000000000000004"} -> {"cpu": "301m"}.
-        So need to parse the strings and convert before comparing.
-        """
-
-        def _conv(dct: Optional[ResourceSpecDict]) -> Optional[ResourceSpecDict]:
-            """Convert the memory value of a ResourceSpecDict to GiB representation.
-
-            Raises:
-                ValueError, for invalid input.
-            """
-            if not dct:
-                return None
-            copy = dct.copy()
-
-            if memory := copy.get("memory"):
-                if memory.endswith("m"):
-                    # This is milli. Divide by 1000.
-                    value = bitmath.Byte(float(memory[:-1]) / 1000).to_GiB().value
-                else:
-                    if not memory.endswith("B"):
-                        # Bitmath doesn't recognize e.g. Gi/G - needs to be GiB/GB.
-                        memory += "B"
-                    value = bitmath.parse_string(memory).to_GiB().value
-
-                if value < 0:
-                    raise ValueError(
-                        "Failed to apply memory resource limit patch: "
-                        "value must be greater than or equal to 0"
-                    )
-                copy["memory"] = f"{str(value)}Gi"
-
-            if cpu := copy.get("cpu"):
-                # TODO need to take into account m, k/K, M, G, T, P and E, but for CPU count it's
-                # probably ok to only support "m" and plain decimals for now.
-                # https://github.com/gtsystem/lightkube/issues/36
-                if cpu.endswith("m"):
-                    # This is milli. Divide by 1000.
-                    value = int(cpu[:-1]) / 1000.0
-                else:
-                    # Round up to whole millis (e.g. 0.30000000000000004 -> 0.301)
-                    value = ceil(float(cpu) * 1000) / 1000.0
-
-                if value < 0:
-                    raise ValueError(
-                        "Failed to apply cpu resource limit patch: "
-                        "value must be greater than or equal to 0"
-                    )
-                copy["cpu"] = str(value)
-
-            return copy
-
-        return ResourceRequirements(limits=_conv(res_req.limits), requests=_conv(res_req.requests))  # type: ignore[arg-type]
-
     def is_ready(self):
         """Reports if the resource patch has been applied and is in effect.
 
@@ -363,7 +301,7 @@ class KubernetesComputeResourcesPatch(Object):
         podspec = self._get_container(self._container_name, pod.spec.containers)  # type: ignore[attr-defined]
 
         try:
-            ready = self._conv_res_req(self.resource_reqs) == self._conv_res_req(podspec.resources)
+            ready = equals_canonically(self.resource_reqs, podspec.resources)
             patched = self._is_patched(client)
         except (ValueError, ApiError) as e:
             msg = f"Failed to apply resource limit patch: {e}"
@@ -402,7 +340,7 @@ class KubernetesComputeResourcesPatch(Object):
             statefulset.spec.template.spec.containers,  # type: ignore[attr-defined]
         )
 
-        return self._conv_res_req(podspec_tpl.resources) == self._conv_res_req(self.resource_reqs)
+        return equals_canonically(podspec_tpl.resources, self.resource_reqs)
 
     @property
     def _app(self) -> str:

@@ -8,10 +8,9 @@ import os
 import re
 import socket
 from decimal import Decimal
-from typing import Dict, cast
+from typing import Dict, Union, cast
 from urllib.parse import urlparse
 
-import bitmath
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
@@ -51,6 +50,67 @@ RULES_DIR = "/etc/prometheus/rules"
 CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
+
+
+def monotonize(value, default_value, multiplier):
+    """A continuous function from the given value to a multiplier-adjusted value.
+
+    >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
+    800.0
+    >>> monotonize(260, 200, 0.8)  # take 0.8 * 260 (input value still > default / 0.8)
+    208.0
+    >>> monotonize(250, 200, 0.8)  # take the default, 200 (input value <= default / 0.8)
+    200
+    >>> monotonize(200, 200, 0.8)
+    200
+    >>> monotonize(150, 200, 0.8)  # return the input value (input value < default)
+    150
+    """
+    if value is None:
+        return default_value
+
+    adjusted_value = value * multiplier
+    if adjusted_value > default_value:
+        return adjusted_value
+
+    if value > default_value:
+        return default_value
+
+    return value
+
+
+def convert_k8s_quantity_to_legacy_binary_gigabytes(
+    capacity: str, multiplier: Union[Decimal, float, str] = 1.0
+) -> str:
+    """Convert a K8s quantity string to legacy binary notation in GB, which prometheus expects.
+
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi")
+    '1GB'
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi", 0.8)
+    '0.8GB'
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1G")
+    '0.931GB'
+
+    Raises:
+        ValueError, if capacity or multiplier are invalid.
+    """
+    if not isinstance(multiplier, Decimal):
+        try:
+            multiplier = Decimal(multiplier)
+        except ArithmeticError as e:
+            raise ValueError("Invalid multiplier") from e
+
+    if not multiplier.is_finite():
+        raise ValueError("Multiplier must be finite")
+
+    if not (capacity_as_decimal := parse_quantity(capacity)):
+        raise ValueError(f"Invalid capacity value: {capacity}")
+
+    # For simplicity, always communicate to prometheus in GiB
+    storage_value = multiplier * capacity_as_decimal / 2**30  # Convert (decimal) bytes to GiB
+    quantized = storage_value.quantize(Decimal("0.001"))
+    as_str = str(quantized).rstrip("0").rstrip(".")
+    return f"{as_str}GB"
 
 
 class PrometheusCharm(CharmBase):
@@ -138,7 +198,7 @@ class PrometheusCharm(CharmBase):
 
         By default, we set the "requests" portion of the resource limits to a sensible value, while
         keeping the "limits" portion unspecified.
-        If the use specifies a "limits" (via config options), then the "requests" portion is
+        If the user specifies a "limits" (via config options), then the "requests" portion is
         calculated to maintain a monotone function, as follows:
         - Calculate the adjusted limit by multiplying the user value by 0.8.
         - If the adjusted value is larger than the default "requests", use the adjusted value for
@@ -148,34 +208,7 @@ class PrometheusCharm(CharmBase):
         - Otherwise (the use value is smaller than the default), use the user value for the
           "requests".
         """
-
-        def monotonize(value, default_value, multiplier):
-            """A continuous function from the given value to a multiplies-adjusted value.
-
-            >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
-            800.0
-            >>> monotonize(260, 200, 0.8)  # take 0.8 * 260 (input value still > default / 0.8)
-            208.0
-            >>> monotonize(250, 200, 0.8)  # take the default, 200 (input value <= default / 0.8)
-            200
-            >>> monotonize(200, 200, 0.8)
-            200
-            >>> monotonize(150, 200, 0.8)  # return the input value (input value < default)
-            150
-            """
-            if value is None:
-                return default_value
-
-            adjusted_value = value * multiplier
-            if adjusted_value > default_value:
-                return adjusted_value
-
-            if value > default_value:
-                return default_value
-
-            return value
-
-        multiplier = Decimal("0.8")  # 0 < multiplier <= 1
+        multiplier = Decimal("0.8")  # the multiplier should be in the open-closed range (0, 1]
         default_requests = ResourceSpecDict(cpu="0.25", memory="200Mi")
 
         if resource_limits is None:
@@ -370,7 +403,7 @@ class PrometheusCharm(CharmBase):
             # https://github.com/prometheus/prometheus/issues/10768
             # For simplicity, always communicate to prometheus in GiB
             try:
-                capacity = self._convert_k8s_capacity_to_legacy_binary_gigabytes(
+                capacity = convert_k8s_quantity_to_legacy_binary_gigabytes(
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
@@ -408,16 +441,6 @@ class PrometheusCharm(CharmBase):
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )
-
-    def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
-        # Reduce possible ambiguity in unit name by adding a trailing 'B'.
-        # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
-        if not capacity.endswith("B"):
-            capacity += "B"
-
-        # For simplicity, always communicate to prometheus in GiB
-        storage_value = multiplier * bitmath.parse_string(capacity).to_GiB().value
-        return f"{storage_value}GB"
 
     def _get_pvc_capacity(self) -> str:
         """Get PVC capacity from pod name.

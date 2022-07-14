@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 from helpers import check_prometheus_is_ready, get_podspec, oci_image
+from lightkube.utils.quantity import equals_canonically
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -22,12 +23,11 @@ resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image"
 deploy_timeout = 600
 resched_timeout = 600
 
-# CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
-# default_limits = {
-#     "cpu": CONFIG["options"]["cpu"].get("default"),
-#     "memory": CONFIG["options"]["memory"].get("default"),
-# }
-default_limits = None
+CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
+default_limits = {
+    "cpu": CONFIG["options"]["cpu"].get("default"),
+    "memory": CONFIG["options"]["memory"].get("default"),
+}
 
 
 async def test_setup_env(ops_test: OpsTest):
@@ -50,9 +50,8 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied(ops_test: OpsTest):
     podspec = get_podspec(ops_test, app_name, "prometheus")
-    # TODO use `equals_canonically` when becomes available
-    assert podspec.resources.limits == default_limits
-    assert podspec.resources.requests == default_limits
+    assert equals_canonically(podspec.resources.limits, default_limits)
+    assert equals_canonically(podspec.resources.requests, default_limits)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
@@ -97,8 +96,8 @@ async def test_default_resource_limits_applied_after_resetting_config(ops_test: 
     await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
 
     podspec = get_podspec(ops_test, app_name, "prometheus")
-    assert podspec.resources.limits == default_limits
-    assert podspec.resources.requests == default_limits
+    assert equals_canonically(podspec.resources.limits, default_limits)
+    assert equals_canonically(podspec.resources.requests, default_limits)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
     assert await check_prometheus_is_ready(ops_test, app_name, 0)

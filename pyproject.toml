@@ -50,7 +50,7 @@ allow_redefinition = true
 
 # Ignore libraries that do not have type hint nor stubs
 [[tool.mypy.overrides]]
-module = ["ops.*", "pytest.*", "pytest_operator.*", "prometheus_api_client.*", "deepdiff.*", "serialized_data_interface.*", "bitmath.*"]
+module = ["ops.*", "pytest.*", "pytest_operator.*", "prometheus_api_client.*", "deepdiff.*", "serialized_data_interface.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

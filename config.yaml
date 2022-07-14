@@ -65,8 +65,8 @@ options:
     type: string
   memory:
     description: |
-      K8s memory resource limit, e.g. "1Gi". Default is unset (no limit).. This value is used
+      K8s memory resource limit, e.g. "1Gi". Default is unset (no limit). This value is used
       for the "limits" portion of the resource requirements (the "requests" portion is
-      automatically deduced from it
+      automatically deduced from it).
       See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
     type: string
