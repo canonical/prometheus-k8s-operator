@@ -40,7 +40,7 @@ from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from lightkube.utils.quantity import parse_quantity
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import ChangeError, ExecError, Layer
 
 from prometheus_server import Prometheus
