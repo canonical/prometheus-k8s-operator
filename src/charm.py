@@ -37,11 +37,12 @@ from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
+from lightkube.utils.quantity import parse_quantity
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.pebble import ChangeError, ExecError, Layer
-from quantity import parse_quantity  # FIXME: delete
+
 from prometheus_server import Prometheus
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
@@ -184,11 +185,13 @@ class PrometheusCharm(CharmBase):
             {
                 # Construct a "requests" dict from a "limits" dict (user input).
                 # Default "requests" values will be used for any missing key in "limits".
-                k: str(monotonize(
-                    parse_quantity(resource_limits.get(k)),
-                    parse_quantity(default_requests[k]),
-                    multiplier,
-                ))
+                k: str(
+                    monotonize(
+                        parse_quantity(resource_limits.get(k)),
+                        parse_quantity(default_requests[k]),
+                        multiplier,
+                    )
+                )
                 for k in default_requests
             }
         )
