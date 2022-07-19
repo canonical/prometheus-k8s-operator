@@ -118,16 +118,49 @@ class ResourceSpecDict(TypedDict, total=False):
     memory: Optional[str]
 
 
-def sanitize_resource_spec_dict(dct: Optional[ResourceSpecDict]) -> Optional[ResourceSpecDict]:
-    """Make sure only recognized keys are present, and drop all keys whose value is empty."""
-    if not dct:
-        return dct
+def is_valid_spec(spec: Optional[ResourceSpecDict]) -> bool:
+    """Check if the spec dict is valid."""
+    if spec is None:
+        return True
+    if not isinstance(spec, dict):
+        logger.error("Invalid resource spec type '%s': must be either None or dict.", spec)
+        return False
 
-    d = dct.copy()
-    for k, v in dct.items():
-        if k not in ResourceSpecDict.__annotations__.keys() or not v:
-            logger.warning("Invalid resource spec: {%s: %s}; ignoring.", k, v)
-            # Remove key, otherwise it will be serialized as 0 and pod won't be scheduled.
+    for k, v in spec.items():
+        if k not in ResourceSpecDict.__annotations__.keys():
+            logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
+            return False
+        try:
+            pv = parse_quantity(v)
+        except ValueError:
+            logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
+            return False
+
+        if pv and pv < 0:
+            logger.error("Invalid resource spec entry: {%s: %s}; must be non-negative.", k, v)
+            return False
+
+    return True
+
+
+def sanitize_resource_spec_dict(spec: Optional[ResourceSpecDict]) -> Optional[ResourceSpecDict]:
+    """Fix spec values without altering semantics.
+
+    The purpose of this helper function is to correct known issues.
+    This function is not intended for fixing user mistakes such as incorrect keys present; that is
+    left for the `is_valid_spec` function.
+    """
+    if not spec:
+        return spec
+
+    d = spec.copy()
+
+    for k, v in spec.items():
+        if not v:
+            # Need to ignore empty values input, otherwise the StatefulSet will have "0" as the
+            # setpoint, the pod will not be scheduled and the charm would be stuck in unknown/lost.
+            # This slightly changes the spec semantics compared to lightkube/k8s: a setpoint of
+            # `None` would be interpreted here as "no limit".
             del d[k]  # type: ignore
 
     # Round up memory to whole bytes. This is need to avoid K8s errors such as:
@@ -293,12 +326,8 @@ class KubernetesComputeResourcesPatch(Object):
         super().__init__(charm, "kubernetes-compute-resource-patch")
         self._charm = charm
         self._container_name = container_name
-        self.resource_reqs = ResourceRequirements(
-            limits=sanitize_resource_spec_dict(limits),  # type: ignore[arg-type]
-            requests=sanitize_resource_spec_dict(requests),  # type: ignore[arg-type]
-        )
-        logger.info("Sanitized requests=%s, limits=%s to %s", requests, limits, self.resource_reqs)
-
+        self.limits = limits
+        self.requests = requests
         self.patcher = ResourcePatcher(self._namespace, self._app, container_name)
 
         # Ensure this patch is applied during the 'config-changed' event, which is emitted every
@@ -320,10 +349,20 @@ class KubernetesComputeResourcesPatch(Object):
 
     def _patch(self) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
-        # Need to ignore invalid input, otherwise the StatefulSet gives "FailedCreate" and the
-        # charm would be stuck in unknown/lost.
+        for spec in (self.limits, self.requests):
+            if not is_valid_spec(spec):
+                msg = f"Invalid resource limit spec: {spec}"
+                logger.error("msg")
+                self.on.patch_failed.emit(message=msg)
+                return
+
+        resource_reqs = ResourceRequirements(
+            limits=sanitize_resource_spec_dict(self.limits),  # type: ignore[arg-type]
+            requests=sanitize_resource_spec_dict(self.requests),  # type: ignore[arg-type]
+        )
+
         try:
-            self.patcher.apply(self.resource_reqs)
+            self.patcher.apply(resource_reqs)
 
         except exceptions.ConfigError as e:
             msg = f"Error creating k8s client: {e}"
@@ -350,17 +389,25 @@ class KubernetesComputeResourcesPatch(Object):
                 "Kubernetes resources for app '%s', container '%s' patched successfully: %s",
                 self._app,
                 self._container_name,
-                self.resource_reqs,
+                resource_reqs,
             )
 
-    def is_ready(self):
+    def is_ready(self) -> bool:
         """Reports if the resource patch has been applied and is in effect.
 
         Returns:
             bool: A boolean indicating if the service patch has been applied and is in effect.
         """
+        if not is_valid_spec(self.limits) or not is_valid_spec(self.requests):
+            return False
+
+        resource_reqs = ResourceRequirements(
+            limits=sanitize_resource_spec_dict(self.limits),  # type: ignore[arg-type]
+            requests=sanitize_resource_spec_dict(self.requests),  # type: ignore[arg-type]
+        )
+
         try:
-            return self.patcher.is_ready(self._pod, self.resource_reqs)
+            return self.patcher.is_ready(self._pod, resource_reqs)
         except (ValueError, ApiError) as e:
             msg = f"Failed to apply resource limit patch: {e}"
             logger.error(msg)

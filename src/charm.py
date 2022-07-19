@@ -185,6 +185,7 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+
         resource_limits = ResourceSpecDict(
             cpu=self.model.config.get("cpu"),
             memory=self.model.config.get("memory"),
@@ -273,7 +274,9 @@ class PrometheusCharm(CharmBase):
         if not self.resources_patch.is_ready():
             if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
                 self.unit.status = WaitingStatus(
-                    f"Waiting for resource limit patch to apply: {self.resources_patch.resource_reqs}"
+                    "Waiting for resource limit patch to apply: "
+                    f"limits = {self.resources_patch.limits}, "
+                    f"requests = {self.resources_patch.requests}"
                 )
             return
 
