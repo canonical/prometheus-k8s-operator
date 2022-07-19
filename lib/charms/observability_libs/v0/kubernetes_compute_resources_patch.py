@@ -6,10 +6,12 @@
 This library is designed to enable developers to more simply patch the Kubernetes compute resource
 limits and requests created by Juju during the deployment of a sidecar charm.
 
-When initialised, this library binds a handler to the parent charm's `config-changed` event, which
-applies the patch to the cluster. This should ensure that the resource limits are correct
-throughout the charm's life. Additional optional user-provided events for re-applying the patch are
-supported but discouraged.
+When initialised, this library binds a handler to the parent charm's `config-changed` event.
+The config-changed event is used because it is guaranteed to fire on startup, on upgrade and on
+pod churn. Additionally, resource limits may be set by charm config options, which would also be
+caught out-of-the-box by this handler. The handler applies the patch to the app's StatefulSet.
+This should ensure that the resource limits are correct throughout the charm's life.Additional
+optional user-provided events for re-applying the patch are supported but discouraged.
 
 The constructor takes a reference to the parent charm, a 'limits' and a 'requests' dictionaries
 that together define the resource requirements. For information regarding the `lightkube`
@@ -72,7 +74,7 @@ def setUp(self, *unused):
 """
 
 import logging
-from types import MethodType
+from math import ceil, floor
 from typing import Dict, List, Optional, TypedDict, Union
 
 from lightkube import ApiError, Client
@@ -87,7 +89,7 @@ from lightkube.models.core_v1 import (
 from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import Pod
 from lightkube.types import PatchType
-from lightkube.utils.quantity import equals_canonically
+from lightkube.utils.quantity import equals_canonically, parse_quantity
 from ops.charm import CharmBase
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 
@@ -122,19 +124,19 @@ def sanitize_resource_spec_dict(dct: Optional[ResourceSpecDict]) -> Optional[Res
         return dct
 
     d = dct.copy()
-    if any(k not in ResourceSpecDict.__annotations__.keys() for k in d.keys()):
-        raise ValueError(
-            "Invalid resource limits dict: must have keys {}".format(
-                ", ".join(ResourceSpecDict.__annotations__.keys())
-            )
-        )
     for k, v in dct.items():
-        if v == "" or v is None:
+        if k not in ResourceSpecDict.__annotations__.keys() or not v:
+            logger.warning("Invalid resource spec: {%s: %s}; ignoring.", k, v)
             # Remove key, otherwise it will be serialized as 0 and pod won't be scheduled.
             del d[k]  # type: ignore
 
+    # Round up memory to whole bytes. This is need to avoid K8s errors such as:
     # fractional byte value "858993459200m" (0.8Gi) is invalid, must be an integer
-    # FIXME: round up memory two whole bytes
+    memory = d.get("memory")
+    if memory:
+        as_decimal = parse_quantity(memory)
+        if as_decimal and as_decimal.remainder_near(floor(as_decimal)):
+            d["memory"] = str(ceil(as_decimal))
     return d
 
 
@@ -162,6 +164,103 @@ class K8sResourcePatchEvents(ObjectEvents):
 
 class ContainerNotFoundError(ValueError):
     """Raised when a given container does not exist in the list of containers."""
+
+
+class ResourcePatcher:
+    """Helper class for patching a container's resource limits in a given StatefulSet."""
+
+    def __init__(self, namespace: str, statefulset_name: str, container_name: str):
+        self.namespace = namespace
+        self.statefulset_name = statefulset_name
+        self.container_name = container_name
+        self.client = Client()
+
+    def _patched_delta(self, resource_reqs: ResourceRequirements) -> StatefulSet:
+        statefulset = self.client.get(
+            StatefulSet, name=self.statefulset_name, namespace=self.namespace
+        )
+
+        return StatefulSet(
+            spec=StatefulSetSpec(
+                selector=statefulset.spec.selector,  # type: ignore[attr-defined]
+                serviceName=statefulset.spec.serviceName,  # type: ignore[attr-defined]
+                template=PodTemplateSpec(
+                    spec=PodSpec(
+                        containers=[Container(name=self.container_name, resources=resource_reqs)]
+                    )
+                ),
+            )
+        )
+
+    @classmethod
+    def _get_container(cls, container_name: str, containers: List[Container]) -> Container:
+        """Find our container from the container list, assuming list is unique by name.
+
+        Typically, *.spec.containers[0] is the charm container, and [1] is the (only) workload.
+
+        Raises:
+            ContainerNotFoundError, if the user-provided container name does not exist in the list.
+
+        Returns:
+            An instance of :class:`Container` whose name matches the given name.
+        """
+        try:
+            return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
+        except StopIteration:
+            raise ContainerNotFoundError(f"Container '{container_name}' not found")
+
+    def is_patched(self, resource_reqs: ResourceRequirements) -> bool:
+        """Reports if the resource patch has been applied to the StatefulSet.
+
+        Returns:
+            bool: A boolean indicating if the service patch has been applied.
+        """
+        return equals_canonically(self.get_templated(), resource_reqs)
+
+    def get_templated(self) -> ResourceRequirements:
+        """Returns the resource limits specified in the StatefulSet template."""
+        statefulset = self.client.get(
+            StatefulSet, name=self.statefulset_name, namespace=self.namespace
+        )
+        podspec_tpl = self._get_container(
+            self.container_name,
+            statefulset.spec.template.spec.containers,  # type: ignore[attr-defined]
+        )
+        return podspec_tpl.resources
+
+    def get_actual(self, pod_name: str) -> ResourceRequirements:
+        """Return the resource limits that are in effect for the container in the given pod."""
+        pod = self.client.get(Pod, name=pod_name, namespace=self.namespace)
+        podspec = self._get_container(
+            self.container_name, pod.spec.containers  # type: ignore[attr-defined]
+        )
+        return podspec.resources
+
+    def is_ready(self, pod_name, resource_reqs: ResourceRequirements):
+        """Reports if the resource patch has been applied and is in effect.
+
+        Returns:
+            bool: A boolean indicating if the service patch has been applied and is in effect.
+        """
+        return self.is_patched(resource_reqs) and equals_canonically(
+            resource_reqs, self.get_actual(pod_name)
+        )
+
+    def apply(self, resource_reqs: ResourceRequirements) -> None:
+        """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
+        # Need to ignore invalid input, otherwise the StatefulSet gives "FailedCreate" and the
+        # charm would be stuck in unknown/lost.
+        if self.is_patched(resource_reqs):
+            return
+
+        self.client.patch(
+            StatefulSet,
+            self.statefulset_name,
+            self._patched_delta(resource_reqs),
+            namespace=self.namespace,
+            patch_type=PatchType.APPLY,
+            field_manager=self.__class__.__name__,
+        )
 
 
 class KubernetesComputeResourcesPatch(Object):
@@ -198,15 +297,10 @@ class KubernetesComputeResourcesPatch(Object):
             limits=sanitize_resource_spec_dict(limits),  # type: ignore[arg-type]
             requests=sanitize_resource_spec_dict(requests),  # type: ignore[arg-type]
         )
-        self.patched_delta = self._patched_delta(
-            namespace=self._namespace,
-            app_name=self._app,
-            container_name=self._container_name,
-            resource_reqs=self.resource_reqs,
-        )
+        logger.info("Sanitized requests=%s, limits=%s to %s", requests, limits, self.resource_reqs)
 
-        # Make mypy type checking happy that self._patch is a method
-        assert isinstance(self._patch, MethodType)
+        self.patcher = ResourcePatcher(self._namespace, self._app, container_name)
+
         # Ensure this patch is applied during the 'config-changed' event, which is emitted every
         # startup and every upgrade. The config-changed event is a good time to apply this kind of
         # patch because it is always emitted after storage-attached, leadership and peer-created,
@@ -221,46 +315,12 @@ class KubernetesComputeResourcesPatch(Object):
         for ev in refresh_event:
             self.framework.observe(ev, self._patch)
 
-    @classmethod
-    def _patched_delta(
-        cls,
-        namespace: str,
-        app_name: str,
-        container_name: str,
-        resource_reqs: ResourceRequirements,
-    ) -> StatefulSet:
-        client = Client()
-        statefulset = client.get(StatefulSet, name=app_name, namespace=namespace)
-
-        return StatefulSet(
-            spec=StatefulSetSpec(
-                selector=statefulset.spec.selector,  # type: ignore[attr-defined]
-                serviceName=statefulset.spec.serviceName,  # type: ignore[attr-defined]
-                template=PodTemplateSpec(
-                    spec=PodSpec(
-                        containers=[Container(name=container_name, resources=resource_reqs)]
-                    )
-                ),
-            )
-        )
-
     def _patch(self, _) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
-        # Need to ignore invalid input, otherwise the statefulset gives "FailedCreate" and the
+        # Need to ignore invalid input, otherwise the StatefulSet gives "FailedCreate" and the
         # charm would be stuck in unknown/lost.
         try:
-            client = Client()
-            if self._is_patched(client):
-                return
-
-            client.patch(
-                StatefulSet,
-                self._app,
-                self.patched_delta,
-                namespace=self._namespace,
-                patch_type=PatchType.APPLY,
-                field_manager=self.__class__.__name__,
-            )
+            self.patcher.apply(self.resource_reqs)
 
         except exceptions.ConfigError as e:
             msg = f"Error creating k8s client: {e}"
@@ -296,51 +356,13 @@ class KubernetesComputeResourcesPatch(Object):
         Returns:
             bool: A boolean indicating if the service patch has been applied and is in effect.
         """
-        client = Client()
-        pod = client.get(Pod, name=self._pod, namespace=self._namespace)
-        podspec = self._get_container(self._container_name, pod.spec.containers)  # type: ignore[attr-defined]
-
         try:
-            ready = equals_canonically(self.resource_reqs, podspec.resources)
-            patched = self._is_patched(client)
+            return self.patcher.is_ready(self._pod, self.resource_reqs)
         except (ValueError, ApiError) as e:
             msg = f"Failed to apply resource limit patch: {e}"
             logger.error(msg)
             self.on.patch_failed.emit(message=msg)
             return False
-
-        return patched and ready
-
-    @classmethod
-    def _get_container(cls, container_name: str, containers: List[Container]) -> Container:
-        """Find our container from the container list, assuming list is unique by name.
-
-        Typically, *.spec.containers[0] is the charm container, and [1] is the (only) workload.
-
-        Raises:
-            ContainerNotFoundError, if the user-provided container name does not exist in the list.
-
-        Returns:
-            An instance of :class:`Container` whose name matches the given name.
-        """
-        try:
-            return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
-        except StopIteration:
-            raise ContainerNotFoundError(f"Container '{container_name}' not found")
-
-    def _is_patched(self, client: Client) -> bool:
-        """Reports if the resource patch has been applied to the StatefulSet.
-
-        Returns:
-            bool: A boolean indicating if the service patch has been applied.
-        """
-        statefulset = client.get(StatefulSet, name=self._app, namespace=self._namespace)
-        podspec_tpl = self._get_container(
-            self._container_name,
-            statefulset.spec.template.spec.containers,  # type: ignore[attr-defined]
-        )
-
-        return equals_canonically(podspec_tpl.resources, self.resource_reqs)
 
     @property
     def _app(self) -> str:

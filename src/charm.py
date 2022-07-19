@@ -53,7 +53,17 @@ logger = logging.getLogger(__name__)
 
 
 def monotonize(value, default_value, multiplier):
-    """A continuous function from the given value to a multiplier-adjusted value.
+    """A continuous, monotone function from the given value to a multiplier-adjusted value.
+
+    Args:
+        value, the independent variable.
+        default_value, the crossover between the function `y = value` and `y = multiplier * value`.
+        multiplier, a number in the range (0, 1).
+
+    Returns:
+        value, if value <= default_value;
+        default_value, if default_value < value < default_value/multiplier;
+        multiplier * value, otherwise (multiplier * value > default_value).
 
     >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
     800.0
@@ -66,6 +76,8 @@ def monotonize(value, default_value, multiplier):
     >>> monotonize(150, 200, 0.8)  # return the input value (input value < default)
     150
     """
+    assert 0 < multiplier < 1, "Multiplier must be in the range (0, 1)."
+
     if value is None:
         return default_value
 
@@ -83,6 +95,13 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
     capacity: str, multiplier: Union[Decimal, float, str] = 1.0
 ) -> str:
     """Convert a K8s quantity string to legacy binary notation in GB, which prometheus expects.
+
+    Args:
+        capacity, a storage quantity in K8s notation.
+        multiplier, an optional convenience argument for adjusting the capacity multiplicatively.
+
+    Returns:
+        The capacity, multiplied by `multiplier`, in Prometheus GB (legacy binary) notation.
 
     >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi")
     '1GB'
@@ -113,6 +132,49 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
     return f"{as_str}GB"
 
 
+def limits_to_requests(resource_limits: ResourceSpecDict):
+    """Calculate "requests" from a "limits" dict.
+
+    By default, we set the "requests" portion of the resource limits to a sensible value, while
+    keeping the "limits" portion unspecified.
+    If the user specifies a "limits" (via config options), then the "requests" portion is deduced
+    from the limits as follows:
+    - Calculate the adjusted limit by multiplying the user value by 0.8.
+    - If the adjusted value is larger than the default value (0.25 for cpu, 200Mi for memory), use
+      the adjusted value for the "requests".
+    - Otherwise, if the user value is larger than the default value (0.25 for cpu, 200Mi for
+      memory), use the default value for the "requests".
+    - Otherwise (the user value is smaller than the default), use the user value for the
+      "requests".
+
+    This guarantees that:
+    - When the "limits" portion is high enough, the "requests" portion is scaled down
+      proportionally to it, leaving some room for bursts.
+    - When the "limits" portion is too low, no scaling takes place and the requests equals the
+      limits.
+    """
+    multiplier = Decimal("0.8")  # the multiplier should be in the open-closed range (0, 1]
+    default_requests = ResourceSpecDict(cpu="0.25", memory="200Mi")
+
+    if resource_limits is None:
+        return default_requests
+
+    return ResourceSpecDict(  # type: ignore
+        {
+            # Construct a "requests" dict from a "limits" dict (user input).
+            # Default "requests" values will be used for any missing key in "limits".
+            k: str(
+                monotonize(
+                    parse_quantity(resource_limits.get(k)),
+                    parse_quantity(default_requests[k]),
+                    multiplier,
+                )
+            )
+            for k in default_requests
+        }
+    )
+
+
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -127,7 +189,7 @@ class PrometheusCharm(CharmBase):
             cpu=self.model.config.get("cpu"),
             memory=self.model.config.get("memory"),
         )
-        resource_requests = self._limits_to_requests(resource_limits)
+        resource_requests = limits_to_requests(resource_limits)
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
             self._name,
@@ -191,43 +253,6 @@ class PrometheusCharm(CharmBase):
         )
 		self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
-
-    @classmethod
-    def _limits_to_requests(cls, resource_limits: ResourceSpecDict):
-        """Calculate "requests" from a "limits" dict.
-
-        By default, we set the "requests" portion of the resource limits to a sensible value, while
-        keeping the "limits" portion unspecified.
-        If the user specifies a "limits" (via config options), then the "requests" portion is
-        calculated to maintain a monotone function, as follows:
-        - Calculate the adjusted limit by multiplying the user value by 0.8.
-        - If the adjusted value is larger than the default "requests", use the adjusted value for
-          the "requests".
-        - Otherwise, if the user value is larger than the default "requests", use the default value
-          for the "requests".
-        - Otherwise (the use value is smaller than the default), use the user value for the
-          "requests".
-        """
-        multiplier = Decimal("0.8")  # the multiplier should be in the open-closed range (0, 1]
-        default_requests = ResourceSpecDict(cpu="0.25", memory="200Mi")
-
-        if resource_limits is None:
-            return default_requests
-
-        return ResourceSpecDict(  # type: ignore
-            {
-                # Construct a "requests" dict from a "limits" dict (user input).
-                # Default "requests" values will be used for any missing key in "limits".
-                k: str(
-                    monotonize(
-                        parse_quantity(resource_limits.get(k)),
-                        parse_quantity(default_requests[k]),
-                        multiplier,
-                    )
-                )
-                for k in default_requests
-            }
-        )
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)

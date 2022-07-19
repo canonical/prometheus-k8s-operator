@@ -24,10 +24,8 @@ deploy_timeout = 600
 resched_timeout = 600
 
 CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
-default_limits = {
-    "cpu": CONFIG["options"]["cpu"].get("default"),
-    "memory": CONFIG["options"]["memory"].get("default"),
-}
+default_limits = None
+default_requests = dict(cpu="0.25", memory="200Mi")
 
 
 async def test_setup_env(ops_test: OpsTest):
@@ -51,7 +49,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 async def test_default_resource_limits_applied(ops_test: OpsTest):
     podspec = get_podspec(ops_test, app_name, "prometheus")
     assert equals_canonically(podspec.resources.limits, default_limits)
-    assert equals_canonically(podspec.resources.requests, default_limits)
+    assert equals_canonically(podspec.resources.requests, default_requests)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
 
 
@@ -97,7 +95,5 @@ async def test_default_resource_limits_applied_after_resetting_config(ops_test: 
 
     podspec = get_podspec(ops_test, app_name, "prometheus")
     assert equals_canonically(podspec.resources.limits, default_limits)
-    assert equals_canonically(podspec.resources.requests, default_limits)
-    assert await check_prometheus_is_ready(ops_test, app_name, 0)
-
+    assert equals_canonically(podspec.resources.requests, default_requests)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
