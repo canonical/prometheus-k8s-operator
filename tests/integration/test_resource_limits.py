@@ -72,7 +72,9 @@ async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
 
 
 @pytest.mark.abort_on_fail
-@pytest.mark.parametrize("cpu,memory", [("-1", "1Gi"), ("1", "-1Gi"), ("4x", "1Gi"), ("1", "1Gx")])
+@pytest.mark.parametrize(
+    "cpu,memory", [("-1", "0.1Gi"), ("1", "-0.1Gi"), ("4x", "1Gi"), ("1", "1Gx")]
+)
 async def test_invalid_resource_limits_put_charm_in_blocked_status(ops_test: OpsTest, cpu, memory):
     custom_limits = {"cpu": cpu, "memory": memory}
     await ops_test.model.applications[app_name].set_config(custom_limits)

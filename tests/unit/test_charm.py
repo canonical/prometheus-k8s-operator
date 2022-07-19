@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import json
+import logging
 import socket
 import unittest
 import uuid
@@ -12,6 +13,8 @@ from helpers import k8s_resource_multipatch
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
+
+logger = logging.getLogger(__name__)
 
 RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
@@ -37,6 +40,7 @@ class TestCharm(unittest.TestCase):
         self.harness.set_model_name("prometheus_model")
         self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
 
     def test_grafana_is_provided_port_and_source(self):
         rel_id = self.harness.add_relation("grafana-source", "grafana")

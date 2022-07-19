@@ -78,5 +78,6 @@ def patch_network_get(private_address="10.1.157.116") -> Callable:
 k8s_resource_multipatch = patch.multiple(
     "charm.KubernetesComputeResourcesPatch",
     _namespace="test-namespace",
+    _patch=lambda *a, **kw: True,
     is_ready=lambda *a, **kw: True,
 )

@@ -220,6 +220,12 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
 
 @pytest.mark.abort_on_fail
 async def test_rescale_prometheus(ops_test: OpsTest):
+    # GitHub runner doesn't have enough resources to deploy 3 unit with the default "requests", and
+    # the unit fails to schedule. Setting a low limit, so it is able to schedule.
+    await ops_test.model.applications[prometheus_app_name].set_config(
+        {"cpu": "0.5", "memory": "0.1Gi"}
+    )
+
     # WHEN prometheus is scaled up
     num_additional_units = 1
     await ops_test.model.applications[prometheus_app_name].scale(scale_change=num_additional_units)

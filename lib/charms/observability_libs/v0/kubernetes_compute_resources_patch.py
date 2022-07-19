@@ -306,16 +306,19 @@ class KubernetesComputeResourcesPatch(Object):
         # patch because it is always emitted after storage-attached, leadership and peer-created,
         # all of which only fire after install. Patching the statefulset prematurely could result
         # in those events firing without a workload.
-        self.framework.observe(charm.on.config_changed, self._patch)
+        self.framework.observe(charm.on.config_changed, self._on_config_changed)
 
         if not refresh_event:
             refresh_event = []
         elif not isinstance(refresh_event, list):
             refresh_event = [refresh_event]
         for ev in refresh_event:
-            self.framework.observe(ev, self._patch)
+            self.framework.observe(ev, self._on_config_changed)
 
-    def _patch(self, _) -> None:
+    def _on_config_changed(self, _):
+        self._patch()
+
+    def _patch(self) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
         # Need to ignore invalid input, otherwise the StatefulSet gives "FailedCreate" and the
         # charm would be stuck in unknown/lost.
