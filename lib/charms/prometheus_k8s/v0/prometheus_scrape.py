@@ -1554,12 +1554,9 @@ class MetricsEndpointProvider(Object):
         """
         for relation in self._charm.model.relations[self._relation_name]:
             unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
-            if self._is_valid_unit_address(unit_ip):
-                relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_ip
-            else:
-                relation.data[self._charm.unit][
-                    "prometheus_scrape_unit_address"
-                ] = socket.getfqdn()
+            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = (
+                unit_ip if self._is_valid_unit_address(unit_ip) else socket.getfqdn()
+            )
 
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
