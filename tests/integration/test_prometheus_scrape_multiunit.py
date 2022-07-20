@@ -223,8 +223,9 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     # GitHub runner doesn't have enough resources to deploy 3 unit with the default "requests", and
     # the unit fails to schedule. Setting a low limit, so it is able to schedule.
     await ops_test.model.applications[prometheus_app_name].set_config(
-        {"cpu": "0.5", "memory": "0.1Gi"}
+        {"cpu": "0.2", "memory": "0.1Gi"}
     )
+    await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active", timeout=120)
 
     # WHEN prometheus is scaled up
     num_additional_units = 1
