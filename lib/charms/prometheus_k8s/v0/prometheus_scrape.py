@@ -1128,7 +1128,7 @@ class MetricsEndpointConsumer(Object):
             ports = []
             unitless_targets = []
             for target in all_targets:
-                host, port = target.split(":")
+                host, port = self._target_parts(target)
                 if host.strip() == "*":
                     ports.append(port.strip())
                 else:
@@ -1156,6 +1156,26 @@ class MetricsEndpointConsumer(Object):
         labeled_job["relabel_configs"] = relabel_configs
 
         return labeled_job
+
+    def _target_parts(self, target) -> list:
+        """Extract host and port from a wildcard target.
+
+        Args:
+            target: a string specifying a scrape target. A
+              scrape target is expected to have the format
+              "host:port". The host part may be a wildcard
+              "*" and the port part can be missing (along
+              with ":") in which case port is set to 80.
+
+        Returns:
+            a list with target host and port as in [host, port]
+        """
+        if ":" in target:
+            parts = target.split(":")
+        else:
+            parts = [target, "80"]
+
+        return parts
 
     def _set_juju_labels(self, labels, scrape_metadata) -> dict:
         """Create a copy of metric labels with Juju topology information.
