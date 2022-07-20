@@ -98,7 +98,7 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
 
     Args:
         capacity, a storage quantity in K8s notation.
-        multiplier, an optional convenience argument for adjusting the capacity multiplicatively.
+        multiplier, an optional convenience argument for scaling capacity.
 
     Returns:
         The capacity, multiplied by `multiplier`, in Prometheus GB (legacy binary) notation.
@@ -133,7 +133,7 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
 
 
 def limits_to_requests(resource_limits: ResourceSpecDict):
-    """Calculate "requests" from a "limits" dict.
+    """Calculate Kubernetes resource "requests" from a "limits" dict.
 
     By default, we set the "requests" portion of the resource limits to a sensible value, while
     keeping the "limits" portion unspecified.
