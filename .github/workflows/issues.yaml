@@ -9,7 +9,6 @@ jobs:
     steps:
       - name: Dump Github Context
         run: |
-          echo '${{ toJSON(github) }}'
           echo "update=false" >> $GITHUB_ENV
           
           if [ ${{ github.event_name }} != "issues" ]; then
