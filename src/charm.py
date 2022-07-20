@@ -186,16 +186,11 @@ class PrometheusCharm(CharmBase):
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
 
-        resource_limits = ResourceSpecDict(
-            cpu=self.model.config.get("cpu"),
-            memory=self.model.config.get("memory"),
-        )
-        resource_requests = limits_to_requests(resource_limits)
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
             self._name,
-            limits=resource_limits,
-            requests=resource_requests,
+            limits_func=lambda: self._resource_limit_from_config(),
+            requests_func=lambda: limits_to_requests(self._resource_limit_from_config()),
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -255,6 +250,13 @@ class PrometheusCharm(CharmBase):
 		self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
 
+    def _resource_limit_from_config(self):
+        resource_limit = ResourceSpecDict(
+            cpu=self.model.config.get("cpu"),
+            memory=self.model.config.get("memory"),
+        )
+        return resource_limit
+
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
 
@@ -273,11 +275,7 @@ class PrometheusCharm(CharmBase):
 
         if not self.resources_patch.is_ready():
             if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
-                self.unit.status = WaitingStatus(
-                    "Waiting for resource limit patch to apply: "
-                    f"limits = {self.resources_patch.limits}, "
-                    f"requests = {self.resources_patch.requests}"
-                )
+                self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
             return
 
         if not container.can_connect():

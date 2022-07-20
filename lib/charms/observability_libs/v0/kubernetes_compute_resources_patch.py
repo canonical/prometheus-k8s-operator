@@ -47,11 +47,33 @@ class SomeCharm(CharmBase):
     self.resources_patch = KubernetesComputeResourcesPatch(
         self,
         "container-name",
-        limits={"cpu": "1", "mem": "2Gi"},
-        requests={"cpu": "1", "mem": "2Gi"}
+        limits_func=lambda: {"cpu": "1", "mem": "2Gi"},
+        requests_func=lambda: {"cpu": "1", "mem": "2Gi"}
     )
     # ...
 ```
+
+Or, if, for example, the resource specs are coming from config options:
+
+```python
+# ...
+
+class SomeCharm(CharmBase):
+  def __init__(self, *args):
+    # ...
+    self.resources_patch = KubernetesComputeResourcesPatch(
+        self,
+        "container-name",
+        limits_func=lambda: self._resource_spec_from_config(),
+        requests_func=lambda: self._resource_spec_from_config(),
+    )
+
+  def _resource_spec_from_config(self):
+    return {"cpu": self.model.config.get("cpu"), "memory": self.model.config.get("memory")}
+
+    # ...
+```
+
 
 Additionally, you may wish to use mocks in your charm's unit testing to ensure that the library
 does not try to make any API calls, or open any files during testing that are unlikely to be
@@ -75,7 +97,7 @@ def setUp(self, *unused):
 
 import logging
 from math import ceil, floor
-from typing import Dict, List, Optional, TypedDict, Union
+from typing import Callable, Dict, List, Optional, TypedDict, Union
 
 from lightkube import ApiError, Client
 from lightkube.core import exceptions
@@ -131,6 +153,7 @@ def is_valid_spec(spec: Optional[ResourceSpecDict]) -> bool:
             logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
             return False
         try:
+            assert isinstance(v, (str, type(None)))  # for type checker
             pv = parse_quantity(v)
         except ValueError:
             logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
@@ -306,8 +329,8 @@ class KubernetesComputeResourcesPatch(Object):
         charm: CharmBase,
         container_name: str,
         *,
-        limits: Optional[ResourceSpecDict],
-        requests: Optional[ResourceSpecDict],
+        limits_func: Callable[[], Optional[ResourceSpecDict]],
+        requests_func: Callable[[], Optional[ResourceSpecDict]],
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         """Constructor for KubernetesComputeResourcesPatch.
@@ -318,16 +341,18 @@ class KubernetesComputeResourcesPatch(Object):
         Args:
             charm: the charm that is instantiating the library.
             container_name: the container for which to apply the resource limits.
-            limits: a dictionary for `limits` resources.
-            requests: a dictionary for `requests` resources.
+            limits_func: a callable returning a dictionary for `limits` resources; if raises,
+              should only raise ValueError.
+            requests_func: a callable returning a dictionary for `requests` resources; if raises,
+              should only raise ValueError.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-apply the patch.
         """
-        super().__init__(charm, "kubernetes-compute-resource-patch")
+        super().__init__(charm, "{}_{}".format(self.__class__.__name__, container_name))
         self._charm = charm
         self._container_name = container_name
-        self.limits = limits
-        self.requests = requests
+        self.limits_func = limits_func
+        self.requests_func = requests_func
         self.patcher = ResourcePatcher(self._namespace, self._app, container_name)
 
         # Ensure this patch is applied during the 'config-changed' event, which is emitted every
@@ -349,16 +374,25 @@ class KubernetesComputeResourcesPatch(Object):
 
     def _patch(self) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
-        for spec in (self.limits, self.requests):
+        try:
+            limits = self.limits_func()
+            requests = self.requests_func()
+        except ValueError as e:
+            msg = f"Failed obtaining resource limit spec: {e}"
+            logger.error(msg)
+            self.on.patch_failed.emit(message=msg)
+            return
+
+        for spec in (limits, requests):
             if not is_valid_spec(spec):
                 msg = f"Invalid resource limit spec: {spec}"
-                logger.error("msg")
+                logger.error(msg)
                 self.on.patch_failed.emit(message=msg)
                 return
 
         resource_reqs = ResourceRequirements(
-            limits=sanitize_resource_spec_dict(self.limits),  # type: ignore[arg-type]
-            requests=sanitize_resource_spec_dict(self.requests),  # type: ignore[arg-type]
+            limits=sanitize_resource_spec_dict(limits),  # type: ignore[arg-type]
+            requests=sanitize_resource_spec_dict(requests),  # type: ignore[arg-type]
         )
 
         try:
@@ -398,12 +432,20 @@ class KubernetesComputeResourcesPatch(Object):
         Returns:
             bool: A boolean indicating if the service patch has been applied and is in effect.
         """
-        if not is_valid_spec(self.limits) or not is_valid_spec(self.requests):
+        try:
+            limits = self.limits_func()
+            requests = self.requests_func()
+        except ValueError as e:
+            msg = f"Failed obtaining resource limit spec: {e}"
+            logger.error(msg)
+            return False
+
+        if not is_valid_spec(limits) or not is_valid_spec(requests):
             return False
 
         resource_reqs = ResourceRequirements(
-            limits=sanitize_resource_spec_dict(self.limits),  # type: ignore[arg-type]
-            requests=sanitize_resource_spec_dict(self.requests),  # type: ignore[arg-type]
+            limits=sanitize_resource_spec_dict(limits),  # type: ignore[arg-type]
+            requests=sanitize_resource_spec_dict(requests),  # type: ignore[arg-type]
         )
 
         try:
