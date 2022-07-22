@@ -91,6 +91,16 @@ async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
 
 
 @pytest.mark.abort_on_fail
+async def test_upgrade(ops_test: OpsTest, prometheus_charm):
+    """Make sure the app is able to upgrade when resource limits are set."""
+    await ops_test.model.applications[app_name].refresh(
+        path=prometheus_charm, resources=resources
+    )
+    await ops_test.model.wait_for_idle(status="active", timeout=300, idle_period=60)
+    assert await check_prometheus_is_ready(ops_test, app_name, 0)
+
+
+@pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied_after_resetting_config(ops_test: OpsTest):
     await ops_test.model.applications[app_name].reset_config(["cpu", "memory"])
     await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
