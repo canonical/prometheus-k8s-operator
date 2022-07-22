@@ -392,6 +392,39 @@ class TestEndpointConsumer(unittest.TestCase):
         for label_name, label_value in labels.items():
             self.assertNotEqual(label_value, bad_labels[label_name])
 
+    def test_consumer_accepts_targets_without_a_port_set(self):
+        self.assertEqual(self.harness.charm._stored.num_events, 0)
+
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
+        jobs = DEFAULT_JOBS.copy()
+        jobs[0]["static_configs"] = [
+            {
+                "targets": ["*"],
+            }
+        ]
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer",
+            {
+                "scrape_metadata": json.dumps(SCRAPE_METADATA),
+                "scrape_jobs": json.dumps(jobs),
+            },
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 1)
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider/0",
+            },
+        )
+        self.assertEqual(self.harness.charm._stored.num_events, 2)
+
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.validate_jobs(jobs)
+
     def test_consumer_returns_alerts_rules_file(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
