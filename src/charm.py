@@ -20,6 +20,7 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
     ResourceSpecDict,
+    limits_to_requests_scaled,
 )
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
@@ -50,45 +51,6 @@ RULES_DIR = "/etc/prometheus/rules"
 CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
-
-
-def monotonize(value, default_value, multiplier):
-    """A continuous, monotone function from the given value to a multiplier-adjusted value.
-
-    Args:
-        value, the independent variable.
-        default_value, the crossover between the function `y = value` and `y = multiplier * value`.
-        multiplier, a number in the range (0, 1).
-
-    Returns:
-        value, if value <= default_value;
-        default_value, if default_value < value < default_value/multiplier;
-        multiplier * value, otherwise (multiplier * value > default_value).
-
-    >>> monotonize(1000, 200, 0.8)  # take 0.8 * 1000
-    800.0
-    >>> monotonize(260, 200, 0.8)  # take 0.8 * 260 (input value still > default / 0.8)
-    208.0
-    >>> monotonize(250, 200, 0.8)  # take the default, 200 (input value <= default / 0.8)
-    200
-    >>> monotonize(200, 200, 0.8)
-    200
-    >>> monotonize(150, 200, 0.8)  # return the input value (input value < default)
-    150
-    """
-    assert 0 < multiplier < 1, "Multiplier must be in the range (0, 1)."
-
-    if value is None:
-        return default_value
-
-    adjusted_value = value * multiplier
-    if adjusted_value > default_value:
-        return adjusted_value
-
-    if value > default_value:
-        return default_value
-
-    return value
 
 
 def convert_k8s_quantity_to_legacy_binary_gigabytes(
@@ -132,49 +94,6 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
     return f"{as_str}GB"
 
 
-def limits_to_requests(resource_limits: ResourceSpecDict):
-    """Calculate Kubernetes resource "requests" from a "limits" dict.
-
-    By default, we set the "requests" portion of the resource limits to a sensible value, while
-    keeping the "limits" portion unspecified.
-    If the user specifies a "limits" (via config options), then the "requests" portion is deduced
-    from the limits as follows:
-    - Calculate the adjusted limit by multiplying the user value by 0.8.
-    - If the adjusted value is larger than the default value (0.25 for cpu, 200Mi for memory), use
-      the adjusted value for the "requests".
-    - Otherwise, if the user value is larger than the default value (0.25 for cpu, 200Mi for
-      memory), use the default value for the "requests".
-    - Otherwise (the user value is smaller than the default), use the user value for the
-      "requests".
-
-    This guarantees that:
-    - When the "limits" portion is high enough, the "requests" portion is scaled down
-      proportionally to it, leaving some room for bursts.
-    - When the "limits" portion is too low, no scaling takes place and the requests equals the
-      limits.
-    """
-    multiplier = Decimal("0.8")  # the multiplier should be in the open-closed range (0, 1]
-    default_requests = ResourceSpecDict(cpu="0.25", memory="200Mi")
-
-    if resource_limits is None:
-        return default_requests
-
-    return ResourceSpecDict(  # type: ignore
-        {
-            # Construct a "requests" dict from a "limits" dict (user input).
-            # Default "requests" values will be used for any missing key in "limits".
-            k: str(
-                monotonize(
-                    parse_quantity(resource_limits.get(k)),
-                    parse_quantity(default_requests[k]),
-                    multiplier,
-                )
-            )
-            for k in default_requests
-        }
-    )
-
-
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -190,7 +109,11 @@ class PrometheusCharm(CharmBase):
             self,
             self._name,
             limits_func=lambda: self._resource_limit_from_config(),
-            requests_func=lambda: limits_to_requests(self._resource_limit_from_config()),
+            requests_func=lambda: limits_to_requests_scaled(
+                self._resource_limit_from_config(),
+                ResourceSpecDict(cpu="0.25", memory="200Mi"),
+                0.8,
+            ),
         )
 
         self._topology = JujuTopology.from_charm(self)

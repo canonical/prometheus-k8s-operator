@@ -94,8 +94,9 @@ def setUp(self, *unused):
     # ...
 ```
 """
-
+import decimal
 import logging
+from decimal import Decimal
 from math import ceil, floor
 from typing import Callable, Dict, List, Optional, TypedDict, Union
 
@@ -140,27 +141,156 @@ class ResourceSpecDict(TypedDict, total=False):
     memory: Optional[str]
 
 
-def is_valid_spec(spec: Optional[ResourceSpecDict]) -> bool:
+_Decimal = Union[Decimal, float, str, int]  # types that are potentially convertible to Decimal
+
+
+def ray_hopper(x: _Decimal, a1: _Decimal, a2: _Decimal, x0: _Decimal) -> Decimal:
+    """A monotone ray hopper.
+
+    For example, this could model the thrust of a hypothetical multi-stage rocket engine, as a
+    function of time.
+
+    Args:
+        x: the value for which to calculate the function.
+        a1: the slope of the first ray.
+        a2: the slope of the second ray; must be a1 > a2.
+        x0: the crossover point from the first ray (a1) to the second ray (a2); must be x0 > 0.
+
+    Returns:
+        A linear piecewise-continuous function of x given two "rays", y = a1*x and y = a2*x,
+        and a crossover point x0, as follows:
+        - x, if 0 <= x <= x0;
+        - a1*x, if x0 < x <= a1/a2*x0;
+        - a2*x, if a1/a2*x0 < x.
+
+    >>> ray_hopper(1000, 1, "0.8", 200)  # take 0.8 * 1000
+    Decimal('800.0')
+    >>> ray_hopper(260, 1, "0.8", 200)  # take 0.8 * 260 (input value still > default / 0.8)
+    Decimal('208.0')
+    >>> ray_hopper(250, 1, "0.8", 200)  # take the default, 200 (input value <= default / 0.8)
+    Decimal('200')
+    >>> ray_hopper(200, 1, "0.8", 200)
+    Decimal('200')
+    >>> ray_hopper(150, 1, "0.8", 200)  # return the input value (input value < default)
+    Decimal('150')
+    """
+    try:
+        a1 = Decimal(a1)
+        a2 = Decimal(a2)
+        x = Decimal(x)
+        x0 = Decimal(x0)
+    except ArithmeticError:
+        raise ValueError("Invalid argument(s): all args must be (convertible to) decimal.")
+
+    if any(arg < 0 for arg in [x, a1, a2, x0]):
+        raise ValueError("Invalid argument(s): all args must be greater than 0.")
+    if a1 <= a2:
+        raise ValueError("Invalid argument: must satisfy a1 > a2.")
+
+    if x <= x0:
+        return a1 * x
+
+    a1x0 = a1 * x0
+    if x <= a1x0 / a2:
+        return a1x0
+
+    return a2 * x
+
+
+def limits_to_requests_scaled(
+    resource_limits: ResourceSpecDict, default_requests: ResourceSpecDict, scaling_factor: _Decimal
+) -> ResourceSpecDict:
+    """A helper function for calculating "requests" from a "limits" dict using a scaling factor.
+
+    With this function:
+    - When the "limits" portion is high enough, the "requests" portion is scaled down
+      proportionally, leaving some room for bursts.
+    - When the "limits" portion is too low, no scaling takes place and the requests equals the
+      limits.
+
+    Args:
+        resource_limits: A dictionary representation of K8s resource limits
+        default_requests: The default requests values to use if a limits value is not given. This
+            would also be used as the crossover point from requests = limits to the scaled limits.
+            For example, we can set the "requests" portion of the resource limits to a sensible
+            value, while keeping the "limits" portion unspecified.
+        scaling_factor: A scaling factor used to calculate the requests value from the limits
+            value. The scaling factor must satisfy: 0 < scaling_factor < 1.
+
+    Raises:
+        ValueError, if arguments are invalid or out of range.
+
+    Returns:
+        A resource spec dictionary scaled-down by scaling_factor, subject to the "default value"
+         constraint as described above.
+
+    >>> sf = Decimal("0.8")
+    >>> limits_to_requests_scaled({"cpu": "1"}, {"cpu": "200m"}, sf)
+    {'cpu': '0.800'}
+    >>> limits_to_requests_scaled({"cpu": "260m"}, {"cpu": "200m"}, sf)
+    {'cpu': '0.208'}
+    >>> limits_to_requests_scaled({"cpu": "250m"}, {"cpu": "200m"}, sf)
+    {'cpu': '0.200'}
+    >>> limits_to_requests_scaled({"cpu": "200m"}, {"cpu": "200m"}, sf)
+    {'cpu': '0.200'}
+    >>> limits_to_requests_scaled({"cpu": "150m"}, {"cpu": "200m"}, sf)
+    {'cpu': '0.150'}
+    """
+    scaling_factor = Decimal(scaling_factor)
+    if not (0 < scaling_factor < 1):
+        raise ValueError("scaling_factor must be in the range (0, 1).")
+
+    if not is_valid_spec(resource_limits):
+        raise ValueError("Invalid limits spec: {}".format(resource_limits))
+    if not is_valid_spec(default_requests):
+        raise ValueError("Invalid default requests spec: {}".format(default_requests))
+
+    resource_limits = sanitize_resource_spec_dict(resource_limits) or {}
+    default_requests = sanitize_resource_spec_dict(default_requests) or {}
+
+    # Construct a "requests" dict from a "limits" dict (user input).
+    # Default "requests" values will be used for any missing key in "limits".
+    requests = {}
+    for k in ResourceSpecDict.__annotations__.keys():
+        if k in default_requests:
+            default = parse_quantity(default_requests[k])  # type: ignore[literal-required]
+            value = (
+                ray_hopper(
+                    parse_quantity(resource_limits[k]), Decimal("1.0"), scaling_factor, default  # type: ignore[literal-required, arg-type]
+                )
+                if k in resource_limits
+                else default
+            )
+            requests[k] = str(value.quantize(decimal.Decimal("0.001"), rounding=decimal.ROUND_UP))  # type: ignore[union-attr]
+
+    return ResourceSpecDict(requests)  # type: ignore[misc]
+
+
+def is_valid_spec(spec: Optional[ResourceSpecDict], debug=False) -> bool:  # noqa: C901
     """Check if the spec dict is valid."""
     if spec is None:
         return True
     if not isinstance(spec, dict):
-        logger.error("Invalid resource spec type '%s': must be either None or dict.", spec)
+        if debug:
+            logger.error("Invalid resource spec type '%s': must be either None or dict.", spec)
         return False
 
     for k, v in spec.items():
         if k not in ResourceSpecDict.__annotations__.keys():
-            logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
+            if debug:
+                logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
             return False
         try:
             assert isinstance(v, (str, type(None)))  # for type checker
             pv = parse_quantity(v)
         except ValueError:
-            logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
+            if debug:
+                logger.error("Invalid resource spec entry: {%s: %s}.", k, v)
             return False
 
         if pv and pv < 0:
-            logger.error("Invalid resource spec entry: {%s: %s}; must be non-negative.", k, v)
+            if debug:
+                logger.error("Invalid resource spec entry: {%s: %s}; must be non-negative.", k, v)
             return False
 
     return True
