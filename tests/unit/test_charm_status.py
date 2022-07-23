@@ -7,7 +7,6 @@ import logging
 import unittest
 from unittest.mock import Mock, patch
 
-from helpers import patch_network_get
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
@@ -42,7 +41,6 @@ class TestActiveStatus(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
-    @patch_network_get()
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_active_if_deployed_without_relations_or_config(self):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
@@ -59,7 +57,6 @@ class TestActiveStatus(unittest.TestCase):
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
             self.assertTrue(plan.to_dict())
 
-    @patch_network_get()
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_blocked_if_reload_configuration_fails(self):
         """Scenario: Unit is deployed but reload configuration fails."""
