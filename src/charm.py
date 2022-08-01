@@ -76,6 +76,7 @@ class PrometheusCharm(CharmBase):
         self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
         external_url = urlparse(self._external_url)
+        self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
         # Exposes remote write endpoints
         self.remote_write_provider = PrometheusRemoteWriteProvider(
@@ -110,6 +111,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(
             self.on.validate_configuration_action, self._on_validate_configuration
         )
+        self.framework.observe(self.on.update_status, self._update_status)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -143,9 +145,7 @@ class PrometheusCharm(CharmBase):
         # otherwise just reload its configuration.
         if current_services == new_layer.services:
             # No change in layer; reload config to make sure it is valid
-            external_url = urlparse(self._external_url)
-            prometheus_server = Prometheus(web_route_prefix=external_url.path)
-            reloaded = prometheus_server.reload_configuration()
+            reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
@@ -178,8 +178,12 @@ class PrometheusCharm(CharmBase):
         # Make sure that if the remote_write endpoint changes, it is reflected in relation data.
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self._external_url)
-
+        self.unit.set_workload_version(self._prometheus_server.version())
         self.unit.status = ActiveStatus()
+
+    def _update_status(self, event):
+        """Fired intermittently by the Juju agent."""
+        self.unit.set_workload_version(self._prometheus_server.version())
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.

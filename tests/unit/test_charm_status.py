@@ -17,6 +17,7 @@ from charm import PrometheusCharm
 logger = logging.getLogger(__name__)
 
 
+@patch("charm.KubernetesServicePatch", lambda x, y: None)
 class TestActiveStatus(unittest.TestCase):
     """Feature: Charm's status should reflect the correctness of the config / relations.
 
@@ -43,7 +44,7 @@ class TestActiveStatus(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch_network_get()
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @patch("charm.Prometheus.version", lambda x: "1.0.0")
     def test_unit_is_active_if_deployed_without_relations_or_config(self):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
@@ -58,9 +59,21 @@ class TestActiveStatus(unittest.TestCase):
             # AND pebble plan is not empty
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
             self.assertTrue(plan.to_dict())
+            # Ensure the workload version is set accordingly
+            self.assertEqual(self.harness.get_workload_version(), "1.0.0")
+
+    @patch("charm.Prometheus.version", lambda x: "1.0.0")
+    def test_unit_update_status_updates_version(self):
+        self.harness.begin()
+        # Force set a workload version before triggering the event
+        self.harness.charm.unit.set_workload_version("0.1.0")
+        self.assertEqual(self.harness.get_workload_version(), "0.1.0")
+        # Trigger the update status event
+        self.harness.charm.on.update_status.emit()
+        # Ensure the workload version is updated accordingly
+        self.assertEqual(self.harness.get_workload_version(), "1.0.0")
 
     @patch_network_get()
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     def test_unit_is_blocked_if_reload_configuration_fails(self):
         """Scenario: Unit is deployed but reload configuration fails."""
         # GIVEN reload configuration fails
