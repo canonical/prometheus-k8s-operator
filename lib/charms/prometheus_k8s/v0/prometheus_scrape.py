@@ -21,17 +21,17 @@ object from this charm library. For the simplest use cases, using the
 typically in the constructor of your charm (the one which exposes a
 metrics endpoint). The `MetricsEndpointProvider` constructor requires
 the name of the relation over which a scrape target (metrics endpoint)
-is exposed to the Prometheus charm. This relation must use the
-`prometheus_scrape` interface. By default address of the metrics
-endpoint is set to the unit IP address, by each unit of the
-`MetricsEndpointProvider` charm. These units set their address in
-response to the `PebbleReady` event of each container in the unit,
-since container restarts of Kubernetes charms can result in change of
-IP addresses. The default name for the metrics endpoint relation is
-`metrics-endpoint`. It is strongly recommended to use the same
-relation name for consistency across charms and doing so obviates the
-need for an additional constructor argument. The
-`MetricsEndpointProvider` object may be instantiated as follows
+is exposed to the Prometheus charm. This relation uses the
+`prometheus_scrape` interface unless specified otherwise.
+
+By default address of the metrics endpoint is set to the unit IP address, by
+each unit of the `MetricsEndpointProvider` charm. These units set their address
+in response to the `PebbleReady` event of each container in the unit, since
+container restarts of Kubernetes charms can result in change of IP addresses.
+The default name for the metrics endpoint relation is `metrics-endpoint`. It is
+strongly recommended to use the same relation name for consistency across
+charms and doing so obviates the need for an additional constructor argument.
+The `MetricsEndpointProvider` object may be instantiated as follows
 
     from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 
@@ -191,7 +191,7 @@ purposes a Prometheus charm needs to do two things
 1. Instantiate the `MetricsEndpointConsumer` object by providing it a
 reference to the parent (Prometheus) charm and optionally the name of
 the relation that the Prometheus charm uses to interact with scrape
-targets. This relation must confirm to the `prometheus_scrape`
+targets. This relation must conform to the `prometheus_scrape`
 interface and it is strongly recommended that this relation be named
 `metrics-endpoint` which is its default value.
 
@@ -339,7 +339,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 20
+LIBPATCH = 21
 
 logger = logging.getLogger(__name__)
 
@@ -801,7 +801,12 @@ class MetricsEndpointConsumer(Object):
 
     on = MonitoringEvents()
 
-    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_RELATION_NAME,
+        relation_interface: str = RELATION_INTERFACE_NAME,
+    ):
         """A Prometheus based Monitoring service.
 
         Args:
@@ -817,19 +822,19 @@ class MetricsEndpointConsumer(Object):
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
                 with the same name as provided via `relation_name` argument.
             RelationInterfaceMismatchError: The relation with the same name as provided
-                via `relation_name` argument does not have the `prometheus_scrape` relation
-                interface.
+                via `relation_name` argument does not have the expected relation interface.
             RelationRoleMismatchError: If the relation with the same name as provided
                 via `relation_name` argument does not have the `RelationRole.requires`
                 role.
         """
         _validate_relation_by_interface_and_direction(
-            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.requires
+            charm, relation_name, relation_interface, RelationRole.requires
         )
 
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
+        self._relation_interface = relation_interface
         self._tool = CosTool(self._charm)
         events = self._charm.on[relation_name]
         self.framework.observe(events.relation_changed, self._on_metrics_provider_relation_changed)
@@ -1036,8 +1041,8 @@ class MetricsEndpointConsumer(Object):
         if not scrape_metadata:
             return scrape_jobs
 
-        job_name_prefix = "juju_{}_prometheus_scrape".format(
-            JujuTopology.from_dict(scrape_metadata).identifier
+        job_name_prefix = "juju_{}_{}".format(
+            JujuTopology.from_dict(scrape_metadata).identifier, self._relation_interface
         )
         hosts = self._relation_hosts(relation)
 
@@ -1067,11 +1072,14 @@ class MetricsEndpointConsumer(Object):
         hosts = {}
         for unit in relation.units:
             # TODO deprecate and remove unit.name
-            unit_name = relation.data[unit].get("prometheus_scrape_unit_name") or unit.name
+            unit_name = (
+                relation.data[unit].get("{}_unit_name".format(self._relation_interface))
+                or unit.name
+            )
             # TODO deprecate and remove "prometheus_scrape_host"
             unit_address = relation.data[unit].get(
-                "prometheus_scrape_unit_address"
-            ) or relation.data[unit].get("prometheus_scrape_host")
+                "{}_unit_address".format(self._relation_interface)
+            ) or relation.data[unit].get("{}_host".format(self._relation_interface))
             if unit_name and unit_address:
                 hosts.update({unit_name: unit_address})
 
@@ -1345,6 +1353,7 @@ class MetricsEndpointProvider(Object):
         jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
+        relation_interface: str = RELATION_INTERFACE_NAME,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1454,14 +1463,13 @@ class MetricsEndpointProvider(Object):
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
                 with the same name as provided via `relation_name` argument.
             RelationInterfaceMismatchError: The relation with the same name as provided
-                via `relation_name` argument does not have the `prometheus_scrape` relation
-                interface.
+                via `relation_name` argument does not have the expected relation interface.
             RelationRoleMismatchError: If the relation with the same name as provided
                 via `relation_name` argument does not have the `RelationRole.provides`
                 role.
         """
         _validate_relation_by_interface_and_direction(
-            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
+            charm, relation_name, relation_interface, RelationRole.provides
         )
 
         try:
@@ -1479,6 +1487,7 @@ class MetricsEndpointProvider(Object):
         self._charm = charm
         self._alert_rules_path = alert_rules_path
         self._relation_name = relation_name
+        self._relation_interface = relation_interface
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
@@ -1574,11 +1583,11 @@ class MetricsEndpointProvider(Object):
         """
         for relation in self._charm.model.relations[self._relation_name]:
             unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
-            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = (
+            relation.data[self._charm.unit]["{}_unit_address".format(self._relation_interface)] = (
                 unit_ip if self._is_valid_unit_address(unit_ip) else socket.getfqdn()
             )
 
-            relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
+            relation.data[self._charm.unit]["{}_unit_name".format(self._relation_interface)] = str(
                 self._charm.model.unit.name
             )
 
