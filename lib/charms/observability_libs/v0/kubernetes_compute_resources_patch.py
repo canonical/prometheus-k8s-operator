@@ -38,9 +38,9 @@ Then, to initialise the library:
 ```python
 # ...
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
-    KubernetesComputeResourcesPatch
+    KubernetesComputeResourcesPatch,
+    ResourceRequirements,
 )
-from lightkube.models.core_v1 import ResourceRequirements
 
 class SomeCharm(CharmBase):
   def __init__(self, *args):
@@ -68,7 +68,7 @@ class SomeCharm(CharmBase):
     self.resources_patch = KubernetesComputeResourcesPatch(
         self,
         "container-name",
-        resource_reqs_func=lambda: self._resource_spec_from_config(),
+        resource_reqs_func=self._resource_spec_from_config,
     )
 
   def _resource_spec_from_config(self) -> ResourceRequirements:
@@ -172,7 +172,9 @@ def adjust_resource_requirements(
     >>> adjust_resource_requirements({"cpu": "1", "memory": "1"}, {"memory": "1G"}, False)
     ResourceRequirements(limits={'cpu': '1', 'memory': '1'}, requests={'memory': '1', 'cpu': '1'})
     >>> adjust_resource_requirements({"custom-resource": "1"}, {"custom-resource": "2"}, False)
-    ResourceRequirements(limits={'custom-resource': '1'}, requests={'custom-resource': '1'})
+    Traceback (most recent call last):
+      ...
+    ValueError: Invalid limits spec: {'custom-resource': '1'}
     """
     if not is_valid_spec(limits):
         raise ValueError("Invalid limits spec: {}".format(limits))
@@ -234,6 +236,11 @@ def is_valid_spec(spec: Optional[dict], debug=False) -> bool:  # noqa: C901
         return False
 
     for k, v in spec.items():
+        valid_keys = ["cpu", "memory"]  # K8s permits custom keys, but we limit here to what we use
+        if k not in valid_keys:
+            if debug:
+                logger.error("Invalid key in resource spec: %s; valid keys: %s.", k, valid_keys)
+            return False
         try:
             assert isinstance(v, (str, type(None)))  # for type checker
             pv = parse_quantity(v)
