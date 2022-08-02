@@ -164,7 +164,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(
             self.on.validate_configuration_action, self._on_validate_configuration
         )
-		self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
 
     def _resource_reqs_from_config(self):

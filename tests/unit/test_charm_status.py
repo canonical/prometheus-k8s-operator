@@ -65,7 +65,9 @@ class TestActiveStatus(unittest.TestCase):
             self.assertEqual(self.harness.get_workload_version(), "1.0.0")
 
     @patch("charm.Prometheus.version", lambda x: "1.0.0")
-    def test_unit_update_status_updates_version(self):
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_unit_update_status_updates_version(self, *_):
         self.harness.begin()
         # Force set a workload version before triggering the event
         self.harness.charm.unit.set_workload_version("0.1.0")
