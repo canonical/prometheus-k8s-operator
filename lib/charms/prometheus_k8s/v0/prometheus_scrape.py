@@ -339,7 +339,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 20
+LIBPATCH = 21
 
 logger = logging.getLogger(__name__)
 
@@ -1497,12 +1497,6 @@ class MetricsEndpointProvider(Object):
                     container = list(self._charm.meta.containers.values())[0]
                     refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
             else:
-                logger.warning(
-                    "%d containers are present in metadata.yaml and "
-                    "refresh_event was not specified. Defaulting to update_status. "
-                    "Metrics IP may not be set in a timely fashion.",
-                    len(self._charm.meta.containers),
-                )
                 refresh_event = [self._charm.on.update_status]
 
         else:
