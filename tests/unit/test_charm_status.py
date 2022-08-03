@@ -7,11 +7,12 @@ import logging
 import unittest
 from unittest.mock import Mock, patch
 
+import ops
 from helpers import k8s_resource_multipatch, patch_network_get
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
-import ops
+
 from charm import PrometheusCharm
 
 ops.testing.SIMULATE_CAN_CONNECT = True

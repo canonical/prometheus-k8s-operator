@@ -7,6 +7,7 @@ import socket
 import unittest
 import uuid
 from unittest.mock import patch
+
 import ops
 import yaml
 from helpers import k8s_resource_multipatch
