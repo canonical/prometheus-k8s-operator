@@ -3,20 +3,24 @@
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
-
 import logging
 import os
 import re
 import socket
-from typing import Dict, cast
+from decimal import Decimal
+from typing import Dict, Union, cast
 from urllib.parse import urlparse
 
-import bitmath
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.observability_libs.v0.juju_topology import JujuTopology
+from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
+    K8sResourcePatchFailedEvent,
+    KubernetesComputeResourcesPatch,
+    adjust_resource_requirements,
+)
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
@@ -28,13 +32,14 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
 )
-from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
+from charms.traefik_k8s.v1.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
+from lightkube.utils.quantity import parse_quantity
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import ChangeError, ExecError, Layer
 
 from prometheus_server import Prometheus
@@ -47,6 +52,47 @@ CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 logger = logging.getLogger(__name__)
 
 
+def convert_k8s_quantity_to_legacy_binary_gigabytes(
+    capacity: str, multiplier: Union[Decimal, float, str] = 1.0
+) -> str:
+    """Convert a K8s quantity string to legacy binary notation in GB, which prometheus expects.
+
+    Args:
+        capacity, a storage quantity in K8s notation.
+        multiplier, an optional convenience argument for scaling capacity.
+
+    Returns:
+        The capacity, multiplied by `multiplier`, in Prometheus GB (legacy binary) notation.
+
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi")
+    '1GB'
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi", 0.8)
+    '0.8GB'
+    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1G")
+    '0.931GB'
+
+    Raises:
+        ValueError, if capacity or multiplier are invalid.
+    """
+    if not isinstance(multiplier, Decimal):
+        try:
+            multiplier = Decimal(multiplier)
+        except ArithmeticError as e:
+            raise ValueError("Invalid multiplier") from e
+
+    if not multiplier.is_finite():
+        raise ValueError("Multiplier must be finite")
+
+    if not (capacity_as_decimal := parse_quantity(capacity)):
+        raise ValueError(f"Invalid capacity value: {capacity}")
+
+    # For simplicity, always communicate to prometheus in GiB
+    storage_value = multiplier * capacity_as_decimal / 2**30  # Convert (decimal) bytes to GiB
+    quantized = storage_value.quantize(Decimal("0.001"))
+    as_str = str(quantized).rstrip("0").rstrip(".")
+    return f"{as_str}GB"
+
+
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -57,6 +103,13 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
 
         self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+
+        self.resources_patch = KubernetesComputeResourcesPatch(
+            self,
+            self._name,
+            resource_reqs_func=lambda: self._resource_reqs_from_config(),
+        )
+
         self._topology = JujuTopology.from_charm(self)
 
         # Relation handler objects
@@ -102,7 +155,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ingress_changed, self._configure)
+        self.framework.observe(self.ingress.on.ready_for_unit, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
@@ -112,6 +165,18 @@ class PrometheusCharm(CharmBase):
             self.on.validate_configuration_action, self._on_validate_configuration
         )
         self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
+
+    def _resource_reqs_from_config(self):
+        limits = {
+            "cpu": self.model.config.get("cpu"),
+            "memory": self.model.config.get("memory"),
+        }
+        requests = {"cpu": "0.25", "memory": "200Mi"}
+        return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
+
+    def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
+        self.unit.status = BlockedStatus(event.message)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -125,6 +190,11 @@ class PrometheusCharm(CharmBase):
         is restarted.
         """
         container = self.unit.get_container(self._name)
+
+        if not self.resources_patch.is_ready():
+            if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
+                self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
+            return
 
         if not container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
@@ -277,7 +347,7 @@ class PrometheusCharm(CharmBase):
             # https://github.com/prometheus/prometheus/issues/10768
             # For simplicity, always communicate to prometheus in GiB
             try:
-                capacity = self._convert_k8s_capacity_to_legacy_binary_gigabytes(
+                capacity = convert_k8s_quantity_to_legacy_binary_gigabytes(
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
@@ -315,16 +385,6 @@ class PrometheusCharm(CharmBase):
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )
-
-    def _convert_k8s_capacity_to_legacy_binary_gigabytes(self, capacity: str, multiplier) -> str:
-        # Reduce possible ambiguity in unit name by adding a trailing 'B'.
-        # (bitmath doesn't accept e.g. "Gi" because it also supports bits.)
-        if not capacity.endswith("B"):
-            capacity += "B"
-
-        # For simplicity, always communicate to prometheus in GiB
-        storage_value = multiplier * bitmath.parse_string(capacity).to_GiB().value
-        return f"{storage_value}GB"
 
     def _get_pvc_capacity(self) -> str:
         """Get PVC capacity from pod name.
