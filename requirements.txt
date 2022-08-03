@@ -3,4 +3,3 @@ pyaml
 requests
 lightkube >= 0.11
 lightkube-models >= 1.22.0.4
-serialized-data-interface >= 0.4.0

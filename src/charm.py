@@ -32,7 +32,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
 )
-from charms.traefik_k8s.v0.ingress_per_unit import IngressPerUnitRequirer
+from charms.traefik_k8s.v1.ingress_per_unit import IngressPerUnitRequirer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
@@ -155,7 +155,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ingress_changed, self._configure)
+        self.framework.observe(self.ingress.on.ready_for_unit, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
