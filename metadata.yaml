@@ -1,10 +1,11 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 name: prometheus-k8s
-display-name: Prometheus
+assumes:
+  - k8s-api
+
 summary: Prometheus for Kubernetes clusters
-maintainers:
-  - Balbir Thomas <balbir.thomas@canonical.com>
+
 description: |
   Prometheus is an open source monitoring solution. Prometheus
   supports aggregating high dimensional data and exposes a powerful
@@ -15,7 +16,12 @@ description: |
   alerting. Prometheus provides its own dashboard for data
   visualization but a richer visualization interface may be obtained
   through a relation with the Grafana charm.
+
+website: https://charmhub.io/prometheus-k8s
+source: https://github.com/canonical/prometheus-k8s-operator
+issues: https://github.com/canonical/prometheus-k8s-operator/issues
 docs: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+
 containers:
   prometheus:
     resource: prometheus-image
