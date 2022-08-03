@@ -11,9 +11,10 @@ from helpers import k8s_resource_multipatch, patch_network_get
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
-
+import ops
 from charm import PrometheusCharm
 
+ops.testing.SIMULATE_CAN_CONNECT = True
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +53,7 @@ class TestActiveStatus(unittest.TestCase):
         # GIVEN reload configuration succeeds
         with patch("prometheus_server.Prometheus.reload_configuration", lambda *a, **kw: True):
             self.harness.begin_with_initial_hooks()
+            self.harness.container_pebble_ready("prometheus")
 
             # WHEN no config is provided or relations created
 
@@ -95,6 +97,7 @@ class TestActiveStatus(unittest.TestCase):
         )
         with replan_patch, reload_patch:
             self.harness.begin_with_initial_hooks()
+            self.harness.container_pebble_ready("prometheus")
 
             # WHEN no config is provided or relations created
 

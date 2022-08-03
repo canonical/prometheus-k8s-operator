@@ -7,13 +7,14 @@ import socket
 import unittest
 import uuid
 from unittest.mock import patch
-
+import ops
 import yaml
 from helpers import k8s_resource_multipatch
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
 
+ops.testing.SIMULATE_CAN_CONNECT = True
 logger = logging.getLogger(__name__)
 
 RELATION_NAME = "metrics-endpoint"
