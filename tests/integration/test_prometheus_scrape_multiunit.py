@@ -225,7 +225,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     await ops_test.model.applications[prometheus_app_name].set_config(
         {"cpu": "0.2", "memory": "0.1Gi"}
     )
-    await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active", timeout=120)
+    await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active", timeout=240)
 
     # WHEN prometheus is scaled up
     num_additional_units = 1
@@ -236,7 +236,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[prometheus_app_name],
         status="active",
-        timeout=120,
+        timeout=240,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
@@ -254,7 +254,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
 
     # THEN nothing breaks
     await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name], status="active", timeout=120, wait_for_exact_units=num_units
+        apps=[prometheus_app_name], status="active", timeout=240, wait_for_exact_units=num_units
     )
     await ops_test.model.wait_for_idle(status="active")
     await asyncio.gather(
@@ -276,7 +276,7 @@ async def test_rescale_tester(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[scrape_tester, remote_write_tester],
         status="active",
-        timeout=120,
+        timeout=240,
         wait_for_exact_units=new_num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
@@ -294,7 +294,7 @@ async def test_rescale_tester(ops_test: OpsTest):
     await ops_test.model.wait_for_idle(
         apps=[scrape_tester, remote_write_tester],
         status="active",
-        timeout=120,
+        timeout=240,
         wait_for_exact_units=num_units,
     )
     await ops_test.model.wait_for_idle(status="active")
