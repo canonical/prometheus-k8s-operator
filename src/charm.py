@@ -107,7 +107,7 @@ class PrometheusCharm(CharmBase):
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
             self._name,
-            resource_reqs_func=lambda: self._resource_reqs_from_config(),
+            resource_reqs_func=self._resource_reqs_from_config,
         )
 
         self._topology = JujuTopology.from_charm(self)
