@@ -3,7 +3,6 @@
 
 import functools
 import json
-import os
 import re
 import unittest
 from typing import List
@@ -459,13 +458,13 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
     def test_non_recursive_is_default(self):
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(self.sandbox.getsyspath("/"), "rules", "prom"))
+        rules.add_path(self.sandbox.getsyspath("/rules/prom/"))
         rules_file_dict = rules.as_dict()
         self.assertEqual({}, rules_file_dict)
 
     def test_non_recursive_lma_format_loading_from_root_dir(self):
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(self.sandbox.getsyspath("/"), "rules", "prom", "lma_format"))
+        rules.add_path(self.sandbox.getsyspath("/rules/prom/lma_format/"))
         rules_file_dict = rules.as_dict()
 
         expected_freestanding_rule = {
@@ -487,7 +486,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
     def test_non_recursive_official_format_loading_from_root_dir(self):
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(self.sandbox.getsyspath("/"), "rules", "prom", "prom_format"))
+        rules.add_path(self.sandbox.getsyspath("/rules/prom/prom_format"))
         rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
@@ -514,7 +513,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
           - For rules in official format, core group name is the group name in the file
         """
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(self.sandbox.getsyspath("/"), "rules", "prom"), recursive=True)
+        rules.add_path(self.sandbox.getsyspath("/rules/prom"), recursive=True)
         rules_file_dict = rules.as_dict()
 
         expected_alert_rule = {
@@ -554,7 +553,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
     def test_unit_not_in_alert_labels(self):
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(self.sandbox.getsyspath("/"), "rules", "prom"), recursive=True)
+        rules.add_path(self.sandbox.getsyspath("/rules/prom"), recursive=True)
         rules_file_dict = rules.as_dict()
         for group in rules_file_dict["groups"]:
             for rule in group["rules"]:
@@ -587,7 +586,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(sandbox.getsyspath("/"), "rules"), recursive=False)
+        rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
@@ -625,7 +624,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(sandbox.getsyspath("/"), "rules"), recursive=False)
+        rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
@@ -648,7 +647,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(sandbox.getsyspath("/"), "rules"), recursive=False)
+        rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
@@ -679,7 +678,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.writetext("rules/a/b/file.rule", yaml.safe_dump(self.gen_rule(2)))
 
         rules = AlertRules(topology=self.topology)
-        rules.add_path(os.path.join(sandbox.getsyspath("/"), "rules"), recursive=True)
+        rules.add_path(sandbox.getsyspath("/rules"), recursive=True)
         rules_file_dict_read = rules.as_dict()
 
         expected_rules_file = {
