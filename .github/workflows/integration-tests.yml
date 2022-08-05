@@ -1,0 +1,26 @@
+name: Integration Tests
+
+on:
+  workflow_call: {}
+  workflow_dispatch: {}
+
+jobs:
+  integration-test:
+    name: Integration tests (microk8s)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Setup operator environment
+        uses: charmed-kubernetes/actions-operator@main
+        with:
+          juju-channel: latest/stable
+          provider: microk8s
+          bootstrap-options: "--agent-version 2.9.29"
+      - name: Patch hostpath-provisioner
+        run: >
+          sg microk8s -c "kubectl patch deployment hostpath-provisioner -n kube-system -p '{\"spec\": {\"template\": {\"spec\": {\"containers\": [{\"name\":\"hostpath-provisioner\", \"image\": \"cdkbot/hostpath-provisioner:1.3.0\" }] }}}}'"
+      - name: Run integration tests
+        run: tox -vve integration

@@ -237,6 +237,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch_network_get()
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")

@@ -90,20 +90,7 @@ jobs:
 
   integration-test:
     name: Integration tests (microk8s)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
-        with:
-          juju-channel: latest/stable
-          provider: microk8s
-          bootstrap-options: "--agent-version 2.9.29"
-      - name: Run Prometheus integration tests
-        run: tox -vve integration
+    uses: ./.github/workflows/integration-tests.yml
 
   release-to-charmhub:
     name: Release to CharmHub

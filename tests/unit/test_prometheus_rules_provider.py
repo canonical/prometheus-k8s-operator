@@ -2,14 +2,13 @@
 # See LICENSE file for licensing details.
 
 import json
-import os
 import textwrap
 import unittest
 from unittest.mock import patch
 
 import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
-from helpers import TempFolderSandbox
+from fs.tempfs import TempFS
 from ops.charm import CharmBase
 from ops.testing import Harness
 
@@ -32,9 +31,10 @@ class TestReloadAlertRules(unittest.TestCase):
         "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
     )
     def setUp(self):
-        self.sandbox = TempFolderSandbox()
-        alert_rules_path = os.path.join(self.sandbox.root, "alerts")
-        self.alert_rules_path = alert_rules_path
+        self.sandbox = TempFS("rule_files", auto_clean=True)
+        self.addCleanup(self.sandbox.close)
+
+        alert_rules_path = self.sandbox.getsyspath("/")
 
         class ConsumerCharm(CharmBase):
             metadata_yaml = textwrap.dedent(
@@ -79,7 +79,7 @@ class TestReloadAlertRules(unittest.TestCase):
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
         # WHEN some rule files are added to the alerts dir
-        self.sandbox.put_file(os.path.join(self.alert_rules_path, "alert.rule"), self.ALERT)
+        self.sandbox.writetext("alert.rule", self.ALERT)
 
         # AND the reload method is called
         self.harness.charm.rules_provider._reinitialize_alert_rules()
@@ -93,8 +93,8 @@ class TestReloadAlertRules(unittest.TestCase):
     def test_reload_after_dir_is_emptied_updates_relation_data(self):
         """Scenario: The reload method is called after all the loaded alert files are removed."""
         # GIVEN alert files are present and relation data contains respective alerts
-        alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
-        self.sandbox.put_file(alert_filename, self.ALERT)
+        self.sandbox.writetext("alert.rule", self.ALERT)
+
         self.harness.charm.rules_provider._reinitialize_alert_rules()
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         self.assertNotEqual(
@@ -102,7 +102,7 @@ class TestReloadAlertRules(unittest.TestCase):
         )
 
         # WHEN all rule files are deleted from the alerts dir
-        self.sandbox.remove(alert_filename)
+        self.sandbox.clean()
 
         # AND the reload method is called
         self.harness.charm.rules_provider._reinitialize_alert_rules()
@@ -114,8 +114,7 @@ class TestReloadAlertRules(unittest.TestCase):
     def test_reload_after_dir_itself_removed_updates_relation_data(self):
         """Scenario: The reload method is called after the alerts dir doesn't exist anymore."""
         # GIVEN alert files are present and relation data contains respective alerts
-        alert_filename = os.path.join(self.alert_rules_path, "alert.rule")
-        self.sandbox.put_file(alert_filename, self.ALERT)
+        self.sandbox.writetext("alert.rule", self.ALERT)
         self.harness.charm.rules_provider._reinitialize_alert_rules()
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         self.assertNotEqual(
@@ -123,8 +122,7 @@ class TestReloadAlertRules(unittest.TestCase):
         )
 
         # WHEN the alerts dir itself is deleted
-        self.sandbox.remove(alert_filename)
-        self.sandbox.rmdir(self.alert_rules_path)
+        self.sandbox.clean()
 
         # AND the reload method is called
         self.harness.charm.rules_provider._reinitialize_alert_rules()
@@ -138,9 +136,8 @@ class TestReloadAlertRules(unittest.TestCase):
         # GIVEN various tricky combinations of files present
         filenames = ["alert.rule", "alert.rules", "alert.ruless", "alertrule", "alertrules"]
         for filename in filenames:
-            alert_filename = os.path.join(self.alert_rules_path, filename)
             rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
-            self.sandbox.put_file(alert_filename, rule_file)
+            self.sandbox.writetext(filename, rule_file)
 
         # AND the reload method is called
         self.harness.charm.rules_provider._reinitialize_alert_rules()

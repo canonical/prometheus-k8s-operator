@@ -26,7 +26,8 @@ class SomeApplication(CharmBase):
 """
 import logging
 import socket
-from typing import List
+from typing import Callable, List
+from urllib.parse import urlparse
 
 import ops
 from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent, RelationRole
@@ -41,7 +42,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -233,21 +234,26 @@ class AlertmanagerProvider(RelationManagerBase):
             charm (CharmBase): the Alertmanager charm
     """
 
-    def __init__(self, charm, relation_name: str = "alerting", api_port: int = 9093):
+    def __init__(
+        self,
+        charm,
+        relation_name: str = "alerting",
+        api_port: int = 9093,
+        *,
+        external_url: Callable = None,
+    ):
+        # TODO: breaking change: force keyword-only args from relation_name onwards
         super().__init__(charm, relation_name, RelationRole.provides)
 
-        self._api_port = api_port
+        self._external_url = external_url or (
+            lambda: "http://{}:{}".format(socket.getfqdn(), api_port)
+        )
 
         events = self.charm.on[self.name]
 
         # No need to observe `relation_departed` or `relation_broken`: data bags are auto-updated
         # so both events are address on the consumer side.
         self.framework.observe(events.relation_joined, self._on_relation_joined)
-
-    @property
-    def api_port(self):
-        """Get the API port number to use for alertmanager."""
-        return self._api_port
 
     def _on_relation_joined(self, event: RelationJoinedEvent):
         """This hook stores the public address of the newly-joined "alerting" relation.
@@ -258,9 +264,13 @@ class AlertmanagerProvider(RelationManagerBase):
         self.update_relation_data(event)
 
     def _generate_relation_data(self, relation: Relation):
-        """Helper function to generate relation data in the correct format."""
-        public_address = "{}:{}".format(socket.getfqdn(), self.api_port)
-        return {"public_address": public_address}
+        """Helper function to generate relation data in the correct format.
+
+        Addresses are without scheme.
+        """
+        # Drop the scheme
+        parsed = urlparse(self._external_url())
+        return {"public_address": "{}:{}{}".format(parsed.hostname, parsed.port, parsed.path)}
 
     def update_relation_data(self, event: RelationEvent = None):
         """Helper function for updating relation data bags.
@@ -271,7 +281,7 @@ class AlertmanagerProvider(RelationManagerBase):
 
         Args:
             event: The event whose data bag needs to be updated. If it is None, update data bags of
-            all relations.
+              all relations.
         """
         if event is None:
             # update all existing relation data
