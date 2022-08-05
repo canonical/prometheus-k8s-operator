@@ -66,10 +66,7 @@ Currently supported relations are
   Alertmanager over the `alertmanager` interface.
 - Access to Prometheus from outside the Kubernetes cluster can be
   provided via `ingress` relation with the
-  [Nginx Ingress Integrator](https://charmhub.io/nginx-ingress-integrator).
-  This relation is **experimental**, and there is a chance the charm
-  will evolve to use some other mechanism to be reachable from the outside
-  of the hosting Kubernetes cluster.
+  [Traefik Ingress Charm](https://charmhub.io/traefik-k8s).
 - In addition, this Prometheus charm allows relations with any
   charm that supports the `prometheus_scrape` relation.
 - This Prometheus charm does not as yet support federation. This
