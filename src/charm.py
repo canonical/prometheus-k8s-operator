@@ -143,6 +143,43 @@ class PrometheusCharm(CharmBase):
         return log_level
 
     @property
+    def _default_config(self):
+        """Default configuration for the Prometheus workload."""
+        return {
+            "job_name": "prometheus",
+            "scrape_interval": "5s",
+            "scrape_timeout": "5s",
+            "metrics_path": "/metrics",
+            "honor_timestamps": True,
+            "scheme": "http",
+            "static_configs": [
+                {
+                    "targets": [f"localhost:{self._port}"],
+                    "labels": {
+                        "juju_model": self._topology.model,
+                        "juju_model_uuid": self._topology.model_uuid,
+                        "juju_application": self._topology.application,
+                        "juju_unit": self._topology.charm_name,
+                        "host": "localhost",
+                    },
+                }
+            ],
+            "relabel_configs": [
+                {
+                    "source_labels": [
+                        "juju_model",
+                        "juju_model_uuid",
+                        "juju_application",
+                        "juju_unit",
+                    ],
+                    "separator": "_",
+                    "target_label": "instance",
+                    "regex": "(.*)",
+                }
+            ],
+        }
+
+    @property
     def external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation.
 
@@ -521,40 +558,7 @@ class PrometheusCharm(CharmBase):
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
 
-        default_config = {
-            "job_name": "prometheus",
-            "scrape_interval": "5s",
-            "scrape_timeout": "5s",
-            "metrics_path": "/metrics",
-            "honor_timestamps": True,
-            "scheme": "http",
-            "static_configs": [
-                {
-                    "targets": [f"localhost:{self._port}"],
-                    "labels": {
-                        "juju_model": self._topology.model,
-                        "juju_model_uuid": self._topology.model_uuid,
-                        "juju_application": self._topology.application,
-                        "juju_unit": self._topology.charm_name,
-                        "host": "localhost",
-                    },
-                }
-            ],
-            "relabel_configs": [
-                {
-                    "source_labels": [
-                        "juju_model",
-                        "juju_model_uuid",
-                        "juju_application",
-                        "juju_unit",
-                    ],
-                    "separator": "_",
-                    "target_label": "instance",
-                    "regex": "(.*)",
-                }
-            ],
-        }
-        prometheus_config["scrape_configs"].append(default_config)  # type: ignore
+        prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
