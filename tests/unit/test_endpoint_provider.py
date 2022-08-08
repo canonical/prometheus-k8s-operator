@@ -13,6 +13,7 @@ from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
+    CosTool,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
@@ -788,3 +789,43 @@ class TestNoLeader(unittest.TestCase):
         )
         self.assertIsNotNone(data)
         self.assertGreater(len(data), 0)  # type: ignore[arg-type]
+
+
+class CharmProvidingPromBakedInRules(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self, jobs=JOBS, alert_rules_path="./src/prometheus_alert_rules"
+        )
+        self.tool = CosTool(self)
+
+
+class TestBakedInAlertRules(unittest.TestCase):
+    """Test that the baked-in alert rules, as written to relation data, pass validation."""
+
+    @patch(
+        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
+    )
+    def setUp(self):
+        self.harness = Harness(CharmProvidingPromBakedInRules, meta=PROVIDER_META)
+        self.harness.set_model_name("MyUUID")
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin_with_initial_hooks()
+
+    @patch_network_get()
+    def test_alert_rules(self):
+        """Verify alert rules are added when leader is elected after the relation is created."""
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+
+        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
+        baked_in_alert_rules_as_they_appear_in_reldata = json.loads(data["alert_rules"])
+
+        tool = self.harness.charm.tool
+        valid, errs = tool.validate_alert_rules(baked_in_alert_rules_as_they_appear_in_reldata)
+        self.assertEqual(valid, True)
+        self.assertEqual(errs, "")

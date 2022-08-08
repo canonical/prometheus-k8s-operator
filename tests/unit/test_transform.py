@@ -169,7 +169,7 @@ class TestValidateAlerts(unittest.TestCase):
             }
         )
         self.assertEqual(valid, False)
-        self.assertIn(errs, "error validating:")
+        self.assertIn("error validating:", errs)
 
     @unittest.mock.patch("platform.machine", lambda: "x86_64")
     def test_successfully_validates_good_alert_rules(self):
@@ -178,20 +178,25 @@ class TestValidateAlerts(unittest.TestCase):
             {
                 "groups": [
                     {
-                        "alert": "CPUOverUse",
-                        "expr": "process_cpu_seconds_total > 0.12",
-                        "for": "0m",
-                        "labels": {
-                            "severity": "Low",
-                            "juju_model": "None",
-                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
-                            "juju_application": "consumer-tester",
-                        },
-                        "annotations": {
-                            "summary": "Instance {{ $labels.instance }} CPU over use",
-                            "description": "{{ $labels.instance }} of job "
-                            "{{ $labels.job }} has used too much CPU.",
-                        },
+                        "name": "group_name",
+                        "rules": [
+                            {
+                                "alert": "CPUOverUse",
+                                "expr": "process_cpu_seconds_total > 0.12",
+                                "for": "0m",
+                                "labels": {
+                                    "severity": "Low",
+                                    "juju_model": "None",
+                                    "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                                    "juju_application": "consumer-tester",
+                                },
+                                "annotations": {
+                                    "summary": "Instance {{ $labels.instance }} CPU over use",
+                                    "description": "{{ $labels.instance }} of job "
+                                    "{{ $labels.job }} has used too much CPU.",
+                                },
+                            }
+                        ],
                     }
                 ]
             }
