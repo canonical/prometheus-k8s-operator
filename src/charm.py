@@ -120,9 +120,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
-        self.framework.observe(
-            self.on.validate_configuration_action, self._on_validate_configuration
-        )
+        self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
     @property
     def self_scraping_job(self):
@@ -176,7 +174,7 @@ class PrometheusCharm(CharmBase):
                 self._name: {
                     "override": "replace",
                     "summary": "prometheus daemon",
-                    "command": self._command(),
+                    "command": self._generate_command(),
                     "startup": "enabled",
                 }
             },
@@ -306,7 +304,7 @@ class PrometheusCharm(CharmBase):
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
 
-    def _command(self) -> str:
+    def _generate_command(self) -> str:
         """Construct command to launch Prometheus.
 
         Returns:
@@ -366,7 +364,7 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
-    def _on_validate_configuration(self, event: ActionEvent) -> None:
+    def _on_validate_config(self, event: ActionEvent) -> None:
         """Runs `promtool check config` inside the workload."""
         container = self.unit.get_container(self._name)
 
