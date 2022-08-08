@@ -7,8 +7,7 @@ import logging
 import os
 import re
 import socket
-from decimal import Decimal
-from typing import Dict, Union, cast
+from typing import Dict, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -32,65 +31,27 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
 )
-from charms.traefik_k8s.v1.ingress_per_unit import IngressPerUnitRequirer
+from charms.traefik_k8s.v1.ingress_per_unit import (
+    IngressPerUnitReadyForUnitEvent,
+    IngressPerUnitRequirer,
+    IngressPerUnitRevokedForUnitEvent,
+)
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from lightkube.utils.quantity import parse_quantity
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 from ops.pebble import ChangeError, ExecError, Layer
 
 from prometheus_server import Prometheus
+from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
-
 CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
-
-
-def convert_k8s_quantity_to_legacy_binary_gigabytes(
-    capacity: str, multiplier: Union[Decimal, float, str] = 1.0
-) -> str:
-    """Convert a K8s quantity string to legacy binary notation in GB, which prometheus expects.
-
-    Args:
-        capacity, a storage quantity in K8s notation.
-        multiplier, an optional convenience argument for scaling capacity.
-
-    Returns:
-        The capacity, multiplied by `multiplier`, in Prometheus GB (legacy binary) notation.
-
-    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi")
-    '1GB'
-    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1Gi", 0.8)
-    '0.8GB'
-    >>> convert_k8s_quantity_to_legacy_binary_gigabytes("1G")
-    '0.931GB'
-
-    Raises:
-        ValueError, if capacity or multiplier are invalid.
-    """
-    if not isinstance(multiplier, Decimal):
-        try:
-            multiplier = Decimal(multiplier)
-        except ArithmeticError as e:
-            raise ValueError("Invalid multiplier") from e
-
-    if not multiplier.is_finite():
-        raise ValueError("Multiplier must be finite")
-
-    if not (capacity_as_decimal := parse_quantity(capacity)):
-        raise ValueError(f"Invalid capacity value: {capacity}")
-
-    # For simplicity, always communicate to prometheus in GiB
-    storage_value = multiplier * capacity_as_decimal / 2**30  # Convert (decimal) bytes to GiB
-    quantized = storage_value.quantize(Decimal("0.001"))
-    as_str = str(quantized).rstrip("0").rstrip(".")
-    return f"{as_str}GB"
 
 
 class PrometheusCharm(CharmBase):
@@ -102,7 +63,10 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
 
-        self.service_patch = KubernetesServicePatch(self, [(f"{self.app.name}", self._port)])
+        self.service_patch = KubernetesServicePatch(
+            self,
+            [(f"{self.app.name}", self._port)],
+        )
 
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
@@ -112,28 +76,20 @@ class PrometheusCharm(CharmBase):
 
         self._topology = JujuTopology.from_charm(self)
 
-        # Relation handler objects
-
-        # Self-monitoring
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
-            jobs=[{"static_configs": [{"targets": [f"*:{self._port}"]}]}],
+            jobs=self.self_scraping_job,
         )
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
-
-        # Gathers scrape job information from metrics endpoints
         self.metrics_consumer = MetricsEndpointConsumer(self)
-
-        # Manages ingress for this charm
         self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
-        external_url = urlparse(self._external_url)
+        external_url = urlparse(self.external_url)
         self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
-        # Exposes remote write endpoints
         self.remote_write_provider = PrometheusRemoteWriteProvider(
-            self,
+            charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             endpoint_address=external_url.hostname or "",
             endpoint_port=external_url.port or self._port,
@@ -141,31 +97,92 @@ class PrometheusCharm(CharmBase):
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
 
-        # Allows Grafana to aggregate metrics
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self._external_url,
+            source_url=self.external_url,
         )
 
-        # Maintains list of Alertmanagers to which alerts are forwarded
-        self.alertmanager_consumer = AlertmanagerConsumer(self, relation_name="alertmanager")
+        self.alertmanager_consumer = AlertmanagerConsumer(
+            charm=self,
+            relation_name="alertmanager",
+        )
 
-        # Event handlers
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ready_for_unit, self._configure)
+        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
+        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
+        self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(
             self.on.validate_configuration_action, self._on_validate_configuration
         )
-        self.framework.observe(self.on.update_status, self._update_status)
-        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
+
+    @property
+    def self_scraping_job(self):
+        """The scrape job used by Prometheus to scrape itself during self-monitoring."""
+        return [{"static_configs": [{"targets": [f"*:{self._port}"]}]}]
+
+    @property
+    def log_level(self):
+        """The log level configured for the charm."""
+        allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
+        log_level = self.model.config["log_level"].lower()
+
+        if log_level not in allowed_log_levels:
+            logging.warning(
+                "Invalid loglevel: %s given, %s allowed. defaulting to DEBUG loglevel.",
+                log_level,
+                "/".join(allowed_log_levels),
+            )
+            log_level = "debug"
+        return log_level
+
+    @property
+    def external_url(self) -> str:
+        """Return the external hostname to be passed to ingress via the relation.
+
+        If we do not have an ingress, then use the pod ip as hostname.
+        The reason to prefer this over the pod name (which is the actual
+        hostname visible from the pod) or a K8s service, is that those
+        are routable virtually exclusively inside the cluster (as they rely)
+        on the cluster's DNS service, while the ip address is _sometimes_
+        routable from the outside, e.g., when deploying on MicroK8s on Linux.
+        """
+        if web_external_url := self.model.config.get("web_external_url"):
+            return web_external_url
+        if ingress_url := self.ingress.url:
+            return ingress_url
+        return f"http://{socket.getfqdn()}:{self._port}"
+
+    @property
+    def _prometheus_layer(self) -> Layer:
+        """Construct the pebble layer.
+
+        Returns:
+            a Pebble layer specification for the Prometheus workload container.
+        """
+        logger.debug("Building pebble layer")
+        layer_config = {
+            "summary": "Prometheus layer",
+            "description": "Pebble layer configuration for Prometheus",
+            "services": {
+                self._name: {
+                    "override": "replace",
+                    "summary": "prometheus daemon",
+                    "command": self._command(),
+                    "startup": "enabled",
+                }
+            },
+        }
+
+        return Layer(layer_config)
 
     def _resource_reqs_from_config(self):
         limits = {
@@ -174,6 +191,14 @@ class PrometheusCharm(CharmBase):
         }
         requests = {"cpu": "0.25", "memory": "200Mi"}
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
+
+    def _on_ingress_ready(self, event: IngressPerUnitReadyForUnitEvent):
+        logger.info("Ingress for unit ready on '%s'", event.url)
+        self._configure(event)
+
+    def _on_ingress_revoked(self, event: IngressPerUnitRevokedForUnitEvent):
+        logger.info("Ingress for unit revoked.")
+        self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
@@ -200,21 +225,16 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        # push Prometheus config file to workload
         prometheus_config = self._prometheus_config()
         container.push(PROMETHEUS_CONFIG, prometheus_config, make_dirs=True)
         logger.info("Pushed new configuration")
 
-        # push alert rules if any
         self._set_alerts(container)
 
         current_services = container.get_plan().services
         new_layer = self._prometheus_layer
 
-        # Restart prometheus only if command line arguments have changed,
-        # otherwise just reload its configuration.
         if current_services == new_layer.services:
-            # No change in layer; reload config to make sure it is valid
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
@@ -224,7 +244,6 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus configuration reloaded")
 
         else:
-            # Layer changed - replan.
             container.add_layer(self._name, new_layer, combine=True)
             try:
                 # If a config is invalid then prometheus would exit immediately.
@@ -245,9 +264,8 @@ class PrometheusCharm(CharmBase):
         ):
             return
 
-        # Make sure that if the remote_write endpoint changes, it is reflected in relation data.
         self.remote_write_provider.update_endpoint()
-        self.grafana_source_provider.update_source(self._external_url)
+        self.grafana_source_provider.update_source(self.external_url)
         self.unit.set_workload_version(self._prometheus_server.version())
         self.unit.status = ActiveStatus()
 
@@ -304,37 +322,20 @@ class PrometheusCharm(CharmBase):
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
-        external_url = self._external_url
+        external_url = self.external_url
         args.append(f"--web.external-url={external_url}")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--enable-feature=remote-write-receiver")
 
-        # get log level
-        allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
-        log_level = config["log_level"].lower()
+        args.append(f"--log.level={self.log_level}")
 
-        # If log level is invalid set it to debug
-        if log_level not in allowed_log_levels:
-            logging.error(
-                "Invalid loglevel: %s given, %s allowed. defaulting to DEBUG loglevel.",
-                log_level,
-                "/".join(allowed_log_levels),
-            )
-            log_level = "debug"
-
-        # set log level
-        args.append(f"--log.level={log_level}")
-
-        # Enable time series database compression
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
-        # Set time series retention time
         if self._is_valid_timespec(retention_time := config.get("metrics_retention_time", "")):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
 
-        # Set time series retention size
         try:
             ratio = self._percent_string_to_ratio(config.get("maximum_retention_size", ""))
 
@@ -522,7 +523,6 @@ class PrometheusCharm(CharmBase):
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
 
-        # By default only monitor prometheus server itself
         default_config = {
             "job_name": "prometheus",
             "scrape_interval": "5s",
@@ -542,7 +542,6 @@ class PrometheusCharm(CharmBase):
                     },
                 }
             ],
-            # Replace the value of the "instance" label with a juju topology identifier
             "relabel_configs": [
                 {
                     "source_labels": [
@@ -564,46 +563,6 @@ class PrometheusCharm(CharmBase):
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         return yaml.dump(prometheus_config)
-
-    @property
-    def _prometheus_layer(self) -> Layer:
-        """Construct the pebble layer.
-
-        Returns:
-            a Pebble layer specification for the Prometheus workload container.
-        """
-        logger.debug("Building pebble layer")
-        layer_config = {
-            "summary": "Prometheus layer",
-            "description": "Pebble layer configuration for Prometheus",
-            "services": {
-                self._name: {
-                    "override": "replace",
-                    "summary": "prometheus daemon",
-                    "command": self._command(),
-                    "startup": "enabled",
-                }
-            },
-        }
-
-        return Layer(layer_config)
-
-    @property
-    def _external_url(self) -> str:
-        """Return the external hostname to be passed to ingress via the relation."""
-        if web_external_url := self.model.config.get("web_external_url"):
-            return web_external_url
-
-        if ingress_url := self.ingress.url:
-            return ingress_url
-
-        # If we do not have an ingress, then use the pod ip as hostname.
-        # The reason to prefer this over the pod name (which is the actual
-        # hostname visible from the pod) or a K8s service, is that those
-        # are routable virtually exclusively inside the cluster (as they rely)
-        # on the cluster's DNS service, while the ip address is _sometimes_
-        # routable from the outside, e.g., when deploying on MicroK8s on Linux.
-        return f"http://{socket.getfqdn()}:{self._port}"
 
 
 if __name__ == "__main__":

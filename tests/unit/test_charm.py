@@ -76,10 +76,10 @@ class TestCharm(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     def test_invalid_log_level_defaults_to_debug(self, *unused):
         bad_log_config = {"log_level": "bad-level"}
-        with self.assertLogs(level="ERROR") as logger:
+        with self.assertLogs(level="WARNING") as logger:
             self.harness.update_config(bad_log_config)
             expected_logs = {
-                "ERROR:root:Invalid loglevel: bad-level given, "
+                "WARNING:root:Invalid loglevel: bad-level given, "
                 "debug/info/warn/error/fatal allowed. "
                 "defaulting to DEBUG loglevel."
             }
