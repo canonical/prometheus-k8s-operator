@@ -58,6 +58,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
             "ch:alertmanager-k8s",
             application_name="alertmanager",
             channel="edge",
+            trust=True,
         ),
         ops_test.model.deploy(
             "ch:grafana-k8s",
