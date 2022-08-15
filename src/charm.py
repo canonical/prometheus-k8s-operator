@@ -73,6 +73,7 @@ class PrometheusCharm(CharmBase):
             self._name,
             resource_reqs_func=self._resource_reqs_from_config,
         )
+        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
 
         self._topology = JujuTopology.from_charm(self)
 
@@ -81,9 +82,15 @@ class PrometheusCharm(CharmBase):
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
         )
+
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
+
         self.metrics_consumer = MetricsEndpointConsumer(self)
+        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
+
         self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
+        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
 
         external_url = urlparse(self.external_url)
         self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
@@ -107,19 +114,16 @@ class PrometheusCharm(CharmBase):
             charm=self,
             relation_name="alertmanager",
         )
+        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
-        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
-        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
-        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
-        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
-        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
+
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
     @property
@@ -272,6 +276,7 @@ class PrometheusCharm(CharmBase):
         if current_services == new_layer.services:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
+                # Reload may fail if ingress relation is set up but ingress is not yet ready.
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
                 return
@@ -307,6 +312,11 @@ class PrometheusCharm(CharmBase):
     def _update_status(self, event):
         """Fired intermittently by the Juju agent."""
         self.unit.set_workload_version(self._prometheus_server.version())
+
+        # Call configure to resolve "BlockedStatus" when the ready-for-unit event is processed
+        # before ingress is in fact ready.
+        # https://github.com/canonical/traefik-k8s-operator/issues/78
+        self._configure(event)
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
