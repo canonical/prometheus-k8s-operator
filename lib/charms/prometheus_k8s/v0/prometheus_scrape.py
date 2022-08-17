@@ -1345,6 +1345,7 @@ class MetricsEndpointProvider(Object):
         jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
+        unit_address: str = None,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1449,6 +1450,8 @@ class MetricsEndpointProvider(Object):
                 The alert rules are automatically updated on charm upgrade.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
+            unit_address: an optional argument that represents a unit address that can be
+                genereated by an Ingress or a Proxy.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -1482,7 +1485,7 @@ class MetricsEndpointProvider(Object):
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
         self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
-
+        self.unit_address = unit_address
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
         self.framework.observe(events.relation_changed, self._on_relation_changed)
@@ -1510,7 +1513,7 @@ class MetricsEndpointProvider(Object):
                 refresh_event = [refresh_event]
 
         for ev in refresh_event:
-            self.framework.observe(ev, self._set_unit_ip)
+            self.framework.observe(ev, self._set_scrape_job_spec)
 
         self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
 
@@ -1574,10 +1577,15 @@ class MetricsEndpointProvider(Object):
         """
         for relation in self._charm.model.relations[self._relation_name]:
             unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
-            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = (
-                unit_ip if self._is_valid_unit_address(unit_ip) else socket.getfqdn()
-            )
 
+            if self.unit_address:
+                unit_address = self.unit_address
+            elif self._is_valid_unit_address(unit_ip):
+                unit_address = unit_ip
+            else:
+                unit_address = socket.getfqdn()
+
+            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_address
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
             )
