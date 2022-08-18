@@ -64,6 +64,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm, prometheus_
             "ch:grafana-k8s",
             application_name="grafana",
             channel="edge",
+            trust=True,
         ),
         ops_test.model.deploy(
             "ch:grafana-agent-k8s",
