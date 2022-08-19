@@ -608,13 +608,17 @@ class AlertRules:
     #   the "alert" and "expr" keys.
     # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
 
-    def __init__(self, topology: Optional[JujuTopology] = None):
+    def __init__(self, topology: Optional[JujuTopology] = None, group_name_prefix: str = ""):
         """Build and alert rule object.
 
         Args:
             topology: an optional `JujuTopology` instance that is used to annotate all alert rules.
+            group_name_prefix: an optional prefix to be added to the group name of all alerts.
+              This is useful for usecases such as cos-config, where the absence of scrape metadata
+              and juju topology results in a non-unique name.
         """
         self.topology = topology
+        self.group_name_prefix = group_name_prefix
         self.tool = CosTool(None)
         self.alert_groups = []  # type: List[dict]
 
@@ -694,7 +698,7 @@ class AlertRules:
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
         group_name_parts = [self.topology.identifier] if self.topology else []
-        group_name_parts.extend([rel_path, group_name, "alerts"])
+        group_name_parts.extend([self.group_name_prefix, rel_path, group_name, "alerts"])
         # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
 
@@ -1642,6 +1646,9 @@ class PrometheusRulesProvider(Object):
             has the `prometheus_scrape` interface.
         dir_path: Root directory for the collection of rule files.
         recursive: Whether to scan for rule files recursively.
+        group_name_prefix: an optional prefix to be added to the group name of all alerts. This 
+            is useful for usecases such as cos-config, where the absence of scrape metadata and
+            juju topology results in a non-unique name.
     """
 
     def __init__(
@@ -1650,11 +1657,13 @@ class PrometheusRulesProvider(Object):
         relation_name: str = DEFAULT_RELATION_NAME,
         dir_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         recursive=True,
+        group_name_prefix: str = "",
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._recursive = recursive
+        self.group_name_prefix = group_name_prefix
 
         try:
             dir_path = _resolve_dir_against_charm_path(charm, dir_path)
@@ -1686,7 +1695,7 @@ class PrometheusRulesProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        alert_rules = AlertRules()
+        alert_rules = AlertRules(group_name_prefix=self.group_name_prefix)
         alert_rules.add_path(self.dir_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
 
