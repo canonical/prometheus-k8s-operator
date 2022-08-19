@@ -73,6 +73,20 @@ class EndpointProviderCharm(CharmBase):
         )
 
 
+class EndpointProviderCharmExternalHostname(CharmBase):
+    _stored = StoredState()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        self.provider = MetricsEndpointProvider(
+            self,
+            jobs=JOBS,
+            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            external_hostname="9.12.20.18",
+        )
+
+
 class EndpointProviderCharmWithMultipleEvents(CharmBase):
     _stored = StoredState()
 
@@ -257,6 +271,19 @@ class TestEndpointProvider(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
+        self.assertIn("prometheus_scrape_unit_name", data)
+
+    @patch_network_get()
+    def test_provider_sets_external_hostname(self):
+        harness = Harness(EndpointProviderCharmExternalHostname, meta=PROVIDER_META)
+        harness.set_model_name("MyUUID")
+        harness.set_leader(True)
+        harness.begin()
+        rel_id = harness.add_relation(RELATION_NAME, "provider")
+        harness.add_relation_unit(rel_id, "provider/0")
+        data = harness.get_relation_data(rel_id, harness.charm.unit.name)
+        self.assertIn("prometheus_scrape_unit_address", data)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "9.12.20.18")
         self.assertIn("prometheus_scrape_unit_name", data)
 
     @patch("socket.getfqdn", new=lambda *args: "some.host")
