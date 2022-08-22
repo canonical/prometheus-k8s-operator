@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 import yaml
-from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from fs.tempfs import TempFS
 from ops.charm import CharmBase
 from ops.testing import Harness
@@ -47,7 +47,12 @@ class TestReloadAlertRules(unittest.TestCase):
 
             def __init__(self, *args, **kwargs):
                 super().__init__(*args)
-                self.rules_provider = PrometheusRulesProvider(self, dir_path=alert_rules_path)
+                self.rules_provider = MetricsEndpointProvider(
+                    self,
+                    alert_rules_path=alert_rules_path,
+                    auto_generate_default_job=False,
+                    group_name_prefix="custom_prefix",
+                )
 
         self.harness = Harness(ConsumerCharm, meta=ConsumerCharm.metadata_yaml)
         # self.harness = Harness(FakeConsumerCharm, meta=FakeConsumerCharm.metadata_yaml)

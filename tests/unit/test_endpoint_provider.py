@@ -189,7 +189,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("application", scrape_metadata)
 
     @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_reldata_scrape_host",
         autospec=True,
     )
     def test_provider_selects_correct_refresh_event_for_sidecar(self, mock_set_unit_ip):
@@ -199,7 +199,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(mock_set_unit_ip.call_count, 1)
 
     @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_reldata_scrape_host",
         autospec=True,
     )
     @patch(
@@ -226,7 +226,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(mock_set_unit_ip.call_count, 1)
 
     @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_reldata_scrape_host",
         autospec=True,
     )
     @patch(
