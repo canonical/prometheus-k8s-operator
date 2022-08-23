@@ -86,10 +86,13 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             application_name=remote_write_tester,
             channel="edge",
             num_units=num_units,
+            trust=True,
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=num_units)
+    await ops_test.model.wait_for_idle(
+        apps=app_names, status="active", wait_for_units=num_units, timeout=600
+    )
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
     )
@@ -330,7 +333,7 @@ async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, pro
 
     # AND all apps become idle after prometheus upgrade
     logger.info("Waiting for all apps to become active/idle...")
-    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
+    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=600)
 
     # THEN nothing breaks
     await asyncio.gather(
