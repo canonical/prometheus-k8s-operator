@@ -9,6 +9,4 @@ jobs:
   pull-request:
     name: PR
     uses: canonical/observability/.github/workflows/pull-request.yaml@main
-    with:
-      component: prometheus
     secrets: inherit
