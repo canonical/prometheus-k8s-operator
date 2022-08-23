@@ -8,3 +8,8 @@ on:
 jobs:
   pull-request:
     uses: canonical/observability/.github/workflows/pull-request.yaml@main
+    with:
+      component: prometheus
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CHARMHUB_TOKEN: ${{ secrets.CHARMHUB_TOKEN }}
