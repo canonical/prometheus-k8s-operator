@@ -11,5 +11,4 @@ jobs:
     with:
       component: prometheus
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CHARMHUB_TOKEN: ${{ secrets.CHARMHUB_TOKEN }}
