@@ -11,5 +11,4 @@ jobs:
     uses: canonical/observability/.github/workflows/pull-request.yaml@main
     with:
       component: prometheus
-    secrets:
-      CHARMHUB_TOKEN: ${{ secrets.CHARMHUB_TOKEN }}
+    secrets: inherit
