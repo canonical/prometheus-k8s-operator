@@ -75,12 +75,18 @@ class PrometheusCharm(CharmBase):
         )
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
 
+        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
+        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
+        external_url = urlparse(self.external_url)
+
         self._topology = JujuTopology.from_charm(self)
 
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
+            external_hostname=external_url.hostname,
         )
 
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
@@ -88,11 +94,6 @@ class PrometheusCharm(CharmBase):
         self.metrics_consumer = MetricsEndpointConsumer(self)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
 
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
-        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
-        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-
-        external_url = urlparse(self.external_url)
         self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
