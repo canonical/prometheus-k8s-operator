@@ -51,7 +51,7 @@ class Prometheus:
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> bool:
-        """Send a POST request to to hot-reload the config.
+        """Send a POST request to hot-reload the config.
 
         This reduces down-time compared to restarting the service.
 
