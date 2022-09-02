@@ -1011,7 +1011,7 @@ class CosTool:
                 return False, ", ".join(
                     [
                         line
-                        for line in e.output.decode("utf8").strip().split("\n")
+                        for line in e.output.decode("utf8").splitlines()
                         if "error validating" in line
                     ]
                 )
