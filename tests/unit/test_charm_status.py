@@ -8,8 +8,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import ops
-from helpers import k8s_resource_multipatch, patch_network_get
-from ops.model import ActiveStatus, BlockedStatus
+from helpers import FakeProcessVersionCheck, k8s_resource_multipatch, patch_network_get
+from ops.model import ActiveStatus, BlockedStatus, Container
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
 
@@ -46,9 +46,9 @@ class TestActiveStatus(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     @patch_network_get()
-    @patch("charm.Prometheus.version", lambda x: "1.0.0")
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
@@ -65,20 +65,8 @@ class TestActiveStatus(unittest.TestCase):
             plan = self.harness.get_container_pebble_plan(self.harness.charm._name)
             self.assertTrue(plan.to_dict())
             # Ensure the workload version is set accordingly
-            self.assertEqual(self.harness.get_workload_version(), "1.0.0")
-
-    @patch("charm.Prometheus.version", lambda x: "1.0.0")
-    @k8s_resource_multipatch
-    @patch("lightkube.core.client.GenericSyncClient")
-    def test_unit_update_status_updates_version(self, *_):
-        self.harness.begin()
-        # Force set a workload version before triggering the event
-        self.harness.charm.unit.set_workload_version("0.1.0")
-        self.assertEqual(self.harness.get_workload_version(), "0.1.0")
-        # Trigger the update status event
-        self.harness.charm.on.update_status.emit()
-        # Ensure the workload version is updated accordingly
-        self.assertEqual(self.harness.get_workload_version(), "1.0.0")
+            self.harness.container_pebble_ready("prometheus")
+            self.assertEqual(self.harness.get_workload_version(), "0.1.0")
 
     @patch_network_get()
     @k8s_resource_multipatch

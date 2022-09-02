@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, cast
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -108,7 +108,8 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        self.framework.observe(self.on.prometheus_pebble_ready, self._configure)
+        # Event handlers
+        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
@@ -118,7 +119,6 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
-        self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
@@ -301,12 +301,20 @@ class PrometheusCharm(CharmBase):
 
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self.external_url)
-        self.unit.set_workload_version(self._prometheus_server.version())
         self.unit.status = ActiveStatus()
 
-    def _update_status(self, event):
-        """Fired intermittently by the Juju agent."""
-        self.unit.set_workload_version(self._prometheus_server.version())
+    def _on_pebble_ready(self, event) -> None:
+        """Pebble ready hook.
+
+        This runs after the the workload container starts.
+        """
+        self._configure(event)
+        if version := self._prometheus_version:
+            self.unit.set_workload_version(version)
+        else:
+            logger.debug(
+                "Cannot set workload version at this time: could not get Alertmanager version."
+            )
 
     def _set_alerts(self, container):
         """Create alert rule files for all Prometheus consumers.
@@ -565,6 +573,24 @@ class PrometheusCharm(CharmBase):
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         return yaml.dump(prometheus_config)
+
+    @property
+    def _prometheus_version(self) -> Optional[str]:
+        """Returns the version of Prometheus.
+
+        Returns:
+            A string equal to the Prometheus version.
+        """
+        container = self.unit.get_container(self._name)
+        if not container.can_connect():
+            return None
+        version_output, _ = container.exec(["/bin/prometheus", "--version"]).wait_output()
+        # Output looks like this:
+        # prometheus, version 2.33.5 (branch: ...
+        result = re.search(r"version (\d*\.\d*\.\d*)", version_output)
+        if result is None:
+            return result
+        return result.group(1)
 
 
 if __name__ == "__main__":
