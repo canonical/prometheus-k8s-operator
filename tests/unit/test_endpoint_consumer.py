@@ -109,7 +109,7 @@ UNLABELED_ALERT_RULES = {
             "rules": [
                 {
                     "alert": "CPUOverUse",
-                    "expr": 'process_cpu_seconds_total{juju_model="None"',
+                    "expr": 'process_cpu_seconds_total{juju_model="None"}',
                     "for": "0m",
                     "labels": {
                         "severity": "Low",

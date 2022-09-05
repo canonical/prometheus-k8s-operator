@@ -320,3 +320,186 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         # THEN the pebble plan the adjusted capacity
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")
+
+
+class TestAlertsFilename(unittest.TestCase):
+    REMOTE_SCRAPE_METADATA = {
+        "model": "remote-model",
+        "model_uuid": "f299585c-9ac6-4b0c-ae06-46d1be2a7262",
+        "application": "remote-app",
+        "charm_name": "remote-charm",
+    }
+
+    LABELED_ALERT_RULES = {
+        "groups": [
+            {
+                "name": "ZZZ_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+                "rules": [
+                    {
+                        "alert": "CPUOverUse",
+                        "expr": "process_cpu_seconds_total > 0.12",
+                        "labels": {
+                            "severity": "Low",
+                            "juju_model": "ZZZ-model",
+                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                            "juju_application": "zzz-app",
+                        },
+                    },
+                ],
+            },
+            {
+                "name": "AAA_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+                "rules": [
+                    {
+                        "alert": "PrometheusTargetMissing",
+                        "expr": "up == 0",
+                        "labels": {
+                            "severity": "critical",
+                            "juju_model": "AAA-model",
+                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                            "juju_application": "aaa-app",
+                        },
+                    },
+                ],
+            },
+        ]
+    }
+
+    UNLABELED_ALERT_RULES = {
+        "groups": [
+            {
+                "name": "ZZZ_group_alerts",
+                "rules": [
+                    {
+                        "alert": "CPUOverUse",
+                        "expr": "process_cpu_seconds_total > 0.12",
+                        "labels": {"severity": "Low"},
+                    },
+                ],
+            },
+            {
+                "name": "AAA_group_alerts",
+                "rules": [
+                    {
+                        "alert": "PrometheusTargetMissing",
+                        "expr": "up == 0",
+                        "labels": {"severity": "critical"},
+                    },
+                ],
+            },
+        ]
+    }
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def setUp(self, *unused):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.harness.set_model_name("prometheus_model")
+        self.mock_capacity.return_value = "1Gi"
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
+        self.harness.add_relation_unit(self.rel_id, "remote-app/0")
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_charm_writes_meaningful_alerts_filename_1(self, *_):
+        # WHEN relation data includes both scrape_metadata and labeled alerts
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app",
+            {
+                "scrape_metadata": json.dumps(self.REMOTE_SCRAPE_METADATA),
+                "alert_rules": json.dumps(self.LABELED_ALERT_RULES),
+            },
+        )
+
+        # THEN rules filename is derived from the contents of scrape_metadata
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        files = container.list_files("/etc/prometheus/rules")
+        self.assertEqual(
+            {file.path for file in files},
+            {"/etc/prometheus/rules/juju_remote-model_f299585c_remote-app.rules"},
+        )
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_charm_writes_meaningful_alerts_filename_2(self, *_):
+        # TODO: merge the contents of these tests into a single test (and fix the bug!)
+        # WHEN relation data includes only labeled alerts (no scrape_metadata)
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app",
+            {
+                "alert_rules": json.dumps(self.LABELED_ALERT_RULES),
+            },
+        )
+
+        # THEN rules filename is derived from the first (!) rule's topology labels
+        # TODO derive filename from _sorted_ rules so it's deterministic?
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        files = container.list_files("/etc/prometheus/rules")
+        self.assertEqual(
+            {file.path for file in files},
+            {
+                "/etc/prometheus/rules/juju_ZZZ-model_f2c1b2a6-e006-11eb-ba80-0242ac130004_zzz-app.rules"
+            },
+        )
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_charm_writes_meaningful_alerts_filename_3(self, *_):
+        # WHEN relation data includes scrape_metadata but _unlabeled_ alerts
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app",
+            {
+                "scrape_metadata": json.dumps(self.REMOTE_SCRAPE_METADATA),
+                "alert_rules": json.dumps(self.UNLABELED_ALERT_RULES),
+            },
+        )
+
+        # THEN rules filename is derived from the contents of scrape_metadata
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        files = container.list_files("/etc/prometheus/rules")
+        self.assertEqual(
+            {file.path for file in files},
+            {"/etc/prometheus/rules/juju_remote-model_f299585c_remote-app.rules"},
+        )
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_charm_writes_meaningful_alerts_filename_4(self, *_):
+        # TODO: merge the contents of these tests into a single test (and fix the bug!)
+        # WHEN relation data includes only _unlabeled_ alerts (no scrape_metadata)
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app",
+            {
+                "alert_rules": json.dumps(self.UNLABELED_ALERT_RULES),
+            },
+        )
+
+        # THEN rules filename is derived from the first (!) rule's group name
+        # TODO derive filename from _sorted_ rules so it's deterministic?
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        files = container.list_files("/etc/prometheus/rules")
+        self.assertEqual(
+            {file.path for file in files}, {"/etc/prometheus/rules/juju_ZZZ_group_alerts.rules"}
+        )

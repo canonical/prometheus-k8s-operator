@@ -18,7 +18,6 @@ import re
 import socket
 import subprocess
 import tempfile
-import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -36,7 +35,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 
 logger = logging.getLogger(__name__)
@@ -993,28 +992,13 @@ class CosTool:
         return rules
 
     def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness alert rules, returning a boolean and any errors."""
+        """Will validate correctness of alert rules, returning a boolean and any errors."""
         if not self.path:
             logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
             return True, ""
 
         with tempfile.TemporaryDirectory() as tmpdir:
             rule_path = Path(tmpdir + "/validate_rule.yaml")
-
-            # Smash "our" rules format into what upstream actually uses, which is more like:
-            #
-            # groups:
-            #   - name: foo
-            #     rules:
-            #       - alert: SomeAlert
-            #         expr: up
-            #       - alert: OtherAlert
-            #         expr: up
-            transformed_rules = {"groups": []}  # type: ignore
-            for rule in rules["groups"]:
-                transformed = {"name": str(uuid.uuid4()), "rules": [rule]}
-                transformed_rules["groups"].append(transformed)
-
             rule_path.write_text(yaml.dump(rules))
 
             args = [str(self.path), "validate", str(rule_path)]
@@ -1024,9 +1008,15 @@ class CosTool:
                 return True, ""
             except subprocess.CalledProcessError as e:
                 logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join([line for line in e.output if "error validating" in line])
+                return False, ", ".join(
+                    [
+                        line
+                        for line in e.output.decode("utf8").splitlines()
+                        if "error validating" in line
+                    ]
+                )
 
-    def inject_label_matchers(self, expression, topology):
+    def inject_label_matchers(self, expression, topology) -> str:
         """Add label matchers to an expression."""
         if not topology:
             return expression
@@ -1042,7 +1032,7 @@ class CosTool:
         # noinspection PyBroadException
         try:
             return self._exec(args)
-        except Exception as e:
+        except subprocess.CalledProcessError as e:
             logger.debug('Applying the expression failed: "%s", falling back to the original', e)
             return expression
 
@@ -1060,7 +1050,6 @@ class CosTool:
             logger.debug('Could not locate cos-tool at: "{}"'.format(res))
         return None
 
-    def _exec(self, cmd):
-        result = subprocess.run(cmd, check=False, stdout=subprocess.PIPE)
-        output = result.stdout.decode("utf-8").strip()
-        return output
+    def _exec(self, cmd) -> str:
+        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return result.stdout.decode("utf-8").strip()
