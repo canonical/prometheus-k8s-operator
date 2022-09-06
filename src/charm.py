@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, Tuple, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -260,8 +260,11 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        prometheus_config = self._prometheus_config()
+        prometheus_config, certs = self._prometheus_config()
         container.push(PROMETHEUS_CONFIG, prometheus_config, make_dirs=True)
+        for filename, contents in certs.items():
+            container.push(filename, contents, make_dirs=True)
+
         logger.info("Pushed new configuration")
 
         self._set_alerts(container)
@@ -550,11 +553,11 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _prometheus_config(self) -> str:
+    def _prometheus_config(self) -> Tuple[str, dict]:
         """Construct Prometheus configuration.
 
         Returns:
-            Prometheus config file in YAML (string) format.
+            A 2-tuple of prometheus config file in YAML (string) format and a dict of cert per job.
         """
         prometheus_config = {
             "global": self._prometheus_global_config(),
@@ -567,12 +570,18 @@ class PrometheusCharm(CharmBase):
             prometheus_config["alerting"] = alerting_config
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
+        certs = {}
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
+            if (tls_config := job.get("tls_config")) and (ca_file := tls_config.get("ca_file")):
+                # Cert is transferred over relation data and needs to be written to a file on disk.
+                cert_filename = f"/etc/prometheus/{job['job_name']}.crt"
+                certs[cert_filename] = ca_file
+                job["tls_config"]["ca_file"] = cert_filename
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
-        return yaml.dump(prometheus_config)
+        return yaml.dump(prometheus_config), certs
 
     @property
     def _prometheus_version(self) -> Optional[str]:
