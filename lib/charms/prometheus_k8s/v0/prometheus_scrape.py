@@ -356,6 +356,9 @@ ALLOWED_KEYS = {
     "label_limit",
     "label_name_length_limit",
     "label_value_length_limit",
+    "scheme",
+    "basic_auth",
+    "tls_config",
 }
 DEFAULT_JOB = {
     "metrics_path": "/metrics",
