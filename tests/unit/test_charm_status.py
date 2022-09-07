@@ -71,6 +71,7 @@ class TestActiveStatus(unittest.TestCase):
     @patch_network_get()
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_unit_is_blocked_if_reload_configuration_fails(self, *unused):
         """Scenario: Unit is deployed but reload configuration fails."""
         # GIVEN reload configuration fails

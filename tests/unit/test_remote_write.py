@@ -235,6 +235,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get()
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
