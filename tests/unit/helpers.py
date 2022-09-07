@@ -33,3 +33,11 @@ k8s_resource_multipatch = patch.multiple(
     _patch=lambda *a, **kw: True,
     is_ready=lambda *a, **kw: True,
 )
+
+
+class FakeProcessVersionCheck:
+    def __init__(self, args):
+        pass
+
+    def wait_output(self):
+        return ("version 0.1.0", "")
