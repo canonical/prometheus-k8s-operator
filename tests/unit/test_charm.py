@@ -6,7 +6,7 @@ import logging
 import socket
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import ops
 import yaml
@@ -513,25 +513,93 @@ class TestAlertsFilename(unittest.TestCase):
         )
 
 
-class TestPebbleLayer(unittest.TestCase):
-    """Test the pebble layer is kept up-to-date (situational awareness)."""
+def raise_if_called(*_, **__):
+    raise RuntimeError("This should not have been called")
 
-    def setUp(self):
-        pass
+
+class TestPebblePlan(unittest.TestCase):
+    """Test the pebble plan is kept up-to-date (situational awareness)."""
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def setUp(self, *_):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.harness.set_model_name(self.__class__.__name__)
+        self.mock_capacity.return_value = "1Gi"
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+        
+        self.container_name = self.harness.charm._name
+        self.container = self.harness.charm.unit.get_container(self.container_name)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch.multiple(
+        "ops.testing._TestingPebbleClient",
+        autostart_services=raise_if_called,
+        replan_services=raise_if_called,
+        start_services=raise_if_called,
+        stop_services=raise_if_called,
+        restart_services=raise_if_called,
+    )
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_no_restart_nor_reload_when_nothing_changes(self, reload_config_patch, *_):
+        """When nothing changes, calling `_configure()` shouldn't result in downtime."""
+        # GIVEN a pebble plan
+        initial_plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertTrue(self.container.get_service("prometheus").is_running())
+
+        # WHEN manually calling _configure again
+        self.harness.charm._configure(None)
+
+        # THEN pebble service is unchanged
+        current_plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
+        self.assertTrue(self.container.get_service("prometheus").is_running())
+
+        # AND workload (re)start is NOT attempted
+        # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
+
+        # AND reload is not invoked
+        reload_config_patch.assert_not_called()
+
+        # WHEN update-status is emitted
+        self.harness.charm.on.update_status.emit()
+
+        # THEN pebble service is unchanged
+        current_plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
+        self.assertTrue(self.container.get_service("prometheus").is_running())
+
+        # AND workload (re)start is NOT attempted
+        # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
+
+        # AND reload is not invoked
+        reload_config_patch.assert_not_called()
 
     def test_workload_restarts_when_some_config_options_change(self):
         """Some config options go in as cli args and require workload restart."""
         # WHEN web_external_url is set
         # THEN pebble service is updated
         # AND workload is restarted
+        # BUT reload is not invoked
 
         # WHEN web_external_url is changed
         # THEN pebble service is updated
         # AND workload is restarted
+        # BUT reload is not invoked
 
         # WHEN web_external_url is unset
         # THEN pebble service is updated
         # AND workload is restarted
+        # BUT reload is not invoked
 
         self.fail("TODO")
 
@@ -540,25 +608,10 @@ class TestPebbleLayer(unittest.TestCase):
         # WHEN evaluation_interval is changed
         # THEN a reload is invoked
         # BUT pebble service is unchanged
-        # AND workload is NOT restarted
+        # AND workload (re)start is NOT attempted
 
         self.fail("TODO")
 
-    def test_no_restart_nor_reload_when_nothing_changes(self):
-        """When nothing changes, calling `_configure()` shouldn't result in downtime."""
-        # GIVEN a charm after initial hooks
-
-        # WHEN manually calling _configure again
-        # THEN pebble service is unchanged
-        # AND workload is NOT restarted
-        # AND no reload is invoked
-
-        # WHEN update-status is emitted
-        # THEN pebble service is unchanged
-        # AND workload is NOT restarted
-        # AND no reload is invoked
-
-        self.fail("TODO")
 
 
 @patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
