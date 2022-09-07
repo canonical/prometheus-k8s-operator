@@ -556,33 +556,24 @@ class TestPebblePlan(unittest.TestCase):
         initial_plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertTrue(self.container.get_service("prometheus").is_running())
 
-        # WHEN manually calling _configure again
-        self.harness.charm._configure(None)
+        for trigger in [
+            lambda: self.harness.charm._configure(None),
+            self.harness.charm.on.update_status.emit,
+        ]:
+            with self.subTest(trigger=trigger):
+                # WHEN manually calling _configure or emitting update-status
+                trigger()
+                
+                # THEN pebble service is unchanged
+                current_plan = self.harness.get_container_pebble_plan("prometheus")
+                self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
+                self.assertTrue(self.container.get_service("prometheus").is_running())
 
-        # THEN pebble service is unchanged
-        current_plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
-        self.assertTrue(self.container.get_service("prometheus").is_running())
+                # AND workload (re)start is NOT attempted
+                # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
 
-        # AND workload (re)start is NOT attempted
-        # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
-
-        # AND reload is not invoked
-        reload_config_patch.assert_not_called()
-
-        # WHEN update-status is emitted
-        self.harness.charm.on.update_status.emit()
-
-        # THEN pebble service is unchanged
-        current_plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
-        self.assertTrue(self.container.get_service("prometheus").is_running())
-
-        # AND workload (re)start is NOT attempted
-        # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
-
-        # AND reload is not invoked
-        reload_config_patch.assert_not_called()
+                # AND reload is not invoked
+                reload_config_patch.assert_not_called()
 
     def test_workload_restarts_when_some_config_options_change(self):
         """Some config options go in as cli args and require workload restart."""
