@@ -513,6 +513,54 @@ class TestAlertsFilename(unittest.TestCase):
         )
 
 
+class TestPebbleLayer(unittest.TestCase):
+    """Test the pebble layer is kept up-to-date (situational awareness)."""
+
+    def setUp(self):
+        pass
+
+    def test_workload_restarts_when_some_config_options_change(self):
+        """Some config options go in as cli args and require workload restart."""
+        # WHEN web_external_url is set
+        # THEN pebble service is updated
+        # AND workload is restarted
+
+        # WHEN web_external_url is changed
+        # THEN pebble service is updated
+        # AND workload is restarted
+
+        # WHEN web_external_url is unset
+        # THEN pebble service is updated
+        # AND workload is restarted
+
+        self.fail("TODO")
+
+    def test_workload_hot_reloads_when_some_config_options_change(self):
+        """Some config options go into the config file and require a reload (not restart)."""
+        # WHEN evaluation_interval is changed
+        # THEN a reload is invoked
+        # BUT pebble service is unchanged
+        # AND workload is NOT restarted
+
+        self.fail("TODO")
+
+    def test_no_restart_nor_reload_when_nothing_changes(self):
+        """When nothing changes, calling `_configure()` shouldn't result in downtime."""
+        # GIVEN a charm after initial hooks
+
+        # WHEN manually calling _configure again
+        # THEN pebble service is unchanged
+        # AND workload is NOT restarted
+        # AND no reload is invoked
+
+        # WHEN update-status is emitted
+        # THEN pebble service is unchanged
+        # AND workload is NOT restarted
+        # AND no reload is invoked
+
+        self.fail("TODO")
+
+
 @patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
@@ -619,3 +667,4 @@ class TestTlsConfig(unittest.TestCase):
         }
         self.assertEqual(tls_subset["job1"], False)
         self.assertEqual(tls_subset["job2"], True)
+
