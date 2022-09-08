@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, Optional, Tuple, cast
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -260,11 +260,7 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        prometheus_config, certs = self._prometheus_config()
-        container.push(PROMETHEUS_CONFIG, prometheus_config, make_dirs=True)
-        for filename, contents in certs.items():
-            container.push(filename, contents, make_dirs=True)
-
+        self._generate_prometheus_config(container)
         logger.info("Pushed new configuration")
 
         self._set_alerts(container)
@@ -553,12 +549,8 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _prometheus_config(self) -> Tuple[str, dict]:
-        """Construct Prometheus configuration.
-
-        Returns:
-            A 2-tuple of prometheus config file in YAML (string) format and a dict of cert per job.
-        """
+    def _generate_prometheus_config(self, container):
+        """Construct Prometheus configuration and write to filesystem."""
         prometheus_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
@@ -581,7 +573,9 @@ class PrometheusCharm(CharmBase):
                 job["tls_config"]["ca_file"] = cert_filename
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
-        return yaml.dump(prometheus_config), certs
+        container.push(PROMETHEUS_CONFIG, yaml.dump(prometheus_config), make_dirs=True)
+        for filename, contents in certs.items():
+            container.push(filename, contents, make_dirs=True)
 
     @property
     def _prometheus_version(self) -> Optional[str]:

@@ -222,7 +222,8 @@ class TestCharm(unittest.TestCase):
             },
         )
 
-        config, _ = self.harness.charm._prometheus_config()
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        config = container.pull(PROMETHEUS_CONFIG)
         prometheus_scrape_config = yaml.safe_load(config)
         for job in prometheus_scrape_config["scrape_configs"]:
             if job["job_name"] != "prometheus":
@@ -517,6 +518,7 @@ class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -530,6 +532,7 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_ca_file(self, *_):
         scrape_jobs = [
             {
@@ -571,6 +574,7 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_insecure_skip_verify(self, *_):
         scrape_jobs = [
             {
