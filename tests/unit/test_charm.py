@@ -235,11 +235,7 @@ class TestCharm(unittest.TestCase):
     @patch("prometheus_server.Prometheus.reload_configuration")
     @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
-        self.harness.container_pebble_ready("prometheus")
-
-        trigger_configuration_reload.assert_called()
-
-        self.harness.update_config({"log_level": "INFO"})
+        self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
 
 
@@ -524,6 +520,7 @@ class TestPebblePlan(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
