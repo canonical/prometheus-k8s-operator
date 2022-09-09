@@ -222,7 +222,9 @@ class TestCharm(unittest.TestCase):
             },
         )
 
-        prometheus_scrape_config = yaml.safe_load(self.harness.charm._prometheus_config())
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        config = container.pull(PROMETHEUS_CONFIG)
+        prometheus_scrape_config = yaml.safe_load(config)
         for job in prometheus_scrape_config["scrape_configs"]:
             if job["job_name"] != "prometheus":
                 self.assertIn("honor_labels", job)
@@ -509,3 +511,111 @@ class TestAlertsFilename(unittest.TestCase):
         self.assertEqual(
             {file.path for file in files}, {"/etc/prometheus/rules/juju_ZZZ_group_alerts.rules"}
         )
+
+
+@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
+class TestTlsConfig(unittest.TestCase):
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    def setUp(self, *_):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        self.rel_id = self.harness.add_relation(RELATION_NAME, "provider-app")
+        self.harness.add_relation_unit(self.rel_id, "provider-app/0")
+
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    def test_ca_file(self, *_):
+        scrape_jobs = [
+            {
+                "job_name": "job1",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {"ca_file": "CERT DATA 1"},
+            },
+            {
+                "job_name": "job2",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {"ca_file": "CERT DATA 2"},
+            },
+        ]
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app",
+            {
+                "scrape_jobs": json.dumps(scrape_jobs),
+            },
+        )
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider-app/0",
+            },
+        )
+
+        container = self.harness.charm.unit.get_container("prometheus")
+        self.assertEqual(container.pull("/etc/prometheus/job1.crt").read(), "CERT DATA 1")
+        self.assertEqual(container.pull("/etc/prometheus/job2.crt").read(), "CERT DATA 2")
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    def test_insecure_skip_verify(self, *_):
+        scrape_jobs = [
+            {
+                "job_name": "job1",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {"insecure_skip_verify": False},
+            },
+            {
+                "job_name": "job2",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {"insecure_skip_verify": True},
+            },
+        ]
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app",
+            {
+                "scrape_jobs": json.dumps(scrape_jobs),
+            },
+        )
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider-app/0",
+            },
+        )
+
+        container = self.harness.charm.unit.get_container("prometheus")
+        config_on_disk = container.pull("/etc/prometheus/prometheus.yml").read()
+        as_dict = yaml.safe_load(config_on_disk)
+        tls_subset = {
+            d["job_name"]: d["tls_config"]["insecure_skip_verify"]
+            for d in as_dict["scrape_configs"]
+            if "tls_config" in d
+        }
+        self.assertEqual(tls_subset["job1"], False)
+        self.assertEqual(tls_subset["job2"], True)

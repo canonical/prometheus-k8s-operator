@@ -260,8 +260,7 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        prometheus_config = self._prometheus_config()
-        container.push(PROMETHEUS_CONFIG, prometheus_config, make_dirs=True)
+        self._generate_prometheus_config(container)
         logger.info("Pushed new configuration")
 
         self._set_alerts(container)
@@ -550,12 +549,8 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _prometheus_config(self) -> str:
-        """Construct Prometheus configuration.
-
-        Returns:
-            Prometheus config file in YAML (string) format.
-        """
+    def _generate_prometheus_config(self, container):
+        """Construct Prometheus configuration and write to filesystem."""
         prometheus_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
@@ -567,12 +562,20 @@ class PrometheusCharm(CharmBase):
             prometheus_config["alerting"] = alerting_config
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
+        certs = {}
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
+            if (tls_config := job.get("tls_config")) and (ca_file := tls_config.get("ca_file")):
+                # Cert is transferred over relation data and needs to be written to a file on disk.
+                cert_filename = f"/etc/prometheus/{job['job_name']}.crt"
+                certs[cert_filename] = ca_file
+                job["tls_config"]["ca_file"] = cert_filename
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
-        return yaml.dump(prometheus_config)
+        container.push(PROMETHEUS_CONFIG, yaml.dump(prometheus_config), make_dirs=True)
+        for filename, contents in certs.items():
+            container.push(filename, contents, make_dirs=True)
 
     @property
     def _prometheus_version(self) -> Optional[str]:
