@@ -75,6 +75,7 @@ class PrometheusCharm(CharmBase):
 
         self._name = "prometheus"
         self._port = 9090
+        self.container = self.unit.get_container(self._name)
 
         self.service_patch = KubernetesServicePatch(
             self,
@@ -279,14 +280,12 @@ class PrometheusCharm(CharmBase):
             ),
         }
 
-        container = self.unit.get_container(self._name)
-
         if not self.resources_patch.is_ready():
             if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
                 self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
             return
 
-        if not container.can_connect():
+        if not self.container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
@@ -294,7 +293,10 @@ class PrometheusCharm(CharmBase):
             # Need to reload if config or alerts changed.
             # (Both functions need to run so cannot use the short-circuiting `or`.)
             should_reload = any(
-                [self._generate_prometheus_config(container), self._set_alerts(container)]
+                [
+                    self._generate_prometheus_config(self.container),
+                    self._set_alerts(self.container),
+                ]
             )
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", e)
@@ -302,14 +304,14 @@ class PrometheusCharm(CharmBase):
             return
 
         try:
-            should_restart = self._update_layer(container)
+            should_restart = self._update_layer(self.container)
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
             self.unit.status = early_return_statuses["layer_fail"]
             return
 
         try:
-            output, err = self._promtail_check_config(container)
+            output, err = self._promtail_check_config(self.container)
             if err:
                 logger.error(
                     "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
@@ -326,7 +328,7 @@ class PrometheusCharm(CharmBase):
                 # If a config is invalid then prometheus would exit immediately.
                 # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
                 # would be raised.
-                container.replan()
+                self.container.replan()
                 logger.info("Prometheus (re)started")
             except PebbleError as e:
                 logger.error(
@@ -521,13 +523,11 @@ class PrometheusCharm(CharmBase):
         return output, err
 
     def _on_validate_config(self, event: ActionEvent) -> None:
-        container = self.unit.get_container(self._name)
-
-        if not container.can_connect():
+        if not self.container.can_connect():
             event.fail("Could not connect to the Prometheus workload!")
             return
 
-        output, err = self._promtail_check_config(container)
+        output, err = self._promtail_check_config(self.container)
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )
@@ -703,10 +703,9 @@ class PrometheusCharm(CharmBase):
         Returns:
             A string equal to the Prometheus version.
         """
-        container = self.unit.get_container(self._name)
-        if not container.can_connect():
+        if not self.container.can_connect():
             return None
-        version_output, _ = container.exec(["/bin/prometheus", "--version"]).wait_output()
+        version_output, _ = self.container.exec(["/bin/prometheus", "--version"]).wait_output()
         # Output looks like this:
         # prometheus, version 2.33.5 (branch: ...
         result = re.search(r"version (\d*\.\d*\.\d*)", version_output)
