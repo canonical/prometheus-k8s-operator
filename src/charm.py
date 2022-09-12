@@ -311,7 +311,7 @@ class PrometheusCharm(CharmBase):
             return
 
         try:
-            output, err = self._promtail_check_config(self.container)
+            output, err = self._promtail_check_config()
             if err:
                 logger.error(
                     "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
@@ -507,14 +507,13 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
-    @staticmethod
-    def _promtail_check_config(container) -> tuple:
+    def _promtail_check_config(self) -> tuple:
         """Check config validity. Runs `promtool check config` inside the workload.
 
         Returns:
             A 2-tuple, (stdout, stderr).
         """
-        proc = container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG])
+        proc = self.container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG])
         try:
             output, err = proc.wait_output()
         except ExecError as e:
@@ -527,7 +526,7 @@ class PrometheusCharm(CharmBase):
             event.fail("Could not connect to the Prometheus workload!")
             return
 
-        output, err = self._promtail_check_config(self.container)
+        output, err = self._promtail_check_config()
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )
