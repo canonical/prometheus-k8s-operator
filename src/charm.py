@@ -44,7 +44,8 @@ from ops.charm import ActionEvent, CharmBase
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
-from ops.pebble import ChangeError, ExecError, Layer
+from ops.pebble import Error as PebbleError
+from ops.pebble import ExecError, Layer
 
 from prometheus_server import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
@@ -268,7 +269,8 @@ class PrometheusCharm(CharmBase):
             "Prometheus failed to restart (config valid?); see debug logs"
         )
         push_fail = BlockedStatus("Failed to push updated config/alert files; see debug logs")
-        early_return_status_list = [cfg_load_fail, restart_fail, push_fail]
+        layer_fail = BlockedStatus("Failed to update prometheus service; see debug logs")
+        early_return_status_list = [cfg_load_fail, restart_fail, push_fail, layer_fail]
 
         container = self.unit.get_container(self._name)
 
@@ -287,12 +289,17 @@ class PrometheusCharm(CharmBase):
             should_reload = any(
                 [self._generate_prometheus_config(container), self._set_alerts(container)]
             )
-        except ChangeError as e:
-            logger.error("Failed to push updated config/alert files:  %s", str(e))
+        except PebbleError as e:
+            logger.error("Failed to push updated config/alert files: %s", str(e))
             self.unit.status = push_fail
             return
 
-        should_restart = self._update_layer(container)
+        try:
+            should_restart = self._update_layer(container)
+        except (TypeError, PebbleError) as e:
+            logger.error("Failed to update prometheus service: %s", str(e))
+            self.unit.status = layer_fail
+            return
 
         if should_restart:
             try:
@@ -301,7 +308,7 @@ class PrometheusCharm(CharmBase):
                 # would be raised.
                 container.replan()
                 logger.info("Prometheus (re)started")
-            except ChangeError as e:
+            except PebbleError as e:
                 logger.error(
                     "Failed to replan; pebble plan: %s; %s", container.get_plan().to_dict(), str(e)
                 )
