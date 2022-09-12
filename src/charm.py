@@ -262,15 +262,22 @@ class PrometheusCharm(CharmBase):
         line arguments). If the Pebble layer has changed then Prometheus
         is restarted.
         """
-        cfg_load_fail = BlockedStatus(
-            "Prometheus failed to reload the configuration (WAL replay or ingress may be in progress); see debug logs"
-        )
-        restart_fail = BlockedStatus(
-            "Prometheus failed to restart (config valid?); see debug logs"
-        )
-        push_fail = BlockedStatus("Failed to push updated config/alert files; see debug logs")
-        layer_fail = BlockedStatus("Failed to update prometheus service; see debug logs")
-        early_return_status_list = [cfg_load_fail, restart_fail, push_fail, layer_fail]
+        early_return_statuses = {
+            "cfg_load_fail": BlockedStatus(
+                "Prometheus failed to reload the configuration (WAL replay or ingress may be in progress); see debug logs"
+            ),
+            "restart_fail": BlockedStatus(
+                "Prometheus failed to restart (config valid?); see debug logs"
+            ),
+            "push_fail": BlockedStatus(
+                "Failed to push updated config/alert files; see debug logs"
+            ),
+            "layer_fail": BlockedStatus("Failed to update prometheus service; see debug logs"),
+            "config_invalid": BlockedStatus("Invalid prometheus configuration; see debug logs"),
+            "validation_fail": BlockedStatus(
+                "Failed to validate prometheus config; see debug logs"
+            ),
+        }
 
         container = self.unit.get_container(self._name)
 
@@ -291,14 +298,27 @@ class PrometheusCharm(CharmBase):
             )
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", str(e))
-            self.unit.status = push_fail
+            self.unit.status = early_return_statuses["push_fail"]
             return
 
         try:
             should_restart = self._update_layer(container)
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", str(e))
-            self.unit.status = layer_fail
+            self.unit.status = early_return_statuses["layer_fail"]
+            return
+
+        try:
+            output, err = self._promtail_check_config(container)
+            if err:
+                logger.error(
+                    "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
+                )
+                self.unit.status = early_return_statuses["config_invalid"]
+                return
+        except PebbleError as e:
+            logger.error("Failed to validate prometheus config: %s", e)
+            self.unit.status = early_return_statuses["validation_fail"]
             return
 
         if should_restart:
@@ -310,21 +330,28 @@ class PrometheusCharm(CharmBase):
                 logger.info("Prometheus (re)started")
             except PebbleError as e:
                 logger.error(
-                    "Failed to replan; pebble plan: %s; %s", container.get_plan().to_dict(), str(e)
+                    "Failed to replan; pebble layer: %s; %s",
+                    self._prometheus_layer.to_dict(),
+                    str(e),
                 )
-                self.unit.status = restart_fail
+                self.unit.status = early_return_statuses["restart_fail"]
                 return
 
         elif should_reload:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
-                logger.error(cfg_load_fail.message)
-                self.unit.status = cfg_load_fail
+                logger.error(
+                    "Prometheus failed to reload the configuration (WAL replay or ingress may be in progress)"
+                )
+                self.unit.status = early_return_statuses["cfg_load_fail"]
                 return
 
             logger.info("Prometheus configuration reloaded")
 
-        if self.unit.status in early_return_status_list:
+        if (
+            isinstance(self.unit.status, BlockedStatus)
+            and self.unit.status not in early_return_statuses.values()
+        ):
             return
 
         self.remote_write_provider.update_endpoint()
@@ -478,23 +505,29 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
+    @staticmethod
+    def _promtail_check_config(container) -> tuple:
+        """Check config validity. Runs `promtool check config` inside the workload.
+
+        Returns:
+            A 2-tuple, (stdout, stderr).
+        """
+        proc = container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG])
+        try:
+            output, err = proc.wait_output()
+        except ExecError as e:
+            output, err = e.stdout, e.stderr
+
+        return output, err
+
     def _on_validate_config(self, event: ActionEvent) -> None:
-        """Runs `promtool check config` inside the workload."""
         container = self.unit.get_container(self._name)
 
         if not container.can_connect():
             event.fail("Could not connect to the Prometheus workload!")
             return
 
-        proc = container.exec(
-            ["/usr/bin/promtool", "check", "config", "/etc/prometheus/prometheus.yml"]
-        )
-        output = err = ""
-        try:
-            output, err = proc.wait_output()
-        except ExecError as e:
-            output, err = e.stdout, e.stderr
-
+        output, err = self._promtail_check_config(container)
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )

@@ -8,7 +8,12 @@ import unittest
 from unittest.mock import Mock, patch
 
 import ops
-from helpers import FakeProcessVersionCheck, k8s_resource_multipatch, patch_network_get
+from helpers import (
+    ExecMock,
+    k8s_resource_multipatch,
+    patch_network_get,
+    prom_multipatch,
+)
 from ops.model import ActiveStatus, BlockedStatus, Container
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
@@ -20,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @patch("charm.KubernetesServicePatch", lambda x, y: None)
+@prom_multipatch
 class TestActiveStatus(unittest.TestCase):
     """Feature: Charm's status should reflect the correctness of the config / relations.
 
@@ -48,7 +54,7 @@ class TestActiveStatus(unittest.TestCase):
     @patch_network_get()
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
@@ -71,7 +77,7 @@ class TestActiveStatus(unittest.TestCase):
     @patch_network_get()
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_unit_is_blocked_if_reload_configuration_fails(self, *unused):
         """Scenario: Unit is deployed but reload configuration fails."""
         # GIVEN reload configuration fails

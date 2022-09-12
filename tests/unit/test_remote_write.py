@@ -15,7 +15,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from helpers import FakeProcessVersionCheck, k8s_resource_multipatch, patch_network_get
+from helpers import ExecMock, k8s_resource_multipatch, patch_network_get
 from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus, Container
@@ -235,7 +235,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch_network_get()
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
@@ -275,7 +275,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch_network_get()
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_address_is_updated_on_upgrade(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")

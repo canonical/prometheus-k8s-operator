@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import ops
 import yaml
-from helpers import FakeProcessVersionCheck, k8s_resource_multipatch
+from helpers import ExecMock, k8s_resource_multipatch, prom_multipatch
 from ops.model import Container
 from ops.testing import Harness
 
@@ -29,11 +29,12 @@ SCRAPE_METADATA = {
 }
 
 
+@prom_multipatch
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -191,6 +192,7 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    @prom_multipatch
     def test_global_evaluation_interval_can_be_set(self, *unused):
         evalint_config = {}
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
@@ -233,7 +235,7 @@ class TestCharm(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
         self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
@@ -285,7 +287,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
@@ -307,7 +309,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)
@@ -325,6 +327,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")
 
 
+@prom_multipatch
 class TestAlertsFilename(unittest.TestCase):
     REMOTE_SCRAPE_METADATA = {
         "model": "remote-model",
@@ -397,7 +400,7 @@ class TestAlertsFilename(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -513,6 +516,7 @@ def raise_if_called(*_, **__):
     raise RuntimeError("This should not have been called")
 
 
+@prom_multipatch
 class TestPebblePlan(unittest.TestCase):
     """Test the pebble plan is kept up-to-date (situational awareness)."""
 
@@ -520,7 +524,7 @@ class TestPebblePlan(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -688,7 +692,7 @@ class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -702,7 +706,7 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_ca_file(self, *_):
         scrape_jobs = [
             {
@@ -744,7 +748,7 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @patch.object(Container, "exec", new=ExecMock)
     def test_insecure_skip_verify(self, *_):
         scrape_jobs = [
             {

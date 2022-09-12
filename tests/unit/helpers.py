@@ -35,9 +35,16 @@ k8s_resource_multipatch = patch.multiple(
 )
 
 
-class FakeProcessVersionCheck:
+class ExecMock:
     def __init__(self, args):
         pass
 
     def wait_output(self):
-        return ("version 0.1.0", "")
+        return ("stdout", "")
+
+
+prom_multipatch = patch.multiple(
+    "charm.PrometheusCharm",
+    _promtail_check_config=lambda *_: ("stdout", ""),
+    _prometheus_version="0.1.0",
+)
