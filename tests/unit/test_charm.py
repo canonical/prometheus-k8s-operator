@@ -10,8 +10,7 @@ from unittest.mock import patch
 
 import ops
 import yaml
-from helpers import ExecMock, k8s_resource_multipatch, prom_multipatch
-from ops.model import Container
+from helpers import k8s_resource_multipatch, prom_multipatch
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -34,7 +33,7 @@ class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=ExecMock)
+    @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -235,7 +234,6 @@ class TestCharm(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration")
-    @patch.object(Container, "exec", new=ExecMock)
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
         self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
@@ -273,6 +271,7 @@ def cli_arg(plan, cli_opt):
     return None
 
 
+@prom_multipatch
 class TestConfigMaximumRetentionSize(unittest.TestCase):
     """Test the config.yaml option 'maximum_retention_size'."""
 
@@ -287,7 +286,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=ExecMock)
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
@@ -309,7 +307,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=ExecMock)
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)
@@ -400,7 +397,7 @@ class TestAlertsFilename(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=ExecMock)
+    @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -524,7 +521,7 @@ class TestPebblePlan(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=ExecMock)
+    @prom_multipatch
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -688,11 +685,12 @@ class TestPebblePlan(unittest.TestCase):
 
 
 @patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
+@prom_multipatch
 class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=ExecMock)
+    @prom_multipatch
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -706,7 +704,6 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=ExecMock)
     def test_ca_file(self, *_):
         scrape_jobs = [
             {
@@ -748,7 +745,6 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=ExecMock)
     def test_insecure_skip_verify(self, *_):
         scrape_jobs = [
             {
