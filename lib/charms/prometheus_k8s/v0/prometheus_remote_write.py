@@ -868,7 +868,7 @@ class PrometheusRemoteWriteProvider(Object):
         The value of the `groups` key is such that it may be used to generate
         a Prometheus alert rules file directly using `yaml.dump` but the
         `groups` key itself must be included as this is required by Prometheus,
-        for example as in `yaml.dump({"groups": alerts["groups"]})`.
+        for example as in `yaml.safe_dump({"groups": alerts["groups"]})`.
 
         The `PrometheusRemoteWriteProvider` accepts a list of rules and these
         rules are all placed into one group.

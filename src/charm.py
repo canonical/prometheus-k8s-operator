@@ -440,7 +440,7 @@ class PrometheusCharm(CharmBase):
             filename = "juju_" + topology_identifier + ".rules"
             path = os.path.join(RULES_DIR, filename)
 
-            rules = yaml.dump(rules_file)
+            rules = yaml.safe_dump(rules_file)
 
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
@@ -680,13 +680,15 @@ class PrometheusCharm(CharmBase):
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         # Check if config changed, using its hash
-        config_hash = sha256(yaml.dump({"prometheus_config": prometheus_config, "certs": certs}))
+        config_hash = sha256(
+            yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
+        )
         if config_hash == self._stored.config_hash:
             return False
 
         logger.debug("Prometheus config changed")
 
-        container.push(PROMETHEUS_CONFIG, yaml.dump(prometheus_config), make_dirs=True)
+        container.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config), make_dirs=True)
         for filename, contents in certs.items():
             container.push(filename, contents, make_dirs=True)
 
