@@ -789,4 +789,3 @@ class TestTlsConfig(unittest.TestCase):
         }
         self.assertEqual(tls_subset["job1"], False)
         self.assertEqual(tls_subset["job2"], True)
-

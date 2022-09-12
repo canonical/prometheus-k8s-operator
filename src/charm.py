@@ -284,7 +284,9 @@ class PrometheusCharm(CharmBase):
         try:
             # Need to reload if config or alerts changed.
             # (Both functions need to run so cannot use the short-circuiting `or`.)
-            should_reload = any([self._update_config(container), self._set_alerts(container)])
+            should_reload = any(
+                [self._generate_prometheus_config(container), self._set_alerts(container)]
+            )
         except ChangeError as e:
             logger.error("Failed to push updated config/alert files:  %s", str(e))
             self.unit.status = push_fail
@@ -340,7 +342,7 @@ class PrometheusCharm(CharmBase):
 
         Returns a boolean indicating if a new configuration was pushed.
         """
-        config = self._prometheus_config()
+        config = self._generate_prometheus_config(container)
         config_hash = sha256(config)
 
         if config_hash == self._stored.config_hash:
@@ -610,8 +612,11 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _generate_prometheus_config(self, container):
-        """Construct Prometheus configuration and write to filesystem."""
+    def _generate_prometheus_config(self, container) -> bool:
+        """Construct Prometheus configuration and write to filesystem.
+
+        Returns a boolean indicating if a new configuration was pushed.
+        """
         prometheus_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
@@ -634,9 +639,20 @@ class PrometheusCharm(CharmBase):
                 job["tls_config"]["ca_file"] = cert_filename
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
+        # Check if config changed, using its hash
+        config_hash = sha256(yaml.dump({"prometheus_config": prometheus_config, "certs": certs}))
+        if config_hash == self._stored.config_hash:
+            return False
+
+        logger.debug("Prometheus config changed")
+
         container.push(PROMETHEUS_CONFIG, yaml.dump(prometheus_config), make_dirs=True)
         for filename, contents in certs.items():
             container.push(filename, contents, make_dirs=True)
+
+        self._stored.config_hash = config_hash
+        logger.info("Pushed new configuration")
+        return True
 
     @property
     def _prometheus_version(self) -> Optional[str]:
