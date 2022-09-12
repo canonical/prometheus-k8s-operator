@@ -4,9 +4,9 @@
 """Helper for interacting with Prometheus throughout the charm's lifecycle."""
 
 import logging
-import requests
 from urllib.parse import urljoin
 
+import requests
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
 
 logger = logging.getLogger(__name__)
