@@ -40,6 +40,10 @@ $ juju relate kube-state-metrics prometheus-k8s
 In a similar manner any charm that exposes a scrape target may be
 related to the Prometheus charm.
 
+> Note: At present it is expected that all relations the Prometheus Operator 
+> partakes in are within the same Juju model. For alternative, please set up a 
+> grafana agent in the remote model and use `remote_write` to get metrics into Prometheus.
+
 ## Dashboard
 
 The Prometheus dashboard may be accessed at a configurable port (default: `9090`) 
