@@ -297,14 +297,14 @@ class PrometheusCharm(CharmBase):
                 [self._generate_prometheus_config(container), self._set_alerts(container)]
             )
         except PebbleError as e:
-            logger.error("Failed to push updated config/alert files: %s", str(e))
+            logger.error("Failed to push updated config/alert files: %s", e)
             self.unit.status = early_return_statuses["push_fail"]
             return
 
         try:
             should_restart = self._update_layer(container)
         except (TypeError, PebbleError) as e:
-            logger.error("Failed to update prometheus service: %s", str(e))
+            logger.error("Failed to update prometheus service: %s", e)
             self.unit.status = early_return_statuses["layer_fail"]
             return
 
@@ -332,7 +332,7 @@ class PrometheusCharm(CharmBase):
                 logger.error(
                     "Failed to replan; pebble layer: %s; %s",
                     self._prometheus_layer.to_dict(),
-                    str(e),
+                    e,
                 )
                 self.unit.status = early_return_statuses["restart_fail"]
                 return
