@@ -37,6 +37,6 @@ k8s_resource_multipatch = patch.multiple(
 
 prom_multipatch = patch.multiple(
     "charm.PrometheusCharm",
-    _promtail_check_config=lambda *_: ("stdout", ""),
+    _promtool_check_config=lambda *_: ("stdout", ""),
     _prometheus_version="0.1.0",
 )
