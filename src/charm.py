@@ -265,7 +265,7 @@ class PrometheusCharm(CharmBase):
         """
         early_return_statuses = {
             "cfg_load_fail": BlockedStatus(
-                "Prometheus failed to reload the configuration (WAL replay or ingress may be in progress); see debug logs"
+                "Prometheus failed to reload the configuration (WAL replay or ingress in progress?); see debug logs"
             ),
             "restart_fail": BlockedStatus(
                 "Prometheus failed to restart (config valid?); see debug logs"
@@ -343,7 +343,7 @@ class PrometheusCharm(CharmBase):
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
                 logger.error(
-                    "Prometheus failed to reload the configuration (WAL replay or ingress may be in progress)"
+                    "Prometheus failed to reload the configuration (WAL replay or ingress in progress?)"
                 )
                 self.unit.status = early_return_statuses["cfg_load_fail"]
                 return
@@ -403,6 +403,11 @@ class PrometheusCharm(CharmBase):
     def _update_status(self, event):
         """Fired intermittently by the Juju agent."""
         self.unit.set_workload_version(self._prometheus_server.version())
+
+        # Unit could still be blocked if a reload failed (e.g. during WAL replay or ingress not
+        # yet ready). Calling `_configure` to recover.
+        if self.unit.status != ActiveStatus():
+            self._configure(event)
 
     def _set_alerts(self, container) -> bool:
         """Create alert rule files for all Prometheus consumers.
