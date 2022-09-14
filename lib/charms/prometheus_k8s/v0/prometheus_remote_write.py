@@ -504,7 +504,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     ```
     requires:
-        receive-remote-write:  # Relation name
+        send-remote-write:  # Relation name
             interface: prometheus_remote_write  # Relation interface
     ```
 
@@ -526,7 +526,7 @@ class PrometheusRemoteWriteConsumer(Object):
     metadata settings).
 
     Then, inside the logic of `_handle_endpoints_changed`, the updated endpoint list is
-    retrieved with with:
+    retrieved with:
 
     ```
     self.remote_write_consumer.endpoints
@@ -535,7 +535,7 @@ class PrometheusRemoteWriteConsumer(Object):
     which returns a dictionary structured like the Prometheus configuration object (see
     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
-    Regarding the default relation name, `receive-remote-write`: if you choose to change it,
+    Regarding the default relation name, `send-remote-write`: if you choose to change it,
     you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
     `relation_name` constructor argument. (The relation interface, on the other hand, is
     fixed and, if you were to change it, your charm would not be able to relate with other
@@ -810,7 +810,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         This method should be used when the charm relying on this library needs
         to update the relation data in response to something occurring outside
-        of the `prometheus_remote_write` relation lifecycle, e.g., in case of a
+        the `prometheus_remote_write` relation lifecycle, e.g., in case of a
         host address change because the charmed operator becomes connected to an
         Ingress after the `prometheus_remote_write` relation is established.
 
@@ -854,9 +854,9 @@ class PrometheusRemoteWriteProvider(Object):
         executed. This method returns all the alert rules provided by each
         related metrics provider charm. These rules may be used to generate a
         separate alert rules file for each relation since the returned list
-        of alert groups are indexed by relation ID. Also for each relation ID
+        of alert groups are indexed by relation ID. Also, for each relation ID
         associated scrape metadata such as Juju model, UUID and application
-        name are provided so the a unique name may be generated for the rules
+        name are provided so the unique name may be generated for the rules
         file. For each relation the structure of data returned is a dictionary
         with four keys
 
@@ -894,7 +894,7 @@ class PrometheusRemoteWriteProvider(Object):
             tool = CosTool(self._charm)
             for group in alert_rules["groups"]:
 
-                # Copy off rules so we don't modify an object we're iterating over
+                # Copy off rules, so we don't modify an object we're iterating over
                 rules = group["rules"]
                 for idx, alert_rule in enumerate(rules):
                     labels = alert_rule.get("labels")
