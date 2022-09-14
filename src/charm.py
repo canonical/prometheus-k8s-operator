@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
+import hashlib
 import logging
 import os
 import re
@@ -40,28 +41,41 @@ from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
+from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
-from ops.pebble import ChangeError, ExecError, Layer
+from ops.pebble import Error as PebbleError
+from ops.pebble import ExecError, Layer
 
 from prometheus_server import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
-CORRUPT_PROMETHEUS_CONFIG_MESSAGE = "Failed to load Prometheus config"
 
 logger = logging.getLogger(__name__)
+
+
+def sha256(hashable) -> str:
+    """Use instead of the builtin hash() for repeatable values."""
+    if isinstance(hashable, str):
+        hashable = hashable.encode("utf-8")
+    return hashlib.sha256(hashable).hexdigest()
 
 
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
+    _stored = StoredState()
+
     def __init__(self, *args):
         super().__init__(*args)
 
+        self._stored.set_default(config_hash=None, alerts_hash=None)
+
         self._name = "prometheus"
         self._port = 9090
+        self.container = self.unit.get_container(self._name)
 
         self.service_patch = KubernetesServicePatch(
             self,
@@ -249,52 +263,96 @@ class PrometheusCharm(CharmBase):
         line arguments). If the Pebble layer has changed then Prometheus
         is restarted.
         """
-        container = self.unit.get_container(self._name)
+        early_return_statuses = {
+            "cfg_load_fail": BlockedStatus(
+                "Prometheus failed to reload the configuration (WAL replay or ingress in progress?); see debug logs"
+            ),
+            "restart_fail": BlockedStatus(
+                "Prometheus failed to restart (config valid?); see debug logs"
+            ),
+            "push_fail": BlockedStatus(
+                "Failed to push updated config/alert files; see debug logs"
+            ),
+            "layer_fail": BlockedStatus("Failed to update prometheus service; see debug logs"),
+            "config_invalid": BlockedStatus("Invalid prometheus configuration; see debug logs"),
+            "validation_fail": BlockedStatus(
+                "Failed to validate prometheus config; see debug logs"
+            ),
+        }
 
         if not self.resources_patch.is_ready():
             if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
                 self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
             return
 
-        if not container.can_connect():
+        if not self.container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        self._generate_prometheus_config(container)
-        logger.info("Pushed new configuration")
+        try:
+            # Need to reload if config or alerts changed.
+            # (Both functions need to run so cannot use the short-circuiting `or`.)
+            should_reload = any(
+                [
+                    self._generate_prometheus_config(self.container),
+                    self._set_alerts(self.container),
+                ]
+            )
+        except PebbleError as e:
+            logger.error("Failed to push updated config/alert files: %s", e)
+            self.unit.status = early_return_statuses["push_fail"]
+            return
 
-        self._set_alerts(container)
+        try:
+            should_restart = self._update_layer(self.container)
+        except (TypeError, PebbleError) as e:
+            logger.error("Failed to update prometheus service: %s", e)
+            self.unit.status = early_return_statuses["layer_fail"]
+            return
 
-        current_services = container.get_plan().services
-        new_layer = self._prometheus_layer
-
-        if current_services == new_layer.services:
-            reloaded = self._prometheus_server.reload_configuration()
-            if not reloaded:
-                logger.error("Prometheus failed to reload the configuration")
-                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
+        try:
+            output, err = self._promtool_check_config()
+            if err:
+                logger.error(
+                    "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
+                )
+                self.unit.status = early_return_statuses["config_invalid"]
                 return
+        except PebbleError as e:
+            logger.error("Failed to validate prometheus config: %s", e)
+            self.unit.status = early_return_statuses["validation_fail"]
+            return
 
-            logger.info("Prometheus configuration reloaded")
-
-        else:
-            container.add_layer(self._name, new_layer, combine=True)
+        if should_restart:
             try:
                 # If a config is invalid then prometheus would exit immediately.
                 # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
                 # would be raised.
-                container.replan()
+                self.container.replan()
                 logger.info("Prometheus (re)started")
-            except ChangeError as e:
+            except PebbleError as e:
                 logger.error(
-                    "Failed to replan; pebble plan: %s; %s", container.get_plan().to_dict(), str(e)
+                    "Failed to replan; pebble layer: %s; %s",
+                    self._prometheus_layer.to_dict(),
+                    e,
                 )
-                self.unit.status = BlockedStatus(CORRUPT_PROMETHEUS_CONFIG_MESSAGE)
+                self.unit.status = early_return_statuses["restart_fail"]
                 return
+
+        elif should_reload:
+            reloaded = self._prometheus_server.reload_configuration()
+            if not reloaded:
+                logger.error(
+                    "Prometheus failed to reload the configuration (WAL replay or ingress in progress?)"
+                )
+                self.unit.status = early_return_statuses["cfg_load_fail"]
+                return
+
+            logger.info("Prometheus configuration reloaded")
 
         if (
             isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status.message != CORRUPT_PROMETHEUS_CONFIG_MESSAGE
+            and self.unit.status not in early_return_statuses.values()
         ):
             return
 
@@ -315,18 +373,64 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Alertmanager version."
             )
 
-    def _set_alerts(self, container):
+    def _update_config(self, container) -> bool:
+        """Pushes new config, if needed.
+
+        Returns a boolean indicating if a new configuration was pushed.
+        """
+        config = self._generate_prometheus_config(container)
+        config_hash = sha256(config)
+
+        if config_hash == self._stored.config_hash:
+            return False
+
+        logger.debug("Prometheus config changed")
+        container.push(PROMETHEUS_CONFIG, config, make_dirs=True)
+        self._stored.config_hash = config_hash
+        logger.info("Pushed new configuration")
+        return True
+
+    def _update_layer(self, container) -> bool:
+        current_services = container.get_plan().services
+        new_layer = self._prometheus_layer
+
+        if current_services == new_layer.services:
+            return False
+
+        container.add_layer(self._name, new_layer, combine=True)
+        return True
+
+    def _update_status(self, event):
+        """Fired intermittently by the Juju agent."""
+        self.unit.set_workload_version(self._prometheus_server.version())
+
+        # Unit could still be blocked if a reload failed (e.g. during WAL replay or ingress not
+        # yet ready). Calling `_configure` to recover.
+        if self.unit.status != ActiveStatus():
+            self._configure(event)
+
+    def _set_alerts(self, container) -> bool:
         """Create alert rule files for all Prometheus consumers.
 
         Args:
             container: the Prometheus workload container into which
                 alert rule files need to be created. This container
                 must be in a pebble ready state.
-        """
-        container.remove_path(RULES_DIR, recursive=True)
 
+        Returns: A boolean indicating if new alert rules were pushed.
+        """
+        metrics_consumer_alerts = self.metrics_consumer.alerts()
+        remote_write_alerts = self.remote_write_provider.alerts()
+
+        alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
+        if alerts_hash == self._stored.alerts_hash:
+            return False
+
+        container.remove_path(RULES_DIR, recursive=True)
         self._push_alert_rules(container, self.metrics_consumer.alerts())
         self._push_alert_rules(container, self.remote_write_provider.alerts())
+        self._stored.alerts_hash = alerts_hash
+        return True
 
     def _push_alert_rules(self, container, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
@@ -343,7 +447,7 @@ class PrometheusCharm(CharmBase):
             filename = f"juju_{topology_identifier}.rules"
             path = os.path.join(RULES_DIR, filename)
 
-            rules = yaml.dump(rules_file)
+            rules = yaml.safe_dump(rules_file)
 
             container.push(path, rules, make_dirs=True)
             logger.debug("Updated alert rules file %s", filename)
@@ -408,22 +512,26 @@ class PrometheusCharm(CharmBase):
 
         return " ".join(command)
 
-    def _on_validate_config(self, event: ActionEvent) -> None:
-        """Runs `promtool check config` inside the workload."""
-        container = self.unit.get_container(self._name)
+    def _promtool_check_config(self) -> tuple:
+        """Check config validity. Runs `promtool check config` inside the workload.
 
-        if not container.can_connect():
-            event.fail("Could not connect to the Prometheus workload!")
-            return
-
-        proc = container.exec(
-            ["/usr/bin/promtool", "check", "config", "/etc/prometheus/prometheus.yml"]
-        )
+        Returns:
+            A 2-tuple, (stdout, stderr).
+        """
+        proc = self.container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG])
         try:
             output, err = proc.wait_output()
         except ExecError as e:
             output, err = e.stdout, e.stderr
 
+        return output, err
+
+    def _on_validate_config(self, event: ActionEvent) -> None:
+        if not self.container.can_connect():
+            event.fail("Could not connect to the Prometheus workload!")
+            return
+
+        output, err = self._promtool_check_config()
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
         )
@@ -548,8 +656,11 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
-    def _generate_prometheus_config(self, container):
-        """Construct Prometheus configuration and write to filesystem."""
+    def _generate_prometheus_config(self, container) -> bool:
+        """Construct Prometheus configuration and write to filesystem.
+
+        Returns a boolean indicating if a new configuration was pushed.
+        """
         prometheus_config = {
             "global": self._prometheus_global_config(),
             "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
@@ -572,9 +683,22 @@ class PrometheusCharm(CharmBase):
                 job["tls_config"]["ca_file"] = cert_filename
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
-        container.push(PROMETHEUS_CONFIG, yaml.dump(prometheus_config), make_dirs=True)
+        # Check if config changed, using its hash
+        config_hash = sha256(
+            yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
+        )
+        if config_hash == self._stored.config_hash:
+            return False
+
+        logger.debug("Prometheus config changed")
+
+        container.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config), make_dirs=True)
         for filename, contents in certs.items():
             container.push(filename, contents, make_dirs=True)
+
+        self._stored.config_hash = config_hash
+        logger.info("Pushed new configuration")
+        return True
 
     @property
     def _prometheus_version(self) -> Optional[str]:
@@ -583,10 +707,9 @@ class PrometheusCharm(CharmBase):
         Returns:
             A string equal to the Prometheus version.
         """
-        container = self.unit.get_container(self._name)
-        if not container.can_connect():
+        if not self.container.can_connect():
             return None
-        version_output, _ = container.exec(["/bin/prometheus", "--version"]).wait_output()
+        version_output, _ = self.container.exec(["/bin/prometheus", "--version"]).wait_output()
         # Output looks like this:
         # prometheus, version 2.33.5 (branch: ...
         result = re.search(r"version (\d*\.\d*\.\d*)", version_output)

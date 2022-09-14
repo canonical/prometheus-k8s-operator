@@ -10,8 +10,7 @@ from unittest.mock import patch
 
 import ops
 import yaml
-from helpers import FakeProcessVersionCheck, k8s_resource_multipatch
-from ops.model import Container
+from helpers import k8s_resource_multipatch, prom_multipatch
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -29,11 +28,12 @@ SCRAPE_METADATA = {
 }
 
 
+@prom_multipatch
 class TestCharm(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -191,6 +191,7 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    @prom_multipatch
     def test_global_evaluation_interval_can_be_set(self, *unused):
         evalint_config = {}
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
@@ -233,13 +234,8 @@ class TestCharm(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
-        self.harness.container_pebble_ready("prometheus")
-
-        trigger_configuration_reload.assert_called()
-
-        self.harness.update_config({"log_level": "INFO"})
+        self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
 
 
@@ -275,6 +271,7 @@ def cli_arg(plan, cli_opt):
     return None
 
 
+@prom_multipatch
 class TestConfigMaximumRetentionSize(unittest.TestCase):
     """Test the config.yaml option 'maximum_retention_size'."""
 
@@ -289,7 +286,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
@@ -311,7 +307,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
         """The `--storage.tsdb.retention.size` arg must be multiplied by maximum_retention_size."""
         # GIVEN a capacity limit in binary notation (k8s notation)
@@ -329,6 +324,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")
 
 
+@prom_multipatch
 class TestAlertsFilename(unittest.TestCase):
     REMOTE_SCRAPE_METADATA = {
         "model": "remote-model",
@@ -401,7 +397,7 @@ class TestAlertsFilename(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -513,12 +509,188 @@ class TestAlertsFilename(unittest.TestCase):
         )
 
 
+def raise_if_called(*_, **__):
+    raise RuntimeError("This should not have been called")
+
+
+@prom_multipatch
+class TestPebblePlan(unittest.TestCase):
+    """Test the pebble plan is kept up-to-date (situational awareness)."""
+
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @prom_multipatch
+    def setUp(self, *_):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.harness.set_model_name(self.__class__.__name__)
+        self.mock_capacity.return_value = "1Gi"
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+
+        self.container_name = self.harness.charm._name
+        self.container = self.harness.charm.unit.get_container(self.container_name)
+
+    @property
+    def plan(self):
+        return self.harness.get_container_pebble_plan("prometheus")
+
+    @property
+    def service(self):
+        return self.container.get_service("prometheus")
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch.multiple(
+        "ops.testing._TestingPebbleClient",
+        autostart_services=raise_if_called,
+        replan_services=raise_if_called,
+        start_services=raise_if_called,
+        stop_services=raise_if_called,
+        restart_services=raise_if_called,
+    )
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_no_restart_nor_reload_when_nothing_changes(self, reload_config_patch, *_):
+        """When nothing changes, calling `_configure()` shouldn't result in downtime."""
+        # GIVEN a pebble plan
+        initial_plan = self.plan
+        self.assertTrue(self.service.is_running())
+
+        for trigger in [
+            lambda: self.harness.charm._configure(None),
+            self.harness.charm.on.update_status.emit,
+        ]:
+            with self.subTest(trigger=trigger):
+                # WHEN manually calling _configure or emitting update-status
+                trigger()
+
+                # THEN pebble service is unchanged
+                current_plan = self.plan
+                self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
+                self.assertTrue(self.service.is_running())
+
+                # AND workload (re)start is NOT attempted
+                # (Patched pebble client would raise if (re)start was attempted.
+                # Nothing else to do here.)
+
+                # AND reload is not invoked
+                reload_config_patch.assert_not_called()
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("socket.getfqdn", new=lambda *args: "fqdn")
+    @patch("ops.testing._TestingPebbleClient.replan_services")
+    @patch("ops.testing._TestingPebbleClient.start_services")
+    @patch("ops.testing._TestingPebbleClient.restart_services")
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_workload_restarts_when_some_config_options_change(
+        self, reload_config, restart, start, replan, *_
+    ):
+        """Some config options go in as cli args and require workload restart."""
+        # GIVEN a pebble plan
+        first_plan = self.plan
+        self.assertTrue(self.service.is_running())
+
+        # WHEN web_external_url is set
+        self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
+
+        # THEN pebble service is updated
+        second_plan = self.plan
+        self.assertEqual(cli_arg(second_plan, "--web.external-url"), "http://test:80/foo/bar")
+        self.assertNotEqual(first_plan.to_dict(), second_plan.to_dict())
+
+        # AND workload is restarted
+        self.assertTrue(self.service.is_running())
+        self.assertTrue(restart.called or start.called or replan.called)
+        restart.reset_mock()
+        start.reset_mock()
+        replan.reset_mock()
+
+        # BUT reload is not invoked
+        reload_config.assert_not_called()
+
+        # WHEN web_external_url is changed
+        self.harness.update_config({"web_external_url": "http://test:80/foo/bar/baz"})
+
+        # THEN pebble service is updated
+        third_plan = self.plan
+        self.assertEqual(cli_arg(third_plan, "--web.external-url"), "http://test:80/foo/bar/baz")
+        self.assertNotEqual(second_plan.to_dict(), third_plan.to_dict())
+
+        # AND workload is restarted
+        self.assertTrue(self.service.is_running())
+        self.assertTrue(restart.called or start.called or replan.called)
+        restart.reset_mock()
+        start.reset_mock()
+        replan.reset_mock()
+
+        # BUT reload is not invoked
+        reload_config.assert_not_called()
+
+        # WHEN web_external_url is unset
+        self.harness.update_config(unset=["web_external_url"])
+
+        # THEN pebble service is updated
+        fourth_plan = self.plan
+        self.assertEqual(cli_arg(fourth_plan, "--web.external-url"), "http://fqdn:9090")
+        self.assertNotEqual(third_plan.to_dict(), fourth_plan.to_dict())
+
+        # AND workload is restarted
+        self.assertTrue(self.service.is_running())
+        self.assertTrue(restart.called or start.called or replan.called)
+        restart.reset_mock()
+        start.reset_mock()
+        replan.reset_mock()
+
+        # BUT reload is not invoked
+        reload_config.assert_not_called()
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch.multiple(
+        "ops.testing._TestingPebbleClient",
+        autostart_services=raise_if_called,
+        replan_services=raise_if_called,
+        start_services=raise_if_called,
+        stop_services=raise_if_called,
+        restart_services=raise_if_called,
+    )
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_workload_hot_reloads_when_some_config_options_change(self, reload_config_patch, *_):
+        """Some config options go into the config file and require a reload (not restart)."""
+        # GIVEN a pebble plan
+        initial_plan = self.plan
+        self.assertTrue(self.service.is_running())
+
+        # WHEN evaluation_interval is changed
+        self.harness.update_config(unset=["evaluation_interval"])
+        self.harness.update_config({"evaluation_interval": "1234s"})
+
+        # THEN a reload is invoked
+        reload_config_patch.assert_called()
+
+        # BUT pebble service is unchanged
+        current_plan = self.plan
+        self.assertEqual(initial_plan.to_dict(), current_plan.to_dict())
+        self.assertTrue(self.service.is_running())
+
+        # AND workload (re)start is NOT attempted
+        # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
+
+
 @patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
+@prom_multipatch
 class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
+    @prom_multipatch
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
         self.addCleanup(self.harness.cleanup)
@@ -532,7 +704,6 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_ca_file(self, *_):
         scrape_jobs = [
             {
@@ -574,7 +745,6 @@ class TestTlsConfig(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
-    @patch.object(Container, "exec", new=FakeProcessVersionCheck)
     def test_insecure_skip_verify(self, *_):
         scrape_jobs = [
             {

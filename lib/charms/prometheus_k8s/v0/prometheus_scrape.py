@@ -922,7 +922,7 @@ class MetricsEndpointConsumer(Object):
         for topology_identifier, alert_rule_groups in self.metrics_consumer.alerts().items():
             filename = "juju_" + topology_identifier + ".rules"
             path = os.path.join(PROMETHEUS_RULES_DIR, filename)
-            rules = yaml.dump(alert_rule_groups)
+            rules = yaml.safe_dump(alert_rule_groups)
             container.push(path, rules, make_dirs=True)
         ```
 
