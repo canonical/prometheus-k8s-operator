@@ -6,7 +6,7 @@
 import logging
 from urllib.parse import urljoin
 
-from requests import get, post
+import requests
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class Prometheus:
         """
         url = urljoin(self.base_url, "-/reload")
         try:
-            response = post(url, timeout=self.api_timeout)
+            response = requests.post(url, timeout=self.api_timeout)
 
             if response.status_code == 200:
                 return True
@@ -81,7 +81,7 @@ class Prometheus:
         url = urljoin(self.base_url, "api/v1/status/buildinfo")
 
         try:
-            response = get(url, timeout=self.api_timeout)
+            response = requests.get(url, timeout=self.api_timeout)
 
             if response.status_code == 200:
                 info = response.json()

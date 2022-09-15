@@ -258,7 +258,7 @@ class PrometheusCharm(CharmBase):
         In response to any configuration change, such as a new consumer
         relation, or a new configuration set by the administrator, the
         Prometheus config file is regenerated, and pushed to the workload
-        container. Prometheus configuration is reloaded if there has
+        container. Prometheus's configuration is reloaded if there has
         been no change to the Pebble layer (such as Prometheus command
         line arguments). If the Pebble layer has changed then Prometheus
         is restarted.
@@ -363,7 +363,7 @@ class PrometheusCharm(CharmBase):
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
 
-        This runs after the the workload container starts.
+        This runs after the workload container starts.
         """
         self._configure(event)
         if version := self._prometheus_version:
@@ -444,7 +444,7 @@ class PrometheusCharm(CharmBase):
 
         """
         for topology_identifier, rules_file in alerts.items():
-            filename = "juju_" + topology_identifier + ".rules"
+            filename = f"juju_{topology_identifier}.rules"
             path = os.path.join(RULES_DIR, filename)
 
             rules = yaml.safe_dump(rules_file)
@@ -501,7 +501,7 @@ class PrometheusCharm(CharmBase):
                 self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
             except LightkubeApiError as e:
                 self.unit.status = BlockedStatus(
-                    f"Error calculating retention size "
+                    "Error calculating retention size "
                     f"(try running `juju trust` on this application): {e}"
                 )
             else:
