@@ -14,14 +14,13 @@ for Prometheus is offered through a separate Charm.
 
 ## Usage
 
-The Prometheus Operator may be deployed using the Juju command line as
-in
+The Prometheus Operator may be deployed using the Juju command line:
 
 ```sh
 $ juju deploy prometheus-k8s --trust
 ```
 
-By default the Prometheus Operator monitors itself, but it also
+By default, the Prometheus Operator monitors itself, but it also
 accepts additional scrape targets over Juju relations with charms that
 support the `prometheus_scrape` interface and preferably use the
 Prometheus charm library. This [charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py)
@@ -31,7 +30,7 @@ path that exposes its metrics in a Prometheus compatible format. For
 example, the
 [kube-state-metrics](https://charmhub.io/kube-state-metrics) charm
 integrates with the Prometheus K8S charm in a way that allows you
-import metrics about resources in a Kubernetes cluster by doing:
+to import metrics about resources in a Kubernetes cluster by doing:
 
 ```sh
 $ juju deploy kube-state-metrics
@@ -41,15 +40,15 @@ $ juju relate kube-state-metrics prometheus-k8s
 In a similar manner any charm that exposes a scrape target may be
 related to the Prometheus charm.
 
-At present it is expected that all relations the Prometheus Operator
-partakes in are within the same Juju model.
-[Further development](https://github.com/canonical/prometheus-operator/issues/58)
-may extend this to allow cross model scrape targets.
+> Note: At present it is expected that all relations that Prometheus is
+> part of are within the same Juju model. For cross-model relations, 
+> please set up a Grafana Agent in the remote model and use `remote_write` 
+> to get the metrics into Prometheus.
 
 ## Dashboard
 
-The Prometheus dashboard may be accessed at a configurable port (by
-default 9090) on the IP address of the Prometheus unit. This unit and
+The Prometheus dashboard may be accessed at a configurable port (default: `9090`) 
+on the IP address of the Prometheus unit. This unit and
 its IP address may be determined using the `juju status` command.
 
 ## Relations
