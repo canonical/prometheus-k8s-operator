@@ -47,6 +47,8 @@ requires:
   ingress:
     interface: ingress_per_unit
     limit: 1
+  send-remote-write:
+    interface: prometheus_remote_write
 
 peers:
   prometheus-peers:

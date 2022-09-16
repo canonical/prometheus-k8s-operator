@@ -23,7 +23,7 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
 )
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
-    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
+    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME, PrometheusRemoteWriteConsumer,
 )
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
@@ -40,7 +40,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops.charm import ActionEvent, CharmBase
+from ops.charm import ActionEvent, CharmBase, RelationChangedEvent
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
@@ -111,6 +111,8 @@ class PrometheusCharm(CharmBase):
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
 
+        self._remote_write_consumer = PrometheusRemoteWriteConsumer(self)
+
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
@@ -131,6 +133,10 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
+        self.framework.observe(
+            self._remote_write_consumer.on.endpoints_changed,
+            self._on_remote_write_endpoints_changed,
+        )
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
@@ -251,6 +257,10 @@ class PrometheusCharm(CharmBase):
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
+
+    def _on_remote_write_endpoints_changed(self, event: RelationChangedEvent) -> None:
+        """Event handler for the remote write endpoint changed event."""
+        self._configure(event)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
