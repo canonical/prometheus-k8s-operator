@@ -3,7 +3,6 @@
 
 import json
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
@@ -17,6 +16,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from helpers import (
+    UNITTEST_DIR,
     cos_tool_path_resolver,
     k8s_resource_multipatch,
     patch_network_get,
@@ -28,8 +28,6 @@ from ops.model import ActiveStatus
 from ops.testing import Harness
 
 from charm import Prometheus, PrometheusCharm
-
-UNITTEST_DIR = Path(__file__).resolve().parent
 
 cos_tool_path_resolver()
 

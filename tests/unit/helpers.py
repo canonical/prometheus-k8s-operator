@@ -9,6 +9,8 @@ import requests
 from charms.prometheus_k8s.v0.prometheus_remote_write import CosTool
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+UNITTEST_DIR = Path(__file__).resolve().parent
+COS_TOOL_URL = "https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-amd64"
 
 
 def patch_network_get(private_address="10.1.157.116") -> Callable:
@@ -33,7 +35,7 @@ def patch_network_get(private_address="10.1.157.116") -> Callable:
     return patch("ops.testing._TestingModelBackend.network_get", network_get)
 
 
-def cos_tool_path_resolver():
+def cos_tool_path_resolver() -> None:
     """Get cos tool path.
 
     Downloads from GitHub, if it does not exist locally.
@@ -43,8 +45,7 @@ def cos_tool_path_resolver():
     cos_path = PROJECT_DIR / "cos-tool-amd64"
     if not cos_path.exists():
         logging.debug("cos-tool was not found, download it")
-        url = "https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-amd64"
-        with requests.get(url, stream=True) as r:
+        with requests.get(COS_TOOL_URL, stream=True) as r:
             r.raise_for_status()
             with open(cos_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=1024):
