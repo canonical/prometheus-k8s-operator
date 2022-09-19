@@ -6,10 +6,10 @@ from typing import Callable
 from unittest.mock import patch
 
 import requests
-
 from charms.prometheus_k8s.v0.prometheus_remote_write import CosTool
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+
 
 def patch_network_get(private_address="10.1.157.116") -> Callable:
     def network_get(*args, **kwargs) -> dict:
@@ -46,15 +46,12 @@ def cos_tool_path_resolver():
         url = "https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-amd64"
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
-            with open(cos_path, 'wb') as f:
+            with open(cos_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=1024):
                     f.write(chunk)
 
     cos_path.chmod(0o777)
     CosTool._path = str(cos_path)
-
-
-
 
 
 k8s_resource_multipatch = patch.multiple(

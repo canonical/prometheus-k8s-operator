@@ -9,10 +9,19 @@ from unittest.mock import patch
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
+)
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
     RELATION_INTERFACE_NAME as RELATION_INTERFACE,
+)
+from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch, cos_tool_path_resolver
+from helpers import (
+    cos_tool_path_resolver,
+    k8s_resource_multipatch,
+    patch_network_get,
+    prom_multipatch,
+)
 from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
