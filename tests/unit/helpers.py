@@ -6,7 +6,8 @@ from typing import Callable
 from unittest.mock import patch
 
 import requests
-from charms.prometheus_k8s.v0.prometheus_remote_write import CosTool
+from charms.prometheus_k8s.v0.prometheus_remote_write import CosTool as _CosTool_remote_write
+from charms.prometheus_k8s.v0.prometheus_scrape import CosTool as _CosTool_scrape
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 UNITTEST_DIR = Path(__file__).resolve().parent
@@ -52,7 +53,8 @@ def cos_tool_path_resolver() -> None:
                     f.write(chunk)
 
     cos_path.chmod(0o777)
-    CosTool._path = str(cos_path)
+    _CosTool_remote_write._path = str(cos_path)
+    _CosTool_scrape._path = str(cos_path)
 
 
 k8s_resource_multipatch = patch.multiple(
