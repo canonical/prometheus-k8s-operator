@@ -17,8 +17,8 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 )
 from helpers import (
     UNITTEST_DIR,
-    cos_tool_path_resolver,
     k8s_resource_multipatch,
+    patch_cos_tool_path,
     patch_network_get,
     prom_multipatch,
 )
@@ -28,8 +28,6 @@ from ops.model import ActiveStatus
 from ops.testing import Harness
 
 from charm import Prometheus, PrometheusCharm
-
-cos_tool_path_resolver()
 
 METADATA = f"""
 name: consumer-tester
@@ -92,6 +90,7 @@ ALERT_RULES = {
 
 
 class RemoteWriteConsumerCharm(CharmBase):
+    @patch_cos_tool_path
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self.remote_write_consumer = PrometheusRemoteWriteConsumer(
