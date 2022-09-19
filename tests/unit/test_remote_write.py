@@ -3,19 +3,16 @@
 
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
-)
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
     RELATION_INTERFACE_NAME as RELATION_INTERFACE,
-)
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch
+from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch, cos_tool_path_resolver
 from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
@@ -23,12 +20,15 @@ from ops.testing import Harness
 
 from charm import Prometheus, PrometheusCharm
 
+UNITTEST_DIR = Path(__file__).resolve().parent
+
+cos_tool_path_resolver()
+
 METADATA = f"""
 name: consumer-tester
 requires:
   {RELATION_NAME}:
     interface: {RELATION_INTERFACE}
-requires:
     ingress-unit:
         interface: ingress-unit
         limit: 1
@@ -90,7 +90,7 @@ class RemoteWriteConsumerCharm(CharmBase):
         self.remote_write_consumer = PrometheusRemoteWriteConsumer(
             self,
             RELATION_NAME,
-            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
         )
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
