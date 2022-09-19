@@ -56,6 +56,7 @@ def cos_tool_path_resolver() -> None:
     cos_path.chmod(0o777)
     _CosTool_remote_write._path = str(cos_path)
 
+
 k8s_resource_multipatch = patch.multiple(
     "charm.KubernetesComputeResourcesPatch",
     _namespace="test-namespace",
