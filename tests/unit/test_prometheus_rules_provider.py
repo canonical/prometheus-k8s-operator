@@ -4,7 +4,6 @@
 import json
 import textwrap
 import unittest
-from unittest.mock import patch
 
 import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
@@ -13,7 +12,6 @@ from ops.charm import CharmBase
 from ops.testing import Harness
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestReloadAlertRules(unittest.TestCase):
     """Feature: Provider charm can manually invoke reloading of alerts.
 
@@ -27,9 +25,6 @@ class TestReloadAlertRules(unittest.TestCase):
     # use a short-form free-standing alert, for brevity
     ALERT = yaml.safe_dump({"alert": "free_standing", "expr": "avg(some_vector[5m]) > 5"})
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.sandbox = TempFS("rule_files", auto_clean=True)
         self.addCleanup(self.sandbox.close)
@@ -94,7 +89,6 @@ class TestReloadAlertRules(unittest.TestCase):
         """Scenario: The reload method is called after all the loaded alert files are removed."""
         # GIVEN alert files are present and relation data contains respective alerts
         self.sandbox.writetext("alert.rule", self.ALERT)
-
         self.harness.charm.rules_provider._reinitialize_alert_rules()
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         self.assertNotEqual(
@@ -102,26 +96,6 @@ class TestReloadAlertRules(unittest.TestCase):
         )
 
         # WHEN all rule files are deleted from the alerts dir
-        self.sandbox.clean()
-
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
-
-        # THEN relation data is empty again
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
-
-    def test_reload_after_dir_itself_removed_updates_relation_data(self):
-        """Scenario: The reload method is called after the alerts dir doesn't exist anymore."""
-        # GIVEN alert files are present and relation data contains respective alerts
-        self.sandbox.writetext("alert.rule", self.ALERT)
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        self.assertNotEqual(
-            relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
-        )
-
-        # WHEN the alerts dir itself is deleted
         self.sandbox.clean()
 
         # AND the reload method is called

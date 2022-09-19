@@ -3,7 +3,6 @@
 
 import json
 import unittest
-from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
 from ops.charm import CharmBase
@@ -78,11 +77,10 @@ class EndpointAggregatorCharm(CharmBase):
         )
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointAggregator(unittest.TestCase):
     def setUp(self):
         self.harness = Harness(EndpointAggregatorCharm, meta=AGGREGATOR_META)
-        self.harness.set_model_info(name="testmodel", uuid="1234567")
+        self.harness.set_model_info(name="testmodel", uuid="12de4fae-06cc-4ceb-9089-567be09fec78")
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
         self.harness.begin_with_initial_hooks()
@@ -111,13 +109,13 @@ class TestEndpointAggregator(unittest.TestCase):
         scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
         expected_jobs = [
             {
-                "job_name": "juju_testmodel_1234567_target-app_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
@@ -149,7 +147,7 @@ class TestEndpointAggregator(unittest.TestCase):
         group = groups[0]
 
         expected_group = {
-            "name": "juju_testmodel_1234567_rules-app_alert_rules",
+            "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
             "rules": [
                 {
                     "alert": "CPU_Usage",
@@ -160,7 +158,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "severity": "page",
                         "cloud": "juju",
                         "juju_model": "testmodel",
-                        "juju_model_uuid": "1234567",
+                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                         "juju_application": "rules-app",
                         "juju_unit": "rules-app/0",
                     },
@@ -198,13 +196,13 @@ class TestEndpointAggregator(unittest.TestCase):
         scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
         expected_jobs = [
             {
-                "job_name": "juju_testmodel_1234567_target-app_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
@@ -236,7 +234,7 @@ class TestEndpointAggregator(unittest.TestCase):
         group = groups[0]
 
         expected_group = {
-            "name": "juju_testmodel_1234567_rules-app_alert_rules",
+            "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
             "rules": [
                 {
                     "alert": "CPU_Usage",
@@ -247,7 +245,7 @@ class TestEndpointAggregator(unittest.TestCase):
                         "severity": "page",
                         "cloud": "juju",
                         "juju_model": "testmodel",
-                        "juju_model_uuid": "1234567",
+                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                         "juju_application": "rules-app",
                         "juju_unit": "rules-app/0",
                     },
@@ -294,13 +292,13 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_jobs = [
             {
-                "job_name": "juju_testmodel_1234567_target-app-1_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app-1_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app-1",
                             "juju_unit": "target-app-1/0",
                             "host": "scrape_target_0",
@@ -310,13 +308,13 @@ class TestEndpointAggregator(unittest.TestCase):
                 "relabel_configs": [RELABEL_INSTANCE_CONFIG],
             },
             {
-                "job_name": "juju_testmodel_1234567_target-app-2_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app-2_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_1:5678"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app-2",
                             "juju_unit": "target-app-2/0",
                             "host": "scrape_target_1",
@@ -358,7 +356,7 @@ class TestEndpointAggregator(unittest.TestCase):
         self.assertEqual(len(groups), 2)
         expected_groups = [
             {
-                "name": "juju_testmodel_1234567_rules-app-1_alert_rules",
+                "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
                 "rules": [
                     {
                         "alert": "CPU_Usage",
@@ -369,7 +367,7 @@ class TestEndpointAggregator(unittest.TestCase):
                             "severity": "page",
                             "cloud": "juju",
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "rules-app-1",
                             "juju_unit": "rules-app-1/0",
                         },
@@ -381,7 +379,7 @@ class TestEndpointAggregator(unittest.TestCase):
                 ],
             },
             {
-                "name": "juju_testmodel_1234567_rules-app-2_alert_rules",
+                "name": "juju_testmodel_12de4fa_rules-app-2_alert_rules",
                 "rules": [
                     {
                         "alert": "DiskFull",
@@ -391,7 +389,7 @@ class TestEndpointAggregator(unittest.TestCase):
                             "override_group_by": "host",
                             "severity": "page",
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "rules-app-2",
                             "juju_unit": "rules-app-2/0",
                         },
@@ -442,13 +440,13 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_jobs = [
             {
-                "job_name": "juju_testmodel_1234567_target-app-1_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app-1_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app-1",
                             "juju_unit": "target-app-1/0",
                             "host": "scrape_target_0",
@@ -495,7 +493,7 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_groups = [
             {
-                "name": "juju_testmodel_1234567_rules-app-1_alert_rules",
+                "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
                 "rules": [
                     {
                         "alert": "CPU_Usage",
@@ -506,7 +504,7 @@ class TestEndpointAggregator(unittest.TestCase):
                             "severity": "page",
                             "cloud": "juju",
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "rules-app-1",
                             "juju_unit": "rules-app-1/0",
                         },
@@ -562,13 +560,13 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_jobs = [
             {
-                "job_name": "juju_testmodel_1234567_target-app_prometheus_scrape",
+                "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
                 "static_configs": [
                     {
                         "targets": ["scrape_target_0:1234"],
                         "labels": {
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "target-app",
                             "juju_unit": "target-app/0",
                             "host": "scrape_target_0",
@@ -615,7 +613,7 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_groups = [
             {
-                "name": "juju_testmodel_1234567_rules-app_alert_rules",
+                "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
                 "rules": [
                     {
                         "alert": "CPU_Usage",
@@ -626,7 +624,7 @@ class TestEndpointAggregator(unittest.TestCase):
                             "severity": "page",
                             "cloud": "juju",
                             "juju_model": "testmodel",
-                            "juju_model_uuid": "1234567",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
                             "juju_application": "rules-app",
                             "juju_unit": "rules-app/0",
                         },
