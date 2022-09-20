@@ -147,3 +147,19 @@ class TestReloadAlertRules(unittest.TestCase):
         alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
         alert_names = [groups["rules"][0]["alert"] for groups in alert_rules["groups"]]
         self.assertEqual(set(alert_names), {"alert.rule", "alert.rules"})
+
+    def test_reload_with_empty_rules(self):
+        """Scenario: The reload method is called with a zero-size alert file."""
+        # GIVEN relation data contains no alerts
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
+
+        # WHEN an empty rules file is written
+        self.sandbox.writetext("alert.rule", "")
+
+        # AND the reload method is called
+        self.harness.charm.rules_provider._reinitialize_alert_rules()
+
+        # THEN relation data is not updated
+        relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
