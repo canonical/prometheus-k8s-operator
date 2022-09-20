@@ -48,7 +48,7 @@ requires:
     interface: ingress_per_unit
     limit: 1
   landing-page:
-    interface: catalogue
+    interface: catalog
 
 peers:
   prometheus-peers:

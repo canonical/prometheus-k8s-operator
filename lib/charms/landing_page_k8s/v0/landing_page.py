@@ -1,5 +1,7 @@
 """Charm for providing landing pages to bundles."""
 
+import ipaddress
+import socket
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 from ops.charm import CharmBase
 
@@ -7,7 +9,7 @@ import logging
 
 LIBID = "7e5cd3b1e1264c2689f09f772c9af026"
 LIBAPI = 0
-LIBPATCH = 1
+LIBPATCH = 2
 
 DEFAULT_RELATION_NAME = "landing-page"
 
@@ -57,12 +59,11 @@ class LandingPageConsumer(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.model.app]["name"] = self._app.name
             relation.data[self._charm.model.app]["description"] = self._app.description
-            relation.data[self._charm.model.app]["url"] = self.unit_address
+            relation.data[self._charm.model.app]["url"] = self.unit_address(relation)
             relation.data[self._charm.model.app]["icon"] = self._app.icon
 
-    @property
-    def unit_address(self):
-        if self._app.url:
+    def unit_address(self, relation):
+        if self._app and self._app.url:
             return self._app.url
         
         unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
@@ -71,6 +72,19 @@ class LandingPageConsumer(Object):
         
         return socket.getfqdn()
 
+    def _is_valid_unit_address(self, address: str) -> bool:
+        """Validate a unit address.
+        At present only IP address validation is supported, but
+        this may be extended to DNS addresses also, as needed.
+        Args:
+            address: a string representing a unit address
+        """
+        try:
+            _ = ipaddress.ip_address(address)
+        except ValueError:
+            return False
+
+        return True
 
 class AppsChangedEvent(EventBase):
     """Event emitted when landing page app entries change."""
