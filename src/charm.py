@@ -15,6 +15,7 @@ import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.landing_page_k8s.v0.landing_page import LandingPageApp, LandingPageConsumer
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
@@ -116,13 +117,26 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.external_url,
         )
-
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
         )
 
-        # Event handlers
+        self.landing_page = LandingPageConsumer(
+            charm=self,
+            app=LandingPageApp(
+                name="Prometheus",
+                icon="chart-line-variant",
+                url=self.external_url,
+                description=(
+                    "Prometheus collects and stores metrics as time series data,"
+                    "i.e. metrics information is stored with the timestamp at which "
+                    "it was recorded, alongside optional key-value pairs called "
+                    "labels."
+                ),
+            ),
+        )
+
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
