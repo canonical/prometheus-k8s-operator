@@ -15,7 +15,13 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch
+from helpers import (
+    UNITTEST_DIR,
+    k8s_resource_multipatch,
+    patch_cos_tool_path,
+    patch_network_get,
+    prom_multipatch,
+)
 from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
@@ -28,7 +34,6 @@ name: consumer-tester
 requires:
   {RELATION_NAME}:
     interface: {RELATION_INTERFACE}
-requires:
     ingress-unit:
         interface: ingress-unit
         limit: 1
@@ -85,12 +90,13 @@ ALERT_RULES = {
 
 
 class RemoteWriteConsumerCharm(CharmBase):
+    @patch_cos_tool_path
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self.remote_write_consumer = PrometheusRemoteWriteConsumer(
             self,
             RELATION_NAME,
-            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
         )
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
