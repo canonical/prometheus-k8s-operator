@@ -684,7 +684,6 @@ class TestPebblePlan(unittest.TestCase):
         # (Patched pebble client would raise if (re)start was attempted. Nothing else to do here.)
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 @prom_multipatch
 class TestTlsConfig(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)

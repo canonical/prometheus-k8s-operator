@@ -107,11 +107,7 @@ class RemoteWriteConsumerCharm(CharmBase):
         pass
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestRemoteWriteConsumer(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
         self.addCleanup(self.harness.cleanup)
@@ -220,16 +216,12 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             assert False  # Could not find the correct alert rule to check
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 @prom_multipatch
 class TestRemoteWriteProvider(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
-        self.harness.set_model_info("lma", "123456")
+        self.harness.set_model_info("lma", "12de4fae-06cc-4ceb-9089-567be09fec78")
         self.addCleanup(self.harness.cleanup)
 
         patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")

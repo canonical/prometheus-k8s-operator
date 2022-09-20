@@ -3,7 +3,6 @@
 
 import json
 import unittest
-from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
@@ -35,7 +34,7 @@ BAD_JOBS = [
 
 SCRAPE_METADATA = {
     "model": "consumer-model",
-    "model_uuid": "abcdef",
+    "model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
     "application": "consumer",
     "charm_name": "test-charm",
 }
@@ -132,7 +131,7 @@ OTHER_SCRAPE_JOBS = [
 ]
 OTHER_SCRAPE_METADATA = {
     "model": "consumer-model",
-    "model_uuid": "hijklm",
+    "model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
     "application": "other-consumer",
     "charm_name": "other-charm",
 }
@@ -155,7 +154,6 @@ class EndpointConsumerCharm(CharmBase):
         return "1.0.0"
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
         metadata_file = open("metadata.yaml")
