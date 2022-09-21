@@ -21,7 +21,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
-from helpers import patch_network_get
+from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -70,7 +70,7 @@ class EndpointProviderCharm(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./tests/unit/prometheus_alert_rules"
+            self, jobs=JOBS, alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules")
         )
 
 
@@ -83,7 +83,7 @@ class EndpointProviderCharmExternalHostname(CharmBase):
         self.provider = MetricsEndpointProvider(
             self,
             jobs=JOBS,
-            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
             external_hostname="9.12.20.18",
         )
 
@@ -385,7 +385,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch_network_get()
     def test_a_bad_alert_expression_logs_an_error(self):
-        self.setup(alert_rules_path="./tests/unit/bad_alert_expressions")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_expressions"))
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -396,7 +396,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch_network_get()
     def test_a_bad_alert_rules_logs_an_error(self):
-        self.setup(alert_rules_path="./tests/unit/bad_alert_rules")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_rules"))
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -725,7 +725,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
 
     @patch_network_get()
     def test_unit_label_is_retained_if_hard_coded(self):
-        self.setup(alert_rules_path="./tests/unit/alert_rules_with_unit_topology")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "alert_rules_with_unit_topology"))
         rel_id = self.harness.add_relation("metrics-endpoint", "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
 
@@ -769,7 +769,7 @@ class CharmProvidingPromBakedInRules(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./src/prometheus_alert_rules"
+            self, jobs=JOBS, alert_rules_path=str(PROJECT_DIR / "src" / "prometheus_alert_rules")
         )
         self.tool = CosTool(self)
 
