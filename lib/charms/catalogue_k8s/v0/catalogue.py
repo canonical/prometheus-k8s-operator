@@ -1,39 +1,44 @@
-"""Charm for providing landing pages to bundles."""
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Charm for providing services catalogues to bundles or sets of charms."""
 
 import ipaddress
-import socket
-from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
-from ops.charm import CharmBase
-
 import logging
+import socket
+from typing import List, Optional, Union
 
-LIBID = "7e5cd3b1e1264c2689f09f772c9af026"
+from ops.charm import CharmBase
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
+
+LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 0
-LIBPATCH = 2
+LIBPATCH = 1
 
-DEFAULT_RELATION_NAME = "landing-page"
+DEFAULT_RELATION_NAME = "catalogue"
 
 logger = logging.getLogger(__name__)
 
-class LandingPageApp:
-    name: str
-    url: str
-    icon: str
-    description: str
 
-    def __init__(self, name, url, icon, description = ""):
+class CatalogueItem:
+    """`CatalogueItem` represents an application entry sent to a catalogue."""
+
+    def __init__(self, name: str, url: str, icon: str, description: str = ""):
         self.name = name
         self.url = url
         self.icon = icon
         self.description = description
 
-class LandingPageConsumer(Object):
+
+class CatalogueConsumer(Object):
+    """`CatalogueConsumer` is used to send over a `CatalogueItem`."""
 
     def __init__(
-        self, 
+        self,
         charm,
-        relation_name: str = DEFAULT_RELATION_NAME, 
-        app: LandingPageApp = None
+        relation_name: str = DEFAULT_RELATION_NAME,
+        app: CatalogueItem = None,
+        refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
@@ -47,15 +52,44 @@ class LandingPageConsumer(Object):
         self.framework.observe(events.relation_departed, self._on_relation_changed)
         self.framework.observe(events.relation_created, self._on_relation_changed)
 
+        self._register_refresh_event(refresh_event)
 
+    def _register_refresh_event(
+        self, refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None
+    ):
+
+        if not refresh_event:
+            if len(self._charm.meta.containers) == 1:
+                if "kubernetes" in self._charm.meta.series:
+                    # This is a podspec charm
+                    refresh_event = [self._charm.on.update_status]
+                else:
+                    # This is a sidecar/pebble charm
+                    container = list(self._charm.meta.containers.values())[0]
+                    refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
+            else:
+                logger.warning(
+                    "%d containers are present in metadata.yaml and "
+                    "refresh_event was not specified. Defaulting to update_status. "
+                    "External address may not be set in a timely fashion.",
+                    len(self._charm.meta.containers),
+                )
+                refresh_event = [self._charm.on.update_status]
+
+        else:
+            if not isinstance(refresh_event, list):
+                refresh_event = [refresh_event]
+
+        for ev in refresh_event:
+            self.framework.observe(ev, self._on_relation_changed)
 
     def _on_relation_changed(self, event):
         if not self._charm.unit.is_leader():
             return
-        
+
         if not self._app:
             return
-        
+
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.model.app]["name"] = self._app.name
             relation.data[self._charm.model.app]["description"] = self._app.description
@@ -63,19 +97,25 @@ class LandingPageConsumer(Object):
             relation.data[self._charm.model.app]["icon"] = self._app.icon
 
     def unit_address(self, relation):
+        """The unit address of the consumer, on which it is reachable.
+
+        Requires ingress to be connected for it to be routable.
+        """
         if self._app and self._app.url:
             return self._app.url
-        
+
         unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
         if self._is_valid_unit_address(unit_ip):
             return unit_ip
-        
+
         return socket.getfqdn()
 
     def _is_valid_unit_address(self, address: str) -> bool:
         """Validate a unit address.
+
         At present only IP address validation is supported, but
         this may be extended to DNS addresses also, as needed.
+
         Args:
             address: a string representing a unit address
         """
@@ -86,30 +126,33 @@ class LandingPageConsumer(Object):
 
         return True
 
-class AppsChangedEvent(EventBase):
-    """Event emitted when landing page app entries change."""
+
+class CatalogueItemsChangedEvent(EventBase):
+    """Event emitted when the catalogue entries change."""
 
     def __init__(self, handle, apps):
         super().__init__(handle)
-        self.apps  = apps
+        self.apps = apps
 
     def snapshot(self):
-        """Save landing page apps information."""
+        """Save catalogue entries information."""
         return {"apps": self.apps}
 
     def restore(self, snapshot):
-        """Restore landing page apps information."""
+        """Restore catalogue entries information."""
         self.apps = snapshot["apps"]
 
 
-class LandingPageEvents(ObjectEvents):
-    """Events raised by `LandingPageConsumer`"""
+class CatalogueEvents(ObjectEvents):
+    """Events raised by `CatalogueConsumer`."""
 
-    apps_changed = EventSource(AppsChangedEvent)
+    apps_changed = EventSource(CatalogueItemsChangedEvent)
 
-class LandingPageProvider(Object):
 
-    on = LandingPageEvents()
+class CatalogueProvider(Object):
+    """`CatalogueProvider` is the side of the relation that serves the actual service catalogue."""
+
+    on = CatalogueEvents()
 
     def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
         super().__init__(charm, relation_name)
@@ -125,17 +168,18 @@ class LandingPageProvider(Object):
         self.on.apps_changed.emit(apps=self.apps)
 
     def _on_relation_changed(self, event):
-        
+
         self.on.apps_changed.emit(apps=self.apps)
 
     @property
     def apps(self):
+        """A list of apps sent over relation data."""
         return [
             {
                 "name": relation.data[relation.app].get("name", ""),
                 "url": relation.data[relation.app].get("url", ""),
-                "icon": relation.data[relation.app].get("icon", ""), 
-                "description": relation.data[relation.app].get("description", "")
+                "icon": relation.data[relation.app].get("icon", ""),
+                "description": relation.data[relation.app].get("description", ""),
             }
             for relation in self._charm.model.relations[self._relation_name]
             if relation.app and relation.units

@@ -15,7 +15,7 @@ import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
-from charms.landing_page_k8s.v0.landing_page import LandingPageApp, LandingPageConsumer
+from charms.catalogue_k8s.v0.catalogue import CatalogueItem, CatalogueConsumer
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
@@ -122,9 +122,13 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        self.landing_page = LandingPageConsumer(
+        self.catalogue = CatalogueConsumer(
             charm=self,
-            app=LandingPageApp(
+            refresh_event=[
+                self.on.prometheus_pebble_ready,
+                self.on["ingress"].relation_joined,
+            ],
+            app=CatalogueItem(
                 name="Prometheus",
                 icon="chart-line-variant",
                 url=self.external_url,
