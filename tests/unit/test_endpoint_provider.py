@@ -21,7 +21,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
-from helpers import PROJECT_DIR, UNITTEST_DIR, patch_cos_tool_path, patch_network_get
+from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
