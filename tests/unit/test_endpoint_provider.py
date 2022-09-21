@@ -278,13 +278,17 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_unit_address"], "some.host")
         self.assertIn("prometheus_scrape_unit_name", data)
 
-    @patch_network_get()
-    def test_provider_supports_multiple_jobs(self):
+    def _get_data(self, target):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("scrape_jobs", data)
-        jobs = json.loads(data["scrape_jobs"])
+        self.assertIn(target, data)
+        val = json.loads(data[target])
+        return val
+
+    @patch_network_get()
+    def test_provider_supports_multiple_jobs(self):
+        jobs = self._get_data(target="scrape_jobs")
         self.assertEqual(len(jobs), len(JOBS))
         names = [job["job_name"] for job in jobs]
         job_names = [job["job_name"] for job in JOBS]
@@ -292,22 +296,14 @@ class TestEndpointProvider(unittest.TestCase):
 
     @patch_network_get()
     def test_provider_sanitizes_jobs(self):
-        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
-        self.harness.add_relation_unit(rel_id, "provider/0")
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("scrape_jobs", data)
-        jobs = json.loads(data["scrape_jobs"])
+        jobs = self._get_data(target="scrape_jobs")
         for job in jobs:
             keys = set(job.keys())
             self.assertTrue(keys.issubset(ALLOWED_KEYS))
 
     @patch_network_get()
     def test_each_alert_rule_is_topology_labeled(self):
-        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
-        self.harness.add_relation_unit(rel_id, "provider/0")
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("alert_rules", data)
-        alerts = json.loads(data["alert_rules"])
+        alerts = self._get_data(target="alert_rules")
         self.assertIn("groups", alerts)
         self.assertEqual(len(alerts["groups"]), 6)
         for group in alerts["groups"]:
@@ -335,13 +331,7 @@ class TestEndpointProvider(unittest.TestCase):
 
     @patch_network_get()
     def test_each_alert_expression_is_topology_labeled(self):
-        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
-        self.harness.add_relation_unit(rel_id, "provider/0")
-        data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
-        self.assertIn("alert_rules", data)
-        alerts = json.loads(data["alert_rules"])
-        self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 6)
+        alerts = self._get_data(target="alert_rules")
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
@@ -418,10 +408,9 @@ def expression_labels(expr):
         expr: a string representing an alert expression.
 
     Returns:
-        a generator which yields each set of labels in
-        in the expression.
+        Generator which yields each set of labels in the expression.
     """
-    pattern = re.compile(r"\{.*\}")
+    pattern = re.compile(r"\{.*}")
     matches = pattern.findall(expr)
     for match in matches:
         match = match.replace("=", '":').replace("juju_", '"juju_')
@@ -585,14 +574,19 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def test_load_multiple_rules_per_file(self):
         """Test official format with multiple alert rules per group in multiple groups."""
         rules_file_dict = {"groups": [self.gen_group(1), self.gen_group(2)]}
+        self._compare_rules(rules_file_dict)
+
+    def _generate_rules_file_dict(self, rules_file_dict):
         sandbox = TempFS("rule_files", auto_clean=True)
         sandbox.makedirs("rules")
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
-
         rules = AlertRules(topology=self.topology)
         rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
+        return rules_file_dict_read
 
+    def _compare_rules(self, rules_file_dict):
+        rules_file_dict_read = self._generate_rules_file_dict(rules_file_dict)
         expected_rules_file = {
             "groups": [
                 {
@@ -623,13 +617,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
                 }
             ]
         }
-        sandbox = TempFS("rule_files", auto_clean=True)
-        sandbox.makedirs("rules")
-        sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
-
-        rules = AlertRules(topology=self.topology)
-        rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
-        rules_file_dict_read = rules.as_dict()
+        rules_file_dict_read = self._generate_rules_file_dict(rules_file_dict)
 
         expected_rules_file = {
             "groups": [
@@ -646,33 +634,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
 
     def test_duplicated_group_names_within_a_file_are_silently_accepted(self):
         rules_file_dict = {"groups": [self.gen_group("same"), self.gen_group("same")]}
-        sandbox = TempFS("rule_files", auto_clean=True)
-        sandbox.makedirs("rules")
-        sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
-
-        rules = AlertRules(topology=self.topology)
-        rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
-        rules_file_dict_read = rules.as_dict()
-
-        expected_rules_file = {
-            "groups": [
-                {
-                    "name": f"{self.topology.identifier}_group_same_alerts",
-                    "rules": [
-                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
-                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
-                    ],
-                },
-                {
-                    "name": f"{self.topology.identifier}_group_same_alerts",
-                    "rules": [
-                        self.gen_rule(1, labels=self.topology.label_matcher_dict),
-                        self.gen_rule(2, labels=self.topology.label_matcher_dict),
-                    ],
-                },
-            ]
-        }
-        self.assertDictEqual(expected_rules_file, rules_file_dict_read)
+        self._compare_rules(rules_file_dict)
 
     def test_deeply_nested(self):
         sandbox = TempFS("rule_files", auto_clean=True)
