@@ -574,7 +574,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def test_load_multiple_rules_per_file(self):
         """Test official format with multiple alert rules per group in multiple groups."""
         rules_file_dict = {"groups": [self.gen_group(1), self.gen_group(2)]}
-        self._compare_rules(rules_file_dict)
+        self._compare_rules(rules_file_dict, "1", "2")
 
     def _generate_rules_file_dict(self, rules_file_dict):
         sandbox = TempFS("rule_files", auto_clean=True)
@@ -585,19 +585,19 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         rules_file_dict_read = rules.as_dict()
         return rules_file_dict_read
 
-    def _compare_rules(self, rules_file_dict):
+    def _compare_rules(self, rules_file_dict, name1, name2):
         rules_file_dict_read = self._generate_rules_file_dict(rules_file_dict)
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_group_1_alerts",
+                    "name": f"{self.topology.identifier}_group_{name1}_alerts",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
                 {
-                    "name": f"{self.topology.identifier}_group_2_alerts",
+                    "name": f"{self.topology.identifier}_group_{name2}_alerts",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
@@ -634,7 +634,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
 
     def test_duplicated_group_names_within_a_file_are_silently_accepted(self):
         rules_file_dict = {"groups": [self.gen_group("same"), self.gen_group("same")]}
-        self._compare_rules(rules_file_dict)
+        self._compare_rules(rules_file_dict, "same", "same")
 
     def test_deeply_nested(self):
         sandbox = TempFS("rule_files", auto_clean=True)
