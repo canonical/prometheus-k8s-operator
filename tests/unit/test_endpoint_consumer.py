@@ -12,6 +12,8 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
 
+from tests.unit.helpers import PROJECT_DIR
+
 RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
 BAD_JOBS = [
@@ -156,7 +158,7 @@ class EndpointConsumerCharm(CharmBase):
 
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        metadata_file = open("metadata.yaml")
+        metadata_file = open(PROJECT_DIR / "metadata.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.addCleanup(self.harness.cleanup)
