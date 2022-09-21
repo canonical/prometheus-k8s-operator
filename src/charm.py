@@ -128,15 +128,13 @@ class PrometheusCharm(CharmBase):
                 self.on.prometheus_pebble_ready,
                 self.on["ingress"].relation_joined,
             ],
-            app=CatalogueItem(
+            item=CatalogueItem(
                 name="Prometheus",
                 icon="chart-line-variant",
                 url=self.external_url,
                 description=(
-                    "Prometheus collects and stores metrics as time series data,"
-                    "i.e. metrics information is stored with the timestamp at which "
-                    "it was recorded, alongside optional key-value pairs called "
-                    "labels."
+                    "Prometheus collects, stores and serves metrics as time series data, "
+                    ",alongside optional key-value pairs called labels."
                 ),
             ),
         )

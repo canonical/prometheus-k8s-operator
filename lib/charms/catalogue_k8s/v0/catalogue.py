@@ -13,7 +13,7 @@ from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEven
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 0
-LIBPATCH = 1
+LIBPATCH = 2
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -37,13 +37,13 @@ class CatalogueConsumer(Object):
         self,
         charm,
         relation_name: str = DEFAULT_RELATION_NAME,
-        app: CatalogueItem = None,
+        item: CatalogueItem = None,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._app = app
+        self._item = item
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._on_relation_changed)
@@ -87,22 +87,22 @@ class CatalogueConsumer(Object):
         if not self._charm.unit.is_leader():
             return
 
-        if not self._app:
+        if not self._item:
             return
 
         for relation in self._charm.model.relations[self._relation_name]:
-            relation.data[self._charm.model.app]["name"] = self._app.name
-            relation.data[self._charm.model.app]["description"] = self._app.description
+            relation.data[self._charm.model.app]["name"] = self._item.name
+            relation.data[self._charm.model.app]["description"] = self._item.description
             relation.data[self._charm.model.app]["url"] = self.unit_address(relation)
-            relation.data[self._charm.model.app]["icon"] = self._app.icon
+            relation.data[self._charm.model.app]["icon"] = self._item.icon
 
     def unit_address(self, relation):
         """The unit address of the consumer, on which it is reachable.
 
         Requires ingress to be connected for it to be routable.
         """
-        if self._app and self._app.url:
-            return self._app.url
+        if self._item and self._item.url:
+            return self._item.url
 
         unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
         if self._is_valid_unit_address(unit_ip):
@@ -130,23 +130,23 @@ class CatalogueConsumer(Object):
 class CatalogueItemsChangedEvent(EventBase):
     """Event emitted when the catalogue entries change."""
 
-    def __init__(self, handle, apps):
+    def __init__(self, handle, items):
         super().__init__(handle)
-        self.apps = apps
+        self.items = items
 
     def snapshot(self):
         """Save catalogue entries information."""
-        return {"apps": self.apps}
+        return {"items": self.items}
 
     def restore(self, snapshot):
         """Restore catalogue entries information."""
-        self.apps = snapshot["apps"]
+        self.items = snapshot["items"]
 
 
 class CatalogueEvents(ObjectEvents):
     """Events raised by `CatalogueConsumer`."""
 
-    apps_changed = EventSource(CatalogueItemsChangedEvent)
+    items_changed = EventSource(CatalogueItemsChangedEvent)
 
 
 class CatalogueProvider(Object):
@@ -165,14 +165,14 @@ class CatalogueProvider(Object):
         self.framework.observe(events.relation_broken, self._on_relation_broken)
 
     def _on_relation_broken(self, event):
-        self.on.apps_changed.emit(apps=self.apps)
+        self.on.items_changed.emit(items=self.items)
 
     def _on_relation_changed(self, event):
 
-        self.on.apps_changed.emit(apps=self.apps)
+        self.on.items_changed.emit(items=self.items)
 
     @property
-    def apps(self):
+    def items(self):
         """A list of apps sent over relation data."""
         return [
             {
