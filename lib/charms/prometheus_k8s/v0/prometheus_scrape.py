@@ -642,7 +642,7 @@ class AlertRules:
                 return []
 
             if not rule_file:
-                logger.warning("Empty rule file: %s", file_path.name)
+                logger.warning("Empty rules file: %s", file_path.name)
                 return []
             if not isinstance(rule_file, dict):
                 logger.error("Invalid rules file (must be a dict): %s", file_path.name)
