@@ -641,6 +641,12 @@ class AlertRules:
                 logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
                 return []
 
+            if not rule_file:
+                logger.warning("Empty rules file: %s", file_path.name)
+                return []
+            if not isinstance(rule_file, dict):
+                logger.error("Invalid rules file (must be a dict): %s", file_path.name)
+                return []
             if _is_official_alert_rule_format(rule_file):
                 alert_groups = rule_file["groups"]
             elif _is_single_alert_rule_format(rule_file):
