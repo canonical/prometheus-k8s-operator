@@ -11,6 +11,7 @@ from unittest.mock import patch
 import ops
 import yaml
 from helpers import k8s_resource_multipatch, prom_multipatch
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.testing import Harness
 
 from charm import PROMETHEUS_CONFIG, PrometheusCharm
@@ -237,6 +238,30 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
         self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_configuration_reload_success(self, trigger_configuration_reload, *unused):
+        trigger_configuration_reload.return_value = True
+        self.harness.update_config({"evaluation_interval": "1234m"})
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_configuration_reload_error(self, trigger_configuration_reload, *unused):
+        trigger_configuration_reload.return_value = False
+        self.harness.update_config({"evaluation_interval": "1234m"})
+        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration")
+    def test_configuration_reload_read_timeout(self, trigger_configuration_reload, *unused):
+        trigger_configuration_reload.return_value = "read_timeout"
+        self.harness.update_config({"evaluation_interval": "1234m"})
+        self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
 
 
 def alerting_config(config):

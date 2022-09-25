@@ -266,8 +266,9 @@ class PrometheusCharm(CharmBase):
         """
         early_return_statuses = {
             "cfg_load_fail": BlockedStatus(
-                "Prometheus failed to reload the configuration (WAL replay or ingress in progress?); see debug logs"
+                "Prometheus failed to reload the configuration; see debug logs"
             ),
+            "cfg_load_timeout": MaintenanceStatus("Waiting for prometheus to start"),
             "restart_fail": BlockedStatus(
                 "Prometheus failed to restart (config valid?); see debug logs"
             ),
@@ -343,10 +344,11 @@ class PrometheusCharm(CharmBase):
         elif should_reload:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
-                logger.error(
-                    "Prometheus failed to reload the configuration (WAL replay or ingress in progress?)"
-                )
+                logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = early_return_statuses["cfg_load_fail"]
+                return
+            elif reloaded == "read_timeout":
+                self.unit.status = early_return_statuses["cfg_load_timeout"]
                 return
 
             logger.info("Prometheus configuration reloaded")
