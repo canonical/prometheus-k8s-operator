@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import yaml
 from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -116,13 +117,28 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.external_url,
         )
-
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
         )
 
-        # Event handlers
+        self.catalogue = CatalogueConsumer(
+            charm=self,
+            refresh_event=[
+                self.on.prometheus_pebble_ready,
+                self.on["ingress"].relation_joined,
+            ],
+            item=CatalogueItem(
+                name="Prometheus",
+                icon="chart-line-variant",
+                url=self.external_url,
+                description=(
+                    "Prometheus collects, stores and serves metrics as time series data, "
+                    "alongside optional key-value pairs called labels."
+                ),
+            ),
+        )
+
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
