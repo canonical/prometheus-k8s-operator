@@ -372,6 +372,90 @@ RELATION_INTERFACE_NAME = "prometheus_scrape"
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 
+class PrometheusConfig:
+    """A namespace for utility functions for manipulating the prometheus config dict."""
+
+    @staticmethod
+    def prefix_job_names(scrape_configs: List[dict], prefix: str) -> List[dict]:
+        modified_scrape_configs = []
+        for scrape_config in scrape_configs:
+            job_name = scrape_config.get("job_name")
+            modified = scrape_config.copy()
+            modified["job_name"] = prefix + "_" + job_name if job_name else prefix
+            modified_scrape_configs.append(modified)
+        
+        return modified_scrape_configs
+
+
+    @staticmethod
+    def expand_wildcard_targets_into_individual_jobs(
+        scrape_jobs: List[dict], hosts: dict
+    ) -> List[dict]:
+        # TODO append unit num to job name
+        # hosts = self._relation_hosts(relation)
+
+        modified_scrape_jobs = []
+        for job in scrape_jobs:
+            static_configs = job.get("static_configs")
+            if not static_configs:
+                continue
+
+            # When a single unit specified more than one wildcard target, then they are expanded
+            # into a static_config per target
+            non_wildcard_static_configs = []
+
+            for static_config in static_configs:
+                targets = static_config.get("targets")
+                if not targets:
+                    continue
+
+                # All non-wildcard targets remain in the same static_config
+                non_wildcard_targets = []
+
+                # All wildcard targets are extracted to a job per unit. If multiple wildcard
+                # targets are specified, they remain in the same static_config (per unit).
+                wildcard_targets = []
+
+                for target in targets:
+                    match = re.compile(r"\*(?:(:\d+))?").match(target)
+                    if match:
+                        # This is a wildcard target.
+                        # Need to expand into separate jobs and remove it from this job here
+                        wildcard_targets.append(target)
+                    else:
+                        # This is not a wildcard target. Copy it over into its own static_config.
+                        non_wildcard_targets.append(target)
+
+                # All non-wildcard targets remain in the same static_config
+                if non_wildcard_targets:
+                    non_wildcard_static_config = static_config.copy()
+                    non_wildcard_static_config["targets"] = non_wildcard_targets
+                    non_wildcard_static_configs.append(non_wildcard_static_config)
+
+                # Extract wildcard targets into individual jobs
+                if wildcard_targets:
+                    for unit_name, unit_hostname in hosts.items():
+                        modified_job = job.copy()
+                        modified_job["static_configs"] = [static_config.copy()]
+                        modified_job["static_configs"][0]["targets"] = [
+                            target.replace("*", unit_hostname) for target in wildcard_targets
+                        ]
+
+                        unit_num = unit_name.split("-")[-1]
+                        job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
+                        modified_job["job_name"] = job_name
+                        modified_job["metrics_path"] = job.get("metrics_path") or "/metrics"
+                        modified_scrape_jobs.append(modified_job)
+
+            if non_wildcard_static_configs:
+                modified_job = job.copy()
+                modified_job["static_configs"] = non_wildcard_static_configs
+                modified_job["metrics_path"] = modified_job.get("metrics_path") or "/metrics"
+                modified_scrape_jobs.append(modified_job)
+
+        return modified_scrape_jobs
+
+
 class RelationNotFoundError(Exception):
     """Raised if there is no relation with the given name is found."""
 
@@ -1042,90 +1126,25 @@ class MetricsEndpointConsumer(Object):
 
         if not scrape_metadata:
             return scrape_jobs
-
+        
         job_name_prefix = "juju_{}_prometheus_scrape".format(
             JujuTopology.from_dict(scrape_metadata).identifier
         )
+        scrape_jobs = PrometheusConfig.prefix_job_names(scrape_jobs, job_name_prefix)
+
         hosts = self._relation_hosts(relation)
+        # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(scrape_jobs, hosts)
 
         labeled_job_configs = []
         for job in scrape_jobs:
             config = self._labeled_static_job_config(
                 _sanitize_scrape_configuration(job),
-                job_name_prefix,
                 hosts,
                 scrape_metadata,
             )
             labeled_job_configs.append(config)
 
         return labeled_job_configs
-
-    @staticmethod
-    def _expand_wildcard_targets_into_individual_jobs(
-        scrape_jobs: List[dict], hosts: dict
-    ) -> List[dict]:
-        # TODO append unit num to job name
-        # hosts = self._relation_hosts(relation)
-
-        modified_scrape_jobs = []
-        for job in scrape_jobs:
-            static_configs = job.get("static_configs")
-            if not static_configs:
-                continue
-
-            # When a single unit specified more than one wildcard target, then they are expanded
-            # into a static_config per target
-            non_wildcard_static_configs = []
-
-            for static_config in static_configs:
-                targets = static_config.get("targets")
-                if not targets:
-                    continue
-
-                # All non-wildcard targets remain in the same static_config
-                non_wildcard_targets = []
-
-                # All wildcard targets are extracted to a job per unit. If multiple wildcard
-                # targets are specified, they remain in the same static_config (per unit).
-                wildcard_targets = []
-
-                for target in targets:
-                    match = re.compile(r"\*(?:(:\d+))?").match(target)
-                    if match:
-                        # This is a wildcard target.
-                        # Need to expand into separate jobs and remove it from this job here
-                        wildcard_targets.append(target)
-                    else:
-                        # This is not a wildcard target. Copy it over into its own static_config.
-                        non_wildcard_targets.append(target)
-
-                # All non-wildcard targets remain in the same static_config
-                if non_wildcard_targets:
-                    non_wildcard_static_config = static_config.copy()
-                    non_wildcard_static_config["targets"] = non_wildcard_targets
-                    non_wildcard_static_configs.append(non_wildcard_static_config)
-
-                # Extract wildcard targets into individual jobs
-                if wildcard_targets:
-                    for unit_name, unit_hostname in hosts.items():
-                        modified_job = job.copy()
-                        modified_job["static_configs"] = [static_config.copy()]
-                        modified_job["static_configs"][0]["targets"] = [
-                            target.replace("*", unit_hostname) for target in wildcard_targets
-                        ]
-
-                        unit_num = unit_name.split("-")[-1]
-                        modified_job["job_name"] += "-" + unit_num
-                        modified_job["metrics_path"] = job.get("metrics_path") or "/metrics"
-                        modified_scrape_jobs.append(modified_job)
-
-            if non_wildcard_static_configs:
-                modified_job = job.copy()
-                modified_job["static_configs"] = non_wildcard_static_configs
-                modified_job["metrics_path"] = modified_job.get("metrics_path") or "/metrics"
-                modified_scrape_jobs.append(modified_job)
-
-        return modified_scrape_jobs
 
     def _relation_hosts(self, relation) -> dict:
         """Fetch unit names and address of all metrics provider units for a single relation.
@@ -1151,16 +1170,13 @@ class MetricsEndpointConsumer(Object):
 
         return hosts
 
-    def _labeled_static_job_config(self, job, job_name_prefix, hosts, scrape_metadata) -> dict:
+    def _labeled_static_job_config(self, job, hosts, scrape_metadata) -> dict:
         """Construct labeled job configuration for a single job.
 
         Args:
 
             job: a dictionary representing the job configuration as obtained from
                 `MetricsEndpointProvider` over relation data.
-            job_name_prefix: a string that may either be used as the
-                job name if the job has no associated name or used as a prefix for
-                the job if it does have a job name.
             hosts: a dictionary mapping host names to host address for
                 all units of the relation for which this job configuration
                 must be constructed.
@@ -1172,11 +1188,7 @@ class MetricsEndpointConsumer(Object):
             A dictionary representing a Prometheus job configuration
             for a single job.
         """
-        name = job.get("job_name")
-        job_name = "{}_{}".format(job_name_prefix, name) if name else job_name_prefix
-
         labeled_job = job.copy()
-        labeled_job["job_name"] = job_name
 
         static_configs = job.get("static_configs")
         labeled_job["static_configs"] = []
