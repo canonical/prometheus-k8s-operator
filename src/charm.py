@@ -134,7 +134,7 @@ class PrometheusCharm(CharmBase):
                 url=self.external_url,
                 description=(
                     "Prometheus collects, stores and serves metrics as time series data, "
-                    ",alongside optional key-value pairs called labels."
+                    "alongside optional key-value pairs called labels."
                 ),
             ),
         )
