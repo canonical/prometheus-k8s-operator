@@ -374,6 +374,30 @@ DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 class PrometheusConfig:
     """A namespace for utility functions for manipulating the prometheus config dict."""
+    @staticmethod
+    def sanitize_scrape_config(job: dict) -> dict:
+        """Restrict permissible scrape configuration options.
+
+        If job is empty then a default job is returned. The
+        default job is
+
+        ```
+        {
+            "metrics_path": "/metrics",
+            "static_configs": [{"targets": ["*:80"]}],
+        }
+        ```
+
+        Args:
+            job: a dict containing a single Prometheus job
+                specification.
+
+        Returns:
+            a dictionary containing a sanitized job specification.
+        """
+        sanitized_job = DEFAULT_JOB.copy()
+        sanitized_job.update({key: value for key, value in job.items() if key in ALLOWED_KEYS})
+        return sanitized_job
 
     @staticmethod
     def prefix_job_names(scrape_configs: List[dict], prefix: str) -> List[dict]:
@@ -590,31 +614,6 @@ def _validate_relation_by_interface_and_direction(
             )
     else:
         raise Exception("Unexpected RelationDirection: {}".format(expected_relation_role))
-
-
-def _sanitize_scrape_configuration(job) -> dict:
-    """Restrict permissible scrape configuration options.
-
-    If job is empty then a default job is returned. The
-    default job is
-
-    ```
-    {
-        "metrics_path": "/metrics",
-        "static_configs": [{"targets": ["*:80"]}],
-    }
-    ```
-
-    Args:
-        job: a dict containing a single Prometheus job
-            specification.
-
-    Returns:
-        a dictionary containing a sanitized job specification.
-    """
-    sanitized_job = DEFAULT_JOB.copy()
-    sanitized_job.update({key: value for key, value in job.items() if key in ALLOWED_KEYS})
-    return sanitized_job
 
 
 class InvalidAlertRulePathError(Exception):
@@ -1138,7 +1137,7 @@ class MetricsEndpointConsumer(Object):
         labeled_job_configs = []
         for job in scrape_jobs:
             config = self._labeled_static_job_config(
-                _sanitize_scrape_configuration(job),
+                PrometheusConfig.sanitize_scrape_config(job),
                 hosts,
                 scrape_metadata,
             )
@@ -1570,7 +1569,7 @@ class MetricsEndpointProvider(Object):
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
-        self._jobs = [_sanitize_scrape_configuration(job) for job in jobs]
+        self._jobs = [PrometheusConfig.sanitize_scrape_config(job) for job in jobs]
         self.external_hostname = external_hostname
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
