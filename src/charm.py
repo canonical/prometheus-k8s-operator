@@ -142,6 +142,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
+        self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
@@ -281,8 +282,9 @@ class PrometheusCharm(CharmBase):
         """
         early_return_statuses = {
             "cfg_load_fail": BlockedStatus(
-                "Prometheus failed to reload the configuration (WAL replay or ingress in progress?); see debug logs"
+                "Prometheus failed to reload the configuration; see debug logs"
             ),
+            "cfg_load_timeout": MaintenanceStatus("Waiting for prometheus to start"),
             "restart_fail": BlockedStatus(
                 "Prometheus failed to restart (config valid?); see debug logs"
             ),
@@ -358,10 +360,11 @@ class PrometheusCharm(CharmBase):
         elif should_reload:
             reloaded = self._prometheus_server.reload_configuration()
             if not reloaded:
-                logger.error(
-                    "Prometheus failed to reload the configuration (WAL replay or ingress in progress?)"
-                )
+                logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = early_return_statuses["cfg_load_fail"]
+                return
+            elif reloaded == "read_timeout":
+                self.unit.status = early_return_statuses["cfg_load_timeout"]
                 return
 
             logger.info("Prometheus configuration reloaded")
@@ -418,8 +421,6 @@ class PrometheusCharm(CharmBase):
 
     def _update_status(self, event):
         """Fired intermittently by the Juju agent."""
-        self.unit.set_workload_version(self._prometheus_server.version())
-
         # Unit could still be blocked if a reload failed (e.g. during WAL replay or ingress not
         # yet ready). Calling `_configure` to recover.
         if self.unit.status != ActiveStatus():
