@@ -374,6 +374,7 @@ DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 class PrometheusConfig:
     """A namespace for utility functions for manipulating the prometheus config dict."""
+
     @staticmethod
     def sanitize_scrape_config(job: dict) -> dict:
         """Restrict permissible scrape configuration options.
@@ -401,21 +402,21 @@ class PrometheusConfig:
 
     @staticmethod
     def prefix_job_names(scrape_configs: List[dict], prefix: str) -> List[dict]:
+        """Adds the given prefix to all the job names in the given scrape_configs list."""
         modified_scrape_configs = []
         for scrape_config in scrape_configs:
             job_name = scrape_config.get("job_name")
             modified = scrape_config.copy()
             modified["job_name"] = prefix + "_" + job_name if job_name else prefix
             modified_scrape_configs.append(modified)
-        
-        return modified_scrape_configs
 
+        return modified_scrape_configs
 
     @staticmethod
     def expand_wildcard_targets_into_individual_jobs(
         scrape_jobs: List[dict], hosts: dict
     ) -> List[dict]:
-        # TODO append unit num to job name
+        """Extract wildcard hosts from the given scrape_configs list into separate jobs."""
         # hosts = self._relation_hosts(relation)
 
         modified_scrape_jobs = []
@@ -1125,14 +1126,16 @@ class MetricsEndpointConsumer(Object):
 
         if not scrape_metadata:
             return scrape_jobs
-        
+
         job_name_prefix = "juju_{}_prometheus_scrape".format(
             JujuTopology.from_dict(scrape_metadata).identifier
         )
         scrape_jobs = PrometheusConfig.prefix_job_names(scrape_jobs, job_name_prefix)
 
         hosts = self._relation_hosts(relation)
-        # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(scrape_jobs, hosts)
+        # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+        #     scrape_jobs, hosts
+        # )
 
         labeled_job_configs = []
         for job in scrape_jobs:

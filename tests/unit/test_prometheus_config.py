@@ -22,9 +22,7 @@ class TestWildcardExpansion(unittest.TestCase):
         }
 
         # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts
-        )
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
 
         # THEN each wildcard target is extracted into its own job
         # AND the job name is suffixed by the unit number
@@ -61,9 +59,7 @@ class TestWildcardExpansion(unittest.TestCase):
         }
 
         # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts
-        )
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
 
         # THEN each wildcard target is extracted into its own job
         # AND the job name is suffixed by the unit number
@@ -101,9 +97,7 @@ class TestWildcardExpansion(unittest.TestCase):
         }
 
         # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts
-        )
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
 
         # THEN each wildcard target is extracted into its own job
         # AND all non-wildcard targets are kept in the same static config in their own job
@@ -146,9 +140,7 @@ class TestWildcardExpansion(unittest.TestCase):
         }
 
         # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts
-        )
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
 
         # THEN port is also omitted in job specs
         self.assertEqual(
@@ -190,9 +182,7 @@ class TestWildcardExpansion(unittest.TestCase):
         }
 
         # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts
-        )
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
 
         # THEN each wildcard target is extracted into its own job
         # AND all non-wildcard targets are kept in the same static configs list in their own job
