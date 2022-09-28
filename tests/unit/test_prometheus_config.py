@@ -17,8 +17,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit-0": "10.10.10.10",
-            "unit-1": "11.11.11.11",
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
         }
 
         # WHEN the jobs are processed
@@ -54,8 +54,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit-0": "10.10.10.10",
-            "unit-1": "11.11.11.11",
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
         }
 
         # WHEN the jobs are processed
@@ -92,8 +92,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit-0": "10.10.10.10",
-            "unit-1": "11.11.11.11",
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
         }
 
         # WHEN the jobs are processed
@@ -135,8 +135,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit-0": "10.10.10.10",
-            "unit-1": "11.11.11.11",
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
         }
 
         # WHEN the jobs are processed
@@ -177,8 +177,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit-0": "10.10.10.10",
-            "unit-1": "11.11.11.11",
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
         }
 
         # WHEN the jobs are processed

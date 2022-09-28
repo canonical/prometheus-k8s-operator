@@ -504,7 +504,7 @@ class PrometheusConfig:
                             target.replace("*", unit_hostname) for target in wildcard_targets
                         ]
 
-                        unit_num = unit_name.split("-")[-1]
+                        unit_num = unit_name.split("/")[-1]
                         job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
                         modified_job["job_name"] = job_name
                         modified_job["metrics_path"] = job.get("metrics_path") or "/metrics"
@@ -1193,20 +1193,23 @@ class MetricsEndpointConsumer(Object):
         scrape_jobs = PrometheusConfig.sanitize_scrape_configs(scrape_jobs)
 
         hosts = self._relation_hosts(relation)
-        # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-        #     scrape_jobs, hosts, JujuTopology.from_dict(scrape_metadata)
-        # )
 
-        labeled_job_configs = []
-        for job in scrape_jobs:
-            config = self._labeled_static_job_config(
-                job,
-                hosts,
-                scrape_metadata,
-            )
-            labeled_job_configs.append(config)
+        # labeled_job_configs = []
+        # for job in scrape_jobs:
+        #     config = self._labeled_static_job_config(
+        #         job,
+        #         hosts,
+        #         scrape_metadata,
+        #     )
+        #     labeled_job_configs.append(config)
 
-        return labeled_job_configs
+        # return labeled_job_configs
+
+        scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            scrape_jobs, hosts, JujuTopology.from_dict(scrape_metadata)
+        )
+
+        return scrape_jobs
 
     def _relation_hosts(self, relation) -> dict:
         """Fetch unit names and address of all metrics provider units for a single relation.

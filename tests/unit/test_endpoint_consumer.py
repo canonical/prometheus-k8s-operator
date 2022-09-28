@@ -247,9 +247,9 @@ class TestEndpointConsumer(unittest.TestCase):
             self.assertEqual(len(relabel_configs), 1)
 
             relabel_config = relabel_configs[0]
-            self.assertEqual(
-                relabel_config.get("source_labels"),
-                ["juju_model", "juju_model_uuid", "juju_application", "juju_unit"],
+            self.assertGreaterEqual(
+                set(relabel_config.get("source_labels")),
+                set(["juju_model", "juju_model_uuid", "juju_application"]),
             )
 
     def test_consumer_notifies_on_new_scrape_relation(self):
@@ -274,14 +274,14 @@ class TestEndpointConsumer(unittest.TestCase):
         self.setup_charm_relations()
 
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), len(SCRAPE_JOBS))
+        self.assertEqual(len(jobs), 3)  # two wildcards and one fully-qualified
         self.validate_jobs(jobs)
 
     def test_consumer_does_not_unit_label_fully_qualified_targets(self):
         self.setup_charm_relations()
 
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), len(SCRAPE_JOBS))
+        self.assertEqual(len(jobs), 3)  # two wildcards and one fully-qualified
         for job in jobs:
             for static_config in job["static_configs"]:
                 if FULL_TARGET in static_config.get("targets"):
@@ -291,7 +291,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.setup_charm_relations()
 
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), len(SCRAPE_JOBS))
+        self.assertEqual(len(jobs), 3)  # two wildcards and one fully-qualified
         for job in jobs:
             for static_config in job["static_configs"]:
                 if FULL_TARGET not in static_config.get("targets"):
@@ -321,7 +321,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.setup_charm_relations(multi=True)
 
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), len(SCRAPE_JOBS) + len(OTHER_SCRAPE_JOBS))
+        self.assertEqual(len(jobs), 4)  # three wildcards and one fully-qualified
 
     def test_consumer_scrapes_each_port_for_wildcard_hosts(self):
         rel_ids = self.setup_charm_relations()
@@ -329,7 +329,7 @@ class TestEndpointConsumer(unittest.TestCase):
         rel_id = rel_ids[0]
 
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), len(SCRAPE_JOBS))
+        self.assertEqual(len(jobs), 3)  # two wildcards and one fully-qualified
         ports = wildcard_target_ports(SCRAPE_JOBS)
         targets = wildcard_targets(jobs, ports)
         consumers = self.harness.charm.model.get_relation(RELATION_NAME, rel_id)
@@ -524,11 +524,10 @@ def job_name_suffix(job_name, labels, rel_id):
     Returns:
         string name of job as set by provider (if any)
     """
-    name_prefix = "juju_{}_{}_{}_prometheus_{}_scrape_".format(
+    name_prefix = "juju_{}_{}_{}_prometheus_scrape_".format(
         labels["juju_model"],
         labels["juju_model_uuid"][:7],
         labels["juju_application"],
-        rel_id,
     )
     return job_name[len(name_prefix) :]
 
@@ -546,7 +545,7 @@ def named_job_attribute(job_name, attribute, default=None, jobs=SCRAPE_JOBS):
         value of requested attribute if found or default.
     """
     for job in jobs:
-        if job["job_name"].endswith(job_name):
+        if job["job_name"] in job_name:
             return job.get(attribute, default)
     return None
 
