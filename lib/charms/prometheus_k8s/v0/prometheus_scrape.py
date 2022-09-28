@@ -1194,17 +1194,6 @@ class MetricsEndpointConsumer(Object):
 
         hosts = self._relation_hosts(relation)
 
-        # labeled_job_configs = []
-        # for job in scrape_jobs:
-        #     config = self._labeled_static_job_config(
-        #         job,
-        #         hosts,
-        #         scrape_metadata,
-        #     )
-        #     labeled_job_configs.append(config)
-
-        # return labeled_job_configs
-
         scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
             scrape_jobs, hosts, JujuTopology.from_dict(scrape_metadata)
         )
@@ -1235,79 +1224,6 @@ class MetricsEndpointConsumer(Object):
 
         return hosts
 
-    def _labeled_static_job_config(self, job, hosts, scrape_metadata) -> dict:
-        """Construct labeled job configuration for a single job.
-
-        Args:
-
-            job: a dictionary representing the job configuration as obtained from
-                `MetricsEndpointProvider` over relation data.
-            hosts: a dictionary mapping host names to host address for
-                all units of the relation for which this job configuration
-                must be constructed.
-            scrape_metadata: scrape configuration metadata obtained
-                from `MetricsEndpointProvider` from the same relation for
-                which this job configuration is being constructed.
-
-        Returns:
-            A dictionary representing a Prometheus job configuration
-            for a single job.
-        """
-        labeled_job = job.copy()
-
-        static_configs = job.get("static_configs")
-        labeled_job["static_configs"] = []
-
-        # relabel instance labels so that instance identifiers are globally unique
-        # stable over unit recreation
-        instance_relabel_config = {
-            "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
-            "separator": "_",
-            "target_label": "instance",
-            "regex": "(.*)",
-        }
-
-        # label all static configs in the Prometheus job
-        # labeling inserts Juju topology information and
-        # sets a relabeling config for instance labels
-        for static_config in static_configs:
-            labels = static_config.get("labels", {}) if static_configs else {}
-            all_targets = static_config.get("targets", [])
-
-            # split all targets into those which will have unit labels
-            # and those which will not
-            ports = []
-            unitless_targets = []
-            for target in all_targets:
-                host, port = self._target_parts(target)
-                if host.strip() == "*":
-                    ports.append(port.strip())
-                else:
-                    unitless_targets.append(target)
-
-            # label scrape targets that do not have unit labels
-            if unitless_targets:
-                unitless_config = self._labeled_unitless_config(
-                    unitless_targets, labels, scrape_metadata
-                )
-                labeled_job["static_configs"].append(unitless_config)
-
-            # label scrape targets that do have unit labels
-            for host_name, host_address in hosts.items():
-                static_config = self._labeled_unit_config(
-                    host_name, host_address, ports, labels, scrape_metadata
-                )
-                labeled_job["static_configs"].append(static_config)
-                if "juju_unit" not in instance_relabel_config["source_labels"]:
-                    instance_relabel_config["source_labels"].append("juju_unit")  # type: ignore
-
-        # ensure topology relabeling of instance label is last in order of relabelings
-        relabel_configs = job.get("relabel_configs", [])
-        relabel_configs.append(instance_relabel_config)
-        labeled_job["relabel_configs"] = relabel_configs
-
-        return labeled_job
-
     def _target_parts(self, target) -> list:
         """Extract host and port from a wildcard target.
 
@@ -1327,87 +1243,6 @@ class MetricsEndpointConsumer(Object):
             parts = [target, "80"]
 
         return parts
-
-    def _set_juju_labels(self, labels, scrape_metadata) -> dict:
-        """Create a copy of metric labels with Juju topology information.
-
-        Args:
-            labels: a dictionary containing Prometheus metric labels.
-            scrape_metadata: scrape related metadata provided by
-                `MetricsEndpointProvider`.
-
-        Returns:
-            a copy of the `labels` dictionary augmented with Juju
-            topology information except for unit name.
-        """
-        juju_labels = labels.copy()  # deep copy not needed
-        juju_labels.update(JujuTopology.from_dict(scrape_metadata).label_matcher_dict)
-
-        return juju_labels
-
-    def _labeled_unitless_config(self, targets, labels, scrape_metadata) -> dict:
-        """Static scrape configuration for fully qualified host addresses.
-
-        Fully qualified hosts are those scrape targets for which the
-        address are specified by the `MetricsEndpointProvider` as part
-        of the scrape job specification set in application relation data.
-        The address specified need not belong to any unit of the
-        `MetricsEndpointProvider` charm. As a result there is no reliable
-        way to determine the name (Juju topology unit name) for such a
-        target.
-
-        Args:
-            targets: a list of addresses of fully qualified hosts.
-            labels: labels specified by `MetricsEndpointProvider` clients
-                 which are associated with `targets`.
-            scrape_metadata: scrape related metadata provided by `MetricsEndpointProvider`.
-
-        Returns:
-            A dictionary containing the static scrape configuration
-            for a list of fully qualified hosts.
-        """
-        juju_labels = self._set_juju_labels(labels, scrape_metadata)
-        unitless_config = {"targets": targets, "labels": juju_labels}
-        return unitless_config
-
-    def _labeled_unit_config(
-        self, unit_name, host_address, ports, labels, scrape_metadata
-    ) -> dict:
-        """Static scrape configuration for a wildcard host.
-
-        Wildcard hosts are those scrape targets whose name (Juju unit
-        name) and address (unit IP address) is set into unit relation
-        data by the `MetricsEndpointProvider` charm, which sets this
-        data for ALL its units.
-
-        Args:
-            unit_name: a string representing the unit name of the wildcard host.
-            host_address: a string representing the address of the wildcard host.
-            ports: list of ports on which this wildcard host exposes its metrics.
-            labels: a dictionary of labels provided by
-                `MetricsEndpointProvider` intended to be associated with
-                this wildcard host.
-            scrape_metadata: scrape related metadata provided by `MetricsEndpointProvider`.
-
-        Returns:
-            A dictionary containing the static scrape configuration
-            for a single wildcard host.
-        """
-        juju_labels = self._set_juju_labels(labels, scrape_metadata)
-
-        juju_labels["juju_unit"] = unit_name
-
-        static_config = {"labels": juju_labels}
-
-        if ports:
-            targets = []
-            for port in ports:
-                targets.append("{}:{}".format(host_address, port))
-            static_config["targets"] = targets  # type: ignore
-        else:
-            static_config["targets"] = [host_address]  # type: ignore
-
-        return static_config
 
 
 def _dedupe_job_names(jobs: List[dict]):
