@@ -401,6 +401,11 @@ class PrometheusConfig:
         return sanitized_job
 
     @staticmethod
+    def sanitize_scrape_configs(scrape_configs: List[dict]) -> List[dict]:
+        """A vectorized version of `sanitize_scrape_config`."""
+        return [PrometheusConfig.sanitize_scrape_config(job) for job in scrape_configs]
+
+    @staticmethod
     def prefix_job_names(scrape_configs: List[dict], prefix: str) -> List[dict]:
         """Adds the given prefix to all the job names in the given scrape_configs list."""
         modified_scrape_configs = []
@@ -1131,6 +1136,7 @@ class MetricsEndpointConsumer(Object):
             JujuTopology.from_dict(scrape_metadata).identifier
         )
         scrape_jobs = PrometheusConfig.prefix_job_names(scrape_jobs, job_name_prefix)
+        scrape_jobs = PrometheusConfig.sanitize_scrape_configs(scrape_jobs)
 
         hosts = self._relation_hosts(relation)
         # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
@@ -1140,7 +1146,7 @@ class MetricsEndpointConsumer(Object):
         labeled_job_configs = []
         for job in scrape_jobs:
             config = self._labeled_static_job_config(
-                PrometheusConfig.sanitize_scrape_config(job),
+                job,
                 hosts,
                 scrape_metadata,
             )
@@ -1572,7 +1578,7 @@ class MetricsEndpointProvider(Object):
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
-        self._jobs = [PrometheusConfig.sanitize_scrape_config(job) for job in jobs]
+        self._jobs = PrometheusConfig.sanitize_scrape_configs(jobs)
         self.external_hostname = external_hostname
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
