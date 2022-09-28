@@ -419,10 +419,31 @@ class PrometheusConfig:
 
     @staticmethod
     def expand_wildcard_targets_into_individual_jobs(
-        scrape_jobs: List[dict], hosts: dict
+        scrape_jobs: List[dict],
+        hosts: dict,
+        topology: JujuTopology = None,
     ) -> List[dict]:
-        """Extract wildcard hosts from the given scrape_configs list into separate jobs."""
+        """Extract wildcard hosts from the given scrape_configs list into separate jobs.
+
+        Args:
+            scrape_jobs: list of scrape jobs.
+            hosts: a dictionary mapping host names to host address for
+                all units of the relation for which this job configuration
+                must be constructed.
+            topology: optional arg for adding topology labels to scrape targets.
+        """
         # hosts = self._relation_hosts(relation)
+
+        # relabel instance labels so that instance identifiers are globally unique
+        # stable over unit recreation
+        topology_relabel_config = {
+            "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
+            "separator": "_",
+            "target_label": "instance",
+            "regex": "(.*)",
+        }
+        topology_relabel_config_wildcard = copy.deepcopy(topology_relabel_config)
+        topology_relabel_config_wildcard["source_labels"].append("juju_unit")  # type: ignore[attr-defined]
 
         modified_scrape_jobs = []
         for job in scrape_jobs:
@@ -460,6 +481,17 @@ class PrometheusConfig:
                 if non_wildcard_targets:
                     non_wildcard_static_config = static_config.copy()
                     non_wildcard_static_config["targets"] = non_wildcard_targets
+
+                    if topology:
+                        # When non-wildcard targets (aka fully qualified hostnames) are specified,
+                        # there is no reliable way to determine the name (Juju topology unit name)
+                        # for such a target. Therefore labeling with Juju topology, excluding the
+                        # unit name.
+                        non_wildcard_static_config["labels"] = {
+                            **non_wildcard_static_config.get("labels", {}),
+                            **topology.label_matcher_dict,
+                        }
+
                     non_wildcard_static_configs.append(non_wildcard_static_config)
 
                 # Extract wildcard targets into individual jobs
@@ -467,7 +499,8 @@ class PrometheusConfig:
                     for unit_name, unit_hostname in hosts.items():
                         modified_job = job.copy()
                         modified_job["static_configs"] = [static_config.copy()]
-                        modified_job["static_configs"][0]["targets"] = [
+                        modified_static_config = modified_job["static_configs"][0]
+                        modified_static_config["targets"] = [
                             target.replace("*", unit_hostname) for target in wildcard_targets
                         ]
 
@@ -475,12 +508,33 @@ class PrometheusConfig:
                         job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
                         modified_job["job_name"] = job_name
                         modified_job["metrics_path"] = job.get("metrics_path") or "/metrics"
+
+                        if topology:
+                            # Add topology labels
+                            modified_static_config["labels"] = {
+                                **modified_static_config.get("labels", {}),
+                                **topology.label_matcher_dict,
+                                **{"juju_unit": unit_name},
+                            }
+
+                            # Instance relabeling for topology should be last in order.
+                            modified_job["relabel_configs"] = modified_job.get(
+                                "relabel_configs", []
+                            ) + [topology_relabel_config_wildcard]
+
                         modified_scrape_jobs.append(modified_job)
 
             if non_wildcard_static_configs:
                 modified_job = job.copy()
                 modified_job["static_configs"] = non_wildcard_static_configs
                 modified_job["metrics_path"] = modified_job.get("metrics_path") or "/metrics"
+
+                if topology:
+                    # Instance relabeling for topology should be last in order.
+                    modified_job["relabel_configs"] = modified_job.get("relabel_configs", []) + [
+                        topology_relabel_config
+                    ]
+
                 modified_scrape_jobs.append(modified_job)
 
         return modified_scrape_jobs
@@ -1140,7 +1194,7 @@ class MetricsEndpointConsumer(Object):
 
         hosts = self._relation_hosts(relation)
         # scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-        #     scrape_jobs, hosts
+        #     scrape_jobs, hosts, JujuTopology.from_dict(scrape_metadata)
         # )
 
         labeled_job_configs = []
