@@ -375,6 +375,22 @@ DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 class PrometheusConfig:
     """A namespace for utility functions for manipulating the prometheus config dict."""
 
+    # relabel instance labels so that instance identifiers are globally unique
+    # stable over unit recreation
+    topology_relabel_config = {
+        "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
+        "separator": "_",
+        "target_label": "instance",
+        "regex": "(.*)",
+    }
+
+    topology_relabel_config_wildcard = {
+        "source_labels": ["juju_model", "juju_model_uuid", "juju_application", "juju_unit"],
+        "separator": "_",
+        "target_label": "instance",
+        "regex": "(.*)",
+    }
+
     @staticmethod
     def sanitize_scrape_config(job: dict) -> dict:
         """Restrict permissible scrape configuration options.
@@ -433,17 +449,6 @@ class PrometheusConfig:
             topology: optional arg for adding topology labels to scrape targets.
         """
         # hosts = self._relation_hosts(relation)
-
-        # relabel instance labels so that instance identifiers are globally unique
-        # stable over unit recreation
-        topology_relabel_config = {
-            "source_labels": ["juju_model", "juju_model_uuid", "juju_application"],
-            "separator": "_",
-            "target_label": "instance",
-            "regex": "(.*)",
-        }
-        topology_relabel_config_wildcard = copy.deepcopy(topology_relabel_config)
-        topology_relabel_config_wildcard["source_labels"].append("juju_unit")  # type: ignore[attr-defined]
 
         modified_scrape_jobs = []
         for job in scrape_jobs:
@@ -520,7 +525,7 @@ class PrometheusConfig:
                             # Instance relabeling for topology should be last in order.
                             modified_job["relabel_configs"] = modified_job.get(
                                 "relabel_configs", []
-                            ) + [topology_relabel_config_wildcard]
+                            ) + [PrometheusConfig.topology_relabel_config_wildcard]
 
                         modified_scrape_jobs.append(modified_job)
 
@@ -532,7 +537,7 @@ class PrometheusConfig:
                 if topology:
                     # Instance relabeling for topology should be last in order.
                     modified_job["relabel_configs"] = modified_job.get("relabel_configs", []) + [
-                        topology_relabel_config
+                        PrometheusConfig.topology_relabel_config
                     ]
 
                 modified_scrape_jobs.append(modified_job)

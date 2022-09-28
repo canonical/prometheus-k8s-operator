@@ -1,9 +1,13 @@
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import logging
 import unittest
 
+from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusConfig
+
+logger = logging.getLogger(__name__)
 
 
 class TestWildcardExpansion(unittest.TestCase):
@@ -241,6 +245,78 @@ class TestWildcardExpansion(unittest.TestCase):
                         {"targets": ["1.1.1.1:1111"], "labels": {"static_config": "1st"}},
                         {"targets": ["2.2.2.2:2222"], "labels": {"static_config": "2nd"}},
                     ],
+                },
+            ],
+        )
+
+
+class TestWildcardExpansionWithTopology(unittest.TestCase):
+    """Similar to `TestWildcardExpansion`, but with rendering topology labels."""
+
+    def test_mixed_targets_with_topology(self):
+        # GIVEN scrape_configs with mixed target types in the same list, and without port numbers
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
+            }
+        ]
+
+        hosts = {
+            "unit/0": "10.10.10.10",
+            "unit/1": "11.11.11.11",
+        }
+
+        # AND some topology
+        topology = JujuTopology(
+            model="model",
+            model_uuid="00000000-0000-0000-a000-000000000000",
+            application="app",
+            charm_name="charm",
+        )
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN fully-qualified hosts have topology labels, excluding the unit
+        # AND wildcard hosts have topology labels, including the unit
+        self.assertEqual(
+            expanded,
+            [
+                {
+                    "job_name": "job-0",
+                    "metrics_path": "/metrics",
+                    "static_configs": [
+                        {
+                            "targets": ["10.10.10.10"],
+                            "labels": {**topology.label_matcher_dict, **{"juju_unit": "unit/0"}},
+                        }
+                    ],
+                    "relabel_configs": [PrometheusConfig.topology_relabel_config_wildcard],
+                },
+                {
+                    "job_name": "job-1",
+                    "metrics_path": "/metrics",
+                    "static_configs": [
+                        {
+                            "targets": ["11.11.11.11"],
+                            "labels": {**topology.label_matcher_dict, **{"juju_unit": "unit/1"}},
+                        }
+                    ],
+                    "relabel_configs": [PrometheusConfig.topology_relabel_config_wildcard],
+                },
+                {
+                    "job_name": "job",
+                    "metrics_path": "/metrics",
+                    "static_configs": [
+                        {
+                            "targets": ["1.1.1.1"],
+                            "labels": topology.label_matcher_dict,
+                        }
+                    ],
+                    "relabel_configs": [PrometheusConfig.topology_relabel_config],
                 },
             ],
         )
