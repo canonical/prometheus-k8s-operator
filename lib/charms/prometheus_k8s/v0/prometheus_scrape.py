@@ -324,11 +324,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from ops.charm import CharmBase, RelationRole
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
+from ops.model import Relation
 
 # The unique Charmhub library identifier, never change it
 LIBID = "bc84295fef5f4049878f07b131968ee2"
@@ -436,7 +438,7 @@ class PrometheusConfig:
     @staticmethod
     def expand_wildcard_targets_into_individual_jobs(
         scrape_jobs: List[dict],
-        hosts: dict,
+        hosts: Dict[str, Tuple[str, str]],
         topology: JujuTopology = None,
     ) -> List[dict]:
         """Extract wildcard hosts from the given scrape_configs list into separate jobs.
@@ -501,7 +503,7 @@ class PrometheusConfig:
 
                 # Extract wildcard targets into individual jobs
                 if wildcard_targets:
-                    for unit_name, unit_hostname in hosts.items():
+                    for unit_name, (unit_hostname, unit_path) in hosts.items():
                         modified_job = job.copy()
                         modified_job["static_configs"] = [static_config.copy()]
                         modified_static_config = modified_job["static_configs"][0]
@@ -512,7 +514,9 @@ class PrometheusConfig:
                         unit_num = unit_name.split("/")[-1]
                         job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
                         modified_job["job_name"] = job_name
-                        modified_job["metrics_path"] = job.get("metrics_path") or "/metrics"
+                        modified_job["metrics_path"] = unit_path + (
+                            job.get("metrics_path") or "/metrics"
+                        )
 
                         if topology:
                             # Add topology labels
@@ -1191,31 +1195,22 @@ class MetricsEndpointConsumer(Object):
         if not scrape_metadata:
             return scrape_jobs
 
-        job_name_prefix = "juju_{}_prometheus_scrape".format(
-            JujuTopology.from_dict(scrape_metadata).identifier
-        )
+        topology = JujuTopology.from_dict(scrape_metadata)
+
+        job_name_prefix = "juju_{}_prometheus_scrape".format(topology.identifier)
         scrape_jobs = PrometheusConfig.prefix_job_names(scrape_jobs, job_name_prefix)
         scrape_jobs = PrometheusConfig.sanitize_scrape_configs(scrape_jobs)
 
         hosts = self._relation_hosts(relation)
 
         scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            scrape_jobs, hosts, JujuTopology.from_dict(scrape_metadata)
+            scrape_jobs, hosts, topology
         )
 
         return scrape_jobs
 
-    def _relation_hosts(self, relation) -> dict:
-        """Fetch unit names and address of all metrics provider units for a single relation.
-
-        Args:
-            relation: An `ops.model.Relation` object for which the unit name to
-                address mapping is required.
-
-        Returns:
-            A dictionary that maps unit names to unit addresses for
-            the specified relation.
-        """
+    def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str]]:
+        """Returns a mapping from unit names to (address, path) tuples, for the given relation."""
         hosts = {}
         for unit in relation.units:
             # TODO deprecate and remove unit.name
@@ -1224,8 +1219,9 @@ class MetricsEndpointConsumer(Object):
             unit_address = relation.data[unit].get(
                 "prometheus_scrape_unit_address"
             ) or relation.data[unit].get("prometheus_scrape_host")
+            unit_path = relation.data[unit].get("prometheus_scrape_unit_path", "")
             if unit_name and unit_address:
-                hosts.update({unit_name: unit_address})
+                hosts.update({unit_name: (unit_address, unit_path)})
 
         return hosts
 
@@ -1336,7 +1332,7 @@ class MetricsEndpointProvider(Object):
         jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
-        external_hostname: str = None,
+        external_url: str = None,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1441,7 +1437,7 @@ class MetricsEndpointProvider(Object):
                 The alert rules are automatically updated on charm upgrade.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
-            external_hostname: an optional argument that represents an external hostname that
+            external_url: an optional argument that represents an external url that
                 can be generated by an Ingress or a Proxy.
 
         Raises:
@@ -1476,7 +1472,13 @@ class MetricsEndpointProvider(Object):
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
         self._jobs = PrometheusConfig.sanitize_scrape_configs(jobs)
-        self.external_hostname = external_hostname
+
+        if external_url:
+            external_url = (
+                external_url if urlparse(external_url).scheme else ("http://" + external_url)
+            )
+        self.external_url = external_url
+
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
         self.framework.observe(events.relation_changed, self._on_relation_changed)
@@ -1569,14 +1571,21 @@ class MetricsEndpointProvider(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
 
-            if self.external_hostname:
-                unit_address = self.external_hostname
+            # TODO store entire url in relation data, instead of only select url parts.
+
+            if self.external_url:
+                parsed = urlparse(self.external_url)
+                unit_address = parsed.hostname
+                path = parsed.path
             elif self._is_valid_unit_address(unit_ip):
                 unit_address = unit_ip
+                path = ""
             else:
                 unit_address = socket.getfqdn()
+                path = ""
 
             relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_address
+            relation.data[self._charm.unit]["prometheus_scrape_unit_path"] = path
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
             )
