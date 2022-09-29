@@ -19,7 +19,6 @@ import pytest
 from helpers import oci_image, unit_address
 from pytest_operator.plugin import OpsTest
 
-pytestmark = pytest.mark.skip("https://github.com/canonical/prometheus-k8s-operator/issues/360")
 
 logger = logging.getLogger(__name__)
 
