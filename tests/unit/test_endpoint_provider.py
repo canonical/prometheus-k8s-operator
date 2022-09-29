@@ -74,7 +74,7 @@ class EndpointProviderCharm(CharmBase):
         )
 
 
-class EndpointProviderCharmExternalHostname(CharmBase):
+class EndpointProviderCharmExternalUrl(CharmBase):
     _stored = StoredState()
 
     def __init__(self, *args, **kwargs):
@@ -84,7 +84,7 @@ class EndpointProviderCharmExternalHostname(CharmBase):
             self,
             jobs=JOBS,
             alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
-            external_hostname="9.12.20.18",
+            external_url="9.12.20.18",
         )
 
 
@@ -256,8 +256,8 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("prometheus_scrape_unit_name", data)
 
     @patch_network_get()
-    def test_provider_sets_external_hostname(self):
-        harness = Harness(EndpointProviderCharmExternalHostname, meta=PROVIDER_META)
+    def test_provider_sets_external_url(self):
+        harness = Harness(EndpointProviderCharmExternalUrl, meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
         harness.set_leader(True)
         harness.begin()

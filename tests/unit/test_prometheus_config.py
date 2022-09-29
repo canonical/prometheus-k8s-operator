@@ -21,8 +21,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # WHEN the jobs are processed
@@ -58,8 +58,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # WHEN the jobs are processed
@@ -96,8 +96,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # WHEN the jobs are processed
@@ -139,8 +139,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # WHEN the jobs are processed
@@ -181,8 +181,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # WHEN the jobs are processed
@@ -263,8 +263,8 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": "10.10.10.10",
-            "unit/1": "11.11.11.11",
+            "unit/0": ("10.10.10.10", ""),
+            "unit/1": ("11.11.11.11", ""),
         }
 
         # AND some topology
@@ -317,6 +317,93 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
                         }
                     ],
                     "relabel_configs": [PrometheusConfig.topology_relabel_config],
+                },
+            ],
+        )
+
+
+class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
+    """Similar to `TestWildcardExpansion`, but with path prefix."""
+
+    def test_default_metrics_endpoint_with_ingress_per_unit(self):
+        # GIVEN scrape_configs and per-unit path prefix
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
+            }
+        ]
+
+        hosts = {
+            "unit/0": ("10.10.10.10", "/model-unit-0"),
+            "unit/1": ("11.11.11.11", "/model-unit-1"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
+
+        # THEN wildcard targets have the ingress prefixed to the default metrics_path
+        # AND fully-qualified targets have the default metrics_path
+        self.assertEqual(
+            expanded,
+            [
+                {
+                    "job_name": "job-0",
+                    "static_configs": [{"targets": ["10.10.10.10"]}],
+                    "metrics_path": "/model-unit-0/metrics",
+                },
+                {
+                    "job_name": "job-1",
+                    "static_configs": [{"targets": ["11.11.11.11"]}],
+                    "metrics_path": "/model-unit-1/metrics",
+                },
+                {
+                    "job_name": "job",
+                    "static_configs": [{"targets": ["1.1.1.1"]}],
+                    "metrics_path": "/metrics",
+                },
+            ],
+        )
+
+    def test_custom_metrics_endpoint_with_ingress_per_unit(self):
+        # urlunparse(json.loads(json.dumps(urlparse("http://a.b/c")))) == "http://a.b/c"
+
+        # GIVEN scrape_configs and per-unit path prefix
+        jobs = [
+            {
+                "job_name": "job",
+                "metrics_path": "/custom/path",
+                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
+            }
+        ]
+
+        hosts = {
+            "unit/0": ("10.10.10.10", "/model-unit-0"),
+            "unit/1": ("11.11.11.11", "/model-unit-1"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(jobs, hosts)
+
+        # THEN wildcard targets have the ingress prefixed to the default metrics_path
+        # AND fully-qualified targets have the default metrics_path
+        self.assertEqual(
+            expanded,
+            [
+                {
+                    "job_name": "job-0",
+                    "static_configs": [{"targets": ["10.10.10.10"]}],
+                    "metrics_path": "/model-unit-0/custom/path",
+                },
+                {
+                    "job_name": "job-1",
+                    "static_configs": [{"targets": ["11.11.11.11"]}],
+                    "metrics_path": "/model-unit-1/custom/path",
+                },
+                {
+                    "job_name": "job",
+                    "static_configs": [{"targets": ["1.1.1.1"]}],
+                    "metrics_path": "/custom/path",
                 },
             ],
         )
