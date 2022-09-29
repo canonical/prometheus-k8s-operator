@@ -95,14 +95,16 @@ class PrometheusCharm(CharmBase):
 
         external_url = urlparse(self.external_url)
 
-        # TODO when https://github.com/canonical/traefik-k8s-operator/issues/78 is fixed, change
-        #  the refresh event to self.ingress.on.ready_for_unit.
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
             external_url=self.external_url,
-            refresh_event=self.on.update_status,  # needed for ingress
+            refresh_event=[  # needed for ingress
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
+                self.on.update_status,
+            ],
         )
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
         self.metrics_consumer = MetricsEndpointConsumer(self)
