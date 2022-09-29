@@ -101,7 +101,7 @@ class PrometheusCharm(CharmBase):
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
-            external_hostname=external_url.netloc,
+            external_url=self.external_url,
             refresh_event=self.on.update_status,  # needed for ingress
         )
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
@@ -167,17 +167,11 @@ class PrometheusCharm(CharmBase):
     @property
     def self_scraping_job(self):
         """The scrape job used by Prometheus to scrape itself during self-monitoring."""
-        # TODO https://github.com/canonical/prometheus-k8s-operator/issues/360
-        # A single scrape job cannot accommodate more than one unit with ingress-per-unit.
-        # With ingress, each unit is expected to have a different path. This means that each
-        # unit needs to have its own static_config, because `metrics_path` is on the same
-        # hierarchical level as `static_configs` (for this reason, *-notation cannot be used).
-        # However, scrape jobs are placed in app data, so only the leader unit can set it, and the
-        # leader unit must be able to obtain addresses of all units.
         port = urlparse(self.external_url).port or 80
         return [
             {
-                "metrics_path": self.metrics_path,
+                # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
+                # to specify it here.
                 "static_configs": [{"targets": [f"*:{port}"]}],
             }
         ]

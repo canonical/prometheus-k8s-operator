@@ -17,7 +17,6 @@ ops.testing.SIMULATE_CAN_CONNECT = True
 logger = logging.getLogger(__name__)
 
 
-@unittest.skip("https://github.com/canonical/prometheus-k8s-operator/issues/360")
 class TestWebExternalUrlForCharm(unittest.TestCase):
     """Test that the web_external_url config option is rendered correctly for the charm.
 
@@ -111,7 +110,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
-            "fqdn:9090",
+            "fqdn",
         )
 
         # AND the remote-write provider points to prom's fqdn
@@ -138,12 +137,10 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/metrics")
 
-        # AND the self-scrape job points to the external url
+        # AND the self-scrape job advertises a wildcard target on port 80
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
-            json.dumps(
-                [{"metrics_path": "/metrics", "static_configs": [{"targets": ["foo.bar"]}]}]
-            ),
+            json.dumps([{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:80"]}]}]),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
@@ -174,16 +171,16 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/metrics")
 
-        # AND the self-scrape job points to the external url
+        # AND the self-scrape job advertises a wildcard target on port 1234
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
             json.dumps(
-                [{"metrics_path": "/metrics", "static_configs": [{"targets": ["foo.bar:1234"]}]}]
+                [{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:1234"]}]}]
             ),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
-            "foo.bar:1234",
+            "foo.bar",
         )
 
         # AND the remote-write provider points to prom's fqdn
@@ -210,12 +207,10 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/baz/metrics")
 
-        # AND the self-scrape job points to the external url
+        # AND the self-scrape job advertises a wildcard target on port 80
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
-            json.dumps(
-                [{"metrics_path": "/baz/metrics", "static_configs": [{"targets": ["foo.bar"]}]}]
-            ),
+            json.dumps([{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:80"]}]}]),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
@@ -246,21 +241,21 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/baz/metrics")
 
-        # AND the self-scrape job points to the external url
+        # AND the self-scrape job advertises a wildcard target on port 1234
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
             json.dumps(
                 [
                     {
-                        "metrics_path": "/baz/metrics",
-                        "static_configs": [{"targets": ["foo.bar:1234"]}],
+                        "metrics_path": "/metrics",
+                        "static_configs": [{"targets": ["*:1234"]}],
                     }
                 ]
             ),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
-            "foo.bar:1234",
+            "foo.bar",
         )
 
         # AND the remote-write provider points to prom's fqdn

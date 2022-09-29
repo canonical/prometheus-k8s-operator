@@ -625,7 +625,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
             "remote-app/0",
             {
                 "prometheus_scrape_unit_address": "10.10.10.10",
-                # "prometheus_scrape_unit_path": external_url_path.substitute(unit=0),
+                "prometheus_scrape_unit_path": external_url_path.substitute(unit=0),
                 "prometheus_scrape_unit_name": "remote-app/0",
             },
         )
@@ -635,7 +635,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
             "remote-app/1",
             {
                 "prometheus_scrape_unit_address": "11.11.11.11",
-                # "prometheus_scrape_unit_path": external_url_path.substitute(unit=1),
+                "prometheus_scrape_unit_path": external_url_path.substitute(unit=1),
                 "prometheus_scrape_unit_name": "remote-app/1",
             },
         )
@@ -655,14 +655,17 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         # WHEN the the provider forwards a nice and simple scrape job
         self.set_relation_data(metrics_path=None, external_url_path=None)
 
-        # THEN the consumer side sees one job, two static_configs and one target per static_config
+        # THEN the consumer side sees two jobs
+        # AND one static_config per job
+        # AND one target per static_config
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), 1)  # one job
-        self.assertEqual(len(jobs[0]["static_configs"]), 2)  # one static_config per unit
+        self.assertEqual(len(jobs), 2)  # two jobs, one job per unit
+        self.assertEqual(len(jobs[0]["static_configs"]), 1)  # one static_config per unit
+        self.assertEqual(len(jobs[1]["static_configs"]), 1)
 
         # one target per static_config
         self.assertEqual(len(targets_unit_0 := jobs[0]["static_configs"][0]["targets"]), 1)
-        self.assertEqual(len(targets_unit_1 := jobs[0]["static_configs"][1]["targets"]), 1)
+        self.assertEqual(len(targets_unit_1 := jobs[1]["static_configs"][0]["targets"]), 1)
 
         # AND the consumer side expands it to unit addresses
         unit_netlocs = sorted([targets_unit_0[0], targets_unit_1[0]])
@@ -679,19 +682,21 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertEqual(jobs[0]["metrics_path"], "/custom_path")
 
-    @unittest.skip("Not yet impl'd")
     def test_job_with_same_path_prefix(self):
         # WHEN the provider sets unit addresses with the same path in both units
         self.set_relation_data(metrics_path=None, external_url_path=Template("/foo"))
 
-        # THEN the consumer side sees one job, two static_configs and one target per static_config
+        # THEN the consumer side sees two jobs
+        # AND one static_configs per job
+        # AN one target per static_config
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), 1)  # one job
-        self.assertEqual(len(jobs[0]["static_configs"]), 2)  # one static_config per unit
+        self.assertEqual(len(jobs), 2)  # two jobs
+        self.assertEqual(len(jobs[0]["static_configs"]), 1)  # one static_config per unit
+        self.assertEqual(len(jobs[1]["static_configs"]), 1)
 
         # one target per static_config
         self.assertEqual(len(targets_unit_0 := jobs[0]["static_configs"][0]["targets"]), 1)
-        self.assertEqual(len(targets_unit_1 := jobs[0]["static_configs"][1]["targets"]), 1)
+        self.assertEqual(len(targets_unit_1 := jobs[1]["static_configs"][0]["targets"]), 1)
 
         # AND the consumer side expands it to unit addresses
         unit_netlocs = sorted([targets_unit_0[0], targets_unit_1[0]])
@@ -699,8 +704,8 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
 
         # AND prefixes the default metrics_path with the unit's path
         self.assertEqual(jobs[0]["metrics_path"], "/foo/metrics")
+        self.assertEqual(jobs[1]["metrics_path"], "/foo/metrics")
 
-    @unittest.skip("Not yet impl'd")
     def test_job_with_different_path_prefix(self):
         # WHEN the provider sets unit addresses with a path
         self.set_relation_data(metrics_path=None, external_url_path=Template("/model-app-$unit"))
@@ -719,10 +724,9 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         self.assertEqual(unit_netlocs, ["10.10.10.10:1234", "11.11.11.11:1234"])
 
         # AND prefixes the default metrics_path with the unit's path
-        self.assertEqual(jobs[0]["metrics_path"], "/model-app-0/metrics")
-        self.assertEqual(jobs[1]["metrics_path"], "/model-app-1/metrics")
+        paths = sorted([jobs[0]["metrics_path"], jobs[1]["metrics_path"]])
+        self.assertEqual(paths, ["/model-app-0/metrics", "/model-app-1/metrics"])
 
-    @unittest.skip("Not yet impl'd")
     def test_job_with_port_and_path_prefix(self):
         # WHEN the provider sets unit addresses with a path and also specifies metrics_path
         self.set_relation_data(
@@ -731,5 +735,5 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
 
         # THEN the provider's metrics_path appended to the unit's path instead of the default
         jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(jobs[0]["metrics_path"], "/model-app-0/custom-path")
-        self.assertEqual(jobs[1]["metrics_path"], "/model-app-1/custom-path")
+        paths = sorted([jobs[0]["metrics_path"], jobs[1]["metrics_path"]])
+        self.assertEqual(paths, ["/model-app-0/custom-path", "/model-app-1/custom-path"])
