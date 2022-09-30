@@ -145,7 +145,8 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
         assert '"health":"down"' not in targets
 
     # Workaround to make sure everything is up-to-date: update-status
-    # - wait until ingress is really ready (https://github.com/canonical/traefik-k8s-operator/issues/78)
+    # - wait until ingress is really ready
+    #   (https://github.com/canonical/traefik-k8s-operator/issues/78)
     # - update-status
     async def get_ingressed_endpoints():
         action = (
