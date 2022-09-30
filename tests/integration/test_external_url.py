@@ -19,7 +19,6 @@ import pytest
 from helpers import oci_image, unit_address
 from pytest_operator.plugin import OpsTest
 
-
 logger = logging.getLogger(__name__)
 
 prometheus_app_name = "prometheus"
