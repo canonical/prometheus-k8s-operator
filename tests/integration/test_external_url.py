@@ -11,6 +11,7 @@
 """
 
 import asyncio
+import json
 import logging
 import subprocess
 import urllib.request
@@ -18,6 +19,7 @@ import urllib.request
 import pytest
 from helpers import oci_image, unit_address
 from pytest_operator.plugin import OpsTest
+from workload import Prometheus
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,42 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
         logger.info("Response: %s", targets)
         assert '"health":"up"' in targets
         assert '"health":"down"' not in targets
+
+    # Workaround to make sure everything is up-to-date: update-status
+    # - wait until ingress is really ready (https://github.com/canonical/traefik-k8s-operator/issues/78)
+    # - update-status
+    async def get_ingressed_endpoints():
+        action = (
+            await ops_test.model.applications["traefik"]
+            .units[0]
+            .run_action("show-proxied-endpoints")
+        )
+        res = (await action.wait()).results
+        # res looks like this:
+        # {'proxied-endpoints':
+        #   '{"prometheus/0": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-0"},
+        #     "prometheus/1": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-1"}
+        #    }', 'return-code': 0}
+
+        proxied_endpoints = json.loads(res["proxied-endpoints"])
+        endpoints = [v["url"] for v in proxied_endpoints.values()]
+        return endpoints
+
+    ingressed_endpoints = await get_ingressed_endpoints()
+    logger.debug("Waiting for endpoints to become reachable: %s", ingressed_endpoints)
+    await ops_test.model.block_until(
+        lambda: all(Prometheus(ep).is_ready() for ep in ingressed_endpoints)
+    )
+    await ops_test.model.set_config({"update-status-hook-interval": "10s"})
+    await asyncio.sleep(11)
+    await ops_test.model.set_config({"update-status-hook-interval": "60m"})
+    logger.info("At this point, ingressed endpoints should become reachable and reldata updated")
+    await ops_test.model.wait_for_idle(
+        apps=[prometheus_app_name, "traefik", external_prom_name],
+        status="active",
+        timeout=600,
+        idle_period=idle_period,
+    )
 
     # AND the self-scrape jobs are healthy (their scrape url must have the entire web_external_url
     # for this to work).
