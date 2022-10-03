@@ -83,6 +83,51 @@ async def test_deploy(ops_test: OpsTest, prometheus_charm):
     )
 
 
+async def wait_for_ingress(ops_test: OpsTest):
+    """Returns when all ingressed prometheuses are ready.
+
+    Wait until ingress is really ready.
+    Workaround for https://github.com/canonical/traefik-k8s-operator/issues/78.
+    """
+
+    async def get_ingressed_endpoints():
+        action = (
+            await ops_test.model.applications["traefik"]
+            .units[0]
+            .run_action("show-proxied-endpoints")
+        )
+        res = (await action.wait()).results
+        # res looks like this:
+        # {'proxied-endpoints':
+        #   '{"prometheus/0": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-0"},
+        #     "prometheus/1": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-1"}
+        #    }', 'return-code': 0}
+
+        proxied_endpoints = json.loads(res["proxied-endpoints"])
+        endpoints = [v["url"] for v in proxied_endpoints.values()]
+        return endpoints
+
+    ingressed_endpoints = await get_ingressed_endpoints()
+    logger.debug("Waiting for endpoints to become reachable: %s", ingressed_endpoints)
+    await ops_test.model.block_until(
+        lambda: all(Prometheus(ep).is_ready() for ep in ingressed_endpoints)
+    )
+
+
+async def force_update_status(ops_test: OpsTest):
+    """Force an update-status emission and wait for active/idle."""
+    await ops_test.model.set_config({"update-status-hook-interval": "10s"})
+    await asyncio.sleep(11)
+    await ops_test.model.set_config({"update-status-hook-interval": "60m"})
+    logger.debug("At this point, ingressed endpoints should become reachable and reldata updated")
+    await ops_test.model.wait_for_idle(
+        apps=[prometheus_app_name, "traefik", external_prom_name],
+        status="active",
+        timeout=600,
+        idle_period=idle_period,
+    )
+
+
 async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
     # Set up microk8s metallb addon, needed by traefik
     logger.info("(Re)-enabling metallb")
@@ -144,42 +189,12 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
         assert '"health":"up"' in targets
         assert '"health":"down"' not in targets
 
-    # Workaround to make sure everything is up-to-date: update-status
-    # - wait until ingress is really ready
-    #   (https://github.com/canonical/traefik-k8s-operator/issues/78)
-    # - update-status
-    async def get_ingressed_endpoints():
-        action = (
-            await ops_test.model.applications["traefik"]
-            .units[0]
-            .run_action("show-proxied-endpoints")
-        )
-        res = (await action.wait()).results
-        # res looks like this:
-        # {'proxied-endpoints':
-        #   '{"prometheus/0": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-0"},
-        #     "prometheus/1": {"url": "http://10.128.0.2:80/test-external-url-0lxt-prometheus-1"}
-        #    }', 'return-code': 0}
-
-        proxied_endpoints = json.loads(res["proxied-endpoints"])
-        endpoints = [v["url"] for v in proxied_endpoints.values()]
-        return endpoints
-
-    ingressed_endpoints = await get_ingressed_endpoints()
-    logger.debug("Waiting for endpoints to become reachable: %s", ingressed_endpoints)
-    await ops_test.model.block_until(
-        lambda: all(Prometheus(ep).is_ready() for ep in ingressed_endpoints)
-    )
-    await ops_test.model.set_config({"update-status-hook-interval": "10s"})
-    await asyncio.sleep(11)
-    await ops_test.model.set_config({"update-status-hook-interval": "60m"})
-    logger.info("At this point, ingressed endpoints should become reachable and reldata updated")
-    await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name, "traefik", external_prom_name],
-        status="active",
-        timeout=600,
-        idle_period=idle_period,
-    )
+    # Workaround to make sure everything is up-to-date:
+    # Ingress events are already passed as refresh_event to the MeetricsEndpointProvider.
+    # TODO remove these two lines when https://github.com/canonical/traefik-k8s-operator/issues/78
+    #  is fixed.
+    await wait_for_ingress(ops_test)
+    await force_update_status(ops_test)
 
     # AND the self-scrape jobs are healthy (their scrape url must have the entire web_external_url
     # for this to work).
