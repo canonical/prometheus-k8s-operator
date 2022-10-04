@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, cast, List
 from urllib.parse import urlparse
 
 import yaml
@@ -683,6 +683,22 @@ class PrometheusCharm(CharmBase):
         alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
         return alerting_config
 
+    def _remote_write_config(self) -> List[Dict[str, str]]:
+        """Construct Prometheus endpoints configuration for remote write.
+
+        See https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write
+
+        Returns:
+            list of dicts consisting of the remote write endpoints configuration for Prometheus.
+        """
+
+        endpoints = self._remote_write_consumer.endpoints
+
+        if not endpoints:
+            logger.debug("No remote write endpoints available")
+
+        return endpoints
+
     def _generate_prometheus_config(self, container) -> bool:
         """Construct Prometheus configuration and write to filesystem.
 
@@ -697,6 +713,9 @@ class PrometheusCharm(CharmBase):
         alerting_config = self._alerting_config()
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
+
+        if remote_write_config := self._remote_write_config():
+            prometheus_config["remote_write"] = remote_write_config
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         certs = {}
