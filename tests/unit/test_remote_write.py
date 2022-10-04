@@ -15,7 +15,13 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
-from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch
+from helpers import (
+    UNITTEST_DIR,
+    k8s_resource_multipatch,
+    patch_cos_tool_path,
+    patch_network_get,
+    prom_multipatch,
+)
 from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
@@ -28,7 +34,6 @@ name: consumer-tester
 requires:
   {RELATION_NAME}:
     interface: {RELATION_INTERFACE}
-requires:
     ingress-unit:
         interface: ingress-unit
         limit: 1
@@ -85,12 +90,13 @@ ALERT_RULES = {
 
 
 class RemoteWriteConsumerCharm(CharmBase):
+    @patch_cos_tool_path
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self.remote_write_consumer = PrometheusRemoteWriteConsumer(
             self,
             RELATION_NAME,
-            alert_rules_path="./tests/unit/prometheus_alert_rules",
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
         )
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
@@ -101,11 +107,7 @@ class RemoteWriteConsumerCharm(CharmBase):
         pass
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestRemoteWriteConsumer(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.harness = Harness(RemoteWriteConsumerCharm, meta=METADATA)
         self.addCleanup(self.harness.cleanup)
@@ -214,16 +216,12 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             assert False  # Could not find the correct alert rule to check
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 @prom_multipatch
 class TestRemoteWriteProvider(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
-        self.harness.set_model_info("lma", "123456")
+        self.harness.set_model_info("lma", "12de4fae-06cc-4ceb-9089-567be09fec78")
         self.addCleanup(self.harness.cleanup)
 
         patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")

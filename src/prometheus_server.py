@@ -4,6 +4,7 @@
 """Helper for interacting with Prometheus throughout the charm's lifecycle."""
 
 import logging
+from typing import Union
 from urllib.parse import urljoin
 
 import requests
@@ -50,13 +51,15 @@ class Prometheus:
         self.base_url = urljoin(f"http://{host}:{port}", web_route_prefix)
         self.api_timeout = api_timeout
 
-    def reload_configuration(self) -> bool:
+    def reload_configuration(self) -> Union[bool, str]:
         """Send a POST request to hot-reload the config.
 
         This reduces down-time compared to restarting the service.
 
         Returns:
-          True if reload succeeded (returned 200 OK); False otherwise.
+          True if reload succeeded (returned 200 OK);
+          "read_timeout" on a read timeout.
+          False on error.
         """
         url = urljoin(self.base_url, "-/reload")
         try:
@@ -64,7 +67,10 @@ class Prometheus:
 
             if response.status_code == 200:
                 return True
-        except (ConnectionError, ConnectTimeout, ReadTimeout) as e:
+        except ReadTimeout as e:
+            logger.info("config reload timed out via {}: {}".format(url, str(e)))
+            return "read_timeout"
+        except (ConnectionError, ConnectTimeout) as e:
             logger.error("config reload error via %s: %s", url, str(e))
 
         return False

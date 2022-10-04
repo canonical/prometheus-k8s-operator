@@ -21,7 +21,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
-from helpers import patch_network_get
+from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -70,11 +70,11 @@ class EndpointProviderCharm(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./tests/unit/prometheus_alert_rules"
+            self, jobs=JOBS, alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules")
         )
 
 
-class EndpointProviderCharmExternalHostname(CharmBase):
+class EndpointProviderCharmExternalUrl(CharmBase):
     _stored = StoredState()
 
     def __init__(self, *args, **kwargs):
@@ -83,8 +83,8 @@ class EndpointProviderCharmExternalHostname(CharmBase):
         self.provider = MetricsEndpointProvider(
             self,
             jobs=JOBS,
-            alert_rules_path="./tests/unit/prometheus_alert_rules",
-            external_hostname="9.12.20.18",
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
+            external_url="9.12.20.18",
         )
 
 
@@ -102,11 +102,7 @@ class EndpointProviderCharmWithMultipleEvents(CharmBase):
         )
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestEndpointProvider(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.harness.set_model_name("MyUUID")
@@ -114,9 +110,6 @@ class TestEndpointProvider(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.begin()
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def test_provider_default_scrape_relations_not_in_meta(self):
         """Tests that the Provider raises exception when no promethes_scrape in meta."""
         harness = Harness(
@@ -135,9 +128,6 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationNotFoundError, harness.begin)
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def test_provider_default_scrape_relation_wrong_interface(self):
         """Tests that Provider raises exception if the default relation has the wrong interface."""
         harness = Harness(
@@ -156,9 +146,6 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationInterfaceMismatchError, harness.begin)
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def test_provider_default_scrape_relation_wrong_role(self):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
@@ -202,9 +189,6 @@ class TestEndpointProvider(unittest.TestCase):
         "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
         autospec=True,
     )
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
         """Tests that Provider raises exception if the default relation has the wrong role."""
         harness = Harness(
@@ -228,9 +212,6 @@ class TestEndpointProvider(unittest.TestCase):
     @patch(
         "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
         autospec=True,
-    )
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
     )
     def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
         harness = Harness(
@@ -275,8 +256,8 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("prometheus_scrape_unit_name", data)
 
     @patch_network_get()
-    def test_provider_sets_external_hostname(self):
-        harness = Harness(EndpointProviderCharmExternalHostname, meta=PROVIDER_META)
+    def test_provider_sets_external_url(self):
+        harness = Harness(EndpointProviderCharmExternalUrl, meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
         harness.set_leader(True)
         harness.begin()
@@ -391,7 +372,6 @@ def customize_endpoint_provider(*args, **kwargs):
     return CustomizedEndpointProvider
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestNonStandardProviders(unittest.TestCase):
     def setup(self, **kwargs):
         bad_provider_charm = customize_endpoint_provider(
@@ -405,7 +385,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch_network_get()
     def test_a_bad_alert_expression_logs_an_error(self):
-        self.setup(alert_rules_path="./tests/unit/bad_alert_expressions")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_expressions"))
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -416,7 +396,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
     @patch_network_get()
     def test_a_bad_alert_rules_logs_an_error(self):
-        self.setup(alert_rules_path="./tests/unit/bad_alert_rules")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_rules"))
 
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -449,11 +429,7 @@ def expression_labels(expr):
         yield labels
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self) -> None:
         free_standing_rule = {
             "alert": "free_standing",
@@ -482,7 +458,9 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
             "rules/prom/prom_format/standard_rule.rule", yaml.safe_dump(rules_file_dict)
         )
 
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyUnit", "MyCharm")
+        self.topology = JujuTopology(
+            "MyModel", "12de4fae-06cc-4ceb-9089-567be09fec78", "MyApp", "MyUnit", "MyCharm"
+        )
 
     def test_non_recursive_is_default(self):
         rules = AlertRules(topology=self.topology)
@@ -588,13 +566,11 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
                 self.assertTrue("juju_unit" not in rule["labels"])
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self) -> None:
-        self.topology = JujuTopology("MyModel", "MyUUID", "MyApp", "MyCharm")
+        self.topology = JujuTopology(
+            "MyModel", "12de4fae-06cc-4ceb-9089-567be09fec78", "MyApp", "MyCharm"
+        )
 
     def gen_rule(self, name, **extra):
         return {
@@ -728,7 +704,6 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestAlertRulesContainingUnitTopology(unittest.TestCase):
     """Tests that check MetricsEndpointProvider does not remove unit topology.
 
@@ -750,7 +725,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
 
     @patch_network_get()
     def test_unit_label_is_retained_if_hard_coded(self):
-        self.setup(alert_rules_path="./tests/unit/alert_rules_with_unit_topology")
+        self.setup(alert_rules_path=str(UNITTEST_DIR / "alert_rules_with_unit_topology"))
         rel_id = self.harness.add_relation("metrics-endpoint", "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
 
@@ -763,13 +738,9 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
                 self.assertIn("juju_unit=", rule["expr"])
 
 
-@patch("charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True)
 class TestNoLeader(unittest.TestCase):
     """Tests the case where leader is not set immediately."""
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.harness = Harness(EndpointProviderCharm, meta=PROVIDER_META)
         self.harness.set_model_name("MyUUID")
@@ -798,7 +769,7 @@ class CharmProvidingPromBakedInRules(CharmBase):
         super().__init__(*args)
 
         self.provider = MetricsEndpointProvider(
-            self, jobs=JOBS, alert_rules_path="./src/prometheus_alert_rules"
+            self, jobs=JOBS, alert_rules_path=str(PROJECT_DIR / "src" / "prometheus_alert_rules")
         )
         self.tool = CosTool(self)
 
@@ -806,9 +777,6 @@ class CharmProvidingPromBakedInRules(CharmBase):
 class TestBakedInAlertRules(unittest.TestCase):
     """Test that the baked-in alert rules, as written to relation data, pass validation."""
 
-    @patch(
-        "charms.observability_libs.v0.juju_topology.JujuTopology.is_valid_uuid", lambda *args: True
-    )
     def setUp(self):
         self.harness = Harness(CharmProvidingPromBakedInRules, meta=PROVIDER_META)
         self.harness.set_model_name("MyUUID")
