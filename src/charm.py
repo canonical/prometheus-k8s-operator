@@ -89,25 +89,33 @@ class PrometheusCharm(CharmBase):
             resource_reqs_func=self._resource_reqs_from_config,
         )
 
+        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+
         self._topology = JujuTopology.from_charm(self)
+
+        external_url = urlparse(self.external_url)
 
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
+            external_url=self.external_url,
+            refresh_event=[  # needed for ingress
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
+                self.on.update_status,
+            ],
         )
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
         self.metrics_consumer = MetricsEndpointConsumer(self)
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
-        external_url = urlparse(self.external_url)
         self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             endpoint_address=external_url.hostname or "",
-            endpoint_port=external_url.port or self._port,
+            endpoint_port=external_url.port or 80,
             endpoint_schema=external_url.scheme,
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
@@ -154,9 +162,21 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
     @property
+    def metrics_path(self):
+        """The metrics path, adjusted by ingress path (if any)."""
+        return urlparse(self.external_url).path.rstrip("/") + "/metrics"
+
+    @property
     def self_scraping_job(self):
         """The scrape job used by Prometheus to scrape itself during self-monitoring."""
-        return [{"static_configs": [{"targets": [f"*:{self._port}"]}]}]
+        port = urlparse(self.external_url).port or 80
+        return [
+            {
+                # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
+                # to specify it here.
+                "static_configs": [{"targets": [f"*:{port}"]}],
+            }
+        ]
 
     @property
     def log_level(self):
@@ -180,7 +200,7 @@ class PrometheusCharm(CharmBase):
             "job_name": "prometheus",
             "scrape_interval": "5s",
             "scrape_timeout": "5s",
-            "metrics_path": "/metrics",
+            "metrics_path": self.metrics_path,
             "honor_timestamps": True,
             "scheme": "http",
             "static_configs": [
@@ -410,10 +430,13 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _update_layer(self, container) -> bool:
-        current_services = container.get_plan().services
+        current_planned_services = container.get_plan().services
         new_layer = self._prometheus_layer
 
-        if current_services == new_layer.services:
+        current_services = container.get_services()  # mapping from str to ServiceInfo
+        all_svcs_running = all(svc.is_running() for svc in current_services.values())
+
+        if current_planned_services == new_layer.services and all_svcs_running:
             return False
 
         container.add_layer(self._name, new_layer, combine=True)
