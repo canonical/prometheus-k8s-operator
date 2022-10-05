@@ -277,6 +277,7 @@ class PrometheusCharm(CharmBase):
 
     def _on_remote_write_endpoints_changed(self, event: RelationChangedEvent) -> None:
         """Event handler for the remote write endpoint changed event."""
+        logger.debug("Remote write endpoints were changed")
         self._configure(event)
 
     def _configure(self, _):
@@ -696,6 +697,8 @@ class PrometheusCharm(CharmBase):
 
         if not endpoints:
             logger.debug("No remote write endpoints available")
+        else:
+            logger.debug("Remote write endpoints are: %s", endpoints)
 
         return endpoints
 
