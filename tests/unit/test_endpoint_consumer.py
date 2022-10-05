@@ -2,7 +2,9 @@
 # See LICENSE file for licensing details.
 
 import json
+import logging
 import unittest
+from string import Template
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
@@ -13,6 +15,8 @@ from ops.framework import StoredState
 from ops.testing import Harness
 
 from tests.unit.helpers import PROJECT_DIR
+
+logger = logging.getLogger(__name__)
 
 RELATION_NAME = "metrics-endpoint"
 DEFAULT_JOBS = [{"metrics_path": "/metrics"}]
@@ -586,3 +590,150 @@ def wildcard_targets(jobs, wildcard_ports):
                     if target.endswith(port):
                         targets.append(target)
     return targets
+
+
+class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
+    """Test how scrape jobs of multiunit providers with wildcard-hosts get rendered to disk."""
+
+    def set_relation_data(self, metrics_path: str = None, external_url_path: Template = None):
+        job = {
+            "job_name": "job",
+            "static_configs": [{"targets": ["*:1234"]}],
+        }
+        if metrics_path:
+            job.update({"metrics_path": metrics_path})
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app",
+            {
+                "scrape_metadata": json.dumps(
+                    {
+                        "model": self.__class__.__name__,
+                        "model_uuid": "00000000-0000-0000-a000-000000000000",
+                        "application": "remote-app",
+                        "charm_name": "some-provider",
+                    }
+                ),
+                "scrape_jobs": json.dumps([job]),
+            },
+        )
+
+        external_url_path = external_url_path or Template("")
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app/0",
+            {
+                "prometheus_scrape_unit_address": "10.10.10.10",
+                "prometheus_scrape_unit_path": external_url_path.substitute(unit=0),
+                "prometheus_scrape_unit_name": "remote-app/0",
+            },
+        )
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "remote-app/1",
+            {
+                "prometheus_scrape_unit_address": "11.11.11.11",
+                "prometheus_scrape_unit_path": external_url_path.substitute(unit=1),
+                "prometheus_scrape_unit_name": "remote-app/1",
+            },
+        )
+
+    def setUp(self):
+        metadata_file = open("metadata.yaml")
+        self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
+
+        self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
+        self.harness.add_relation_unit(self.rel_id, "remote-app/0")
+        self.harness.add_relation_unit(self.rel_id, "remote-app/1")
+
+        self.addCleanup(self.harness.cleanup)
+        self.harness.begin()
+
+    def test_bare_job(self):
+        # WHEN the the provider forwards a nice and simple scrape job
+        self.set_relation_data(metrics_path=None, external_url_path=None)
+
+        # THEN the consumer side sees two jobs
+        # AND one static_config per job
+        # AND one target per static_config
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertEqual(len(jobs), 2)  # two jobs, one job per unit
+        self.assertEqual(len(jobs[0]["static_configs"]), 1)  # one static_config per unit
+        self.assertEqual(len(jobs[1]["static_configs"]), 1)
+
+        # one target per static_config
+        self.assertEqual(len(targets_unit_0 := jobs[0]["static_configs"][0]["targets"]), 1)
+        self.assertEqual(len(targets_unit_1 := jobs[1]["static_configs"][0]["targets"]), 1)
+
+        # AND the consumer side expands it to unit addresses
+        unit_netlocs = sorted([targets_unit_0[0], targets_unit_1[0]])
+        self.assertEqual(unit_netlocs, ["10.10.10.10:1234", "11.11.11.11:1234"])
+
+        # AND adds the default metrics_path key
+        self.assertEqual(jobs[0]["metrics_path"], "/metrics")
+
+    def test_job_with_metrics_path(self):
+        # WHEN the provider specifies a metrics_path
+        self.set_relation_data(metrics_path="/custom_path", external_url_path=None)
+
+        # THEN the consumer uses it
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertEqual(jobs[0]["metrics_path"], "/custom_path")
+
+    def test_job_with_same_path_prefix(self):
+        # WHEN the provider sets unit addresses with the same path in both units
+        self.set_relation_data(metrics_path=None, external_url_path=Template("/foo"))
+
+        # THEN the consumer side sees two jobs
+        # AND one static_configs per job
+        # AN one target per static_config
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertEqual(len(jobs), 2)  # two jobs
+        self.assertEqual(len(jobs[0]["static_configs"]), 1)  # one static_config per unit
+        self.assertEqual(len(jobs[1]["static_configs"]), 1)
+
+        # one target per static_config
+        self.assertEqual(len(targets_unit_0 := jobs[0]["static_configs"][0]["targets"]), 1)
+        self.assertEqual(len(targets_unit_1 := jobs[1]["static_configs"][0]["targets"]), 1)
+
+        # AND the consumer side expands it to unit addresses
+        unit_netlocs = sorted([targets_unit_0[0], targets_unit_1[0]])
+        self.assertEqual(unit_netlocs, ["10.10.10.10:1234", "11.11.11.11:1234"])
+
+        # AND prefixes the default metrics_path with the unit's path
+        self.assertEqual(jobs[0]["metrics_path"], "/foo/metrics")
+        self.assertEqual(jobs[1]["metrics_path"], "/foo/metrics")
+
+    def test_job_with_different_path_prefix(self):
+        # WHEN the provider sets unit addresses with a path
+        self.set_relation_data(metrics_path=None, external_url_path=Template("/model-app-$unit"))
+
+        # THEN the consumer side sees one job per unit
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertEqual(len(jobs), 2)  # one job per unit, so 2 in total
+        self.assertEqual(len(jobs[0]["static_configs"]), 1)
+
+        # one target per static_config
+        self.assertEqual(len(targets_unit_0 := jobs[0]["static_configs"][0]["targets"]), 1)
+        self.assertEqual(len(targets_unit_1 := jobs[1]["static_configs"][0]["targets"]), 1)
+
+        # AND the consumer side expands it to unit addresses
+        unit_netlocs = sorted([targets_unit_0[0], targets_unit_1[0]])
+        self.assertEqual(unit_netlocs, ["10.10.10.10:1234", "11.11.11.11:1234"])
+
+        # AND prefixes the default metrics_path with the unit's path
+        paths = sorted([jobs[0]["metrics_path"], jobs[1]["metrics_path"]])
+        self.assertEqual(paths, ["/model-app-0/metrics", "/model-app-1/metrics"])
+
+    def test_job_with_port_and_path_prefix(self):
+        # WHEN the provider sets unit addresses with a path and also specifies metrics_path
+        self.set_relation_data(
+            metrics_path="/custom-path", external_url_path=Template("/model-app-$unit")
+        )
+
+        # THEN the provider's metrics_path appended to the unit's path instead of the default
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        paths = sorted([jobs[0]["metrics_path"], jobs[1]["metrics_path"]])
+        self.assertEqual(paths, ["/model-app-0/custom-path", "/model-app-1/custom-path"])

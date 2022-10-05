@@ -32,23 +32,11 @@ class Prometheus:
               when we relate to an ingress.
             api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
         """
-        if web_route_prefix and not web_route_prefix.endswith("/"):
-            # If we do not add the '/' and the end, we will lose the last
-            # bit of the path:
-            #
-            # BAD:
-            #
-            # >>> urljoin('http://some/more', 'thing')
-            #   'http://some/thing'
-            #
-            # GOOD:
-            #
-            # >>> urljoin('http://some/more/', 'thing')
-            #   'http://some/more/thing'
-            #
-            web_route_prefix = f"{web_route_prefix}/"
+        web_route_prefix = web_route_prefix.lstrip("/").rstrip("/")
+        self.base_url = f"http://{host.rstrip('/')}:{port}/" + web_route_prefix
+        if not self.base_url.endswith("/"):
+            self.base_url += "/"
 
-        self.base_url = urljoin(f"http://{host}:{port}", web_route_prefix)
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> Union[bool, str]:

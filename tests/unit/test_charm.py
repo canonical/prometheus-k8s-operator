@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import ops
 import yaml
+from helpers import cli_arg, k8s_resource_multipatch, prom_multipatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import DEFAULT_CONSUMER_NAME
 from helpers import k8s_resource_multipatch, prom_multipatch
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
@@ -306,18 +307,6 @@ def scrape_config(config_yaml, job_name):
     for config in scrape_configs:
         if config["job_name"] == job_name:
             return config
-    return None
-
-
-def cli_arg(plan, cli_opt):
-    plan_dict = plan.to_dict()
-    args = plan_dict["services"]["prometheus"]["command"].split()
-    for arg in args:
-        opt_list = arg.split("=")
-        if len(opt_list) == 2 and opt_list[0] == cli_opt:
-            return opt_list[1]
-        if len(opt_list) == 1 and opt_list[0] == cli_opt:
-            return opt_list[0]
     return None
 
 
