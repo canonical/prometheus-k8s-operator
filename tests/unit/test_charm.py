@@ -10,9 +10,8 @@ from unittest.mock import patch
 
 import ops
 import yaml
-from helpers import cli_arg, k8s_resource_multipatch, prom_multipatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import DEFAULT_CONSUMER_NAME
-from helpers import k8s_resource_multipatch, prom_multipatch
+from helpers import cli_arg, k8s_resource_multipatch, prom_multipatch
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.testing import Harness
 
