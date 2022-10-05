@@ -694,7 +694,6 @@ class PrometheusCharm(CharmBase):
         Returns:
             list of dicts consisting of the remote write endpoints configuration for Prometheus.
         """
-
         endpoints = self._remote_write_consumer.endpoints
 
         if not endpoints:

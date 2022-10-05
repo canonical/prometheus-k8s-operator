@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import ops
 import yaml
+from charms.prometheus_k8s.v0.prometheus_remote_write import DEFAULT_CONSUMER_NAME
 from helpers import k8s_resource_multipatch, prom_multipatch
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
 from ops.testing import Harness
@@ -231,6 +232,30 @@ class TestCharm(unittest.TestCase):
             if job["job_name"] != "prometheus":
                 self.assertIn("honor_labels", job)
                 self.assertTrue(job["honor_labels"])
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_send_remote_write_endpoints(self, *unused):
+        rel_id = self.harness.add_relation(DEFAULT_CONSUMER_NAME, "prometheus-read")
+        unit_name = "prometheus-read/0"
+        self.harness.add_relation_unit(rel_id, unit_name)
+
+        self.harness.update_relation_data(
+            rel_id,
+            unit_name,
+            {"remote_write": json.dumps({"url": "http://1.1.1.1:9090/api/v1/write"})},
+        )
+
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        config = container.pull(PROMETHEUS_CONFIG)
+        prometheus_scrape_config = yaml.safe_load(config)
+
+        self.assertIn("remote_write", prometheus_scrape_config)
+        self.assertEqual(len(prometheus_scrape_config["remote_write"]), 1)
+        self.assertDictEqual(
+            prometheus_scrape_config["remote_write"][0],
+            {"url": "http://1.1.1.1:9090/api/v1/write"},
+        )
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
