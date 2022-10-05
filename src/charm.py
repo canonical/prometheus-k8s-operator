@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, Optional, cast, List
+from typing import Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -24,9 +24,10 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
 )
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
-    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME, PrometheusRemoteWriteConsumer,
+    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    PrometheusRemoteWriteConsumer,
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import (
