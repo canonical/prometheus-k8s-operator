@@ -150,6 +150,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
+        self.framework.observe(self.on.send_remote_write_relation_broken, self._configure)
         self.framework.observe(
             self._remote_write_consumer.on.endpoints_changed,
             self._on_remote_write_endpoints_changed,
