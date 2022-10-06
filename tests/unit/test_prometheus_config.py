@@ -418,10 +418,14 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
         static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
 
         # THEN all targets are under the same static_config
-        # AND no path_prefix present
+        # AND the default path_prefix is rendered
         self.assertEqual(
             static_configs,
-            {"alertmanagers": [{"static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}]}]},
+            {
+                "alertmanagers": [
+                    {"path_prefix": "/", "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}]},
+                ],
+            },
         )
 
     def test_ip_address_and_port(self):
@@ -433,13 +437,16 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
 
         # THEN all targets are under the same static_config
         # AND port makes part of the target string
-        # AND no path_prefix present
+        # AND the default path_prefix is rendered
         self.assertEqual(
             static_configs,
             {
                 "alertmanagers": [
-                    {"static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}]}
-                ]
+                    {
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                    },
+                ],
             },
         )
 
@@ -460,14 +467,14 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                     {
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
-                    }
-                ]
+                    },
+                ],
             },
         )
-    
+
     def test_ip_address_port_and_different_path_prefix(self):
         # GIVEN a hostname:port/path, all with the same path
-        alertmanagers = ["1.1.1.1:1111/some/path", "2.2.2.2:2222/some/other/path"]
+        alertmanagers = ["1.1.1.1:1111/some/path", "2.2.2.2:2222/some/other/path", "3.3.3.3"]
 
         # WHEN rendered
         static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
@@ -486,6 +493,10 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                         "path_prefix": "/some/other/path",
                         "static_configs": [{"targets": ["2.2.2.2:2222"]}],
                     },
-                ]
+                    {
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["3.3.3.3"]}],
+                    },
+                ],
             },
         )

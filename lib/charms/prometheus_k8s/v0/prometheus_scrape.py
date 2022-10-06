@@ -322,6 +322,7 @@ import re
 import socket
 import subprocess
 import tempfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -564,7 +565,24 @@ class PrometheusConfig:
         Returns:
             A dict representation for the static_configs section.
         """
-        return {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
+        # Make sure it's a valid url so urlparse could parse it.
+        scheme = re.compile(r"^https?://")
+        sanitized = [am if scheme.search(am) else "http://" + am for am in alertmanagers]
+
+        # Create a mapping from paths to netlocs
+        # Group alertmanager targets into a dictionary of lists:
+        # {path: [netloc1, netloc2]}
+        paths = defaultdict(list)  # type: Dict[str, List[str]]
+        for parsed in map(urlparse, sanitized):
+            path = parsed.path or "/"
+            paths[path].append(parsed.netloc)
+
+        return {
+            "alertmanagers": [
+                {"path_prefix": path_prefix, "static_configs": [{"targets": netlocs}]}
+                for path_prefix, netlocs in paths.items()
+            ]
+        }
 
 
 class RelationNotFoundError(Exception):
