@@ -60,13 +60,9 @@ async def test_good_config_validates_successfully(
     )
     res = (await action.wait()).results
 
-    assert res == {
-        "result": "Checking /etc/prometheus/prometheus.yml\n SUCCESS: /etc/prometheus/prometheus.yml is "
-        + "valid prometheus config file syntax\n\n",
-        "error-message": "",
-        "valid": "True",
-        "Code": "0",
-    }
+    assert res["error-message"] == ""
+    assert res["valid"] == "True"
+    assert "SUCCESS" in res["result"]  # NOTE: this is coming from promtool and may change
 
 
 @pytest.mark.abort_on_fail
