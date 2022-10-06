@@ -32,6 +32,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
+    PrometheusConfig,
 )
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
@@ -685,15 +686,14 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alerting_config = {}  # type: Dict[str, list]
-
         alertmanagers = self.alertmanager_consumer.get_cluster_info()
-
         if not alertmanagers:
             logger.debug("No alertmanagers available")
-            return alerting_config
+            return {}
 
-        alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
+        alerting_config: Dict[str, list] = PrometheusConfig.render_alertmanager_static_configs(
+            alertmanagers
+        )
         return alerting_config
 
     def _generate_prometheus_config(self, container) -> bool:

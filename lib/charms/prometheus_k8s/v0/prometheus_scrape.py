@@ -548,6 +548,24 @@ class PrometheusConfig:
 
         return modified_scrape_jobs
 
+    @staticmethod
+    def render_alertmanager_static_configs(alertmanagers: List[str]):
+        """Render the alertmanager static_configs section from a list of URLs.
+
+        Each target must be in the hostname:port format, and prefixes are specified in a separate
+        key. Therefore, with ingress in place, would need to extract the path into the
+        `path_prefix` key, which is higher up in the config hierarchy.
+
+        https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alertmanager_config
+
+        Args:
+            alertmanagers: List of alertmanager URLs.
+
+        Returns:
+            A dict representation for the static_configs section.
+        """
+        return {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
+
 
 class RelationNotFoundError(Exception):
     """Raised if there is no relation with the given name is found."""
