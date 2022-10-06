@@ -322,6 +322,7 @@ import re
 import socket
 import subprocess
 import tempfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -340,7 +341,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 23
 
 logger = logging.getLogger(__name__)
 
@@ -547,6 +548,41 @@ class PrometheusConfig:
                 modified_scrape_jobs.append(modified_job)
 
         return modified_scrape_jobs
+
+    @staticmethod
+    def render_alertmanager_static_configs(alertmanagers: List[str]):
+        """Render the alertmanager static_configs section from a list of URLs.
+
+        Each target must be in the hostname:port format, and prefixes are specified in a separate
+        key. Therefore, with ingress in place, would need to extract the path into the
+        `path_prefix` key, which is higher up in the config hierarchy.
+
+        https://prometheus.io/docs/prometheus/latest/configuration/configuration/#alertmanager_config
+
+        Args:
+            alertmanagers: List of alertmanager URLs.
+
+        Returns:
+            A dict representation for the static_configs section.
+        """
+        # Make sure it's a valid url so urlparse could parse it.
+        scheme = re.compile(r"^https?://")
+        sanitized = [am if scheme.search(am) else "http://" + am for am in alertmanagers]
+
+        # Create a mapping from paths to netlocs
+        # Group alertmanager targets into a dictionary of lists:
+        # {path: [netloc1, netloc2]}
+        paths = defaultdict(list)  # type: Dict[str, List[str]]
+        for parsed in map(urlparse, sanitized):
+            path = parsed.path or "/"
+            paths[path].append(parsed.netloc)
+
+        return {
+            "alertmanagers": [
+                {"path_prefix": path_prefix, "static_configs": [{"targets": netlocs}]}
+                for path_prefix, netlocs in paths.items()
+            ]
+        }
 
 
 class RelationNotFoundError(Exception):
