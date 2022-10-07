@@ -1,7 +1,13 @@
 name: Update Dependencies (fetch-lib)
+
 on:
   schedule:
     - cron:  '0 10 * * 1'
+  workflow_call:
+    secrets:
+      CHARMHUB_TOKEN:
+        required: true
+
 jobs:
   fetch-lib:
     runs-on: ubuntu-latest
