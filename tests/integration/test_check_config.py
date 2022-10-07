@@ -60,9 +60,9 @@ async def test_good_config_validates_successfully(
     )
     res = (await action.wait()).results
 
-    assert res["error-message"] == ""
     assert res["valid"] == "True"
-    assert "SUCCESS" in res["result"]  # NOTE: this is coming from promtool and may change
+    assert res["error-message"] == ""
+    assert "SUCCESS" in res["result"]  # NOTE: this is coming from promtool so may change
 
 
 @pytest.mark.abort_on_fail
@@ -101,9 +101,6 @@ async def test_bad_config_sets_action_results(ops_test, prometheus_charm, promet
     )
     res = (await action.wait()).results
 
-    assert res == {
-        "error-message": '  FAILED: parsing YAML file /etc/prometheus/prometheus.yml: not a valid duration string: "NotANumber!!!"\n',
-        "result": "Checking /etc/prometheus/prometheus.yml\n\n",
-        "Code": "0",
-        "valid": "False",
-    }
+    assert res["valid"] == "False"
+    assert "FAILED" in res["error-message"]  # NOTE: this is coming from promtool so may change
+    assert "SUCCESS" not in res["result"]  # NOTE: this is coming from promtool and may change
