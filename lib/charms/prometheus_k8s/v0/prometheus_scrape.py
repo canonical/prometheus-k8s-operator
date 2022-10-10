@@ -13,8 +13,10 @@ provide a scrape target for Prometheus.
 
 ## Requirements
 
-Using this library requires to fetch the juju_topology library from the
+Using this library requires you to fetch the juju_topology library from
 [observability-libs]((https://github.com/canonical/observability-libs/blob/main/lib/charms/observability_libs/v0/juju_topology.py).
+
+`charmcraft fetch-lib charms.observability_libs.v0.juju_topology`
 
 ## Provider Library Usage
 
