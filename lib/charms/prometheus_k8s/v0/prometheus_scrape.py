@@ -1,6 +1,6 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""## Overview.
+"""## Overview
 
 This document explains how to integrate with the Prometheus charm
 for the purpose of providing a metrics endpoint to Prometheus. It
@@ -10,6 +10,11 @@ currently integrated charms. Finally this document is the
 authoritative reference on the structure of relation data that is
 shared between Prometheus charms and any other charm that intends to
 provide a scrape target for Prometheus.
+
+## Requirements
+
+Using this library requires to fetch the juju_topology library from the
+[observability-libs]((https://github.com/canonical/observability-libs/blob/main/lib/charms/observability_libs/v0/juju_topology.py).
 
 ## Provider Library Usage
 
