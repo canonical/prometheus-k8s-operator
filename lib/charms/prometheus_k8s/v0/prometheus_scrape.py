@@ -14,7 +14,7 @@ provide a scrape target for Prometheus.
 ## Dependencies
 
 Using this library requires you to fetch the juju_topology library from
-[observability-libs]((https://github.com/canonical/observability-libs/blob/main/lib/charms/observability_libs/v0/juju_topology.py).
+[observability-libs](https://charmhub.io/observability-libs/libraries/juju_topology).
 
 `charmcraft fetch-lib charms.observability_libs.v0.juju_topology`
 
