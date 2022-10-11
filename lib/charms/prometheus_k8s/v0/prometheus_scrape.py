@@ -11,7 +11,7 @@ authoritative reference on the structure of relation data that is
 shared between Prometheus charms and any other charm that intends to
 provide a scrape target for Prometheus.
 
-## Requirements
+## Dependencies
 
 Using this library requires you to fetch the juju_topology library from
 [observability-libs]((https://github.com/canonical/observability-libs/blob/main/lib/charms/observability_libs/v0/juju_topology.py).
