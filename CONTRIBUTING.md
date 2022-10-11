@@ -3,7 +3,7 @@
 ## Overview
 
 This documents explains the processes and practices recommended for
-contributing enhancements to the Prometheus charm.
+contributing enhancements to the Prometheus Charmed Operator.
 
 - Generally, before developing enhancements to this charm, you should consider
   [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
@@ -12,8 +12,6 @@ contributing enhancements to the Prometheus charm.
   implementation, you can reach us at
   [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
   or [Discourse](https://discourse.charmhub.io/).
-  The primary author of this charm is available on the Mattermost channel as
-  `@balbir-thomas`.
 - Familiarising yourself with the
   [Charmed Operator Framework](https://juju.is/docs/sdk)
   library will help you a lot when working on new features or bug fixes.
@@ -21,41 +19,56 @@ contributing enhancements to the Prometheus charm.
   typically examines
   + code quality
   + test coverage
-  + user experience for Juju administrators
-  this charm.
+  + user experience for Juju administrators.
 - Please help us out in ensuring easy to review branches by rebasing
-  your pull request branch onto the `main` branch. This also avoids
-  merge commits and creates a linear Git commit history.
+  your pull request branch onto the `main` branch. This also avoids merge commits and creates a linear Git commit history.
 
-## Developing
 
-Create and activate a virtualenv with the development requirements:
+## Setup
+
+A typical development setup for charms created with the [Charmed Operator Framework](https://juju.is/docs/sdk) contains:
+
+
+- [Charmcraft](https://github.com/canonical/charmcraft) - Developer tooling for creating, building and publishing Charmed Operators
+- [Juju](https://juju.is/) - a Charmed Operator Lifecycle Manager (OLM), used for deploying and managing operators
+- [Multipass](https://multipass.run/) - a lightweight Ubuntu virtual machine manager (optional)
+- [MicroK8s](https://microk8s.io/) - a low-ops Kubernetes distribution we’ll use for testing our Charmed Operator (optional if developing a Charmed Operator for Kubernetes)
+
+Please [follow this guide](https://juju.is/docs/sdk/dev-setup) which will walk through the installation of these tools to get you started with charm development.
+
+
+### Testing
+
+All default tests can be executed by running `tox` without arguments.
+
+You can also manually run specific test environment:
 
 ```bash
-$ virtualenv -p python3 venv
-$ source venv/bin/activate
+tox -e lint         # check your code complies to linting rules
+tox -e static       # run static analysis
+tox -e unit         # run unit tests
+tox -e integration  # run integration tests
+tox -e fmt          # update your code according to linting rules
 ```
 
-### Charm Specific Setup
+Unit tests are written with the Operator Framework [test harness](https://ops.readthedocs.io/en/latest/#module-ops.testing).
 
-A typical setup using [Snap](https://snapcraft.io/), for deployments
-to a [microk8s](https://microk8s.io/) cluster can be achieved by
-following instructions in the Juju SDK
-[development setup](https://juju.is/docs/sdk/dev-setup).
-
-It is also essential that a Juju storage pool is created as follows
-
-```bash
-$ juju create-storage-pool operator-storage kubernetes storage-class=microk8s-hostpath
-```
 
 ### Build
 
-Build the charm in this git repository
+In order to pack the charm locally so it could be deployed from a local path we use
+[charmcraft](https://juju.is/docs/sdk/setting-up-charmcraft).
+
+From the charm's root folder:
 
 ```bash
 $ charmcraft pack
+Packing the charm
+Created 'prometheus-k8s_ubuntu-20.04-amd64.charm'.
+Charms packed:
+    prometheus-k8s_ubuntu-20.04-amd64.charm
 ```
+
 
 ### Deploy
 
@@ -65,35 +78,21 @@ $ juju deploy --trust \
     --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
-## Linting
-Flake8 and black linters may be run to check charm and test source code using the
-command
 
-```bash
-tox -e lint
-```
-
-## Testing
-
-Unit tests are implemented using the Operator Framework test
-[harness](https://ops.readthedocs.io/en/latest/#module-ops.testing). These
-tests may executed by doing
-
-```bash
-$ tox -e unit
-```
-
-It is expected that unit tests should provide at least 80% code coverage.
 
 ## Code Overview
 
 The core implementation of this charm is represented by the
 [`PrometheusCharm`](src/charm.py) class. `PrometheusCharm` responds to
 
+- [Pebble](https://github.com/canonical/pebble/) ready
 - configuration changes,
-- changes in relations with Alertmanager,
-- changes in relations with Grafana
+- charm upgrade
+- changes in relations with [Alertmanager](https://github.com/canonical/alertmanager-k8s-operator)
+- changes in relations with [Grafana](https://github.com/canonical/grafana-k8s-operator)
+- chamges in relation with [Traefik](https://github.com/canonical/traefik-k8s-operator) (Ingress)
 - changes in relations with any scrape target.
+
 
 In response to any change in its configuration, relations with
 Alertmanager or scrape target, `PrometheusCharm` regenerates its
