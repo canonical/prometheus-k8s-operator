@@ -1,6 +1,8 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""## Overview
+"""Source code can be found on GitHub at canonical/observability-libs/lib/charms/observability_libs.
+
+## Overview
 
 This document explains how to integrate with the Prometheus charm
 for the purpose of providing a metrics endpoint to Prometheus. It
