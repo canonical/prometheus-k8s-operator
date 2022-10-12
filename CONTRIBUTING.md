@@ -3,7 +3,7 @@
 ## Overview
 
 This documents explains the processes and practices recommended for
-contributing enhancements to the Prometheus Charmed Operator.
+contributing enhancements to the Prometheus charmed operator.
 
 - Generally, before developing enhancements to this charm, you should consider
   [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
@@ -72,33 +72,6 @@ $ juju deploy --trust \
     --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
-
-
-## Code Overview
-
-The core implementation of this charm is represented by the
-[`PrometheusCharm`](src/charm.py) class. `PrometheusCharm` responds to
-
-- [Pebble](https://github.com/canonical/pebble/) ready
-- configuration changes,
-- charm upgrade
-- changes in relations with [Alertmanager](https://github.com/canonical/alertmanager-k8s-operator)
-- changes in relations with [Grafana](https://github.com/canonical/grafana-k8s-operator)
-- chamges in relation with [Traefik](https://github.com/canonical/traefik-k8s-operator) (Ingress)
-- changes in relations with any scrape target.
-
-
-In response to any change in its configuration, relations with
-Alertmanager or scrape target, `PrometheusCharm` regenerates its
-config file, and restarts itself.
-
-In response to a change in relation with Grafana `PrometheusCharm`
-provides Grafana its own address and port. `PrometheusCharm` also
-validates all configurations options when provided before generating
-its config file.
-
-The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py).
 
 ### Library Details
 
