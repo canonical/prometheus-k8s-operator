@@ -37,4 +37,4 @@ configuration is generated.
 
 4. [Traefik Charmed Operator](https://charmhub.io/traefik-k8s), over the `ingress_per_unit` interface, so Prometheus may be reached from outside the Kubernetes cluster it is running on.
 
-5. [Catalogue CharmedOperator](https://github.com/canonical/catalogue-k8s-operator/tree/main/charm), over the `catalogue` interface, so Prometheus can be published in the service catalogue web page.
+5. [Catalogue Charmed Operator](https://charmhub.io/catalogue-k8s), over the `catalogue` interface, so Prometheus can be published in the service catalogue web page.
