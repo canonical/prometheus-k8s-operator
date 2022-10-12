@@ -26,15 +26,9 @@ contributing enhancements to the Prometheus Charmed Operator.
 
 ## Setup
 
-A typical development setup for charms created with the [Charmed Operator Framework](https://juju.is/docs/sdk) contains:
+This prometheus operator is developed with the [Charmed Operator Framework](https://juju.is/docs/sdk).
 
-
-- [Charmcraft](https://github.com/canonical/charmcraft) - Developer tooling for creating, building and publishing Charmed Operators
-- [Juju](https://juju.is/) - a Charmed Operator Lifecycle Manager (OLM), used for deploying and managing operators
-- [Multipass](https://multipass.run/) - a lightweight Ubuntu virtual machine manager (optional)
-- [MicroK8s](https://microk8s.io/) - a low-ops Kubernetes distribution we’ll use for testing our Charmed Operator (optional if developing a Charmed Operator for Kubernetes)
-
-Please [follow this guide](https://juju.is/docs/sdk/dev-setup) which will walk through the installation of these tools to get you started with charm development.
+Please follow the [dev-env setup guide](https://juju.is/docs/sdk/dev-setup) to get started.
 
 
 ### Testing
