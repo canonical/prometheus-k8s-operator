@@ -1572,9 +1572,9 @@ class MetricsEndpointProvider(Object):
                 else:
                     self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
 
-        self._set_scrape_job_spec(event)
+        self._set_scrape_job_spec()
 
-    def _set_scrape_job_spec(self, event):
+    def _set_scrape_job_spec(self, _=None):
         """Ensure scrape target information is made available to prometheus.
 
         When a metrics provider charm is related to a prometheus charm, the
@@ -1583,7 +1583,7 @@ class MetricsEndpointProvider(Object):
         data. In addition, each of the consumer units also sets its own
         host address in Juju unit relation data.
         """
-        self._set_unit_ip(event)
+        self._set_unit_ip()
 
         if not self._charm.unit.is_leader():
             return
@@ -1603,7 +1603,7 @@ class MetricsEndpointProvider(Object):
                 # that is written to the filesystem.
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
-    def _set_unit_ip(self, _):
+    def _set_unit_ip(self, _=None):
         """Set unit host address.
 
         Each time a metrics provider charm container is restarted it updates its own
