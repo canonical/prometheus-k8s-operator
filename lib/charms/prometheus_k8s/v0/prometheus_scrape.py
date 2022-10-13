@@ -1528,10 +1528,28 @@ class MetricsEndpointProvider(Object):
         self.framework.observe(events.relation_changed, self._on_relation_changed)
 
         if not refresh_event:
-            refresh_event = []
+            # FIXME remove once podspec charms are verified.
+            # `self._set_scrape_job_spec()` is called every re-init so this should not be needed.
+            if len(self._charm.meta.containers) == 1:
+                if "kubernetes" in self._charm.meta.series:
+                    # This is a podspec charm
+                    refresh_event = [self._charm.on.update_status]
+                else:
+                    # This is a sidecar/pebble charm
+                    container = list(self._charm.meta.containers.values())[0]
+                    refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
+            else:
+                logger.warning(
+                    "%d containers are present in metadata.yaml and "
+                    "refresh_event was not specified. Defaulting to update_status. "
+                    "Metrics IP may not be set in a timely fashion.",
+                    len(self._charm.meta.containers),
+                )
+                refresh_event = [self._charm.on.update_status]
 
-        if not isinstance(refresh_event, list):
-            refresh_event = [refresh_event]
+        else:
+            if not isinstance(refresh_event, list):
+                refresh_event = [refresh_event]
 
         for ev in refresh_event:
             self.framework.observe(ev, self._set_scrape_job_spec)
