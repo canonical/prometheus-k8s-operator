@@ -165,8 +165,12 @@ class PrometheusCharm(CharmBase):
             self._remote_write_consumer.on.endpoints_changed,
             self._on_remote_write_endpoints_changed,
         )
-        self.framework.observe(self._remote_write_consumer.on.endpoints_changed, self._push_alerts_to_remote_write)
-        self.framework.observe(self.metrics_consumer.on.targets_changed, self._push_alerts_to_remote_write)
+        self.framework.observe(
+            self._remote_write_consumer.on.endpoints_changed, self._push_alerts_to_remote_write
+        )
+        self.framework.observe(
+            self.metrics_consumer.on.targets_changed, self._push_alerts_to_remote_write
+        )
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
