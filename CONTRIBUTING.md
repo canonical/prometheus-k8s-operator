@@ -3,7 +3,7 @@
 ## Overview
 
 This documents explains the processes and practices recommended for
-contributing enhancements to the Prometheus charm.
+contributing enhancements to the Prometheus charmed operator.
 
 - Generally, before developing enhancements to this charm, you should consider
   [opening an issue ](https://github.com/canonical/prometheus-operator) explaining
@@ -12,8 +12,6 @@ contributing enhancements to the Prometheus charm.
   implementation, you can reach us at
   [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
   or [Discourse](https://discourse.charmhub.io/).
-  The primary author of this charm is available on the Mattermost channel as
-  `@balbir-thomas`.
 - Familiarising yourself with the
   [Charmed Operator Framework](https://juju.is/docs/sdk)
   library will help you a lot when working on new features or bug fixes.
@@ -21,41 +19,50 @@ contributing enhancements to the Prometheus charm.
   typically examines
   + code quality
   + test coverage
-  + user experience for Juju administrators
-  this charm.
+  + user experience for Juju administrators.
 - Please help us out in ensuring easy to review branches by rebasing
-  your pull request branch onto the `main` branch. This also avoids
-  merge commits and creates a linear Git commit history.
+  your pull request branch onto the `main` branch. This also avoids merge commits and creates a linear Git commit history.
 
-## Developing
 
-Create and activate a virtualenv with the development requirements:
+## Setup
 
-```bash
-$ virtualenv -p python3 venv
-$ source venv/bin/activate
-```
+This prometheus operator is developed with the [Charmed Operator Framework](https://juju.is/docs/sdk).
 
-### Charm Specific Setup
+Please follow the [dev-env setup guide](https://juju.is/docs/sdk/dev-setup) to get started.
 
-A typical setup using [Snap](https://snapcraft.io/), for deployments
-to a [microk8s](https://microk8s.io/) cluster can be achieved by
-following instructions in the Juju SDK
-[development setup](https://juju.is/docs/sdk/dev-setup).
 
-It is also essential that a Juju storage pool is created as follows
+### Testing
+
+All default tests can be executed by running `tox` without arguments.
+
+You can also manually run specific test environment:
 
 ```bash
-$ juju create-storage-pool operator-storage kubernetes storage-class=microk8s-hostpath
+tox -e lint         # check your code complies to linting rules
+tox -e static       # run static analysis
+tox -e unit         # run unit tests
+tox -e integration  # run integration tests
+tox -e fmt          # update your code according to linting rules
 ```
+
+Unit tests are written with the Operator Framework [test harness](https://ops.readthedocs.io/en/latest/#module-ops.testing).
+
 
 ### Build
 
-Build the charm in this git repository
+In order to pack the charm locally so it could be deployed from a local path we use
+[charmcraft](https://juju.is/docs/sdk/setting-up-charmcraft).
+
+From the charm's root folder:
 
 ```bash
 $ charmcraft pack
+Packing the charm
+Created 'prometheus-k8s_ubuntu-20.04-amd64.charm'.
+Charms packed:
+    prometheus-k8s_ubuntu-20.04-amd64.charm
 ```
+
 
 ### Deploy
 
@@ -65,47 +72,6 @@ $ juju deploy --trust \
     --resource prometheus-image=ubuntu/prometheus:latest
 ```
 
-## Linting
-Flake8 and black linters may be run to check charm and test source code using the
-command
-
-```bash
-tox -e lint
-```
-
-## Testing
-
-Unit tests are implemented using the Operator Framework test
-[harness](https://ops.readthedocs.io/en/latest/#module-ops.testing). These
-tests may executed by doing
-
-```bash
-$ tox -e unit
-```
-
-It is expected that unit tests should provide at least 80% code coverage.
-
-## Code Overview
-
-The core implementation of this charm is represented by the
-[`PrometheusCharm`](src/charm.py) class. `PrometheusCharm` responds to
-
-- configuration changes,
-- changes in relations with Alertmanager,
-- changes in relations with Grafana
-- changes in relations with any scrape target.
-
-In response to any change in its configuration, relations with
-Alertmanager or scrape target, `PrometheusCharm` regenerates its
-config file, and restarts itself.
-
-In response to a change in relation with Grafana `PrometheusCharm`
-provides Grafana its own address and port. `PrometheusCharm` also
-validates all configurations options when provided before generating
-its config file.
-
-The `PrometheusCharm` object interacts with its scrape targets using a
-[charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py).
 
 ### Library Details
 

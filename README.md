@@ -1,8 +1,8 @@
-# Prometheus Operator
+# Prometheus Charmed Operator for K8s
 
 ## Description
 
-The Prometheus Operator provides a cluster monitoring solution using
+The Prometheus Charmed Operator provides a cluster monitoring solution using
 [Prometheus](https://prometheus.io), which is an open source
 monitoring system and alerting toolkit.
 
@@ -41,36 +41,16 @@ In a similar manner any charm that exposes a scrape target may be
 related to the Prometheus charm.
 
 > Note: At present it is expected that all relations that Prometheus is
-> part of are within the same Juju model. For cross-model relations, 
-> please set up a Grafana Agent in the remote model and use `remote_write` 
+> part of are within the same Juju model. For cross-model relations,
+> please set up a Grafana Agent in the remote model and use `remote_write`
 > to get the metrics into Prometheus.
 
 ## Dashboard
 
-The Prometheus dashboard may be accessed at a configurable port (default: `9090`) 
+The Prometheus dashboard may be accessed at a configurable port (default: `9090`)
 on the IP address of the Prometheus unit. This unit and
 its IP address may be determined using the `juju status` command.
 
-## Relations
-
-Currently supported relations are
-
-- [Grafana](https://github.com/canonical/grafana-operator) aggregates
-  metrics scraped by Prometheus and provides a versatile dashboard to
-  view these metrics in configurable ways. Prometheus relates to
-  Grafana over the `grafana_datasource` interface.
-- [Alertmanager](https://github.com/canonical/alertmanager-operator)
-  receives alerts from Prometheus, aggregates and deduplicates them,
-  then forwards them to specified targets. Prometheus relates to
-  Alertmanager over the `alertmanager` interface.
-- Access to Prometheus from outside the Kubernetes cluster can be
-  provided via `ingress` relation with the
-  [Traefik Ingress Charm](https://charmhub.io/traefik-k8s).
-- In addition, this Prometheus charm allows relations with any
-  charm that supports the `prometheus_scrape` relation.
-- This Prometheus charm does not as yet support federation. This
-  implies scaling the number of Prometheus units results in each unit
-  scrape the same targets.
 
 ## Use Cases Supported
 
