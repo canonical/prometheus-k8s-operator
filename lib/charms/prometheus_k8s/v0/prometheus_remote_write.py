@@ -23,7 +23,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
-from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole
+from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole, RelationBrokenEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
@@ -630,7 +630,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
-        self.framework.observe(on_relation.relation_broken, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
         self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
         self.framework.observe(
             self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
@@ -638,6 +638,9 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(
             self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
         )
+
+    def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
+        self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
     def _handle_endpoints_changed(self, event: RelationEvent) -> None:
         if self._charm.unit.is_leader():
