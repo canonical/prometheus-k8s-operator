@@ -172,7 +172,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
-    def _push_alerts_to_remote_write(self, event):
+    def _push_alerts_to_remote_write(self, event) -> None:
+        """Get alert rules from metrics consumer and forward them to remote write consumer."""
         alerts = self.metrics_consumer.alerts()
         consumer_rules_list = self._remote_write_consumer.extra_rules_list = []
         for topology_identifier, alert_rule_groups in alerts.items():
