@@ -350,7 +350,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 logger = logging.getLogger(__name__)
 
@@ -1525,10 +1525,11 @@ class MetricsEndpointProvider(Object):
         self.external_url = external_url
 
         events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_joined, self._set_scrape_job_spec)
         self.framework.observe(events.relation_changed, self._on_relation_changed)
 
         if not refresh_event:
+            # FIXME remove once podspec charms are verified.
+            # `self._set_scrape_job_spec()` is called every re-init so this should not be needed.
             if len(self._charm.meta.containers) == 1:
                 if "kubernetes" in self._charm.meta.series:
                     # This is a podspec charm
@@ -1553,10 +1554,16 @@ class MetricsEndpointProvider(Object):
         for ev in refresh_event:
             self.framework.observe(ev, self._set_scrape_job_spec)
 
-        self.framework.observe(self._charm.on.upgrade_charm, self._set_scrape_job_spec)
-
-        # If there is no leader during relation_joined we will still need to set alert rules.
-        self.framework.observe(self._charm.on.leader_elected, self._set_scrape_job_spec)
+        # Update relation data every reinit. If instead we used event hooks then observing only
+        # relation-joined would not be sufficient:
+        # - Would need to observe leader-elected, in case there was no leader during
+        #   relation-joined.
+        # - If later related to an ingress provider, then would need to register and wait for
+        #   update-status interval to elapse before changes would apply.
+        # - The ingerss-ready custom event is currently emitted prematurely and cannot be relied
+        #   upon: https://github.com/canonical/traefik-k8s-operator/issues/78
+        # NOTE We may still end up waiting for update-status before changes are applied.
+        self._set_scrape_job_spec()
 
     def _on_relation_changed(self, event):
         """Check for alert rule messages in the relation data before moving on."""
@@ -1572,9 +1579,7 @@ class MetricsEndpointProvider(Object):
                 else:
                     self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
 
-        self._set_scrape_job_spec(event)
-
-    def _set_scrape_job_spec(self, event):
+    def _set_scrape_job_spec(self, _=None):
         """Ensure scrape target information is made available to prometheus.
 
         When a metrics provider charm is related to a prometheus charm, the
@@ -1583,7 +1588,7 @@ class MetricsEndpointProvider(Object):
         data. In addition, each of the consumer units also sets its own
         host address in Juju unit relation data.
         """
-        self._set_unit_ip(event)
+        self._set_unit_ip()
 
         if not self._charm.unit.is_leader():
             return
@@ -1603,7 +1608,7 @@ class MetricsEndpointProvider(Object):
                 # that is written to the filesystem.
                 relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
-    def _set_unit_ip(self, _):
+    def _set_unit_ip(self, _=None):
         """Set unit host address.
 
         Each time a metrics provider charm container is restarted it updates its own
