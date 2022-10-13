@@ -621,7 +621,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self.extra_rules_list = []
+        self.extra_rules_list: list = []
 
         self.topology = JujuTopology.from_charm(charm)
 
