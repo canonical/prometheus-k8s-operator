@@ -168,6 +168,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_sets_scrape_metadata(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_metadata", data)
         scrape_metadata = data["scrape_metadata"]
@@ -175,73 +180,15 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
-    @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
-        autospec=True,
-    )
-    def test_provider_selects_correct_refresh_event_for_sidecar(self, mock_set_unit_ip):
-        self.harness.add_relation(RELATION_NAME, "provider")
-
-        self.harness.container_pebble_ready("prometheus-tester")
-        self.assertEqual(mock_set_unit_ip.call_count, 1)
-
-    # @patch(
-    #     "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
-    #     autospec=True,
-    # )
-    # def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
-    #     """Tests that Provider raises exception if the default relation has the wrong role."""
-    #     harness = Harness(
-    #         EndpointProviderCharm,
-    #         # No provider relation with `prometheus_scrape` as interface
-    #         meta=f"""
-    #              name: provider-tester
-    #              containers:
-    #                prometheus-tester:
-    #              provides:
-    #                {RELATION_NAME}:
-    #                  interface: prometheus_scrape
-    #              series:
-    #                - kubernetes
-    #      """,
-    #     )
-    #     harness.begin()
-    #     harness.charm.on.update_status.emit()
-    #     self.assertEqual(mock_set_unit_ip.call_count, 1)
-
-    # @patch(
-    #     "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
-    #     autospec=True,
-    # )
-    # def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
-    #     harness = Harness(
-    #         EndpointProviderCharmWithMultipleEvents,
-    #         # No provider relation with `prometheus_scrape` as interface
-    #         meta=f"""
-    #              name: provider-tester
-    #              containers:
-    #                prometheus-tester:
-    #              provides:
-    #                {RELATION_NAME}:
-    #                  interface: prometheus_scrape
-    #              series:
-    #                - kubernetes
-    #      """,
-    #     )
-    #     harness.set_model_name("MyUUID")
-    #     harness.begin()
-    #     harness.add_relation(RELATION_NAME, "provider")
-
-    #     harness.charm.on.config_changed.emit()
-    #     self.assertEqual(mock_set_unit_ip.call_count, 1)
-
-    #     harness.container_pebble_ready("prometheus-tester")
-    #     self.assertEqual(mock_set_unit_ip.call_count, 2)
-
     @patch_network_get()
     def test_provider_unit_sets_address_on_pebble_ready(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
@@ -250,6 +197,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_unit_sets_address_on_relation_joined(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
@@ -263,6 +215,11 @@ class TestEndpointProvider(unittest.TestCase):
         harness.begin()
         rel_id = harness.add_relation(RELATION_NAME, "provider")
         harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        harness.charm.provider._set_scrape_job_spec()
+
         data = harness.get_relation_data(rel_id, harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "9.12.20.18")
@@ -273,6 +230,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_unit_sets_fqdn_if_not_address_on_relation_joined(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "some.host")
@@ -282,6 +244,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_supports_multiple_jobs(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_jobs", data)
         jobs = json.loads(data["scrape_jobs"])
@@ -294,6 +261,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_provider_sanitizes_jobs(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("scrape_jobs", data)
         jobs = json.loads(data["scrape_jobs"])
@@ -305,6 +277,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_each_alert_rule_is_topology_labeled(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
@@ -337,6 +314,11 @@ class TestEndpointProvider(unittest.TestCase):
     def test_each_alert_expression_is_topology_labeled(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
@@ -390,6 +372,11 @@ class TestNonStandardProviders(unittest.TestCase):
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
+
+            # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+            # https://github.com/canonical/operator/issues/736
+            self.harness.charm.provider._set_scrape_job_spec()
+
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn("Invalid rules file: missing_expr.rule", messages[0])
@@ -401,6 +388,11 @@ class TestNonStandardProviders(unittest.TestCase):
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
+
+            # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+            # https://github.com/canonical/operator/issues/736
+            self.harness.charm.provider._set_scrape_job_spec()
+
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
@@ -729,6 +721,10 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
         rel_id = self.harness.add_relation("metrics-endpoint", "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
 
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
+
         # check unit topology is present in labels and in alert rule expression
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
@@ -754,6 +750,10 @@ class TestNoLeader(unittest.TestCase):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
         self.harness.set_leader(True)
+
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
 
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name).get(
             "alert_rules"
@@ -789,6 +789,9 @@ class TestBakedInAlertRules(unittest.TestCase):
         """Verify alert rules are added when leader is elected after the relation is created."""
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
+        # Ugly re-init workaround: manually call `_set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        self.harness.charm.provider._set_scrape_job_spec()
 
         data = self.harness.get_relation_data(rel_id, self.harness.model.app.name)
         baked_in_alert_rules_as_they_appear_in_reldata = json.loads(data["alert_rules"])
