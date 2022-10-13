@@ -185,58 +185,58 @@ class TestEndpointProvider(unittest.TestCase):
         self.harness.container_pebble_ready("prometheus-tester")
         self.assertEqual(mock_set_unit_ip.call_count, 1)
 
-    @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
-        autospec=True,
-    )
-    def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
-        """Tests that Provider raises exception if the default relation has the wrong role."""
-        harness = Harness(
-            EndpointProviderCharm,
-            # No provider relation with `prometheus_scrape` as interface
-            meta=f"""
-                 name: provider-tester
-                 containers:
-                   prometheus-tester:
-                 provides:
-                   {RELATION_NAME}:
-                     interface: prometheus_scrape
-                 series:
-                   - kubernetes
-         """,
-        )
-        harness.begin()
-        harness.charm.on.update_status.emit()
-        self.assertEqual(mock_set_unit_ip.call_count, 1)
+    # @patch(
+    #     "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+    #     autospec=True,
+    # )
+    # def test_provider_selects_correct_refresh_event_for_podspec(self, mock_set_unit_ip):
+    #     """Tests that Provider raises exception if the default relation has the wrong role."""
+    #     harness = Harness(
+    #         EndpointProviderCharm,
+    #         # No provider relation with `prometheus_scrape` as interface
+    #         meta=f"""
+    #              name: provider-tester
+    #              containers:
+    #                prometheus-tester:
+    #              provides:
+    #                {RELATION_NAME}:
+    #                  interface: prometheus_scrape
+    #              series:
+    #                - kubernetes
+    #      """,
+    #     )
+    #     harness.begin()
+    #     harness.charm.on.update_status.emit()
+    #     self.assertEqual(mock_set_unit_ip.call_count, 1)
 
-    @patch(
-        "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
-        autospec=True,
-    )
-    def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
-        harness = Harness(
-            EndpointProviderCharmWithMultipleEvents,
-            # No provider relation with `prometheus_scrape` as interface
-            meta=f"""
-                 name: provider-tester
-                 containers:
-                   prometheus-tester:
-                 provides:
-                   {RELATION_NAME}:
-                     interface: prometheus_scrape
-                 series:
-                   - kubernetes
-         """,
-        )
-        harness.set_model_name("MyUUID")
-        harness.begin()
-        harness.add_relation(RELATION_NAME, "provider")
+    # @patch(
+    #     "charms.prometheus_k8s.v0.prometheus_scrape.MetricsEndpointProvider._set_unit_ip",
+    #     autospec=True,
+    # )
+    # def test_provider_can_refresh_on_multiple_events(self, mock_set_unit_ip):
+    #     harness = Harness(
+    #         EndpointProviderCharmWithMultipleEvents,
+    #         # No provider relation with `prometheus_scrape` as interface
+    #         meta=f"""
+    #              name: provider-tester
+    #              containers:
+    #                prometheus-tester:
+    #              provides:
+    #                {RELATION_NAME}:
+    #                  interface: prometheus_scrape
+    #              series:
+    #                - kubernetes
+    #      """,
+    #     )
+    #     harness.set_model_name("MyUUID")
+    #     harness.begin()
+    #     harness.add_relation(RELATION_NAME, "provider")
 
-        harness.charm.on.config_changed.emit()
-        self.assertEqual(mock_set_unit_ip.call_count, 1)
+    #     harness.charm.on.config_changed.emit()
+    #     self.assertEqual(mock_set_unit_ip.call_count, 1)
 
-        harness.container_pebble_ready("prometheus-tester")
-        self.assertEqual(mock_set_unit_ip.call_count, 2)
+    #     harness.container_pebble_ready("prometheus-tester")
+    #     self.assertEqual(mock_set_unit_ip.call_count, 2)
 
     @patch_network_get()
     def test_provider_unit_sets_address_on_pebble_ready(self):

@@ -1558,6 +1558,8 @@ class MetricsEndpointProvider(Object):
         # If there is no leader during relation_joined we will still need to set alert rules.
         self.framework.observe(self._charm.on.leader_elected, self._set_scrape_job_spec)
 
+        self._set_scrape_job_spec()
+
     def _on_relation_changed(self, event):
         """Check for alert rule messages in the relation data before moving on."""
         if self._charm.unit.is_leader():
