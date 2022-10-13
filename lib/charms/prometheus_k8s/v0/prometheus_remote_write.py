@@ -621,6 +621,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
+        self.extra_rules_list = []
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -668,6 +669,12 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules.add_path(self._alert_rules_path, recursive=False)
 
         alert_rules_as_dict = alert_rules.as_dict()
+
+        if self.extra_rules_list:
+            if alert_rules_as_dict:
+                alert_rules_as_dict["groups"].extend(self.extra_rules_list)
+            else:
+                alert_rules_as_dict["groups"] = self.extra_rules_list
 
         if alert_rules_as_dict:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)

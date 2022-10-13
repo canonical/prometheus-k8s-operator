@@ -153,6 +153,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
+        self.framework.observe(self.on.upgrade_charm, self._push_alerts_to_remote_write)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
@@ -164,10 +165,21 @@ class PrometheusCharm(CharmBase):
             self._remote_write_consumer.on.endpoints_changed,
             self._on_remote_write_endpoints_changed,
         )
+        self.framework.observe(self._remote_write_consumer.on.endpoints_changed, self._push_alerts_to_remote_write)
+        self.framework.observe(self.metrics_consumer.on.targets_changed, self._push_alerts_to_remote_write)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+
+    def _push_alerts_to_remote_write(self, event):
+        alerts = self.metrics_consumer.alerts()
+        consumer_rules_list = self._remote_write_consumer.extra_rules_list = []
+        for topology_identifier, alert_rule_groups in alerts.items():
+            consumer_rules_list.extend(alert_rule_groups.get("groups", []))
+
+        logger.debug("Extra rules were pushed to remote write endpoint. %s", consumer_rules_list)
+        self._remote_write_consumer.reload_alerts()
 
     @property
     def metrics_path(self):
