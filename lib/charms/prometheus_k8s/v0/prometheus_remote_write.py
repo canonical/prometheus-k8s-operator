@@ -23,7 +23,14 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
-from ops.charm import CharmBase, HookEvent, RelationEvent, RelationMeta, RelationRole, RelationBrokenEvent
+from ops.charm import (
+    CharmBase,
+    HookEvent,
+    RelationBrokenEvent,
+    RelationEvent,
+    RelationMeta,
+    RelationRole,
+)
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
