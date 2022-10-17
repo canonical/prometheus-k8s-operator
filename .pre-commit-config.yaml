@@ -1,3 +1,4 @@
+# exclude library folder from checks, except prometheus library itself
 exclude: ^((?!lib/charms/prometheus_k8s)lib).*$
 repos:
   - repo: https://github.com/PyCQA/autoflake
