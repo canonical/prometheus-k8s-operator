@@ -33,6 +33,11 @@ copyright-check = "True"
 copyright-author = "Canonical Ltd."
 copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
 
+[tool.autoflake]
+check = true
+remove-all-unused-imports = true
+in-place = true
+
 [tool.mypy]
 pretty = true
 python_version = 3.8

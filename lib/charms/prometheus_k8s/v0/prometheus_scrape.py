@@ -1784,8 +1784,8 @@ class MetricsEndpointAggregator(Object):
         {
             "prometheus": "monitoring",
             "scrape_target": "prometheus-target",
-            "alert_rules": "prometheus-rules"
-        }
+            "alert_rules": "prometheus-rules",
+        },
     )
     ```
 
