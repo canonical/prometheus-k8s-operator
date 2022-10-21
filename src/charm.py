@@ -96,29 +96,60 @@ class PrometheusCharm(CharmBase):
 
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
         self.metrics_consumer = MetricsEndpointConsumer(self)
-
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
         )
 
-        self.catalogue = CatalogueConsumer(
-            charm=self,
-            refresh_event=[
-                self.on.prometheus_pebble_ready,
-                self.on.leader_elected,
-                self.on["ingress"].relation_joined,
-            ],
-            item=CatalogueItem(
-                name="Prometheus",
-                icon="chart-line-variant",
-                url=self.external_url,
-                description=(
-                    "Prometheus collects, stores and serves metrics as time series data, "
-                    "alongside optional key-value pairs called labels."
+        # Skip external_url-dependent logic on removal
+        if os.getenv("JUJU_HOOK_NAME") not in ["stop", "remove"]:
+            external_url = urlparse(self.external_url)
+
+            self._scraping = MetricsEndpointProvider(
+                self,
+                relation_name="self-metrics-endpoint",
+                jobs=self.self_scraping_job,
+                external_url=self.external_url,
+                refresh_event=[  # needed for ingress
+                    self.ingress.on.ready_for_unit,
+                    self.ingress.on.revoked_for_unit,
+                    self.on.update_status,
+                ],
+            )
+            self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
+
+            self.remote_write_provider = PrometheusRemoteWriteProvider(
+                charm=self,
+                relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
+                endpoint_address=external_url.hostname or "",
+                endpoint_port=external_url.port or 80,
+                endpoint_schema=external_url.scheme,
+                endpoint_path=f"{external_url.path}/api/v1/write",
+            )
+
+            self.grafana_source_provider = GrafanaSourceProvider(
+                charm=self,
+                source_type="prometheus",
+                source_url=self.external_url,
+            )
+
+            self.catalogue = CatalogueConsumer(
+                charm=self,
+                refresh_event=[
+                    self.on.prometheus_pebble_ready,
+                    self.on.leader_elected,
+                    self.on["ingress"].relation_joined,
+                ],
+                item=CatalogueItem(
+                    name="Prometheus",
+                    icon="chart-line-variant",
+                    url=self.external_url,
+                    description=(
+                        "Prometheus collects, stores and serves metrics as time series data, "
+                        "alongside optional key-value pairs called labels."
+                    ),
                 ),
-            ),
-        )
+            )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -243,61 +274,6 @@ class PrometheusCharm(CharmBase):
 
         return Layer(layer_config)
 
-    def _initialize_with_url(self):
-        """Construct the objects which need the external url."""
-        external_url = urlparse(self.external_url)
-
-        if not hasattr(self, "_scraping"):
-            self._scraping = MetricsEndpointProvider(
-                self,
-                relation_name="self-metrics-endpoint",
-                jobs=self.self_scraping_job,
-                external_url=self.external_url,
-                refresh_event=[  # needed for ingress
-                    self.ingress.on.ready_for_unit,
-                    self.ingress.on.revoked_for_unit,
-                    self.on.update_status,
-                ],
-            )
-
-        if not hasattr(self, "_prometheus_server"):
-            self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
-
-        if not hasattr(self, "remote_write_provider"):
-            self.remote_write_provider = PrometheusRemoteWriteProvider(
-                charm=self,
-                relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-                endpoint_address=external_url.hostname or "",
-                endpoint_port=external_url.port or 80,
-                endpoint_schema=external_url.scheme,
-                endpoint_path=f"{external_url.path}/api/v1/write",
-            )
-
-        if not hasattr(self, "grafana_source_provider"):
-            self.grafana_source_provider = GrafanaSourceProvider(
-                charm=self,
-                source_type="prometheus",
-                source_url=self.external_url,
-            )
-
-        if not hasattr(self, "catalogue"):
-            self.catalogue = CatalogueConsumer(
-                charm=self,
-                refresh_event=[
-                    self.on.prometheus_pebble_ready,
-                    self.on["ingress"].relation_joined,
-                ],
-                item=CatalogueItem(
-                    name="Prometheus",
-                    icon="chart-line-variant",
-                    url=self.external_url,
-                    description=(
-                        "Prometheus collects, stores and serves metrics as time series data, "
-                        "alongside optional key-value pairs called labels."
-                    ),
-                ),
-            )
-
     def _resource_reqs_from_config(self):
         limits = {
             "cpu": self.model.config.get("cpu"),
@@ -328,8 +304,6 @@ class PrometheusCharm(CharmBase):
         line arguments). If the Pebble layer has changed then Prometheus
         is restarted.
         """
-        self._initialize_with_url()
-
         early_return_statuses = {
             "cfg_load_fail": BlockedStatus(
                 "Prometheus failed to reload the configuration; see debug logs"
