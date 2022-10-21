@@ -135,6 +135,7 @@ class PrometheusCharm(CharmBase):
             charm=self,
             refresh_event=[
                 self.on.prometheus_pebble_ready,
+                self.on.leader_elected,
                 self.on["ingress"].relation_joined,
             ],
             item=CatalogueItem(
