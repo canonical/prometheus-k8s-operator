@@ -45,7 +45,13 @@ from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    MaintenanceStatus,
+    ModelError,
+    WaitingStatus,
+)
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
 
@@ -101,55 +107,53 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        # Skip external_url-dependent logic on removal
-        if os.getenv("JUJU_HOOK_NAME") not in ["stop", "remove"]:
-            external_url = urlparse(self.external_url)
+        external_url = urlparse(self.external_url)
 
-            self._scraping = MetricsEndpointProvider(
-                self,
-                relation_name="self-metrics-endpoint",
-                jobs=self.self_scraping_job,
-                external_url=self.external_url,
-                refresh_event=[  # needed for ingress
-                    self.ingress.on.ready_for_unit,
-                    self.ingress.on.revoked_for_unit,
-                    self.on.update_status,
-                ],
-            )
-            self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
+        self._scraping = MetricsEndpointProvider(
+            self,
+            relation_name="self-metrics-endpoint",
+            jobs=self.self_scraping_job,
+            external_url=self.external_url,
+            refresh_event=[  # needed for ingress
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
+                self.on.update_status,
+            ],
+        )
+        self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
-            self.remote_write_provider = PrometheusRemoteWriteProvider(
-                charm=self,
-                relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-                endpoint_address=external_url.hostname or "",
-                endpoint_port=external_url.port or 80,
-                endpoint_schema=external_url.scheme,
-                endpoint_path=f"{external_url.path}/api/v1/write",
-            )
+        self.remote_write_provider = PrometheusRemoteWriteProvider(
+            charm=self,
+            relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
+            endpoint_address=external_url.hostname or "",
+            endpoint_port=external_url.port or 80,
+            endpoint_schema=external_url.scheme,
+            endpoint_path=f"{external_url.path}/api/v1/write",
+        )
 
-            self.grafana_source_provider = GrafanaSourceProvider(
-                charm=self,
-                source_type="prometheus",
-                source_url=self.external_url,
-            )
+        self.grafana_source_provider = GrafanaSourceProvider(
+            charm=self,
+            source_type="prometheus",
+            source_url=self.external_url,
+        )
 
-            self.catalogue = CatalogueConsumer(
-                charm=self,
-                refresh_event=[
-                    self.on.prometheus_pebble_ready,
-                    self.on.leader_elected,
-                    self.on["ingress"].relation_joined,
-                ],
-                item=CatalogueItem(
-                    name="Prometheus",
-                    icon="chart-line-variant",
-                    url=self.external_url,
-                    description=(
-                        "Prometheus collects, stores and serves metrics as time series data, "
-                        "alongside optional key-value pairs called labels."
-                    ),
+        self.catalogue = CatalogueConsumer(
+            charm=self,
+            refresh_event=[
+                self.on.prometheus_pebble_ready,
+                self.on.leader_elected,
+                self.on["ingress"].relation_joined,
+            ],
+            item=CatalogueItem(
+                name="Prometheus",
+                icon="chart-line-variant",
+                url=self.external_url,
+                description=(
+                    "Prometheus collects, stores and serves metrics as time series data, "
+                    "alongside optional key-value pairs called labels."
                 ),
-            )
+            ),
+        )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -245,10 +249,13 @@ class PrometheusCharm(CharmBase):
         on the cluster's DNS service, while the ip address is _sometimes_
         routable from the outside, e.g., when deploying on MicroK8s on Linux.
         """
-        if web_external_url := self.model.config.get("web_external_url"):
-            return web_external_url
-        if ingress_url := self.ingress.url:
-            return ingress_url
+        try:
+            if web_external_url := self.model.config.get("web_external_url"):
+                return web_external_url
+            if ingress_url := self.ingress.url:
+                return ingress_url
+        except ModelError as e:
+            logger.error("Failed obtaining external url: %s. Shutting down?", e)
         return f"http://{socket.getfqdn()}:{self._port}"
 
     @property
