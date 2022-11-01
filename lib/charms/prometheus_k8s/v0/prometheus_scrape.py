@@ -1378,7 +1378,7 @@ class MetricsEndpointProvider(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
-        lookaside_jobs_callable: Callable[Any, List[Dict]] = None,  # type: ignore
+        lookaside_jobs_callable: Callable[Union[Any, None], List[Dict]] = None,  # type: ignore
     ):
         """Construct a metrics provider for a Prometheus charm.
 
