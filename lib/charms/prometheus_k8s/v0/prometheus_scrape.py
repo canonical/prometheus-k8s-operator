@@ -333,7 +333,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
@@ -1378,7 +1378,7 @@ class MetricsEndpointProvider(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
-        lookaside_jobs_callable: Callable = None,  # type: ignore
+        lookaside_jobs_callable: Callable = None,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
