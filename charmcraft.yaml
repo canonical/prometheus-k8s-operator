@@ -12,6 +12,9 @@ parts:
   charm:
     build-packages:
       - git
+    charm-python-packages:
+      - wheel==0.37.1
+      - setuptools==45.2.0
   cos-tool:
     plugin: dump
     source: .
