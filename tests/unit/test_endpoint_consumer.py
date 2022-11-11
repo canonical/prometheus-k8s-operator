@@ -4,6 +4,7 @@
 import json
 import logging
 import unittest
+import uuid
 from string import Template
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
@@ -610,7 +611,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
                 "scrape_metadata": json.dumps(
                     {
                         "model": self.__class__.__name__,
-                        "model_uuid": "00000000-0000-0000-a000-000000000000",
+                        "model_uuid": str(uuid.uuid4()),
                         "application": "remote-app",
                         "charm_name": "some-provider",
                     }
