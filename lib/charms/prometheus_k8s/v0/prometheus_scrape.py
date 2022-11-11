@@ -350,7 +350,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 25
+LIBPATCH = 26
 
 logger = logging.getLogger(__name__)
 
@@ -449,7 +449,7 @@ class PrometheusConfig:
     def expand_wildcard_targets_into_individual_jobs(
         scrape_jobs: List[dict],
         hosts: Dict[str, Tuple[str, str]],
-        topology: JujuTopology = None,
+        topology: JujuTopology = None,  # type: ignore
     ) -> List[dict]:
         """Extract wildcard hosts from the given scrape_configs list into separate jobs.
 
@@ -1378,7 +1378,7 @@ class MetricsEndpointProvider(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
-        lookaside_jobs_callable: Callable = None,
+        lookaside_jobs_callable: Callable = None,  # type: ignore
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1586,6 +1586,11 @@ class MetricsEndpointProvider(Object):
                 else:
                     self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
 
+    def update_scrape_job_spec(self, jobs):
+        """Update scrape job specification."""
+        self._jobs = PrometheusConfig.sanitize_scrape_configs(jobs)
+        self.set_scrape_job_spec()
+
     def set_scrape_job_spec(self, _=None):
         """Ensure scrape target information is made available to prometheus.
 
@@ -1672,7 +1677,7 @@ class MetricsEndpointProvider(Object):
            single scrape job for Prometheus.
         """
         jobs = self._jobs if self._jobs else [DEFAULT_JOB]
-        if self._lookaside_jobs:
+        if callable(self._lookaside_jobs):
             return jobs + PrometheusConfig.sanitize_scrape_configs(self._lookaside_jobs())
         else:
             return jobs
