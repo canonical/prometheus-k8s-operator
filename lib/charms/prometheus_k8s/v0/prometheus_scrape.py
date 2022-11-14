@@ -449,7 +449,7 @@ class PrometheusConfig:
     def expand_wildcard_targets_into_individual_jobs(
         scrape_jobs: List[dict],
         hosts: Dict[str, Tuple[str, str]],
-        topology: JujuTopology = None,  # type: ignore
+        topology: JujuTopology = None,
     ) -> List[dict]:
         """Extract wildcard hosts from the given scrape_configs list into separate jobs.
 
@@ -1378,7 +1378,7 @@ class MetricsEndpointProvider(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
-        lookaside_jobs_callable: Callable = None,  # type: ignore
+        lookaside_jobs_callable: Callable = None,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
