@@ -411,7 +411,7 @@ class PrometheusCharm(CharmBase):
             self.unit.set_workload_version(version)
         else:
             logger.debug(
-                "Cannot set workload version at this time: could not get Alertmanager version."
+                "Cannot set workload version at this time: could not get Prometheus version."
             )
 
     def _update_config(self, container) -> bool:
@@ -459,20 +459,21 @@ class PrometheusCharm(CharmBase):
                 alert rule files need to be created. This container
                 must be in a pebble ready state.
 
-        Returns: A boolean indicating if new alert rules were pushed.
+        Returns: A boolean indicating if new or different alert rules were pushed.
         """
+        alert_rules_changed = True
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
-
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
+
         if alerts_hash == self._stored.alerts_hash:
-            return False
+            alert_rules_changed = False
 
         container.remove_path(RULES_DIR, recursive=True)
         self._push_alert_rules(container, self.metrics_consumer.alerts())
         self._push_alert_rules(container, self.remote_write_provider.alerts())
         self._stored.alerts_hash = alerts_hash
-        return True
+        return alert_rules_changed
 
     def _push_alert_rules(self, container, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
