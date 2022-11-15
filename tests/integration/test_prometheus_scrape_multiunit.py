@@ -221,7 +221,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     assert all([up_before[i] <= up_after[i] for i in range(num_units)])
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_rescale_prometheus(ops_test: OpsTest):
     # GitHub runner doesn't have enough resources to deploy 3 unit with the default "requests", and
     # the unit fails to schedule. Setting a low limit, so it is able to schedule.
@@ -265,7 +265,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     )
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_rescale_tester(ops_test: OpsTest):
     # WHEN testers are scaled up
     num_additional_units = 1
@@ -306,7 +306,7 @@ async def test_rescale_tester(ops_test: OpsTest):
     )
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and rescale testers at the same time (without waiting for idle)."""
     # WHEN prometheus is upgraded at the same time that the testers are scaled up
@@ -369,7 +369,7 @@ async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, pro
     )
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_rescale_prometheus_while_upgrading_testers(
     ops_test: OpsTest, prometheus_tester_charm
 ):
