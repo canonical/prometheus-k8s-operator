@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 5
 
 log = logging.getLogger(__name__)
 
@@ -112,6 +112,7 @@ INGRESS_REQUIRES_UNIT_SCHEMA = {
         "host": {"type": "string"},
         "port": {"type": "string"},
         "mode": {"type": "string"},
+        "strip-prefix": {"type": "string"},
     },
     "required": ["model", "name", "host", "port"],
 }
@@ -150,6 +151,7 @@ RequirerData = TypedDict(
         "host": str,
         "port": int,
         "mode": Optional[Literal["tcp", "http"]],
+        "strip-prefix": Optional[bool],
     },
     total=False,
 )
@@ -470,21 +472,25 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         return requirer_units_data
 
     def _get_requirer_unit_data(self, relation: Relation, remote_unit: Unit) -> RequirerData:  # type: ignore
-        """Attempts to fetch the requirer unit data for this unit.
+        """Fetch and validate the requirer unit data for this unit.
 
-        May raise KeyError if the remote unit didn't send (some of) the required
-        data yet, or ValidationError if it did share some data, but the data
-        is invalid.
+        For convenience, we convert 'port' to integer.
         """
+        if not relation.app or not relation.app.name:
+            # Handle edge case where remote app name can be missing, e.g.,
+            # relation_broken events.
+            # FIXME https://github.com/canonical/traefik-k8s-operator/issues/34
+            return {}
+
         databag = relation.data[remote_unit]
         remote_data = {}  # type: Dict[str, Union[int, str]]
-        for k in ("port", "host", "model", "name", "mode"):
+        for k in ("port", "host", "model", "name", "mode", "strip-prefix"):
             v = databag.get(k)
             if v is not None:
                 remote_data[k] = v
         _validate_data(remote_data, INGRESS_REQUIRES_UNIT_SCHEMA)
-        # do some convenience casting
         remote_data["port"] = int(remote_data["port"])
+        remote_data["strip-prefix"] = bool(remote_data.get("strip-prefix", False))
         return remote_data
 
     def _provider_app_data(self, relation: Relation) -> ProviderApplicationData:
@@ -653,6 +659,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         port: Optional[int] = None,
         mode: Literal["tcp", "http"] = "http",
         listen_to: Literal["only-this-unit", "all-units", "both"] = "only-this-unit",
+        strip_prefix: bool = False,
     ):
         """Constructor for IngressPerUnitRequirer.
 
@@ -688,6 +695,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         self._host = host
         self._port = port
         self._mode = mode
+        self._strip_prefix = strip_prefix
 
         self.listen_to = listen_to
 
@@ -777,6 +785,10 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
             "port": str(port),
             "mode": self._mode,
         }
+
+        if self._strip_prefix:
+            data["strip-prefix"] = "true"
+
         _validate_data(data, INGRESS_REQUIRES_UNIT_SCHEMA)
         self.relation.data[self.unit].update(data)
 

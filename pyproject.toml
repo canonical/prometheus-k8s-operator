@@ -47,6 +47,7 @@ namespace_packages = true
 explicit_package_bases = true
 check_untyped_defs = true
 allow_redefinition = true
+implicit_optional = true
 
 # Ignore libraries that do not have type hint nor stubs
 [[tool.mypy.overrides]]
@@ -54,7 +55,7 @@ module = ["pytest.*", "pytest_operator.*", "prometheus_api_client.*", "deepdiff.
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["charms.grafana_k8s.*", "charms.alertmanager_k8s.*", "charms.traefik_k8s.*"]
+module = ["charms.grafana_k8s.*", "charms.alertmanager_k8s.*", "charms.observability_libs.*", "charms.traefik_k8s.*"]
 follow_imports = "silent"
 
 [[tool.mypy.overrides]]
