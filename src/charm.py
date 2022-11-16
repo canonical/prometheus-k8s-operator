@@ -469,6 +469,8 @@ class PrometheusCharm(CharmBase):
         if alerts_hash == self._stored.alerts_hash:
             alert_rules_changed = False
 
+        # Pushing files every time for situations such as cluster restart:
+        # Relation data and stored state match, but files haven't been written yet.
         container.remove_path(RULES_DIR, recursive=True)
         self._push_alert_rules(container, self.metrics_consumer.alerts())
         self._push_alert_rules(container, self.remote_write_provider.alerts())
