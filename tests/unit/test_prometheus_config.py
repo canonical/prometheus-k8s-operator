@@ -3,6 +3,7 @@
 
 import logging
 import unittest
+import uuid
 
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusConfig
@@ -270,7 +271,7 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         # AND some topology
         topology = JujuTopology(
             model="model",
-            model_uuid="00000000-0000-0000-a000-000000000000",
+            model_uuid=str(uuid.uuid4()),
             application="app",
             charm_name="charm",
         )
