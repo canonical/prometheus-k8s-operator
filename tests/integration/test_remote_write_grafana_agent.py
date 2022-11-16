@@ -140,7 +140,7 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
     assert num_head_chunks_before <= num_head_chunks_after
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_check_data_not_persist_on_scale_0(ops_test, prometheus_charm):
     prometheus_app_name = "prometheus"
 
