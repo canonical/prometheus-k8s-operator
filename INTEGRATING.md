@@ -1,6 +1,6 @@
-## Integrating Prometheus
+## Integrating Prometheus Charmed Operator
 
-Prometheus integrates with the following
+Prometheus Charmed Operator integrates with the following:
 
 1. Any charm that supports the `prometheus_scrape` interface in
 serving as a scrape target for Prometheus. This integration is done
@@ -31,11 +31,10 @@ Any time new relations are made, or existing ones changed, between the
 Prometheus charm and any scrape target charm, a new Prometheus
 configuration is generated.
 
-2. Prometheus integrates with
-[Grafana](https://charmhub.io/grafana-k8s) which provides a dashboard
-for viewing metrics aggregated by Prometheus. These dasboards may be
-customised by charms that relate to Grafana.
+2. [Grafana Charmed Operator](https://charmhub.io/grafana-k8s), over the `grafana_datasource` interface, to provide a dashboard for viewing metrics aggregated by Prometheus. These dashboards may be customised by charms that relate to Grafana.
 
-3. Prometheus forwards alerts to one or more
-[Alertmanagers](https://charmhub.io/alertmanager-k8s) that are related
-to it.
+3. [Alertmanager Charmed Operator](https://charmhub.io/alertmanager-k8s), over the `alertmanager` interface, so Prometheus may forward alerts to it.
+
+4. [Traefik Charmed Operator](https://charmhub.io/traefik-k8s), over the `ingress_per_unit` interface, so Prometheus may be reached from outside the Kubernetes cluster it is running on.
+
+5. [Catalogue Charmed Operator](https://charmhub.io/catalogue-k8s), over the `catalogue` interface, so Prometheus can be published in the service catalogue web page.

@@ -45,18 +45,18 @@ requires:
 ALERT_RULES = {
     "groups": [
         {
-            "name": "None_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+            "name": "None_e674af04-0e76-4c11-92a0-f219fa8b4386_consumer-tester_alerts",
             "rules": [
                 {
                     "alert": "CPUOverUse",
                     "expr": 'process_cpu_seconds_total{juju_application="consumer-tester",'
                     'juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004"} > 0.12',
+                    'juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"} > 0.12',
                     "for": "0m",
                     "labels": {
                         "severity": "Low",
                         "juju_model": "None",
-                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
                         "juju_application": "consumer-tester",
                     },
                     "annotations": {
@@ -68,12 +68,12 @@ ALERT_RULES = {
                 {
                     "alert": "PrometheusTargetMissing",
                     "expr": 'up{juju_application="consumer-tester",juju_model="None",'
-                    'juju_model_uuid="f2c1b2a6-e006-11eb-ba80-0242ac130004"} == 0',
+                    'juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"} == 0',
                     "for": "0m",
                     "labels": {
                         "severity": "critical",
                         "juju_model": "None",
-                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
                         "juju_application": "consumer-tester",
                     },
                     "annotations": {

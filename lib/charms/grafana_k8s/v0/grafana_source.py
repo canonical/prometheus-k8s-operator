@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 logger = logging.getLogger(__name__)
 
@@ -507,7 +507,7 @@ class GrafanaSourceConsumer(Object):
             self._on_grafana_peer_changed,
         )
 
-    def _on_grafana_source_relation_changed(self, event: CharmEvents) -> None:
+    def _on_grafana_source_relation_changed(self, event: Optional[CharmEvents] = None) -> None:
         """Handle relation changes in related providers.
 
         If there are changes in relations between Grafana source consumers
@@ -652,6 +652,9 @@ class GrafanaSourceConsumer(Object):
         """On upgrade, ensure stored data maintains compatibility."""
         # self._stored.sources may have hyphens instead of underscores in key names.
         # Make sure they reconcile.
+        if not self._charm.unit.is_leader():
+            return
+
         self._set_default_data()
         sources = _type_convert_stored(self._stored.sources)
         for rel_id in sources.keys():
@@ -673,6 +676,20 @@ class GrafanaSourceConsumer(Object):
             peer_sources_to_delete = set(self.get_peer_data("sources_to_delete"))
             sources_to_delete = set.union(old_sources_to_delete, peer_sources_to_delete)
             self.set_peer_data("sources_to_delete", sources_to_delete)
+
+    def update_sources(self, relation: Relation = None) -> None:
+        """Re-establish sources on one or more relations.
+
+        If something changes between this library and a datasource, try to re-establish
+        datasources.
+
+        Args:
+            relation: a specific relation for which the datasources have to be
+                updated. If not specified, all relations managed by this
+                :class:`GrafanaSourceConsumer` will be updated.
+        """
+        if self._charm.unit.is_leader():
+            self._on_grafana_source_relation_changed(None)
 
     @property
     def sources(self) -> List[dict]:
@@ -698,9 +715,9 @@ class GrafanaSourceConsumer(Object):
 
     def set_peer_data(self, key: str, data: Any) -> None:
         """Put information into the peer data bucket instead of `StoredState`."""
-        self._charm.peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore
+        self._charm.peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore[attr-defined]
 
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
-        data = self._charm.peers.data[self._charm.app].get(key, "")  # type: ignore
+        data = self._charm.peers.data[self._charm.app].get(key, "")  # type: ignore[attr-defined]
         return json.loads(data) if data else {}

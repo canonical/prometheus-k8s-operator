@@ -33,6 +33,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
+    PrometheusConfig,
 )
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
@@ -45,7 +46,13 @@ from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase, RelationChangedEvent
 from ops.framework import StoredState
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    MaintenanceStatus,
+    ModelError,
+    WaitingStatus,
+)
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
 
@@ -94,6 +101,13 @@ class PrometheusCharm(CharmBase):
 
         self._topology = JujuTopology.from_charm(self)
 
+        self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
+        self.metrics_consumer = MetricsEndpointConsumer(self)
+        self.alertmanager_consumer = AlertmanagerConsumer(
+            charm=self,
+            relation_name="alertmanager",
+        )
+
         external_url = urlparse(self.external_url)
 
         self._scraping = MetricsEndpointProvider(
@@ -107,9 +121,6 @@ class PrometheusCharm(CharmBase):
                 self.on.update_status,
             ],
         )
-        self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
-        self.metrics_consumer = MetricsEndpointConsumer(self)
-
         self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
@@ -128,15 +139,12 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.external_url,
         )
-        self.alertmanager_consumer = AlertmanagerConsumer(
-            charm=self,
-            relation_name="alertmanager",
-        )
 
         self.catalogue = CatalogueConsumer(
             charm=self,
             refresh_event=[
                 self.on.prometheus_pebble_ready,
+                self.on.leader_elected,
                 self.on["ingress"].relation_joined,
             ],
             item=CatalogueItem(
@@ -266,10 +274,13 @@ class PrometheusCharm(CharmBase):
         on the cluster's DNS service, while the ip address is _sometimes_
         routable from the outside, e.g., when deploying on MicroK8s on Linux.
         """
-        if web_external_url := self.model.config.get("web_external_url"):
-            return web_external_url
-        if ingress_url := self.ingress.url:
-            return ingress_url
+        try:
+            if web_external_url := self.model.config.get("web_external_url"):
+                return web_external_url
+            if ingress_url := self.ingress.url:
+                return ingress_url
+        except ModelError as e:
+            logger.error("Failed obtaining external url: %s. Shutting down?", e)
         return f"http://{socket.getfqdn()}:{self._port}"
 
     @property
@@ -439,7 +450,7 @@ class PrometheusCharm(CharmBase):
             self.unit.set_workload_version(version)
         else:
             logger.debug(
-                "Cannot set workload version at this time: could not get Alertmanager version."
+                "Cannot set workload version at this time: could not get Prometheus version."
             )
 
     def _update_config(self, container) -> bool:
@@ -487,20 +498,20 @@ class PrometheusCharm(CharmBase):
                 alert rule files need to be created. This container
                 must be in a pebble ready state.
 
-        Returns: A boolean indicating if new alert rules were pushed.
+        Returns: A boolean indicating if new or different alert rules were pushed.
         """
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
-
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
-        if alerts_hash == self._stored.alerts_hash:
-            return False
+        alert_rules_changed = alerts_hash != self._stored.alerts_hash
 
+        # Pushing files every time for situations such as cluster restart:
+        # Relation data and stored state match, but files haven't been written yet.
         container.remove_path(RULES_DIR, recursive=True)
         self._push_alert_rules(container, self.metrics_consumer.alerts())
         self._push_alert_rules(container, self.remote_write_provider.alerts())
         self._stored.alerts_hash = alerts_hash
-        return True
+        return alert_rules_changed
 
     def _push_alert_rules(self, container, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
@@ -715,15 +726,14 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alerting_config = {}  # type: Dict[str, list]
-
         alertmanagers = self.alertmanager_consumer.get_cluster_info()
-
         if not alertmanagers:
             logger.debug("No alertmanagers available")
-            return alerting_config
+            return {}
 
-        alerting_config = {"alertmanagers": [{"static_configs": [{"targets": alertmanagers}]}]}
+        alerting_config: Dict[str, list] = PrometheusConfig.render_alertmanager_static_configs(
+            alertmanagers
+        )
         return alerting_config
 
     def _remote_write_config(self) -> List[Dict[str, str]]:

@@ -3,6 +3,7 @@
 
 import logging
 import unittest
+import uuid
 
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusConfig
@@ -270,7 +271,7 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         # AND some topology
         topology = JujuTopology(
             model="model",
-            model_uuid="00000000-0000-0000-a000-000000000000",
+            model_uuid=str(uuid.uuid4()),
             application="app",
             charm_name="charm",
         )
@@ -406,4 +407,97 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
                     "metrics_path": "/custom/path",
                 },
             ],
+        )
+
+
+class TestAlertmanagerStaticConfigs(unittest.TestCase):
+    def test_ip_address_only(self):
+        # GIVEN a hostname only
+        alertmanagers = ["1.1.1.1", "2.2.2.2"]
+
+        # WHEN rendered
+        static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
+
+        # THEN all targets are under the same static_config
+        # AND the default path_prefix is rendered
+        self.assertEqual(
+            static_configs,
+            {
+                "alertmanagers": [
+                    {"path_prefix": "/", "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}]},
+                ],
+            },
+        )
+
+    def test_ip_address_and_port(self):
+        # GIVEN a hostname:port
+        alertmanagers = ["1.1.1.1:1111", "2.2.2.2:2222"]
+
+        # WHEN rendered
+        static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
+
+        # THEN all targets are under the same static_config
+        # AND port makes part of the target string
+        # AND the default path_prefix is rendered
+        self.assertEqual(
+            static_configs,
+            {
+                "alertmanagers": [
+                    {
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                    },
+                ],
+            },
+        )
+
+    def test_ip_address_port_and_same_path_prefix(self):
+        # GIVEN a hostname:port/path, all with the same path
+        alertmanagers = ["1.1.1.1:1111/some/path", "2.2.2.2:2222/some/path"]
+
+        # WHEN rendered
+        static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
+
+        # THEN all targets are under the same static_config
+        # AND port makes part of the target string
+        # AND a path_prefix is rendered
+        self.assertEqual(
+            static_configs,
+            {
+                "alertmanagers": [
+                    {
+                        "path_prefix": "/some/path",
+                        "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                    },
+                ],
+            },
+        )
+
+    def test_ip_address_port_and_different_path_prefix(self):
+        # GIVEN a hostname:port/path, all with the same path
+        alertmanagers = ["1.1.1.1:1111/some/path", "2.2.2.2:2222/some/other/path", "3.3.3.3"]
+
+        # WHEN rendered
+        static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
+
+        # THEN each target is under its own static_config with its own path_prefix
+        # AND port makes part of the target string
+        self.assertEqual(
+            static_configs,
+            {
+                "alertmanagers": [
+                    {
+                        "path_prefix": "/some/path",
+                        "static_configs": [{"targets": ["1.1.1.1:1111"]}],
+                    },
+                    {
+                        "path_prefix": "/some/other/path",
+                        "static_configs": [{"targets": ["2.2.2.2:2222"]}],
+                    },
+                    {
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["3.3.3.3"]}],
+                    },
+                ],
+            },
         )
