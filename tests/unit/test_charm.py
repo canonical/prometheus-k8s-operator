@@ -234,10 +234,9 @@ class TestCharm(unittest.TestCase):
                 self.assertTrue(job["honor_labels"])
 
     @k8s_resource_multipatch
-    @patch("lightkube.core.client.GenericSyncClient")
     def test_send_remote_write_endpoints(self, *unused):
-        rel_id = self.harness.add_relation(DEFAULT_CONSUMER_NAME, "prometheus-read")
-        unit_name = "prometheus-read/0"
+        rel_id = self.harness.add_relation(DEFAULT_CONSUMER_NAME, "prometheus-receiver")
+        unit_name = "prometheus-receiver/0"
         self.harness.add_relation_unit(rel_id, unit_name)
 
         self.harness.update_relation_data(
