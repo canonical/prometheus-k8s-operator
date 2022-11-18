@@ -83,7 +83,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
                     assert ava_rule[0]["state"] == "firing"
                     break
         else:
-            raise AssertionError("Rule was not fired")
+            raise AssertionError(f"The 'AlwaysFiringDueToNumericValue' avalanche alert was not found in prometheus '{app}'")
 
 
 async def has_metric(ops_test, query: str, app_name: str) -> bool:
