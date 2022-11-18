@@ -9,8 +9,8 @@ import pytest
 from helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
+    has_metric,
     oci_image,
-    run_promql,
 )
 from pytest_operator.plugin import OpsTest
 
@@ -74,7 +74,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
             app,
         )
 
-        # Note: the following depends on an avalnche alert coming from the avalanche charm
+        # Note: the following depends on an avalanche alert coming from the avalanche charm
         # https://github.com/canonical/avalanche-k8s-operator/blob/main/src/prometheus_alert_rules
         prom_rules = await get_prometheus_rules(ops_test, app, 0)
         for rule in prom_rules:
@@ -83,14 +83,6 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
                     assert ava_rule[0]["state"] == "firing"
                     break
         else:
-            raise AssertionError(f"The 'AlwaysFiringDueToNumericValue' avalanche alert was not found in prometheus '{app}'")
-
-
-async def has_metric(ops_test, query: str, app_name: str) -> bool:
-    # Throws if the query does not return any time series within 5 minutes,
-    # and as a consequence, fails the test
-    for timeseries in await run_promql(ops_test, query, app_name):
-        if timeseries.get("metric"):
-            return True
-
-    return False
+            raise AssertionError(
+                f"The 'AlwaysFiringDueToNumericValue' avalanche alert was not found in prometheus '{app}'"
+            )

@@ -10,6 +10,7 @@ from helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
     get_rules_for,
+    has_metric,
     oci_image,
     run_promql,
 )
@@ -171,13 +172,3 @@ async def test_check_data_not_persist_on_scale_0(ops_test, prometheus_charm):
     total1 = await run_promql(ops_test, query, prometheus_app_name)
     num_head_chunks_after = int(total1[0]["value"][1])
     assert num_head_chunks_before <= num_head_chunks_after
-
-
-async def has_metric(ops_test, query: str, app_name: str) -> bool:
-    # Throws if the query does not return any time series within 5 minutes,
-    # and as a consequence, fails the test
-    for timeseries in await run_promql(ops_test, query, app_name):
-        if timeseries.get("metric"):
-            return True
-
-    return False
