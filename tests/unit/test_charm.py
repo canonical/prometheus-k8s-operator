@@ -250,10 +250,9 @@ class TestCharm(unittest.TestCase):
         prometheus_scrape_config = yaml.safe_load(config)
 
         self.assertIn("remote_write", prometheus_scrape_config)
-        self.assertEqual(len(prometheus_scrape_config["remote_write"]), 1)
-        self.assertDictEqual(
-            prometheus_scrape_config["remote_write"][0],
-            {"url": "http://1.1.1.1:9090/api/v1/write"},
+        self.assertEqual(
+            prometheus_scrape_config["remote_write"],
+            [{"url": "http://1.1.1.1:9090/api/v1/write"}],
         )
 
     @k8s_resource_multipatch
