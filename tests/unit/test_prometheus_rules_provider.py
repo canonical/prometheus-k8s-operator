@@ -108,7 +108,17 @@ class TestReloadAlertRules(unittest.TestCase):
     def test_only_files_with_rule_or_rules_suffixes_are_loaded(self):
         """Scenario: User has both short-form rules (*.rule) and long-form rules (*.rules)."""
         # GIVEN various tricky combinations of files present
-        filenames = ["alert.rule", "alert.rules", "alert.ruless", "alertrule", "alertrules"]
+        filenames = [
+            "alert.rule",
+            "alert.rules",
+            "alert.ruless",
+            "alertrule",
+            "alertrules",
+            "alert.yml",
+            "alert.yaml",
+            "alert.txt",
+            "alert.json",
+        ]
         for filename in filenames:
             rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
             self.sandbox.writetext(filename, rule_file)
@@ -120,7 +130,9 @@ class TestReloadAlertRules(unittest.TestCase):
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
         alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
         alert_names = [groups["rules"][0]["alert"] for groups in alert_rules["groups"]]
-        self.assertEqual(set(alert_names), {"alert.rule", "alert.rules"})
+        self.assertEqual(
+            set(alert_names), {"alert.rule", "alert.rules", "alert.yml", "alert.yaml"}
+        )
 
     def test_reload_with_empty_rules(self):
         """Scenario: The reload method is called with a zero-size alert file."""

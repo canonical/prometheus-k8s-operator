@@ -255,7 +255,11 @@ is assumed to be in one of two formats:
 - a single rule format, which is a simplified subset of the official format,
 comprising a single alert rule per file, using the same YAML fields.
 
-The file name must have the `.rule` extension.
+The file name must have one of the following extensions:
+- `.rule`
+- `.rules`
+- `.yml`
+- `.yaml`
 
 An example of the contents of such a file in the custom single rule
 format is shown below.
@@ -939,7 +943,9 @@ class AlertRules:
         alert_groups = []  # type: List[dict]
 
         # Gather all alerts into a list of groups
-        for file_path in self._multi_suffix_glob(dir_path, [".rule", ".rules"], recursive):
+        for file_path in self._multi_suffix_glob(
+            dir_path, [".rule", ".rules", ".yml", ".yaml"], recursive
+        ):
             alert_groups_from_file = self._from_file(dir_path, file_path)
             if alert_groups_from_file:
                 logger.debug("Reading alert rule from %s", file_path)
