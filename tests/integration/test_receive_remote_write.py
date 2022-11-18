@@ -81,12 +81,17 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
 
         # Note: the following depends on an avalanche alert coming from the avalanche charm
         # https://github.com/canonical/avalanche-k8s-operator/blob/main/src/prometheus_alert_rules
-        prom_rules = await get_prometheus_rules(ops_test, app, 0)
-        for rule in prom_rules:
-            if ava_rule := rule.get("rules", {}):
-                if ava_rule[0]["name"] == "AlwaysFiringDueToNumericValue":
-                    assert ava_rule[0]["state"] == "firing"
-                    break
+        prom_rules_list = await get_prometheus_rules(ops_test, app, 0)
+        for rules_dict in prom_rules_list:
+            if rules_list := rules_dict.get("rules", []):
+                for rule in rules_list:
+                    if rule["name"] == "AlwaysFiringDueToNumericValue":
+                        assert rule["state"] == "firing"
+                        break
+                else:
+                    # "AlwaysFiringDueToNumericValue" was not found, go to next rules_dict
+                    continue
+                break
         else:
             raise AssertionError(
                 f"The 'AlwaysFiringDueToNumericValue' avalanche alert was not found in prometheus '{app}'"
