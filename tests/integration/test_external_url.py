@@ -212,7 +212,9 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
 
     assert '"health":"up"' in targets
     assert '"health":"down"' not in targets
-    assert len(re.findall(r'"health":"up"', targets)) == 3  # the default self scrape, and the two prom units
+    assert (
+        len(re.findall(r'"health":"up"', targets)) == 3
+    )  # the default self scrape, and the two prom units
 
 
 async def test_jobs_are_up_with_config_option_overriding_traefik(ops_test: OpsTest):
