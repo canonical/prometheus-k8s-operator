@@ -25,10 +25,10 @@ local_apps = [avalanche, prom_read, prom_write]
 
 @pytest.mark.abort_on_fail
 async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
-    """Test `receive-remote-write` relation.
+    """Test chaining via `receive-remote-write` relation.
 
-    Test that when one Prometheus is related to another Prometheus via
-    `receive-remote-write` all the alerts from the 1st prometheus are forwarded to the second.
+    When two Prometheuses are related to one another via `receive-remote-write`,
+    then all the alerts from the 1st prometheus should be forwarded to the second.
 
     """
     await asyncio.gather(
@@ -47,7 +47,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
             series="focal",
         ),
         ops_test.model.deploy(
-            f"{avalanche}-k8s", channel="edge", application_name=avalanche, series="focal"
+            "avalanche-k8s", channel="edge", application_name=avalanche, series="focal"
         ),
     )
 
@@ -74,6 +74,8 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
             app,
         )
 
+        # Note: the following depends on an avalnche alert coming from the avalanche charm
+        # https://github.com/canonical/avalanche-k8s-operator/blob/main/src/prometheus_alert_rules
         prom_rules = await get_prometheus_rules(ops_test, app, 0)
         for rule in prom_rules:
             if ava_rule := rule.get("rules", {}):
