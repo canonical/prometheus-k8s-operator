@@ -205,8 +205,9 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
     targets = urllib.request.urlopen(url, None, timeout=2).read().decode("utf8")
     logger.info("Response: %s", targets)
 
-    # Make sure the ingressed targets, and not the old ones before ingress applied, are the ones being scraped.
-    # (Assuming the default scrape interval of 1 min passed since reldata was updated with the external url.)
+    # Make sure the ingressed targets, and not the old ones before ingress applied, are the ones
+    # being scraped. (Assuming the default scrape interval of 1 min passed since reldata was
+    # updated with the external url.)
     for i in range(num_units):
         assert f"{ops_test.model_name}-{prometheus_app_name}-{i}" in targets
 
