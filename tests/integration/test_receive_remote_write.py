@@ -33,7 +33,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
     Prometheus (prometheus-receiver) that provides `receive-remote-write` relation
     provides `/api/v1/write` API endpoint that will be consumed by Prometheus (prometheus-sender)
     that requires `send-remote-write` relation. Later, `prometheus-sender` will write all the data
-    it receives from applications to the provided API point of `prometheus-receiver`.
+    it receives from applications to the provided API endpoint of `prometheus-receiver`.
 
     """
     await asyncio.gather(
