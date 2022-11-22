@@ -145,10 +145,6 @@ class PrometheusCharm(CharmBase):
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
                 self.on.config_changed,  # web_external_url; also covers upgrade-charm
-                # TODO remove the following after the traefik issue is fixed
-                #  https://github.com/canonical/traefik-k8s-operator/issues/78
-                self.on["ingress"].relation_changed,
-                self.on.update_status,
             ],
             item=CatalogueItem(
                 name="Prometheus",
