@@ -13,6 +13,7 @@
 import asyncio
 import json
 import logging
+import re
 import subprocess
 import urllib.request
 
@@ -183,14 +184,14 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
     # AND the default job is healthy (its scrape url must have the path for this to work)
     prom_urls = [prom_url(i) + "/api/v1/targets" for i in range(num_units)]
     for url in prom_urls:
-        logger.info("Attmpting to fetch targets from url: %s", url)
+        logger.info("Attempting to fetch targets from url: %s", url)
         targets = urllib.request.urlopen(url, None, timeout=2).read().decode("utf8")
         logger.info("Response: %s", targets)
         assert '"health":"up"' in targets
         assert '"health":"down"' not in targets
 
     # Workaround to make sure everything is up-to-date:
-    # Ingress events are already passed as refresh_event to the MeetricsEndpointProvider.
+    # Ingress events are already passed as refresh_event to the MetricsEndpointProvider.
     # TODO remove these two lines when https://github.com/canonical/traefik-k8s-operator/issues/78
     #  is fixed.
     await wait_for_ingress(ops_test)
@@ -200,11 +201,21 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
     # for this to work).
     external_prom_url = f"http://{await unit_address(ops_test, external_prom_name, 0)}:9090"
     url = external_prom_url + "/api/v1/targets"
-    logger.info("Attmpting to fetch targets from url: %s", external_prom_url)
+    logger.info("Attempting to fetch targets from url: %s", external_prom_url)
     targets = urllib.request.urlopen(url, None, timeout=2).read().decode("utf8")
     logger.info("Response: %s", targets)
+
+    # Make sure the ingressed targets, and not the old ones before ingress applied, are the ones
+    # being scraped. (Assuming the default scrape interval of 1 min passed since reldata was
+    # updated with the external url.)
+    for i in range(num_units):
+        assert f"{ops_test.model_name}-{prometheus_app_name}-{i}" in targets
+
     assert '"health":"up"' in targets
     assert '"health":"down"' not in targets
+    assert (
+        len(re.findall(r'"health":"up"', targets)) == 3
+    )  # the default self scrape, and the two prom units
 
 
 async def test_jobs_are_up_with_config_option_overriding_traefik(ops_test: OpsTest):
@@ -229,7 +240,7 @@ async def test_jobs_are_up_with_config_option_overriding_traefik(ops_test: OpsTe
     # AND the default job is healthy (its scrape url must have the path for this to work)
     prom_urls = [await prom_url(i) + "/api/v1/targets" for i in range(num_units)]
     for url in prom_urls:
-        logger.info("Attmpting to fetch targets from url: %s", url)
+        logger.info("Attempting to fetch targets from url: %s", url)
         targets = urllib.request.urlopen(url, None, timeout=2).read().decode("utf8")
         logger.info("Response: %s", targets)
         assert '"health":"up"' in targets
