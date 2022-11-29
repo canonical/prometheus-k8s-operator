@@ -19,7 +19,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -595,6 +595,8 @@ class PrometheusRemoteWriteConsumer(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+        *,
+        extra_alerts_callable: Optional[Callable] = None,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -630,7 +632,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self.extra_rules_list = []  # type: list
+        self.extra_alerts_callable = extra_alerts_callable
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -682,14 +684,36 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if self.extra_rules_list:
-            if alert_rules_as_dict:
-                alert_rules_as_dict["groups"].extend(self.extra_rules_list)
-            else:
-                alert_rules_as_dict["groups"] = self.extra_rules_list
+        alert_rules_as_dict = self._parse_and_add_extra_alerts(alert_rules_as_dict)
 
         if alert_rules_as_dict:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+
+    def _parse_and_add_extra_alerts(self, alert_rules_as_dict: dict) -> dict:
+        """Parse alerts from `self.extra_alerts_callable`.
+
+        Call `self.extra_alerts_callable`, parse alert groups and
+        extend (mutate) `alert_rules_as_dict` with new alerts.
+
+        Returns:
+            (dict) Modified `alert_rules_as_dict`. Return is done only for explicit mutation.
+        """
+        if callable(self.extra_alerts_callable):
+            extra_alerts_list = []
+            extra_alerts = self.extra_alerts_callable()
+            if extra_alerts:
+                for topology_identifier, alert_rule_groups in extra_alerts.items():
+                    extra_alerts_list.extend(alert_rule_groups.get("groups", []))
+
+                if alert_rules_as_dict:
+                    alert_rules_as_dict["groups"].extend(extra_alerts_list)
+                else:
+                    alert_rules_as_dict["groups"] = extra_alerts_list
+
+                logger.debug(
+                    "Extra rules were pushed to remote write endpoint. %s", extra_alerts_list
+                )
+        return alert_rules_as_dict
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""

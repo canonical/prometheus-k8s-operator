@@ -132,7 +132,9 @@ class PrometheusCharm(CharmBase):
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
 
-        self._remote_write_consumer = PrometheusRemoteWriteConsumer(self)
+        self._remote_write_consumer = PrometheusRemoteWriteConsumer(
+            self, extra_alerts_callable=self.metrics_consumer.alerts
+        )
 
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
@@ -186,13 +188,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
 
     def _push_alerts_to_remote_write(self, event) -> None:
-        """Get alert rules from metrics consumer and forward them to remote write consumer."""
-        alerts = self.metrics_consumer.alerts()
-        consumer_rules_list = self._remote_write_consumer.extra_rules_list = []
-        for topology_identifier, alert_rule_groups in alerts.items():
-            consumer_rules_list.extend(alert_rule_groups.get("groups", []))
-
-        logger.debug("Extra rules were pushed to remote write endpoint. %s", consumer_rules_list)
+        """Reload alerts on remote write consumer and push it to re-read alerts from callables."""
         self._remote_write_consumer.reload_alerts()
 
     @property

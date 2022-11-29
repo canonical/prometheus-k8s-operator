@@ -56,7 +56,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=local_apps, status="active", wait_for_units=1)
+    await ops_test.model.wait_for_idle(status="active", wait_for_units=1, raise_on_error=False)
     assert await check_prometheus_is_ready(ops_test, prom_send, 0)
     assert await check_prometheus_is_ready(ops_test, prom_receive, 0)
 
