@@ -147,7 +147,8 @@ class PrometheusCharm(CharmBase):
             refresh_event=[
                 self.on.prometheus_pebble_ready,
                 self.on.leader_elected,
-                self.on["ingress"].relation_changed,
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
                 self.on.config_changed,  # web_external_url; also covers upgrade-charm
             ],
             item=CatalogueItem(
