@@ -237,8 +237,7 @@ def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
 
 
 async def has_metric(ops_test, query: str, app_name: str) -> bool:
-    # Throws if the query does not return any time series within 5 minutes,
-    # and as a consequence, fails the test
+    """Returns True if the query returns any time series; False otherwise."""
     for timeseries in await run_promql(ops_test, query, app_name):
         if timeseries.get("metric"):
             return True
