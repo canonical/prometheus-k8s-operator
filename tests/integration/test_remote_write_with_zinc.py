@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 import pytest
-from helpers import check_prometheus_is_ready, has_metric, oci_image
+from helpers import check_prometheus_is_ready, oci_image, run_promql
 from juju.controller import Controller  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -145,3 +145,13 @@ async def test_offer_and_consume_remote_write_with_zinc(ops_test):
     await consumer.model.remove_application(agent_remote_name, block_until_done=True)
     await consumer.model.remove_saas("prom")
     await controller.disconnect()
+
+
+async def has_metric(ops_test, query: str, app_name: str) -> bool:
+    # Throws if the query does not return any time series within 5 minutes,
+    # and as a consequence, fails the test
+    for timeseries in await run_promql(ops_test, query, app_name):
+        if timeseries.get("metric"):
+            return True
+
+    return False
