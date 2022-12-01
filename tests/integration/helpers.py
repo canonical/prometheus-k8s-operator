@@ -234,3 +234,12 @@ def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
     pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
     podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))
     return podspec
+
+
+async def has_metric(ops_test, query: str, app_name: str) -> bool:
+    """Returns True if the query returns any time series; False otherwise."""
+    for timeseries in await run_promql(ops_test, query, app_name):
+        if timeseries.get("metric"):
+            return True
+
+    return False
