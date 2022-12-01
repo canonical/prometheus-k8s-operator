@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 log = logging.getLogger(__name__)
 
@@ -711,7 +711,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         # before and those we know now
         previous_urls = self._stored.current_urls or {}  # type: ignore
         current_urls = (
-            {} if isinstance(event, RelationBrokenEvent) else self._get_urls_from_relation_data
+            {} if isinstance(event, RelationBrokenEvent) else self._urls_from_relation_data
         )
         self._stored.current_urls = current_urls  # type: ignore
 
@@ -737,14 +737,13 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
             for unit_name in removed:
                 self.on.revoked.emit(self.relation, unit_name)  # type: ignore
 
-        # todo remove cast when ops.charm is typed
-        self._publish_auto_data(typing.cast(Relation, event.relation))
+        self._publish_auto_data()
 
     def _handle_upgrade_or_leader(self, event):
-        for relation in self.relations:
-            self._publish_auto_data(relation)
+        if self.relations:
+            self._publish_auto_data()
 
-    def _publish_auto_data(self, relation: Relation):
+    def _publish_auto_data(self):
         if self._port:
             self.provide_ingress_requirements(host=self._host, port=self._port)
 
@@ -793,7 +792,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         self.relation.data[self.unit].update(data)
 
     @property
-    def _get_urls_from_relation_data(self) -> Dict[str, str]:
+    def _urls_from_relation_data(self) -> Dict[str, str]:
         """The full ingress URLs to reach every unit.
 
         May return an empty dict if the URLs aren't available yet.
@@ -832,9 +831,8 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
 
         May return an empty dict if the URLs aren't available yet.
         """
-        data = _type_convert_stored(self._stored.current_urls or {})  # type: ignore
-        assert isinstance(data, dict)  # for static checker
-        return data
+        current_urls = self._urls_from_relation_data
+        return current_urls
 
     @property
     def url(self) -> Optional[str]:
@@ -842,6 +840,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
 
         May return None if the URL isn't available yet.
         """
-        if not self.urls:
+        urls = self.urls
+        if not urls:
             return None
-        return self.urls.get(self.charm.unit.name)
+        return urls.get(self.charm.unit.name)

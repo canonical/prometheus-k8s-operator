@@ -75,7 +75,7 @@ from uuid import UUID
 LIBID = "bced1658f20f49d28b88f61f83c2d232"
 
 LIBAPI = 0
-LIBPATCH = 3
+LIBPATCH = 4
 
 
 class InvalidUUIDError(Exception):
@@ -94,8 +94,8 @@ class JujuTopology:
         model: str,
         model_uuid: str,
         application: str,
-        unit: str = None,
-        charm_name: str = None,
+        unit: Optional[str] = None,
+        charm_name: Optional[str] = None,
     ):
         """Build a JujuTopology object.
 
@@ -181,7 +181,10 @@ class JujuTopology:
         )
 
     def as_dict(
-        self, *, remapped_keys: Dict[str, str] = None, excluded_keys: List[str] = None
+        self,
+        *,
+        remapped_keys: Optional[Dict[str, str]] = None,
+        excluded_keys: Optional[List[str]] = None,
     ) -> OrderedDict:
         """Format the topology information into an ordered dict.
 

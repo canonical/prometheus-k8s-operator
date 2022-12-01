@@ -13,7 +13,7 @@ from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEven
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 0
-LIBPATCH = 2
+LIBPATCH = 3
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -37,7 +37,7 @@ class CatalogueConsumer(Object):
         self,
         charm,
         relation_name: str = DEFAULT_RELATION_NAME,
-        item: CatalogueItem = None,
+        item: Optional[CatalogueItem] = None,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         super().__init__(charm, relation_name)

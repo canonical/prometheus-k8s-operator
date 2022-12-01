@@ -26,7 +26,7 @@ class SomeApplication(CharmBase):
 """
 import logging
 import socket
-from typing import Callable, List
+from typing import Callable, List, Optional
 from urllib.parse import urlparse
 
 import ops
@@ -42,7 +42,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -240,7 +240,7 @@ class AlertmanagerProvider(RelationManagerBase):
         relation_name: str = "alerting",
         api_port: int = 9093,
         *,
-        external_url: Callable = None,
+        external_url: Optional[Callable] = None,
     ):
         # TODO: breaking change: force keyword-only args from relation_name onwards
         super().__init__(charm, relation_name, RelationRole.provides)
@@ -270,9 +270,11 @@ class AlertmanagerProvider(RelationManagerBase):
         """
         # Drop the scheme
         parsed = urlparse(self._external_url())
-        return {"public_address": "{}:{}{}".format(parsed.hostname, parsed.port, parsed.path)}
+        return {
+            "public_address": "{}:{}{}".format(parsed.hostname, parsed.port or 80, parsed.path)
+        }
 
-    def update_relation_data(self, event: RelationEvent = None):
+    def update_relation_data(self, event: Optional[RelationEvent] = None):
         """Helper function for updating relation data bags.
 
         This function can be used in two different ways:
