@@ -596,7 +596,7 @@ class PrometheusRemoteWriteConsumer(Object):
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         *,
-        extra_alerts_callable: Optional[Callable[[], dict]] = None,
+        extra_alerts_callable: List[Optional[Callable[[], dict]]] = [],
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -699,21 +699,22 @@ class PrometheusRemoteWriteConsumer(Object):
             (dict) The original `alert_rules_as_dict` with the return value of
             `PrometheusRemoteWriteConsumer.extra_alerts_callable` merged into the dict.
         """
-        if callable(self.extra_alerts_callable) and alert_rules_as_dict:
-            extra_alerts_list = []
-            extra_alerts = self.extra_alerts_callable()
-            if extra_alerts:
-                for alert_rule_groups in extra_alerts.values():
-                    extra_alerts_list.extend(alert_rule_groups.get("groups", []))
+        for extra_func in self.extra_alerts_callable:
+            if callable(extra_func) and alert_rules_as_dict:
+                extra_alerts_list = []
+                extra_alerts = extra_func()
+                if extra_alerts:
+                    for alert_rule_groups in extra_alerts.values():
+                        extra_alerts_list.extend(alert_rule_groups.get("groups", []))
 
-                alert_rules_as_dict["groups"] = (
-                    alert_rules_as_dict.get("groups", []) + extra_alerts_list
-                )
+                    alert_rules_as_dict["groups"] = (
+                        alert_rules_as_dict.get("groups", []) + extra_alerts_list
+                    )
 
-                logger.debug(
-                    "%s extra rules were pushed to remote write endpoint.",
-                    len(extra_alerts_list),
-                )
+                    logger.debug(
+                        "%s extra rules were pushed to remote write endpoint.",
+                        len(extra_alerts_list),
+                    )
         return alert_rules_as_dict
 
     def reload_alerts(self) -> None:

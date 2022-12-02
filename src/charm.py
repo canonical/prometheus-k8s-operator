@@ -133,7 +133,11 @@ class PrometheusCharm(CharmBase):
         )
 
         self._remote_write_consumer = PrometheusRemoteWriteConsumer(
-            self, extra_alerts_callable=self.metrics_consumer.alerts
+            self,
+            extra_alerts_callable=[
+                self.metrics_consumer.alerts,
+                self.remote_write_provider.alerts,
+            ],
         )
 
         self.grafana_source_provider = GrafanaSourceProvider(
