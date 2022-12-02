@@ -596,7 +596,7 @@ class PrometheusRemoteWriteConsumer(Object):
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         *,
-        extra_alerts_callable: Optional[Callable] = None,
+        extra_alerts_callable: Optional[Callable[[], dict]] = None,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -696,22 +696,23 @@ class PrometheusRemoteWriteConsumer(Object):
         extend (mutate) `alert_rules_as_dict` with new alerts.
 
         Returns:
-            (dict) Modified `alert_rules_as_dict`. Return is done only for explicit mutation.
+            (dict) The original `alert_rules_as_dict` with the return value of
+            `PrometheusRemoteWriteConsumer.extra_alerts_callable` merged into the dict.
         """
-        if callable(self.extra_alerts_callable):
+        if callable(self.extra_alerts_callable) and alert_rules_as_dict:
             extra_alerts_list = []
             extra_alerts = self.extra_alerts_callable()
             if extra_alerts:
-                for topology_identifier, alert_rule_groups in extra_alerts.items():
+                for alert_rule_groups in extra_alerts.values():
                     extra_alerts_list.extend(alert_rule_groups.get("groups", []))
 
-                if alert_rules_as_dict:
-                    alert_rules_as_dict["groups"].extend(extra_alerts_list)
-                else:
-                    alert_rules_as_dict["groups"] = extra_alerts_list
+                alert_rules_as_dict["groups"] = (
+                    alert_rules_as_dict.get("groups", []) + extra_alerts_list
+                )
 
                 logger.debug(
-                    "Extra rules were pushed to remote write endpoint. %s", extra_alerts_list
+                    "%s extra rules were pushed to remote write endpoint.",
+                    len(extra_alerts_list),
                 )
         return alert_rules_as_dict
 
