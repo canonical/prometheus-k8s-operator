@@ -134,7 +134,7 @@ class PrometheusCharm(CharmBase):
 
         self._remote_write_consumer = PrometheusRemoteWriteConsumer(
             self,
-            extra_alerts_callable=[
+            extra_alerts_callables=[
                 self.metrics_consumer.alerts,
                 self.remote_write_provider.alerts,
             ],

@@ -596,7 +596,7 @@ class PrometheusRemoteWriteConsumer(Object):
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         *,
-        extra_alerts_callable: List[Optional[Callable[[], dict]]] = [],
+        extra_alerts_callables: List[Optional[Callable[[], dict]]] = [],
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -632,7 +632,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self.extra_alerts_callable = extra_alerts_callable
+        self.extra_alerts_callables = extra_alerts_callables
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -699,7 +699,7 @@ class PrometheusRemoteWriteConsumer(Object):
             (dict) The original `alert_rules_as_dict` with the return value of
             `PrometheusRemoteWriteConsumer.extra_alerts_callable` merged into the dict.
         """
-        for extra_func in self.extra_alerts_callable:
+        for extra_func in self.extra_alerts_callables:
             if callable(extra_func) and alert_rules_as_dict:
                 extra_alerts_list = []
                 extra_alerts = extra_func()
