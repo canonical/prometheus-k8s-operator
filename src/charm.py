@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import socket
-from typing import Dict, Optional, cast
+from typing import Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -27,6 +27,7 @@ from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
+    PrometheusRemoteWriteConsumer,
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import (
@@ -42,7 +43,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops.charm import ActionEvent, CharmBase
+from ops.charm import ActionEvent, CharmBase, RelationChangedEvent
 from ops.framework import StoredState
 from ops.main import main
 from ops.model import (
@@ -131,6 +132,14 @@ class PrometheusCharm(CharmBase):
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
 
+        self._remote_write_consumer = PrometheusRemoteWriteConsumer(
+            self,
+            extra_alerts_callables=[
+                self.metrics_consumer.alerts,
+                self.remote_write_provider.alerts,
+            ],
+        )
+
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
@@ -160,16 +169,32 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
+        self.framework.observe(self.on.upgrade_charm, self._push_alerts_to_remote_write)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
+        self.framework.observe(self.on.send_remote_write_relation_broken, self._configure)
+        self.framework.observe(
+            self._remote_write_consumer.on.endpoints_changed,
+            self._on_remote_write_endpoints_changed,
+        )
+        self.framework.observe(
+            self._remote_write_consumer.on.endpoints_changed, self._push_alerts_to_remote_write
+        )
+        self.framework.observe(
+            self.metrics_consumer.on.targets_changed, self._push_alerts_to_remote_write
+        )
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+
+    def _push_alerts_to_remote_write(self, event) -> None:
+        """Reload alerts on remote write consumer and push it to re-read alerts from callables."""
+        self._remote_write_consumer.reload_alerts()
 
     @property
     def metrics_path(self):
@@ -301,6 +326,11 @@ class PrometheusCharm(CharmBase):
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
+
+    def _on_remote_write_endpoints_changed(self, event: RelationChangedEvent) -> None:
+        """Event handler for the remote write endpoint changed event."""
+        logger.debug("Remote write endpoints were changed")
+        self._configure(event)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -708,6 +738,23 @@ class PrometheusCharm(CharmBase):
         )
         return alerting_config
 
+    def _remote_write_config(self) -> List[Dict[str, str]]:
+        """Construct Prometheus endpoints configuration for remote write.
+
+        See https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write
+
+        Returns:
+            list of dicts consisting of the remote write endpoints configuration for Prometheus.
+        """
+        endpoints = self._remote_write_consumer.endpoints
+
+        if not endpoints:
+            logger.debug("No remote write endpoints available")
+        else:
+            logger.debug("Remote write endpoints are: %s", endpoints)
+
+        return endpoints
+
     def _generate_prometheus_config(self, container) -> bool:
         """Construct Prometheus configuration and write to filesystem.
 
@@ -722,6 +769,9 @@ class PrometheusCharm(CharmBase):
         alerting_config = self._alerting_config()
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
+
+        if remote_write_config := self._remote_write_config():
+            prometheus_config["remote_write"] = remote_write_config
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         certs = {}

@@ -38,3 +38,42 @@ configuration is generated.
 4. [Traefik Charmed Operator](https://charmhub.io/traefik-k8s), over the `ingress_per_unit` interface, so Prometheus may be reached from outside the Kubernetes cluster it is running on.
 
 5. [Catalogue Charmed Operator](https://charmhub.io/catalogue-k8s), over the `catalogue` interface, so Prometheus can be published in the service catalogue web page.
+
+## Deployment scenarios
+
+### Tier prometheus deployments (local-remote on-call teams)
+
+```mermaid
+graph LR
+subgraph COS1
+  am1[Alertmanager]
+  prom1[Prometheus]
+  am1 --- prom1
+end
+subgraph COS1.2
+  am1.2[Alertmanager]
+  prom1.2[Prometheus]
+  am1.2 --- prom1.2
+end
+subgraph COS2
+  am2[Alertmanager]
+  prom2[Prometheus]
+  am2 --- prom2
+end
+subgraph COS[Main COS]
+  am[Alertmanager]
+  prom[Prometheus]
+  prom --- am
+end
+pd1[PagerDuty] --- am1
+pd2[PagerDuty] --- am2
+am --- pd[PagerDuty]
+prom1 --- |remote write, rules| am1.2
+prom1.2 --- |remote write, rules| prom
+prom2 --- |remote write, rules| prom
+```
+
+Main COS will have a combination of rules COS1+COS2+Main COS to track the health of the entire system.
+Prometheus in COS1 scrapes an application (PagerDuty), sends metrics and alert rules to Prometheus in COS1.2, 
+which sends metrics and alert rules to Prometheus in Main COS. As result Prometheus in Main COS will have alert rules
+defined in the application.

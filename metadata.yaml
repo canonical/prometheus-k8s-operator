@@ -49,6 +49,8 @@ requires:
     limit: 1
   catalogue:
     interface: catalogue
+  send-remote-write:
+    interface: prometheus_remote_write
 
 peers:
   prometheus-peers:
