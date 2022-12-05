@@ -1898,17 +1898,19 @@ class MetricsEndpointAggregator(Object):
             relabel_instance: A boolean flag indicating if Prometheus
                 scrape job "instance" labels must refer to Juju Topology.
         """
-        super().__init__(charm, relation_names["prometheus"])
-        self._stored.set_default(jobs=[], alert_rules=[])
+        self._charm = charm
 
         relation_names = relation_names or {}
 
-        self._charm = charm
         self._prometheus_relation = relation_names.get(
             "prometheus", "downstream-prometheus-scrape"
         )
         self._target_relation = relation_names.get("scrape_target", "prometheus-target")
         self._alert_rules_relation = relation_names.get("alert_rules", "prometheus-rules")
+
+        super().__init__(charm, self._prometheus_relation)
+        self._stored.set_default(jobs=[], alert_rules=[])
+
         self._relabel_instance = relabel_instance
 
         # manage Prometheus charm relation events
