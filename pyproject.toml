@@ -48,7 +48,6 @@ explicit_package_bases = true
 check_untyped_defs = true
 allow_redefinition = true
 no_implicit_optional = false
-implicit_optional = true
 
 
 # Ignore libraries that do not have type hint nor stubs

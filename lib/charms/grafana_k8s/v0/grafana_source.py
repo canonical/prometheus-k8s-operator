@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 13
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +324,7 @@ class GrafanaSourceProvider(Object):
         source_url: Optional[str] = "",
         refresh_event: Optional[BoundEvent] = None,
         relation_name: str = DEFAULT_RELATION_NAME,
-        extra_fields: dict = None,
+        extra_fields: Optional[dict] = None,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -677,7 +677,7 @@ class GrafanaSourceConsumer(Object):
             sources_to_delete = set.union(old_sources_to_delete, peer_sources_to_delete)
             self.set_peer_data("sources_to_delete", sources_to_delete)
 
-    def update_sources(self, relation: Relation = None) -> None:
+    def update_sources(self, relation: Optional[Relation] = None) -> None:
         """Re-establish sources on one or more relations.
 
         If something changes between this library and a datasource, try to re-establish
