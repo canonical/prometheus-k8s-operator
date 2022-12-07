@@ -1,8 +1,6 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Source code can be found on GitHub at https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s.
-
-## Overview
+"""## Overview
 
 This document explains how to integrate with the Prometheus charm
 for the purpose of providing a metrics endpoint to Prometheus. It
@@ -12,6 +10,10 @@ currently integrated charms. Finally this document is the
 authoritative reference on the structure of relation data that is
 shared between Prometheus charms and any other charm that intends to
 provide a scrape target for Prometheus.
+
+## Source code
+
+Source code can be found on GitHub at https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
 
 ## Dependencies
 
