@@ -4,7 +4,8 @@
 
 This library facilitates the integration of the prometheus_remote_write interface.
 
-Source code can be found on GitHub at https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
+Source code can be found on GitHub at
+https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
 
 Charms that need to push data to a charm exposing the Prometheus remote_write API,
 should use the `PrometheusRemoteWriteConsumer`. Charms that operate software that exposes

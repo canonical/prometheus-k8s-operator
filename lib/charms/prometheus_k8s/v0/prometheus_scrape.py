@@ -1,6 +1,8 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""## Overview
+"""Prometheus Scrape Library.
+
+## Overview
 
 This document explains how to integrate with the Prometheus charm
 for the purpose of providing a metrics endpoint to Prometheus. It
@@ -13,7 +15,7 @@ provide a scrape target for Prometheus.
 
 ## Source code
 
-Source code can be found on GitHub at https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
+Source code can be found at https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
 
 ## Dependencies
 
