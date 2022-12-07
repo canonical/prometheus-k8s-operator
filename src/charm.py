@@ -175,6 +175,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.on.receive_remote_write_relation_created, self._configure)
         self.framework.observe(self.on.receive_remote_write_relation_changed, self._configure)
+        self.framework.observe(
+            self.on.receive_remote_write_relation_changed, self._push_alerts_to_remote_write
+        )
         self.framework.observe(self.on.receive_remote_write_relation_broken, self._configure)
         self.framework.observe(self.on.send_remote_write_relation_broken, self._configure)
         self.framework.observe(

@@ -21,7 +21,7 @@ avalanche = "avalanche"
 prom_send = "prometheus-sender"
 prom_receiver_sender = "prometheus-receiver-sender"
 prom_receive = "prometheus-receiver"  # prometheus that provides `/api/v1/write` API endpoint
-local_apps = [avalanche, prom_receive, prom_send]
+local_apps = [avalanche, prom_receive, prom_send, prom_receiver_sender]
 
 
 @pytest.mark.abort_on_fail
@@ -81,7 +81,7 @@ async def test_receive_remote_write(ops_test: OpsTest, prometheus_charm):
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=local_apps, status="active", idle_period=60)
+    await ops_test.model.wait_for_idle(apps=local_apps, status="active", idle_period=90)
 
     # check that both Prometheus have avalanche metrics and both fire avalanche alert
     for app in [prom_send, prom_receiver_sender, prom_receive]:
