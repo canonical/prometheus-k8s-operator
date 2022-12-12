@@ -23,7 +23,7 @@ $ juju deploy prometheus-k8s --trust
 By default, the Prometheus Operator monitors itself, but it also
 accepts additional scrape targets over Juju relations with charms that
 support the `prometheus_scrape` interface and preferably use the
-Prometheus charm library. This [charm library](lib/charms/prometheus_k8s/v0/prometheus_scrape.py)
+Prometheus charm library. This [charm library](https://github.com/canonical/prometheus-k8s-operator/blob/main/lib/charms/prometheus_k8s/v0/prometheus_scrape.py)
 provides an `add_endpoint()` method that creates additional scrape
 targets. Each scrape target is expected to expose a `/metrics` HTTP
 path that exposes its metrics in a Prometheus compatible format. For
