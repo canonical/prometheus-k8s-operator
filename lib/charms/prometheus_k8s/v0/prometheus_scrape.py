@@ -1,6 +1,6 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-"""Source code can be found on GitHub at canonical/observability-libs/lib/charms/observability_libs.
+"""Prometheus Scrape Library.
 
 ## Overview
 
@@ -12,6 +12,11 @@ currently integrated charms. Finally this document is the
 authoritative reference on the structure of relation data that is
 shared between Prometheus charms and any other charm that intends to
 provide a scrape target for Prometheus.
+
+## Source code
+
+Source code can be found on GitHub at:
+ https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
 
 ## Dependencies
 
@@ -354,7 +359,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 26
+LIBPATCH = 27
 
 logger = logging.getLogger(__name__)
 

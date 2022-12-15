@@ -4,6 +4,9 @@
 
 This library facilitates the integration of the prometheus_remote_write interface.
 
+Source code can be found on GitHub at:
+ https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
+
 Charms that need to push data to a charm exposing the Prometheus remote_write API,
 should use the `PrometheusRemoteWriteConsumer`. Charms that operate software that exposes
 the Prometheus remote_write API, that is, they can receive metrics data over remote_write,
@@ -42,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 
 logger = logging.getLogger(__name__)
