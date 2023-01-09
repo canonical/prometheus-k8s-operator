@@ -1,0 +1,46 @@
+name: Auto-update Charm Libraries
+on:
+  # Manual trigger
+  workflow_dispatch:
+  # Check regularly the upstream every four hours
+  schedule:
+    - cron: "0 0,4,8,12,16,20 * * *"
+
+jobs:
+  update-lib:
+    name: Check libraries
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3
+        with:
+          fetch-depth: 0
+
+      - name: Check libs
+        run: |
+          sudo snap install charmcraft --classic --channel latest/stable
+          charmcraft fetch-lib
+        env:
+          CHARMCRAFT_AUTH: "${{ secrets.CHARMHUB_TOKEN }}"
+
+      - uses: tibdex/github-app-token@021a2405c7f990db57f5eae5397423dcc554159c # v1
+        id: generate-token
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_KEY }}
+
+      - name: Create a PR for local changes
+        uses: peter-evans/create-pull-request@2b011faafdcbc9ceb11414d64d0573f37c774b04 # v4
+        id: cpr
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+          commit-message: "chore: bump charm libraries"
+          committer: "Github Actions <github-actions@github.com>"
+          author: "Github Actions <github-actions@github.com>"
+          title: "Bump charm libraries"
+          body: Automated action to fetch latest version of charm libraries.
+          branch: "auto-libs"
+          delete-branch: true
+          reviewers: jnsgruk
+          assignees: jnsgruk
+
