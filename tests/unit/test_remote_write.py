@@ -5,7 +5,6 @@ import json
 import unittest
 from unittest.mock import patch
 
-from charms.observability_libs.v1.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
 )
