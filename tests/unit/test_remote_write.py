@@ -229,7 +229,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -247,7 +247,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -269,7 +269,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertDictEqual(alerts, ALERT_RULES)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
