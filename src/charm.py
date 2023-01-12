@@ -22,7 +22,10 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
 )
-from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.observability_libs.v1.kubernetes_service_patch import (
+    KubernetesServicePatch,
+    ServicePort,
+)
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
@@ -87,7 +90,7 @@ class PrometheusCharm(CharmBase):
 
         self.service_patch = KubernetesServicePatch(
             self,
-            [(f"{self.app.name}", self._port)],
+            [ServicePort(self._port, f"{self.app.name}")],
         )
 
         self.resources_patch = KubernetesComputeResourcesPatch(

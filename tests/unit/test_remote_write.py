@@ -5,7 +5,6 @@ import json
 import unittest
 from unittest.mock import patch
 
-from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
 )
@@ -229,7 +228,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -247,7 +246,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         )
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
@@ -269,7 +268,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
         self.assertEqual(len(alerts), 1)
         self.assertDictEqual(alerts, ALERT_RULES)
 
-    @patch.object(KubernetesServicePatch, "_service_object", new=lambda *args: None)
+    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
