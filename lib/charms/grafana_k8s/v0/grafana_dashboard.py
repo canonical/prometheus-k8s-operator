@@ -218,7 +218,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 21
 
 logger = logging.getLogger(__name__)
 
@@ -608,70 +608,32 @@ def _replace_template_fields(  # noqa: C901
     If existing datasource variables are present, try to substitute them.
     """
     replacements = {"loki": "${lokids}", "prometheus": "${prometheusds}"}
-    used_replacements = []
+    used_replacements = []  # type: List[str]
 
     # If any existing datasources match types we know, or we didn't find
     # any templating variables at all, template them.
     if datasources or not existing_templates:
-        panels = dict_content["panels"]
+        panels = dict_content.get("panels", {})
+        if panels:
+            dict_content["panels"] = _template_panels(
+                panels, replacements, used_replacements, existing_templates, datasources
+            )
 
-        # Go through all the panels. If they have a datasource set, AND it's one
-        # that we can convert to ${lokids} or ${prometheusds}, by stripping off the
-        # ${} templating and comparing the name to the list we built, replace it,
-        # otherwise, leave it alone.
-        #
-        # COS only knows about Prometheus and Loki.
-        for panel in panels:
-            if "datasource" not in panel or not panel.get("datasource"):
-                continue
-            if not existing_templates:
-                datasource = panel.get("datasource")
-                if type(datasource) == str:
-                    if "loki" in datasource:
-                        panel["datasource"] = "${lokids}"
-                    else:
-                        panel["datasource"] = "${prometheusds}"
-                elif type(datasource) == dict:
-                    # In dashboards exported by Grafana 9, datasource type is dict
-                    dstype = datasource.get("type", "")
-                    if dstype == "loki":
-                        panel["datasource"]["uid"] = "${lokids}"
-                    elif dstype == "prometheus":
-                        panel["datasource"]["uid"] = "${prometheusds}"
-                    else:
-                        logger.debug("Unrecognized datasource type '%s'; skipping", dstype)
-                        continue
-                else:
-                    logger.error("Unknown datasource format: skipping")
-                    continue
-            else:
-                if type(panel["datasource"]) == str:
-                    if panel["datasource"].lower() in replacements.values():
-                        # Already a known template variable
-                        continue
-                    # Strip out variable characters and maybe braces
-                    ds = re.sub(r"(\$|\{|\})", "", panel["datasource"])
-                    replacement = replacements.get(datasources[ds], "")
-                    if replacement:
-                        used_replacements.append(ds)
-                    panel["datasource"] = replacement or panel["datasource"]
-                elif type(panel["datasource"]) == dict:
-                    dstype = panel["datasource"].get("type", "")
-                    if panel["datasource"].get("uid", "").lower() in replacements.values():
-                        # Already a known template variable
-                        continue
-                    # Strip out variable characters and maybe braces
-                    ds = re.sub(r"(\$|\{|\})", "", panel["datasource"].get("uid", ""))
-                    replacement = replacements.get(datasources[ds], "")
-                    if replacement:
-                        used_replacements.append(ds)
-                        panel["datasource"]["uid"] = replacement
-                else:
-                    logger.error("Unknown datasource format: skipping")
-                    continue
+        # Find panels nested under rows
+        rows = dict_content.get("rows", {})
+        if rows:
 
-        # Put our substitutions back
-        dict_content["panels"] = panels
+            for row_idx, row in enumerate(rows):
+                if "panels" in row.keys():
+                    rows[row_idx]["panels"] = _template_panels(
+                        row["panels"],
+                        replacements,
+                        used_replacements,
+                        existing_templates,
+                        datasources,
+                    )
+
+            dict_content["rows"] = rows
 
     # Finally, go back and pop off the templates we stubbed out
     deletions = []
@@ -683,6 +645,82 @@ def _replace_template_fields(  # noqa: C901
         dict_content["templating"]["list"].remove(d)
 
     return dict_content
+
+
+def _template_panels(
+    panels: dict,
+    replacements: dict,
+    used_replacements: list,
+    existing_templates: bool,
+    datasources: dict,
+) -> dict:
+    """Iterate through a `panels` object and template it appropriately."""
+    # Go through all the panels. If they have a datasource set, AND it's one
+    # that we can convert to ${lokids} or ${prometheusds}, by stripping off the
+    # ${} templating and comparing the name to the list we built, replace it,
+    # otherwise, leave it alone.
+    #
+    for panel in panels:
+        if "datasource" not in panel or not panel.get("datasource"):
+            continue
+        if not existing_templates:
+            datasource = panel.get("datasource")
+            if type(datasource) == str:
+                if "loki" in datasource:
+                    panel["datasource"] = "${lokids}"
+                elif "grafana" in datasource:
+                    continue
+                else:
+                    panel["datasource"] = "${prometheusds}"
+            elif type(datasource) == dict:
+                # In dashboards exported by Grafana 9, datasource type is dict
+                dstype = datasource.get("type", "")
+                if dstype == "loki":
+                    panel["datasource"]["uid"] = "${lokids}"
+                elif dstype == "prometheus":
+                    panel["datasource"]["uid"] = "${prometheusds}"
+                else:
+                    logger.debug("Unrecognized datasource type '%s'; skipping", dstype)
+                    continue
+            else:
+                logger.error("Unknown datasource format: skipping")
+                continue
+        else:
+            if type(panel["datasource"]) == str:
+                if panel["datasource"].lower() in replacements.values():
+                    # Already a known template variable
+                    continue
+                # Strip out variable characters and maybe braces
+                ds = re.sub(r"(\$|\{|\})", "", panel["datasource"])
+
+                if ds not in datasources.keys():
+                    # Unknown, non-templated datasource, potentially a Grafana builtin
+                    continue
+
+                replacement = replacements.get(datasources[ds], "")
+                if replacement:
+                    used_replacements.append(ds)
+                panel["datasource"] = replacement or panel["datasource"]
+            elif type(panel["datasource"]) == dict:
+                dstype = panel["datasource"].get("type", "")
+                if panel["datasource"].get("uid", "").lower() in replacements.values():
+                    # Already a known template variable
+                    continue
+                # Strip out variable characters and maybe braces
+                ds = re.sub(r"(\$|\{|\})", "", panel["datasource"].get("uid", ""))
+
+                if ds not in datasources.keys():
+                    # Unknown, non-templated datasource, potentially a Grafana builtin
+                    continue
+
+                replacement = replacements.get(datasources[ds], "")
+                if replacement:
+                    used_replacements.append(ds)
+                    panel["datasource"]["uid"] = replacement
+            else:
+                logger.error("Unknown datasource format: skipping")
+                continue
+    return panels
 
 
 def _inject_labels(content: str, topology: dict, transformer: "CosTool") -> str:
