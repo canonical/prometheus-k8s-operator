@@ -90,7 +90,7 @@ class PrometheusCharm(CharmBase):
 
         self.service_patch = KubernetesServicePatch(
             self,
-            [ServicePort(self._port, f"{self.app.name}")],
+            [ServicePort(self._port, name=f"{self.app.name}")],
         )
 
         self.resources_patch = KubernetesComputeResourcesPatch(
