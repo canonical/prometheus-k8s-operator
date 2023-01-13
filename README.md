@@ -1,5 +1,9 @@
 # Prometheus Charmed Operator for Kubernetes
 
+
+[![Release to Edge](https://github.com/canonical/prometheus-k8s-operator/actions/workflows/release-edge.yaml/badge.svg)](https://github.com/canonical/prometheus-k8s-operator/actions/workflows/release-edge.yaml)
+
+
 ## Description
 
 The Prometheus Charmed Operator for [Juju](https://juju.is) provides a monitoring solution using [Prometheus](https://prometheus.io), which is an open-source monitoring system and alerting toolkit. Besides it handles instantiation, scaling, configuration, and Day 2 operations specific to Prometheus.
