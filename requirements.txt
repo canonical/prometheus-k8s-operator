@@ -1,5 +1,5 @@
 jsonschema
-ops
+ops==2.0.0rc2
 pyaml
 requests
 lightkube >= 0.11
