@@ -1881,7 +1881,7 @@ class MetricsEndpointAggregator(Object):
 
     _stored = StoredState()
 
-    def __init__(self, charm, relation_names: dict = None, relabel_instance=True):
+    def __init__(self, charm, relation_names: Optional[dict] = None, relabel_instance=True):
         """Construct a `MetricsEndpointAggregator`.
 
         Args:
@@ -2173,9 +2173,7 @@ class MetricsEndpointAggregator(Object):
         app_name = event.relation.app.name
         self.set_alert_rule_data(app_name, unit_rules)
 
-    def set_alert_rule_data(
-        self, name: str, unit_rules: dict, label_rules: bool = True
-    ) -> None:
+    def set_alert_rule_data(self, name: str, unit_rules: dict, label_rules: bool = True) -> None:
         """Update alert rule data.
 
         The unit rules should be a dict, which is has additional Juju topology labels added. For
