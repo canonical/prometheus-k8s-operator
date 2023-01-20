@@ -774,4 +774,4 @@ class PrometheusCharm(CharmBase):
 
 
 if __name__ == "__main__":
-    main(PrometheusCharm)
+    main(PrometheusCharm, use_juju_for_storage=True)
