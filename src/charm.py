@@ -76,6 +76,11 @@ def sha256(hashable) -> str:
 
 
 def pull(container, path, *, default: Optional[str] = None) -> Optional[str]:
+    """Pull file from container (without raising FileNotFoundError).
+
+    Returns:
+        File contents if exists; `default` otherwise.
+    """
     try:
         return container.pull(path, encoding="utf8").read()
     except FileNotFoundError:
@@ -83,6 +88,7 @@ def pull(container, path, *, default: Optional[str] = None) -> Optional[str]:
 
 
 def push(container, path, contents):
+    """Push file to container, creating subdirs as necessary."""
     container.push(path, contents, make_dirs=True, encoding="utf8")
 
 
