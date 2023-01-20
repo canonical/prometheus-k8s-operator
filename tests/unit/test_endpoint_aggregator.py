@@ -3,6 +3,7 @@
 
 import json
 import unittest
+from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
 from ops.charm import CharmBase
@@ -75,6 +76,18 @@ class EndpointAggregatorCharm(CharmBase):
             self,
             relation_names,
         )
+
+
+class EndpointResolvingAggregatorCharm(CharmBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+
+        relation_names = {
+            "prometheus": PROMETHEUS_RELATION,
+            "scrape_target": SCRAPE_TARGET_RELATION,
+            "alert_rules": ALERT_RULES_RELATION,
+        }
+        self._aggregator = MetricsEndpointAggregator(self, relation_names, resolve_addresses=True)
 
 
 class TestEndpointAggregator(unittest.TestCase):
@@ -637,3 +650,103 @@ class TestEndpointAggregator(unittest.TestCase):
             },
         ]
         self.assertListEqual(groups, expected_groups)
+
+
+class TestEndpointAggregatorWithRelabeling(unittest.TestCase):
+    def setUp(self):
+        self.harness = Harness(EndpointResolvingAggregatorCharm, meta=AGGREGATOR_META)
+        self.harness.set_model_info(name="testmodel", uuid="12de4fae-06cc-4ceb-9089-567be09fec78")
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.begin_with_initial_hooks()
+
+    @patch("socket.gethostbyaddr", new=lambda *args: ("target.harness.example.org",))
+    def test_adding_prometheus_then_target_with_good_dns_adds_label(self):
+        prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
+        self.harness.add_relation_unit(prometheus_rel_id, "prometheus/0")
+
+        target_rel_id = self.harness.add_relation(SCRAPE_TARGET_RELATION, "target-app")
+        self.harness.add_relation_unit(target_rel_id, "target-app/0")
+
+        hostname = "scrape_target_0"
+        port = "1234"
+        self.harness.update_relation_data(
+            target_rel_id,
+            "target-app/0",
+            {
+                "hostname": f"{hostname}",
+                "port": f"{port}",
+            },
+        )
+
+        prometheus_rel_data = self.harness.get_relation_data(
+            prometheus_rel_id, self.harness.model.app.name
+        )
+        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        expected_jobs = [
+            {
+                "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
+                "static_configs": [
+                    {
+                        "targets": ["scrape_target_0:1234"],
+                        "labels": {
+                            "juju_model": "testmodel",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+                            "juju_application": "target-app",
+                            "juju_unit": "target-app/0",
+                            "host": "scrape_target_0",
+                            "dns_name": "target.harness.example.org",
+                        },
+                    }
+                ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
+            }
+        ]
+        self.maxDiff = None
+        self.assertListEqual(scrape_jobs, expected_jobs)
+
+    @patch("socket.gethostbyaddr")
+    def test_adding_prometheus_then_target_with_bad_dns_keeps_input(self, mock_lookup):
+        mock_lookup.side_effect = OSError()
+        prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
+        self.harness.add_relation_unit(prometheus_rel_id, "prometheus/0")
+
+        target_rel_id = self.harness.add_relation(SCRAPE_TARGET_RELATION, "target-app")
+        self.harness.add_relation_unit(target_rel_id, "target-app/0")
+
+        hostname = "scrape_target_0"
+        port = "1234"
+        self.harness.update_relation_data(
+            target_rel_id,
+            "target-app/0",
+            {
+                "hostname": f"{hostname}",
+                "port": f"{port}",
+            },
+        )
+
+        prometheus_rel_data = self.harness.get_relation_data(
+            prometheus_rel_id, self.harness.model.app.name
+        )
+        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        expected_jobs = [
+            {
+                "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
+                "static_configs": [
+                    {
+                        "targets": ["scrape_target_0:1234"],
+                        "labels": {
+                            "juju_model": "testmodel",
+                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+                            "juju_application": "target-app",
+                            "juju_unit": "target-app/0",
+                            "host": "scrape_target_0",
+                            "dns_name": "scrape_target_0",
+                        },
+                    }
+                ],
+                "relabel_configs": [RELABEL_INSTANCE_CONFIG],
+            }
+        ]
+        self.maxDiff = None
+        self.assertListEqual(scrape_jobs, expected_jobs)
