@@ -61,7 +61,7 @@ async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm)
 
 
 @pytest.mark.abort_on_fail
-async def test_files_are_retained_after_upgrade_from_local_path(ops_test, prometheus_charm):
+async def test_files_are_retained_after_refresh(ops_test, prometheus_charm):
     # Get config from before the upgrade
     def get_config():
         return yaml.safe_load(

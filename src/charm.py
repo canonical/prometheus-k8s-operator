@@ -477,13 +477,12 @@ class PrometheusCharm(CharmBase):
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != pull(container, ALERTS_HASH_PATH)
 
-        # Pushing files every time for situations such as cluster restart:
-        # Relation data and stored state match, but files haven't been written yet.
-        # FIXME don't push every time
-        container.remove_path(RULES_DIR, recursive=True)
-        self._push_alert_rules(container, metrics_consumer_alerts)
-        self._push_alert_rules(container, remote_write_alerts)
-        push(container, ALERTS_HASH_PATH, alerts_hash)
+        if alert_rules_changed:
+            container.remove_path(RULES_DIR, recursive=True)
+            self._push_alert_rules(container, metrics_consumer_alerts)
+            self._push_alert_rules(container, remote_write_alerts)
+            push(container, ALERTS_HASH_PATH, alerts_hash)
+
         return alert_rules_changed
 
     def _push_alert_rules(self, container, alerts):
