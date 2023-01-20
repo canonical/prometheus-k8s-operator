@@ -428,23 +428,6 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
-    def _update_config(self, container) -> bool:
-        """Pushes new config, if needed.
-
-        Returns a boolean indicating if a new configuration was pushed.
-        """
-        config = self._generate_prometheus_config(container)
-        config_hash = sha256(config)
-
-        if config_hash == self._stored.config_hash:
-            return False
-
-        logger.debug("Prometheus config changed")
-        container.push(PROMETHEUS_CONFIG, config, make_dirs=True)
-        self._stored.config_hash = config_hash
-        logger.info("Pushed new configuration")
-        return True
-
     def _update_layer(self, container) -> bool:
         current_planned_services = container.get_plan().services
         new_layer = self._prometheus_layer
