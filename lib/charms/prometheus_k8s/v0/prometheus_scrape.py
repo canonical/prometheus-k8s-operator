@@ -2131,7 +2131,7 @@ class MetricsEndpointAggregator(Object):
                         "juju_application": application_name,
                         "juju_unit": unit_name,
                         "host": target["hostname"],
-                        **self._build_extra_info(target)
+                        **self._build_extra_info(target),
                     },
                 }
                 for unit_name, target in targets.items()
@@ -2143,7 +2143,7 @@ class MetricsEndpointAggregator(Object):
         return job
 
     def _build_extra_info(self, target: Dict[str, str]) -> Dict[str, str]:
-        """Build a list of extra static config parameters, if specified"""
+        """Build a list of extra static config parameters, if specified."""
         extra_info = {}
 
         if self._resolve_addresses:
