@@ -72,7 +72,7 @@ async def test_files_are_retained_after_upgrade_from_local_path(ops_test, promet
 
     config_before = get_config()
 
-    logger.debug("upgrade deployed charm with local charm %s", prometheus_charm)
+    logger.debug("Refreshing charm")
     await ops_test.model.applications[prometheus_app_name].refresh(
         path=prometheus_charm, resources=prometheus_resources
     )

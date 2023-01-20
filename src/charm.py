@@ -46,7 +46,6 @@ from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
-from ops.framework import StoredState
 from ops.main import main
 from ops.model import (
     ActiveStatus,
@@ -63,6 +62,8 @@ from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
+CONFIG_HASH_PATH = "/etc/prometheus/config.hash"
+ALERTS_HASH_PATH = "/etc/prometheus/alerts.hash"
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +75,22 @@ def sha256(hashable) -> str:
     return hashlib.sha256(hashable).hexdigest()
 
 
+def pull(container, path, *, default: Optional[str] = None) -> Optional[str]:
+    try:
+        return container.pull(path, encoding="utf8").read()
+    except FileNotFoundError:
+        return default
+
+
+def push(container, path, contents):
+    container.push(path, contents, make_dirs=True, encoding="utf8")
+
+
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
-    _stored = StoredState()
-
     def __init__(self, *args):
         super().__init__(*args)
-
-        self._stored.set_default(config_hash=None, alerts_hash=None)
 
         self._name = "prometheus"
         self._port = 9090
@@ -461,14 +469,15 @@ class PrometheusCharm(CharmBase):
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
-        alert_rules_changed = alerts_hash != self._stored.alerts_hash
+        alert_rules_changed = alerts_hash != pull(container, ALERTS_HASH_PATH)
 
         # Pushing files every time for situations such as cluster restart:
         # Relation data and stored state match, but files haven't been written yet.
+        # FIXME don't push every time
         container.remove_path(RULES_DIR, recursive=True)
-        self._push_alert_rules(container, self.metrics_consumer.alerts())
-        self._push_alert_rules(container, self.remote_write_provider.alerts())
-        self._stored.alerts_hash = alerts_hash
+        self._push_alert_rules(container, metrics_consumer_alerts)
+        self._push_alert_rules(container, remote_write_alerts)
+        push(container, ALERTS_HASH_PATH, alerts_hash)
         return alert_rules_changed
 
     def _push_alert_rules(self, container, alerts):
@@ -488,7 +497,7 @@ class PrometheusCharm(CharmBase):
 
             rules = yaml.safe_dump(rules_file)
 
-            container.push(path, rules, make_dirs=True)
+            push(container, path, rules)
             logger.debug("Updated alert rules file %s", filename)
 
     def _generate_command(self) -> str:
@@ -725,16 +734,16 @@ class PrometheusCharm(CharmBase):
         config_hash = sha256(
             yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
         )
-        if config_hash == self._stored.config_hash:
+        if config_hash == pull(container, CONFIG_HASH_PATH):
             return False
 
         logger.debug("Prometheus config changed")
 
-        container.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config), make_dirs=True)
+        push(container, PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
-            container.push(filename, contents, make_dirs=True)
+            push(container, filename, contents)
 
-        self._stored.config_hash = config_hash
+        push(container, CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
         return True
 
@@ -757,4 +766,4 @@ class PrometheusCharm(CharmBase):
 
 
 if __name__ == "__main__":
-    main(PrometheusCharm, use_juju_for_storage=True)
+    main(PrometheusCharm)
