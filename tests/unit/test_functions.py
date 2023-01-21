@@ -6,9 +6,6 @@ import unittest
 from unittest import mock
 
 import deepdiff
-
-# FIXME: We should **NOT** move methods to the top level to make writing tests
-# more convenient. Mock it with `create_autospec`. See `setUp()`
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 
 
