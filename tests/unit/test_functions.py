@@ -3,12 +3,22 @@
 
 import copy
 import unittest
+from unittest import mock
 
 import deepdiff
-from charms.prometheus_k8s.v0.prometheus_scrape import _dedupe_job_names
+
+# FIXME: We should **NOT** move methods to the top level to make writing tests
+# more convenient. Mock it with `create_autospec`. See `setUp()`
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointConsumer
 
 
 class TestFunctions(unittest.TestCase):
+    def setUp(self):
+        self.consumer = mock.create_autospec(MetricsEndpointConsumer)
+        self.consumer._dedupe_job_names = lambda x: MetricsEndpointConsumer._dedupe_job_names(
+            self.consumer, x
+        )
+
     def test_dedupe_job_names(self):
         jobs = [
             {
@@ -60,6 +70,8 @@ class TestFunctions(unittest.TestCase):
                 "static_configs": [{"targets": ["localhost:9090"]}],
             },
         ]
-        self.assertTrue(len(deepdiff.DeepDiff(_dedupe_job_names(jobs), expected)) == 0)
+        self.assertTrue(
+            len(deepdiff.DeepDiff(self.consumer._dedupe_job_names(jobs), expected)) == 0
+        )
         # Make sure the function does not modify its argument
         self.assertEqual(jobs, jobs_original)

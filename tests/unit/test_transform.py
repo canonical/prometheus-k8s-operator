@@ -155,7 +155,7 @@ class TestValidateAlerts(unittest.TestCase):
     @unittest.mock.patch("platform.machine", lambda: "x86_64")
     def test_returns_errors_on_bad_rule_file(self):
         tool = self.harness.charm.tool
-        valid, errs = tool.validate_alert_rules(
+        valid, errs = tool.validate_rules(
             {
                 "groups": [
                     {
@@ -171,7 +171,7 @@ class TestValidateAlerts(unittest.TestCase):
     @unittest.mock.patch("platform.machine", lambda: "x86_64")
     def test_successfully_validates_good_alert_rules(self):
         tool = self.harness.charm.tool
-        valid, errs = tool.validate_alert_rules(
+        valid, errs = tool.validate_rules(
             {
                 "groups": [
                     {

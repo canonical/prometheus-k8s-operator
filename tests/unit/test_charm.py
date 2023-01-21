@@ -425,6 +425,7 @@ class TestAlertsFilename(unittest.TestCase):
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
         self.harness.add_relation_unit(self.rel_id, "remote-app/0")
+        self.harness.set_leader(True)
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch

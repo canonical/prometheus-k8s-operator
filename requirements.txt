@@ -2,5 +2,6 @@ jsonschema
 ops
 pyaml
 requests
+typing_extensions
 lightkube >= 0.11
 lightkube-models >= 1.22.0.4

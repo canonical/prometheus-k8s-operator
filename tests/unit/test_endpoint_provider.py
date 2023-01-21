@@ -439,7 +439,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
+            self.assertIn("Failed to read rules from bad_yaml.rule", messages[0])
 
 
 def sorted_matchers(matchers) -> str:
@@ -841,6 +841,6 @@ class TestBakedInAlertRules(unittest.TestCase):
         baked_in_alert_rules_as_they_appear_in_reldata = json.loads(data["alert_rules"])
 
         tool = self.harness.charm.tool
-        valid, errs = tool.validate_alert_rules(baked_in_alert_rules_as_they_appear_in_reldata)
+        valid, errs = tool.validate_rules(baked_in_alert_rules_as_they_appear_in_reldata)
         self.assertEqual(valid, True)
         self.assertEqual(errs, "")
