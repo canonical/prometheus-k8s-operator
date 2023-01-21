@@ -370,7 +370,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 28
+LIBPATCH = 29
 
 logger = logging.getLogger(__name__)
 
@@ -695,7 +695,7 @@ class MetricsEndpointProviderEvents(ObjectEvents):
     """Events raised by :class:`InvalidRuleEvent`s."""
 
     alert_rule_status_changed = EventSource(InvalidRuleEvent)
-    recordingt_rule_status_changed = EventSource(InvalidRuleEvent)
+    recording_rule_status_changed = EventSource(InvalidRuleEvent)
 
 
 def _type_convert_stored(obj):
@@ -813,7 +813,7 @@ def _is_single_rule_format(rules_dict: dict, rule_type: _RuleType) -> bool:
     Returns:
         True if rule is in single rule file format.
     """
-    # one alert rule per file
+    # one rule per file
     return set(rules_dict) >= {rule_type, "expr"}
 
 
@@ -846,10 +846,10 @@ class Rules(ABC):
     #   "record") and "expr" keys.
 
     def __init__(self, topology: Optional[JujuTopology] = None):
-        """Build and alert rule object.
+        """Build a rule object.
 
         Args:
-            topology: an optional `JujuTopology` instance that is used to annotate all alert rules.
+            topology: an optional `JujuTopology` instance that is used to annotate all rules.
         """
         self.topology = topology
         self.tool = CosTool(None)
@@ -943,7 +943,7 @@ class Rules(ABC):
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
         group_name_parts = [self.topology.identifier] if self.topology else []
-        group_name_parts.extend([rel_path, group_name, "alerts"])
+        group_name_parts.extend([rel_path, group_name, f"{self.rule_type}s"])
         # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
 
@@ -1576,7 +1576,6 @@ class MetricsEndpointProvider(Object):
         separate `*.rule` file. If the syntax of a rule is invalid,
         the  `MetricsEndpointProvider` logs an error and does not load the particular
         rule.
-
 
         An attempt will be made to validate rules prior to loading them into Prometheus.
         If they are invalid, an event will be emitted from this object which charms can respond
@@ -2514,7 +2513,7 @@ class CosTool:
     def validate_rules(self, rules: dict) -> Tuple[bool, str]:
         """Will validate correctness of rules, returning a boolean and any errors."""
         if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
+            logger.debug("`cos-tool` unavailable. Not validating correctness.")
             return True, ""
 
         with tempfile.TemporaryDirectory() as tmpdir:

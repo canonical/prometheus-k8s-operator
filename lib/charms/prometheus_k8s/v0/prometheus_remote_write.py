@@ -21,6 +21,7 @@ import re
 import socket
 import subprocess
 import tempfile
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -36,6 +37,7 @@ from ops.charm import (
 )
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
+from typing_extensions import Literal
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -45,7 +47,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,9 @@ DEFAULT_CONSUMER_NAME = "send-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+DEFAULT_RECORDING_RULES_RELATIVE_PATH = "./src/prometheus_recording_rules"
+
+_RuleType = Literal["alert", "record"]
 
 
 class RelationNotFoundError(Exception):
@@ -108,8 +113,8 @@ class RelationRoleMismatchError(Exception):
         super().__init__(self.message)
 
 
-class InvalidAlertRuleEvent(EventBase):
-    """Event emitted when alert rule files are not parsable.
+class InvalidRuleEvent(EventBase):
+    """Event emitted when rule files are not parsable.
 
     Enables us to set a clear status on the provider.
     """
@@ -120,66 +125,66 @@ class InvalidAlertRuleEvent(EventBase):
         self.valid = valid
 
     def snapshot(self) -> Dict:
-        """Save alert rule information."""
+        """Save rule information."""
         return {
             "valid": self.valid,
             "errors": self.errors,
         }
 
     def restore(self, snapshot):
-        """Restore alert rule information."""
+        """Restore rule information."""
         self.valid = snapshot["valid"]
         self.errors = snapshot["errors"]
 
 
-def _is_official_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in the upstream format as supported by Prometheus.
+def _is_official_rule_format(rules_dict: dict) -> bool:
+    """Are rules in the upstream format as supported by Prometheus.
 
-    Alert rules in dictionary format are in "official" form if they
+    Rules in dictionary format are in "official" form if they
     contain a "groups" key, since this implies they contain a list of
-    alert rule groups.
+    rule groups.
 
     Args:
-        rules_dict: a set of alert rules in Python dictionary format
+        rules_dict: a set of rules in Python dictionary format
 
     Returns:
-        True if alert rules are in official Prometheus file format.
+        True if rules are in official Prometheus file format.
     """
     return "groups" in rules_dict
 
 
-def _is_single_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in single rule format.
+def _is_single_rule_format(rules_dict: dict, rule_type: _RuleType) -> bool:
+    """Are rules in single rule format.
 
-    The Prometheus charm library supports reading of alert rules in a
-    custom format that consists of a single alert rule per file. This
-    does not conform to the official Prometheus alert rule file format
-    which requires that each alert rules file consists of a list of
-    alert rule groups and each group consists of a list of alert
-    rules.
+    The Prometheus charm library supports reading of rules in a
+    custom format that consists of a single rule per file. This
+    does not conform to the official Prometheus rule file format
+    which requires that each rules file consists of a list of
+    rule groups and each group consists of a list of rules.
 
-    Alert rules in dictionary form are considered to be in single rule
+    Rules in dictionary form are considered to be in single rule
     format if in the least it contains two keys corresponding to the
-    alert rule name and alert expression.
+    rule name and expression.
 
     Returns:
-        True if alert rule is in single rule file format.
+        True if rule is in single rule file format.
     """
-    # one alert rule per file
-    return set(rules_dict) >= {"alert", "expr"}
+    # one rule per file
+    return set(rules_dict) >= {rule_type, "expr"}
 
 
-class AlertRules:
-    """Utility class for amalgamating prometheus alert rule files and injecting juju topology.
+class Rules(ABC):
+    """Utility class for amalgamating prometheus alert files and injecting juju topology.
 
-    An `AlertRules` object supports aggregating alert rules from files and directories in both
-    official and single rule file formats using the `add_path()` method. All the alert rules
+    A `Rules` object supports aggregating rules from files and directories in both
+    official and single rule file formats using the `add_path()` method. All the rules
     read are annotated with Juju topology labels and amalgamated into a single data structure
     in the form of a Python dictionary using the `as_dict()` method. Such a dictionary can be
     easily dumped into JSON format and exchanged over relation data. The dictionary can also
-    be dumped into YAML format and written directly into an alert rules file that is read by
-    Prometheus. Note that multiple `AlertRules` objects must not be written into the same file,
-    since Prometheus allows only a single list of alert rule groups per alert rules file.
+    be dumped into YAML format and written directly into an rules file that is read by
+    Prometheus. Note that multiple `Rules` objects must not be written into the same file,
+    since Prometheus allows only a single list of rule groups per rules file.
+
     The official Prometheus format is a YAML file conforming to the Prometheus documentation
     (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
     The custom single rule format is a subsection of the official YAML, having a single alert
@@ -187,23 +192,30 @@ class AlertRules:
     """
 
     # This class uses the following terminology for the various parts of a rule file:
-    # - alert rules file: the entire groups[] yaml, including the "groups:" key.
-    # - alert groups (plural): the list of groups[] (a list, i.e. no "groups:" key) - it is a list
+    # - rules file: the entire groups[] yaml, including the "groups:" key.
+    # - groups (plural): the list of groups[] (a list, i.e. no "groups:" key) - it is a list
     #   of dictionaries that have the "name" and "rules" keys.
-    # - alert group (singular): a single dictionary that has the "name" and "rules" keys.
-    # - alert rules (plural): all the alerts in a given alert group - a list of dictionaries with
-    #   the "alert" and "expr" keys.
-    # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
+    # - group (singular): a single dictionary that has the "name" and "rules" keys.
+    # - rules (plural): all the rules in a given group - a list of dictionaries with
+    #   the `self.rule_type` (either "alert" or "record") and "expr" keys.
+    # - rule (singular): a single dictionary that has the `self.rule_type` (either "alert" or
+    #   "record") and "expr" keys.
 
     def __init__(self, topology: Optional[JujuTopology] = None):
-        """Build and alert rule object.
+        """Build a rule object.
 
         Args:
-            topology: an optional `JujuTopology` instance that is used to annotate all alert rules.
+            topology: an optional `JujuTopology` instance that is used to annotate all rules.
         """
         self.topology = topology
         self.tool = CosTool(None)
-        self.alert_groups = []  # type: List[dict]
+        self.groups = []  # type: List[dict]
+
+    @property
+    @abstractmethod
+    def rule_type(self) -> _RuleType:
+        """Return the rule type being used for interpolation in messages."""
+        pass
 
     def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
         """Read a rules file from path, injecting juju topology.
@@ -222,47 +234,47 @@ class AlertRules:
                 rule_file = yaml.safe_load(rf)
 
             except Exception as e:
-                logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
+                logger.error("Failed to read rules from %s: %s", file_path.name, e)
                 return []
 
-            if _is_official_alert_rule_format(rule_file):
-                alert_groups = rule_file["groups"]
-            elif _is_single_alert_rule_format(rule_file):
-                # convert to list of alert groups
+            if _is_official_rule_format(rule_file):
+                groups = rule_file["groups"]
+            elif _is_single_rule_format(rule_file, self.rule_type):
+                # convert to list of groups
                 # group name is made up from the file name
-                alert_groups = [{"name": file_path.stem, "rules": [rule_file]}]
+                groups = [{"name": file_path.stem, "rules": [rule_file]}]
             else:
                 # invalid/unsupported
                 logger.error("Invalid rules file: %s", file_path.name)
                 return []
 
             # update rules with additional metadata
-            for alert_group in alert_groups:
-                if not self._is_already_modified(alert_group["name"]):
+            for group in groups:
+                if not self._is_already_modified(group["name"]):
                     # update group name with topology and sub-path
-                    alert_group["name"] = self._group_name(
+                    group["name"] = self._group_name(
                         str(root_path),
                         str(file_path),
-                        alert_group["name"],
+                        group["name"],
                     )
 
                 # add "juju_" topology labels
-                for alert_rule in alert_group["rules"]:
-                    if "labels" not in alert_rule:
-                        alert_rule["labels"] = {}
+                for rule in group["rules"]:
+                    if "labels" not in rule:
+                        rule["labels"] = {}
 
                     if self.topology:
                         # only insert labels that do not already exist
                         for label, val in self.topology.label_matcher_dict.items():
-                            if label not in alert_rule["labels"]:
-                                alert_rule["labels"][label] = val
-                        # insert juju topology filters into a prometheus alert rule
-                        alert_rule["expr"] = self.tool.inject_label_matchers(
-                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                            if label not in rule["labels"]:
+                                rule["labels"][label] = val
+                        # insert juju topology filters into a prometheus rule
+                        rule["expr"] = self.tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
                             self.topology.label_matcher_dict,
                         )
 
-            return alert_groups
+            return groups
 
     def _group_name(self, root_path: str, file_path: str, group_name: str) -> str:
         """Generate group name from path and topology.
@@ -285,13 +297,13 @@ class AlertRules:
         #  - name, from juju topology
         #  - suffix, from the relative path of the rule file;
         group_name_parts = [self.topology.identifier] if self.topology else []
-        group_name_parts.extend([rel_path, group_name, "alerts"])
+        group_name_parts.extend([rel_path, group_name, f"{self.rule_type}s"])
         # filter to remove empty strings
         return "_".join(filter(None, group_name_parts))
 
     def _is_already_modified(self, name: str) -> bool:
         """Detect whether a group name has already been modified with juju topology."""
-        modified_matcher = re.compile(r"^.*?_[\da-f]{8}_.*?alerts$")
+        modified_matcher = re.compile(r"^.*?_[\da-f]{8}_.*?(records|alerts)$")
         if modified_matcher.match(name) is not None:
             return True
         return False
@@ -321,27 +333,27 @@ class AlertRules:
         By default, only the top directory is scanned; for nested scanning, pass `recursive=True`.
 
         Args:
-            dir_path: directory containing *.rule files (alert rules without groups).
+            dir_path: directory containing *.rule files (rules without groups).
             recursive: flag indicating whether to scan for rule files recursively.
 
         Returns:
-            a list of dictionaries representing prometheus alert rule groups, each dictionary
-            representing an alert group (structure determined by `yaml.safe_load`).
+            a list of dictionaries representing prometheus rule groups, each dictionary
+            representing an group (structure determined by `yaml.safe_load`).
         """
-        alert_groups = []  # type: List[dict]
+        groups = []  # type: List[dict]
 
-        # Gather all alerts into a list of groups
+        # Gather all into a list of groups
         for file_path in self._multi_suffix_glob(
             dir_path, [".rule", ".rules", ".yml", ".yaml"], recursive
         ):
-            alert_groups_from_file = self._from_file(dir_path, file_path)
-            if alert_groups_from_file:
-                logger.debug("Reading alert rule from %s", file_path)
-                alert_groups.extend(alert_groups_from_file)
+            groups_from_file = self._from_file(dir_path, file_path)
+            if groups_from_file:
+                logger.debug("Reading %s rule from %s", self.rule_type, file_path)
+                groups.extend(groups_from_file)
 
-        return alert_groups
+        return groups
 
-    def add_path(self, path: str, *, recursive: bool = False) -> None:
+    def add_path(self, path: Union[Path, str], *, recursive: bool = False) -> None:
         """Add rules from a dir path.
 
         All rules from files are aggregated into a data structure representing a single rule file.
@@ -354,23 +366,57 @@ class AlertRules:
         Returns:
             True if path was added else False.
         """
-        path = Path(path)  # type: Path
+        path = Path(path) if isinstance(path, str) else path  # type: Path
         if path.is_dir():
-            self.alert_groups.extend(self._from_dir(path, recursive))
+            self.groups.extend(self._from_dir(path, recursive))
         elif path.is_file():
-            self.alert_groups.extend(self._from_file(path.parent, path))
+            self.groups.extend(self._from_file(path.parent, path))
         else:
-            logger.debug("Alert rules path does not exist: %s", path)
+            logger.debug("%s rules path does not exist: %s", self.rule_type.capitalize(), path)
 
     def as_dict(self) -> dict:
-        """Return standard alert rules file in dict representation.
+        """Return standard rules file in dict representation.
 
         Returns:
             a dictionary containing a single list of alert rule groups.
             The list of alert rule groups is provided as value of the
             "groups" dictionary key.
         """
-        return {"groups": self.alert_groups} if self.alert_groups else {}
+        return {"groups": self.groups} if self.groups else {}
+
+
+class AlertRules(Rules):
+    """Utility class for amalgamating prometheus alert files and injecting juju topology.
+
+    The official Prometheus format is a YAML file conforming to the Prometheus documentation
+    (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
+    The custom single rule format is a subsection of the official YAML, having a single alert
+    rule, effectively "one alert per file".
+    """
+
+    _rule_type = "alert"  # type: _RuleType
+
+    @property
+    def rule_type(self) -> _RuleType:
+        """Return the rule type being used for interpolation in messages."""
+        return self._rule_type
+
+
+class RecordingRules(Rules):
+    """Utility class for amalgamating prometheus recording files and injecting juju topology.
+
+    The official Prometheus format is a YAML file conforming to the Prometheus documentation
+    (https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/).
+    The custom single rule format is a subsection of the official YAML, having a single recording
+    rule, effectively "one record per file".
+    """
+
+    _rule_type = "record"  # type: _RuleType
+
+    @property
+    def rule_type(self) -> _RuleType:
+        """Return the rule type being used for interpolation in messages."""
+        return self._rule_type
 
 
 def _validate_relation_by_interface_and_direction(
@@ -445,15 +491,15 @@ class PrometheusRemoteWriteEndpointsChangedEvent(EventBase):
         self.relation_id = snapshot["relation_id"]
 
 
-class InvalidAlertRulePathError(Exception):
-    """Raised if the alert rules folder cannot be found or is otherwise invalid."""
+class InvalidRulePathError(Exception):
+    """Raised if the rules folder cannot be found or is otherwise invalid."""
 
     def __init__(
         self,
-        alert_rules_absolute_path: str,
+        rules_absolute_path: str,
         message: str,
     ):
-        self.alert_rules_absolute_path = alert_rules_absolute_path
+        self.rules_absolute_path = rules_absolute_path
         self.message = message
 
         super().__init__(self.message)
@@ -477,21 +523,22 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
         # https://github.com/canonical/operator/issues/643
         charm_dir = Path(os.getcwd())
 
-    alerts_dir_path = charm_dir.absolute().joinpath(*path_elements)
+    dir_path = charm_dir.absolute().joinpath(*path_elements)
 
-    if not alerts_dir_path.exists():
-        raise InvalidAlertRulePathError(str(alerts_dir_path), "directory does not exist")
-    if not alerts_dir_path.is_dir():
-        raise InvalidAlertRulePathError(str(alerts_dir_path), "is not a directory")
+    if not dir_path.exists():
+        raise InvalidRulePathError(str(dir_path), "directory does not exist")
+    if not dir_path.is_dir():
+        raise InvalidRulePathError(str(dir_path), "is not a directory")
 
-    return str(alerts_dir_path)
+    return str(dir_path)
 
 
 class PrometheusRemoteWriteConsumerEvents(ObjectEvents):
     """Event descriptor for events raised by `PrometheusRemoteWriteConsumer`."""
 
     endpoints_changed = EventSource(PrometheusRemoteWriteEndpointsChangedEvent)
-    alert_rule_status_changed = EventSource(InvalidAlertRuleEvent)
+    alert_rule_status_changed = EventSource(InvalidRuleEvent)
+    recording_rule_status_changed = EventSource(InvalidRuleEvent)
 
 
 class PrometheusRemoteWriteConsumer(Object):
@@ -583,6 +630,12 @@ class PrometheusRemoteWriteConsumer(Object):
             description: >
             The unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
 
+    In addition, recording rules can be specified. By default, this library will look
+    into the `<charm_parent_dir>/prometheus_recording_rules`, which in a standard charm
+    layouts resolves to `src/prometheus_recording_rules`. Each recording rule goes into a
+    separate `*.rule` file. If the syntax of a rule is invalid, the `MetricsEndpointProvider`
+    logs an error and does not load the particular rule.
+
     The `%%juju_topology%%` token will be replaced with label filters ensuring that
     the only timeseries evaluated are those scraped from this charm, and no other.
     Failing to ensure that the `%%juju_topology%%` token is applied to each and every
@@ -598,6 +651,7 @@ class PrometheusRemoteWriteConsumer(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+        recording_rules_path: str = DEFAULT_RECORDING_RULES_RELATIVE_PATH,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -622,10 +676,19 @@ class PrometheusRemoteWriteConsumer(Object):
 
         try:
             alert_rules_path = _resolve_dir_against_charm_path(charm, alert_rules_path)
-        except InvalidAlertRulePathError as e:
+        except InvalidRulePathError as e:
             logger.debug(
                 "Invalid Prometheus alert rules folder at %s: %s",
-                e.alert_rules_absolute_path,
+                e.rules_absolute_path,
+                e.message,
+            )
+
+        try:
+            recording_rules_path = _resolve_dir_against_charm_path(charm, recording_rules_path)
+        except InvalidRulePathError as e:
+            logger.debug(
+                "Invalid Prometheus recording rules folder at %s: %s",
+                e.rules_absolute_path,
                 e.message,
             )
 
@@ -633,6 +696,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
+        self._recording_rules_path = recording_rules_path
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -642,12 +706,12 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
-        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
+        self.framework.observe(on_relation.relation_joined, self._push_rules_on_relation_joined)
         self.framework.observe(
-            self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
+            self._charm.on.leader_elected, self._push_rules_to_all_relation_databags
         )
         self.framework.observe(
-            self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
+            self._charm.on.upgrade_charm, self._push_rules_to_all_relation_databags
         )
 
     def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
@@ -668,28 +732,39 @@ class PrometheusRemoteWriteConsumer(Object):
 
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
-    def _push_alerts_on_relation_joined(self, event: RelationEvent) -> None:
-        self._push_alerts_to_relation_databag(event.relation)
+    def _push_rules_on_relation_joined(self, event: RelationEvent) -> None:
+        self._push_rules_to_relation_databag(event.relation)
 
-    def _push_alerts_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
+    def _push_rules_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
         for relation in self.model.relations[self._relation_name]:
-            self._push_alerts_to_relation_databag(relation)
+            self._push_rules_to_relation_databag(relation)
 
-    def _push_alerts_to_relation_databag(self, relation: Relation) -> None:
+    def _push_rules_to_relation_databag(self, relation: Relation) -> None:
         if not self._charm.unit.is_leader():
             return
 
         alert_rules = AlertRules(self.topology)
         alert_rules.add_path(self._alert_rules_path, recursive=False)
-
         alert_rules_as_dict = alert_rules.as_dict()
+
+        recording_rules = RecordingRules(self.topology)
+        recording_rules.add_path(self._recording_rules_path, recursive=False)
+        recording_rules_as_dict = recording_rules.as_dict()
 
         if alert_rules_as_dict:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
+        if recording_rules_as_dict:
+            relation.data[self._charm.app]["recording_rules"] = json.dumps(recording_rules_as_dict)
+
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
-        self._push_alerts_to_all_relation_databags(None)
+        # FIXME: find who's using this and deprecate it
+        self.reload_rules()
+
+    def reload_rules(self) -> None:
+        """Reload rules from disk and push them to relation data."""
+        self._push_rules_to_all_relation_databags(None)
 
     @property
     def endpoints(self) -> List[Dict[str, str]]:
@@ -861,6 +936,38 @@ class PrometheusRemoteWriteProvider(Object):
             }
         )
 
+    def recording_rules(self) -> dict:
+        """Fetch recording rules from all relations.
+
+        A Prometheus recording rules file consists of a list of "groups". Each
+        group consists of a list of recording `rules` that are sequentially
+        executed. This method returns all the recording rules provided by each
+        related metrics provider charm. These rules may be used to generate a
+        separate recording rules file for each relation since the returned list
+        of recording groups are indexed by relation ID. Also, for each relation ID
+        associated scrape metadata such as Juju model, UUID and application
+        name are provided so the unique name may be generated for the rules
+        file. For each relation the structure of data returned is a dictionary
+        with four keys
+
+        - groups
+        - model
+        - model_uuid
+        - application
+
+        The value of the `groups` key is such that it may be used to generate
+        a Prometheus recording rules file directly using `yaml.dump` but the
+        `groups` key itself must be included as this is required by Prometheus,
+        for example as in `yaml.safe_dump({"groups": alerts["groups"]})`.
+
+        The `PrometheusRemoteWriteProvider` accepts a list of rules and these
+        rules are all placed into one group.
+
+        Returns:
+            a dictionary mapping the name of an recording rule group to the group.
+        """
+        return self._get_rules_by_type("recording")
+
     def alerts(self) -> dict:
         """Fetch alert rules from all relations.
 
@@ -891,28 +998,40 @@ class PrometheusRemoteWriteProvider(Object):
         Returns:
             a dictionary mapping the name of an alert rule group to the group.
         """
-        alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        return self._get_rules_by_type("alert")
+
+    def _get_rules_by_type(self, rule_type: str) -> dict:
+        """Unified logic for fetching rules from different databags.
+
+        The logic for alert|recording rules is shared here, since other than the
+        databag, it is completely identical.
+
+        Returns:
+            A dictionary representing the rules.
+        """
+        rule_mapping = {"alert": "alert_rules", "recording": "recording_rules"}
+        all_rules = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            rules = json.loads(relation.data[relation.app].get(rule_mapping[rule_type], "{}"))
 
-            if not alert_rules:
+            if not rules:
                 continue
 
-            if "groups" not in alert_rules:
-                logger.debug("No alert groups were found in relation data")
+            if "groups" not in rules:
+                logger.debug("No %s groups were found in relation data", rule_type)
                 continue
             # Construct an ID based on what's in the alert rules
             error_messages = []
             tool = CosTool(self._charm)
-            for group in alert_rules["groups"]:
+            for group in rules["groups"]:
 
                 # Copy off rules, so we don't modify an object we're iterating over
                 rules = group["rules"]
-                for idx, alert_rule in enumerate(rules):
-                    labels = alert_rule.get("labels")
+                for idx, rule in enumerate(rules):
+                    labels = rule.get("labels")
 
                     if labels:
                         topology = JujuTopology(
@@ -924,12 +1043,12 @@ class PrometheusRemoteWriteProvider(Object):
                         )
 
                         # Inject topology and put it back in the list
-                        alert_rule["expr"] = tool.inject_label_matchers(
-                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                        rule["expr"] = tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
                             topology.label_matcher_dict,
                         )
 
-                        group["rules"][idx] = alert_rule
+                        group["rules"][idx] = rule
                 try:
                     labels = group["rules"][0]["labels"]
                     identifier = JujuTopology(
@@ -940,17 +1059,20 @@ class PrometheusRemoteWriteProvider(Object):
                         charm_name=labels.get("juju_charm", ""),
                     ).identifier
 
-                    _, errmsg = self.tool.validate_alert_rules({"groups": [group]})
+                    _, errmsg = self.tool.validate_rules({"groups": [group]})
 
                     if errmsg:
                         error_messages.append(errmsg)
                         continue
-                    if identifier not in alerts:
-                        alerts[identifier] = {"groups": [group]}
+                    if identifier not in rules:
+                        all_rules[identifier] = {"groups": [group]}
                     else:
-                        alerts[identifier]["groups"].append(group)
+                        all_rules[identifier]["groups"].append(group)
                 except KeyError:
-                    logger.error("Alert rules were found but no usable labels were present")
+                    logger.error(
+                        "%s rules were found but no usable labels were present",
+                        rule_type.capitalize(),
+                    )
 
             if error_messages:
                 relation.data[self._charm.app]["event"] = json.dumps(
@@ -958,7 +1080,7 @@ class PrometheusRemoteWriteProvider(Object):
                 )
                 continue
 
-        return alerts
+        return all_rules
 
 
 # Copy/pasted from prometheus_scrape.py
@@ -1006,10 +1128,10 @@ class CosTool:
                 rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
         return rules
 
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
+    def validate_rules(self, rules: dict) -> Tuple[bool, str]:
+        """Will validate correctness of rules, returning a boolean and any errors."""
         if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
+            logger.debug("`cos-tool` unavailable. Not validating correctness.")
             return True, ""
 
         with tempfile.TemporaryDirectory() as tmpdir:
