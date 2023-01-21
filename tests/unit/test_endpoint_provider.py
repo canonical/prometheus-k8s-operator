@@ -417,10 +417,6 @@ class TestNonStandardProviders(unittest.TestCase):
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
 
-            # Ugly re-init workaround: manually call `set_scrape_job_spec`
-            # https://github.com/canonical/operator/issues/736
-            self.harness.charm.provider.set_scrape_job_spec()
-
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
             self.assertIn("Invalid rules file: missing_expr.rule", messages[0])
@@ -432,10 +428,6 @@ class TestNonStandardProviders(unittest.TestCase):
         with self.assertLogs(level="ERROR") as logger:
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
-
-            # Ugly re-init workaround: manually call `set_scrape_job_spec`
-            # https://github.com/canonical/operator/issues/736
-            self.harness.charm.provider.set_scrape_job_spec()
 
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
