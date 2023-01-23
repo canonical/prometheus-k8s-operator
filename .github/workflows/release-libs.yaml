@@ -1,0 +1,11 @@
+name: Release Libraries
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-libs:
+    uses: canonical/observability/.github/workflows/release-libs.yaml@main
+    secrets: inherit
