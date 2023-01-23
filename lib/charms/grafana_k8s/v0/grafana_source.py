@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 logger = logging.getLogger(__name__)
 
@@ -459,6 +459,9 @@ class GrafanaSourceProvider(Object):
         """
         for relation in self._charm.model.relations[self._relation_name]:
             url = self._source_url or "{}:{}".format(socket.getfqdn(), self._source_port)
+            if self._source_type == "mimir":
+                url = f"{url}/prometheus"
+
             relation.data[self._charm.unit]["grafana_source_host"] = url
 
 
@@ -495,7 +498,7 @@ class GrafanaSourceConsumer(Object):
 
         # We're stuck with this forever now so upgrades work, or until such point as we can
         # break compatibility
-        self._stored.set_default(
+        self._stored.set_default(  # type: ignore
             sources=dict(),
             sources_to_delete=set(),
         )
@@ -664,13 +667,13 @@ class GrafanaSourceConsumer(Object):
                 )
 
         # If there's stored data, merge it and purge it
-        if self._stored.sources:
+        if self._stored.sources:  # type: ignore
             self._stored.sources = {}
             peer_sources = self.get_peer_data("sources")
             sources.update(peer_sources)
             self.set_peer_data("sources", sources)
 
-        if self._stored.sources_to_delete:
+        if self._stored.sources_to_delete:  # type: ignore
             old_sources_to_delete = _type_convert_stored(self._stored.sources_to_delete)
             self._stored.sources_to_delete = set()
             peer_sources_to_delete = set(self.get_peer_data("sources_to_delete"))
