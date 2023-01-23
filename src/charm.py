@@ -62,8 +62,8 @@ from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
-CONFIG_HASH_PATH = "/etc/prometheus/config.hash"
-ALERTS_HASH_PATH = "/etc/prometheus/alerts.hash"
+CONFIG_HASH_PATH = "/etc/prometheus/config.sha256"
+ALERTS_HASH_PATH = "/etc/prometheus/alerts.sha256"
 
 logger = logging.getLogger(__name__)
 
