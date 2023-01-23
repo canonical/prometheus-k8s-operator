@@ -75,23 +75,6 @@ def sha256(hashable) -> str:
     return hashlib.sha256(hashable).hexdigest()
 
 
-def pull(container, path) -> Optional[str]:
-    """Pull file from container (without raising FileNotFoundError).
-
-    Returns:
-        File contents if exists; None otherwise.
-    """
-    try:
-        return container.pull(path, encoding="utf-8").read()
-    except (FileNotFoundError, PebbleError):
-        return None
-
-
-def push(container, path, contents):
-    """Push file to container, creating subdirs as necessary."""
-    container.push(path, contents, make_dirs=True, encoding="utf-8")
-
-
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -362,8 +345,8 @@ class PrometheusCharm(CharmBase):
             # (Both functions need to run so cannot use the short-circuiting `or`.)
             should_reload = any(
                 [
-                    self._generate_prometheus_config(self.container),
-                    self._set_alerts(self.container),
+                    self._generate_prometheus_config(),
+                    self._set_alerts(),
                 ]
             )
         except PebbleError as e:
@@ -372,7 +355,7 @@ class PrometheusCharm(CharmBase):
             return
 
         try:
-            should_restart = self._update_layer(self.container)
+            should_restart = self._update_layer()
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
             self.unit.status = early_return_statuses["layer_fail"]
@@ -442,17 +425,17 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
-    def _update_layer(self, container) -> bool:
-        current_planned_services = container.get_plan().services
+    def _update_layer(self) -> bool:
+        current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
 
-        current_services = container.get_services()  # mapping from str to ServiceInfo
+        current_services = self.container.get_services()  # mapping from str to ServiceInfo
         all_svcs_running = all(svc.is_running() for svc in current_services.values())
 
         if current_planned_services == new_layer.services and all_svcs_running:
             return False
 
-        container.add_layer(self._name, new_layer, combine=True)
+        self.container.add_layer(self._name, new_layer, combine=True)
         return True
 
     def _update_status(self, event):
@@ -462,39 +445,30 @@ class PrometheusCharm(CharmBase):
         if self.unit.status != ActiveStatus():
             self._configure(event)
 
-    def _set_alerts(self, container) -> bool:
+    def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
-
-        Args:
-            container: the Prometheus workload container into which
-                alert rule files need to be created. This container
-                must be in a pebble ready state.
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
-        alert_rules_changed = alerts_hash != pull(container, ALERTS_HASH_PATH)
+        alert_rules_changed = alerts_hash != self.pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
-            container.remove_path(RULES_DIR, recursive=True)
-            self._push_alert_rules(container, metrics_consumer_alerts)
-            self._push_alert_rules(container, remote_write_alerts)
-            push(container, ALERTS_HASH_PATH, alerts_hash)
+            self.container.remove_path(RULES_DIR, recursive=True)
+            self._push_alert_rules(metrics_consumer_alerts)
+            self._push_alert_rules(remote_write_alerts)
+            self.push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
 
-    def _push_alert_rules(self, container, alerts):
+    def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
 
         Args:
-            container: the Prometheus workload container into which
-                alert rule files need to be created. This container
-                must be in a pebble ready state.
             alerts: a dictionary of alert rule files, fetched from
                 either a metrics consumer or a remote write provider.
-
         """
         for topology_identifier, rules_file in alerts.items():
             filename = f"juju_{topology_identifier}.rules"
@@ -502,7 +476,7 @@ class PrometheusCharm(CharmBase):
 
             rules = yaml.safe_dump(rules_file)
 
-            push(container, path, rules)
+            self.push(path, rules)
             logger.debug("Updated alert rules file %s", filename)
 
     def _generate_command(self) -> str:
@@ -708,7 +682,7 @@ class PrometheusCharm(CharmBase):
         )
         return alerting_config
 
-    def _generate_prometheus_config(self, container) -> bool:
+    def _generate_prometheus_config(self) -> bool:
         """Construct Prometheus configuration and write to filesystem.
 
         Returns a boolean indicating if a new configuration was pushed.
@@ -739,16 +713,16 @@ class PrometheusCharm(CharmBase):
         config_hash = sha256(
             yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
         )
-        if config_hash == pull(container, CONFIG_HASH_PATH):
+        if config_hash == self.pull(CONFIG_HASH_PATH):
             return False
 
         logger.debug("Prometheus config changed")
 
-        push(container, PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
+        self.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
-            push(container, filename, contents)
+            self.push(filename, contents)
 
-        push(container, CONFIG_HASH_PATH, config_hash)
+        self.push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
         return True
 
@@ -768,6 +742,22 @@ class PrometheusCharm(CharmBase):
         if result is None:
             return result
         return result.group(1)
+
+    def pull(self, path) -> Optional[str]:
+        """Pull file from container (without raising pebble errors).
+
+        Returns:
+            File contents if exists; None otherwise.
+        """
+        try:
+            return self.container.pull(path, encoding="utf-8").read()
+        except (FileNotFoundError, PebbleError):
+            # Drop FileNotFoundError https://github.com/canonical/operator/issues/896
+            return None
+
+    def push(self, path, contents):
+        """Push file to container, creating subdirs as necessary."""
+        self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
 
 if __name__ == "__main__":
