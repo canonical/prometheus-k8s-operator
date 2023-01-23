@@ -46,7 +46,6 @@ from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
-from ops.framework import StoredState
 from ops.main import main
 from ops.model import (
     ActiveStatus,
@@ -63,6 +62,8 @@ from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 RULES_DIR = "/etc/prometheus/rules"
+CONFIG_HASH_PATH = "/etc/prometheus/config.sha256"
+ALERTS_HASH_PATH = "/etc/prometheus/alerts.sha256"
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +78,8 @@ def sha256(hashable) -> str:
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
-    _stored = StoredState()
-
     def __init__(self, *args):
         super().__init__(*args)
-
-        self._stored.set_default(config_hash=None, alerts_hash=None)
 
         self._name = "prometheus"
         self._port = 9090
@@ -348,8 +345,8 @@ class PrometheusCharm(CharmBase):
             # (Both functions need to run so cannot use the short-circuiting `or`.)
             should_reload = any(
                 [
-                    self._generate_prometheus_config(self.container),
-                    self._set_alerts(self.container),
+                    self._generate_prometheus_config(),
+                    self._set_alerts(),
                 ]
             )
         except PebbleError as e:
@@ -358,7 +355,7 @@ class PrometheusCharm(CharmBase):
             return
 
         try:
-            should_restart = self._update_layer(self.container)
+            should_restart = self._update_layer()
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
             self.unit.status = early_return_statuses["layer_fail"]
@@ -428,34 +425,17 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
-    def _update_config(self, container) -> bool:
-        """Pushes new config, if needed.
-
-        Returns a boolean indicating if a new configuration was pushed.
-        """
-        config = self._generate_prometheus_config(container)
-        config_hash = sha256(config)
-
-        if config_hash == self._stored.config_hash:
-            return False
-
-        logger.debug("Prometheus config changed")
-        container.push(PROMETHEUS_CONFIG, config, make_dirs=True)
-        self._stored.config_hash = config_hash
-        logger.info("Pushed new configuration")
-        return True
-
-    def _update_layer(self, container) -> bool:
-        current_planned_services = container.get_plan().services
+    def _update_layer(self) -> bool:
+        current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
 
-        current_services = container.get_services()  # mapping from str to ServiceInfo
+        current_services = self.container.get_services()  # mapping from str to ServiceInfo
         all_svcs_running = all(svc.is_running() for svc in current_services.values())
 
         if current_planned_services == new_layer.services and all_svcs_running:
             return False
 
-        container.add_layer(self._name, new_layer, combine=True)
+        self.container.add_layer(self._name, new_layer, combine=True)
         return True
 
     def _update_status(self, event):
@@ -465,39 +445,30 @@ class PrometheusCharm(CharmBase):
         if self.unit.status != ActiveStatus():
             self._configure(event)
 
-    def _set_alerts(self, container) -> bool:
+    def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
-
-        Args:
-            container: the Prometheus workload container into which
-                alert rule files need to be created. This container
-                must be in a pebble ready state.
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
-        alert_rules_changed = alerts_hash != self._stored.alerts_hash
+        alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
-        # Pushing files every time for situations such as cluster restart:
-        # Relation data and stored state match, but files haven't been written yet.
-        container.remove_path(RULES_DIR, recursive=True)
-        self._push_alert_rules(container, self.metrics_consumer.alerts())
-        self._push_alert_rules(container, self.remote_write_provider.alerts())
-        self._stored.alerts_hash = alerts_hash
+        if alert_rules_changed:
+            self.container.remove_path(RULES_DIR, recursive=True)
+            self._push_alert_rules(metrics_consumer_alerts)
+            self._push_alert_rules(remote_write_alerts)
+            self._push(ALERTS_HASH_PATH, alerts_hash)
+
         return alert_rules_changed
 
-    def _push_alert_rules(self, container, alerts):
+    def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
 
         Args:
-            container: the Prometheus workload container into which
-                alert rule files need to be created. This container
-                must be in a pebble ready state.
             alerts: a dictionary of alert rule files, fetched from
                 either a metrics consumer or a remote write provider.
-
         """
         for topology_identifier, rules_file in alerts.items():
             filename = f"juju_{topology_identifier}.rules"
@@ -505,7 +476,7 @@ class PrometheusCharm(CharmBase):
 
             rules = yaml.safe_dump(rules_file)
 
-            container.push(path, rules, make_dirs=True)
+            self._push(path, rules)
             logger.debug("Updated alert rules file %s", filename)
 
     def _generate_command(self) -> str:
@@ -711,7 +682,7 @@ class PrometheusCharm(CharmBase):
         )
         return alerting_config
 
-    def _generate_prometheus_config(self, container) -> bool:
+    def _generate_prometheus_config(self) -> bool:
         """Construct Prometheus configuration and write to filesystem.
 
         Returns a boolean indicating if a new configuration was pushed.
@@ -742,16 +713,16 @@ class PrometheusCharm(CharmBase):
         config_hash = sha256(
             yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
         )
-        if config_hash == self._stored.config_hash:
+        if config_hash == self._pull(CONFIG_HASH_PATH):
             return False
 
         logger.debug("Prometheus config changed")
 
-        container.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config), make_dirs=True)
+        self._push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
-            container.push(filename, contents, make_dirs=True)
+            self._push(filename, contents)
 
-        self._stored.config_hash = config_hash
+        self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
         return True
 
@@ -771,6 +742,22 @@ class PrometheusCharm(CharmBase):
         if result is None:
             return result
         return result.group(1)
+
+    def _pull(self, path) -> Optional[str]:
+        """Pull file from container (without raising pebble errors).
+
+        Returns:
+            File contents if exists; None otherwise.
+        """
+        try:
+            return self.container.pull(path, encoding="utf-8").read()
+        except (FileNotFoundError, PebbleError):
+            # Drop FileNotFoundError https://github.com/canonical/operator/issues/896
+            return None
+
+    def _push(self, path, contents):
+        """Push file to container, creating subdirs as necessary."""
+        self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
 
 if __name__ == "__main__":

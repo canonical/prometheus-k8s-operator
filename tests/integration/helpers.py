@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 
 import logging
+import subprocess
 from pathlib import Path
 from typing import List
 
@@ -243,3 +244,25 @@ async def has_metric(ops_test, query: str, app_name: str) -> bool:
             return True
 
     return False
+
+
+def get_workload_file(
+    model_name: str, app_name: str, unit_num: int, container_name: str, filepath: str
+) -> bytes:
+    cmd = [
+        "juju",
+        "ssh",
+        "--model",
+        model_name,
+        "--container",
+        container_name,
+        f"{app_name}/{unit_num}",
+        "cat",
+        filepath,
+    ]
+    try:
+        res = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        log.error(e.stdout.decode())
+        raise e
+    return res.stdout
