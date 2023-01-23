@@ -29,7 +29,8 @@ async def test_deploy_from_channel_and_upgrade_with_current(ops_test, prometheus
 
     logger.info("Upgrade %s charm to current charm", channel)
     await ops_test.model.applications[app_name].refresh(
-        path=prometheus_charm, resources=prometheus_resources
+        path=prometheus_charm,
+        resources=prometheus_resources,
     )
     await ops_test.model.wait_for_idle(
         status="active", timeout=300, idle_period=60, raise_on_error=False

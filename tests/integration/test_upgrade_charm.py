@@ -39,7 +39,10 @@ async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm)
     """
     await asyncio.gather(
         ops_test.model.deploy(
-            prometheus_charm, resources=prometheus_resources, application_name=prometheus_app_name
+            prometheus_charm,
+            resources=prometheus_resources,
+            application_name=prometheus_app_name,
+            trust=True,
         ),
         ops_test.model.deploy(
             prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name

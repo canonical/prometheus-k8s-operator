@@ -82,14 +82,14 @@ def pull(container, path, *, default: Optional[str] = None) -> Optional[str]:
         File contents if exists; `default` otherwise.
     """
     try:
-        return container.pull(path, encoding="utf8").read()
-    except FileNotFoundError:
+        return container.pull(path, encoding="utf-8").read()
+    except (FileNotFoundError, PebbleError):
         return default
 
 
 def push(container, path, contents):
     """Push file to container, creating subdirs as necessary."""
-    container.push(path, contents, make_dirs=True, encoding="utf8")
+    container.push(path, contents, make_dirs=True, encoding="utf-8")
 
 
 class PrometheusCharm(CharmBase):
