@@ -453,13 +453,13 @@ class PrometheusCharm(CharmBase):
         metrics_consumer_alerts = self.metrics_consumer.alerts()
         remote_write_alerts = self.remote_write_provider.alerts()
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
-        alert_rules_changed = alerts_hash != self.pull(ALERTS_HASH_PATH)
+        alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
             self.container.remove_path(RULES_DIR, recursive=True)
             self._push_alert_rules(metrics_consumer_alerts)
             self._push_alert_rules(remote_write_alerts)
-            self.push(ALERTS_HASH_PATH, alerts_hash)
+            self._push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
 
@@ -476,7 +476,7 @@ class PrometheusCharm(CharmBase):
 
             rules = yaml.safe_dump(rules_file)
 
-            self.push(path, rules)
+            self._push(path, rules)
             logger.debug("Updated alert rules file %s", filename)
 
     def _generate_command(self) -> str:
@@ -713,16 +713,16 @@ class PrometheusCharm(CharmBase):
         config_hash = sha256(
             yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
         )
-        if config_hash == self.pull(CONFIG_HASH_PATH):
+        if config_hash == self._pull(CONFIG_HASH_PATH):
             return False
 
         logger.debug("Prometheus config changed")
 
-        self.push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
+        self._push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
-            self.push(filename, contents)
+            self._push(filename, contents)
 
-        self.push(CONFIG_HASH_PATH, config_hash)
+        self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
         return True
 
@@ -743,7 +743,7 @@ class PrometheusCharm(CharmBase):
             return result
         return result.group(1)
 
-    def pull(self, path) -> Optional[str]:
+    def _pull(self, path) -> Optional[str]:
         """Pull file from container (without raising pebble errors).
 
         Returns:
@@ -755,7 +755,7 @@ class PrometheusCharm(CharmBase):
             # Drop FileNotFoundError https://github.com/canonical/operator/issues/896
             return None
 
-    def push(self, path, contents):
+    def _push(self, path, contents):
         """Push file to container, creating subdirs as necessary."""
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
