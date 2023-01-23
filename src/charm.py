@@ -75,16 +75,16 @@ def sha256(hashable) -> str:
     return hashlib.sha256(hashable).hexdigest()
 
 
-def pull(container, path, *, default: Optional[str] = None) -> Optional[str]:
+def pull(container, path) -> Optional[str]:
     """Pull file from container (without raising FileNotFoundError).
 
     Returns:
-        File contents if exists; `default` otherwise.
+        File contents if exists; None otherwise.
     """
     try:
         return container.pull(path, encoding="utf-8").read()
     except (FileNotFoundError, PebbleError):
-        return default
+        return None
 
 
 def push(container, path, contents):
