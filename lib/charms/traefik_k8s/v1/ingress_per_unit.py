@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 log = logging.getLogger(__name__)
 
@@ -317,7 +317,7 @@ class IngressPerUnitProviderEvents(ObjectEvents):
 class IngressPerUnitProvider(_IngressPerUnitBase):
     """Implementation of the provider of ingress_per_unit."""
 
-    on = IngressPerUnitProviderEvents()
+    on = IngressPerUnitProviderEvents()  # type: ignore
 
     def _handle_relation(self, event):
         relation = event.relation
@@ -563,7 +563,7 @@ class _IPUEvent(RelationEvent):
             obj = kwargs.get(attr, default)
             setattr(self, attr, obj)
 
-    def snapshot(self) -> dict:
+    def snapshot(self):
         dct = super().snapshot()
         for attr in self.__attrs__():
             obj = getattr(self, attr)
@@ -577,7 +577,7 @@ class _IPUEvent(RelationEvent):
                 ) from e
         return dct
 
-    def restore(self, snapshot: dict) -> None:
+    def restore(self, snapshot) -> None:
         super().restore(snapshot)
         for attr, obj in snapshot.items():
             setattr(self, attr, obj)
@@ -801,7 +801,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         if not relation:
             return {}
 
-        if not all((relation.app, relation.app.name)):  # type: ignore
+        if not relation.app and not relation.app.name:  # type: ignore
             # FIXME Workaround for https://github.com/canonical/operator/issues/693
             # We must be in a relation_broken hook
             return {}
