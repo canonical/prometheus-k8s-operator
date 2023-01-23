@@ -368,7 +368,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 28
+LIBPATCH = 29
 
 logger = logging.getLogger(__name__)
 
@@ -1591,19 +1591,9 @@ class MetricsEndpointProvider(Object):
             if not isinstance(refresh_event, list):
                 refresh_event = [refresh_event]
 
+        self.framework.observe(events.relation_joined, self.set_scrape_job_spec)
         for ev in refresh_event:
             self.framework.observe(ev, self.set_scrape_job_spec)
-
-        # Update relation data every reinit. If instead we used event hooks then observing only
-        # relation-joined would not be sufficient:
-        # - Would need to observe leader-elected, in case there was no leader during
-        #   relation-joined.
-        # - If later related to an ingress provider, then would need to register and wait for
-        #   update-status interval to elapse before changes would apply.
-        # - The ingerss-ready custom event is currently emitted prematurely and cannot be relied
-        #   upon: https://github.com/canonical/traefik-k8s-operator/issues/78
-        # NOTE We may still end up waiting for update-status before changes are applied.
-        self.set_scrape_job_spec()
 
     def _on_relation_changed(self, event):
         """Check for alert rule messages in the relation data before moving on."""
