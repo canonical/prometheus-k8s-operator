@@ -218,7 +218,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 23
 
 logger = logging.getLogger(__name__)
 
@@ -1786,7 +1786,6 @@ class GrafanaDashboardAggregator(Object):
         builtins = self._maybe_get_builtin_dashboards(event)
 
         if not templates and not builtins:
-            logger.warning("NOTHING!")
             return {}
 
         dashboards = {}
