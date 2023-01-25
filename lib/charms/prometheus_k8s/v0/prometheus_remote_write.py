@@ -391,7 +391,7 @@ class AlertRules(Rules):
     The official Prometheus format is a YAML file conforming to the Prometheus documentation
     (https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/).
     The custom single rule format is a subsection of the official YAML, having a single alert
-    rule, effectively "one alert per file".
+    rule, effectively "one alerting rule per file".
     """
 
     _rule_type = "alert"  # type: _RuleType
