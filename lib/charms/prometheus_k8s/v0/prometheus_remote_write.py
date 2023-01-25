@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 
 logger = logging.getLogger(__name__)
@@ -764,7 +764,7 @@ class PrometheusRemoteWriteProvider(Object):
         self,
         charm: CharmBase,
         relation_name: str = DEFAULT_RELATION_NAME,
-        endpoint_schema: str = "http",
+        endpoint_schema: str = "http",  # TODO: in v1, rename to 'scheme'
         endpoint_address: str = "",
         endpoint_port: Union[str, int] = 9090,
         endpoint_path: str = "/api/v1/write",
@@ -802,7 +802,7 @@ class PrometheusRemoteWriteProvider(Object):
         self._charm = charm
         self.tool = CosTool(self._charm)
         self._relation_name = relation_name
-        self._endpoint_schema = endpoint_schema
+        self._endpoint_scheme = endpoint_schema.rstrip("://")
         self._endpoint_address = endpoint_address
         self._endpoint_port = int(endpoint_port)
         self._endpoint_path = endpoint_path
@@ -852,7 +852,7 @@ class PrometheusRemoteWriteProvider(Object):
             path = "/{}".format(path)
 
         endpoint_url = "{}://{}:{}{}".format(
-            self._endpoint_schema, address, str(self._endpoint_port), path
+            self._endpoint_scheme, address, str(self._endpoint_port), path
         )
 
         relation.data[self._charm.unit]["remote_write"] = json.dumps(
