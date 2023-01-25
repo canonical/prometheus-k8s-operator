@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 log = logging.getLogger(__name__)
 
@@ -397,7 +397,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         return self._get_requirer_unit_data(relation, unit)
 
     def publish_url(self, relation: Relation, unit_name: str, url: str):
-        """Place the ingress url in the application data bag for the units on the requires side.
+        """Place the ingress url in the application data bag for the units on the requirer side.
 
         Assumes that this unit is leader.
         """
