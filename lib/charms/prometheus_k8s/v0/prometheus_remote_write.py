@@ -408,7 +408,7 @@ class RecordingRules(Rules):
     The official Prometheus format is a YAML file conforming to the Prometheus documentation
     (https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/).
     The custom single rule format is a subsection of the official YAML, having a single recording
-    rule, effectively "one record per file".
+    rule, effectively "one recording rule per file".
     """
 
     _rule_type = "record"  # type: _RuleType
