@@ -2131,7 +2131,7 @@ class MetricsEndpointAggregator(Object):
                         "juju_application": application_name,
                         "juju_unit": unit_name,
                         "host": target["hostname"],
-                        **self._build_extra_info(target),
+                        **self._static_config_extra_labels(target),
                     },
                 }
                 for unit_name, target in targets.items()
