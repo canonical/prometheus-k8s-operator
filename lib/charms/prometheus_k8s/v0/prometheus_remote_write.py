@@ -58,7 +58,11 @@ RELATION_INTERFACE_NAME = "prometheus_remote_write"
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
 
-class RelationNotFoundError(Exception):
+class RemoteWriteError(Exception):
+    """Base class remote-write errors."""
+
+
+class RelationNotFoundError(RemoteWriteError):
     """Raised if there is no relation with the given name."""
 
     def __init__(self, relation_name: str):
@@ -68,7 +72,7 @@ class RelationNotFoundError(Exception):
         super().__init__(self.message)
 
 
-class RelationInterfaceMismatchError(Exception):
+class RelationInterfaceMismatchError(RemoteWriteError):
     """Raised if the relation with the given name has a different interface."""
 
     def __init__(
@@ -89,7 +93,7 @@ class RelationInterfaceMismatchError(Exception):
         super().__init__(self.message)
 
 
-class RelationRoleMismatchError(Exception):
+class RelationRoleMismatchError(RemoteWriteError):
     """Raised if the relation with the given name has a different direction."""
 
     def __init__(
@@ -445,7 +449,7 @@ class PrometheusRemoteWriteEndpointsChangedEvent(EventBase):
         self.relation_id = snapshot["relation_id"]
 
 
-class InvalidAlertRulePathError(Exception):
+class InvalidAlertRulePathError(RemoteWriteError):
     """Raised if the alert rules folder cannot be found or is otherwise invalid."""
 
     def __init__(
@@ -802,7 +806,7 @@ class PrometheusRemoteWriteProvider(Object):
         self._charm = charm
         self.tool = CosTool(self._charm)
         self._relation_name = relation_name
-        self._endpoint_scheme = endpoint_schema.rstrip("://")
+        self._endpoint_scheme = endpoint_schema.strip().rstrip("://")
         self._endpoint_address = endpoint_address
         self._endpoint_port = int(endpoint_port)
         self._endpoint_path = endpoint_path
@@ -850,6 +854,10 @@ class PrometheusRemoteWriteProvider(Object):
         path = self._endpoint_path or ""
         if path and not path.startswith("/"):
             path = "/{}".format(path)
+
+        if not re.match(r"^\w+$", self._endpoint_scheme):
+            msg = f"Invalid scheme 'f{self._endpoint_scheme}'; did you mean 'http'?"
+            raise ValueError(msg)
 
         endpoint_url = "{}://{}:{}{}".format(
             self._endpoint_scheme, address, str(self._endpoint_port), path
