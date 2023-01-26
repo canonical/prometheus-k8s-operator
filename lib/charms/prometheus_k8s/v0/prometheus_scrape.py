@@ -2142,7 +2142,7 @@ class MetricsEndpointAggregator(Object):
 
         return job
 
-    def _build_extra_info(self, target: Dict[str, str]) -> Dict[str, str]:
+    def _static_config_extra_labels(self, target: Dict[str, str]) -> Dict[str, str]:
         """Build a list of extra static config parameters, if specified."""
         extra_info = {}
 
