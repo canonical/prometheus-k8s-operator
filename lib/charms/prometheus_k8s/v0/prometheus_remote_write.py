@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 
 logger = logging.getLogger(__name__)
@@ -721,6 +721,33 @@ class PrometheusRemoteWriteConsumer(Object):
         return endpoints
 
 
+class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
+    """Event emitted when Prometheus remote_write alerts change."""
+
+    def __init__(self, handle, relation_id):
+        super().__init__(handle)
+        self.relation_id = relation_id
+
+    def snapshot(self):
+        """Save Prometheus remote_write information."""
+        return {"relation_id": self.relation_id}
+
+    def restore(self, snapshot):
+        """Restore Prometheus remote_write information."""
+        self.relation_id = snapshot["relation_id"]
+
+
+class PrometheusRemoteWriteProviderConsumersChangedEvent(EventBase):
+    """Event emitted when Prometheus remote_write alerts change."""
+
+
+class PrometheusRemoteWriteProviderEvents(ObjectEvents):
+    """Event descriptor for events raised by `PrometheusRemoteWriteProvider`."""
+
+    alert_rules_changed = EventSource(PrometheusRemoteWriteAlertsChangedEvent)
+    consumers_changed = EventSource(PrometheusRemoteWriteProviderConsumersChangedEvent)
+
+
 class PrometheusRemoteWriteProvider(Object):
     """API that manages a provided `prometheus_remote_write` relation.
 
@@ -759,6 +786,8 @@ class PrometheusRemoteWriteProvider(Object):
     relation using the `prometheus_remote_write` interface, in which case changing the relation
     name to differentiate between "incoming" and "outgoing" remote write interactions is necessary.
     """
+
+    on = PrometheusRemoteWriteProviderEvents()
 
     def __init__(
         self,
@@ -810,15 +839,25 @@ class PrometheusRemoteWriteProvider(Object):
         on_relation = self._charm.on[self._relation_name]
         self.framework.observe(
             on_relation.relation_created,
-            self._on_relation_change,
+            self._on_consumers_changed,
         )
         self.framework.observe(
             on_relation.relation_joined,
-            self._on_relation_change,
+            self._on_consumers_changed,
+        )
+        self.framework.observe(
+            on_relation.relation_changed,
+            self._on_relation_changed,
         )
 
-    def _on_relation_change(self, event: RelationEvent) -> None:
-        self.update_endpoint(event.relation)
+    def _on_consumers_changed(self, event: RelationEvent) -> None:
+        if not isinstance(event, RelationBrokenEvent):
+            self.update_endpoint(event.relation)
+        self.on.consumers_changed.emit()
+
+    def _on_relation_changed(self, event: RelationEvent) -> None:
+        """Flag Providers that data has changed so they can re-read alerts."""
+        self.on.alert_rules_changed.emit(event.relation.id)
 
     def update_endpoint(self, relation: Optional[Relation] = None) -> None:
         """Triggers programmatically the update of the relation data.
