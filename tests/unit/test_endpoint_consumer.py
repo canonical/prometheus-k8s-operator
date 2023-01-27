@@ -54,13 +54,13 @@ SCRAPE_JOBS = [
         "job_name": "my-first-job",
         "metrics_path": "/one-path",
         "static_configs": [
-            {"targets": [FULL_TARGET, "*:7000"], "labels": {"some-key": "some-value"}}
+            {"targets": [FULL_TARGET, "*:7000"], "labels": {"some_key": "some-value"}}
         ],
     },
     {
         "job_name": "my-second-job",
         "static_configs": [
-            {"targets": ["*:8000"], "labels": {"some-other-key": "some-other-value"}}
+            {"targets": ["*:8000"], "labels": {"some_other_key": "some-other-value"}}
         ],
     },
 ]
@@ -133,7 +133,7 @@ UNLABELED_ALERT_RULES = {
 OTHER_SCRAPE_JOBS = [
     {
         "metrics_path": "/other-path",
-        "static_configs": [{"targets": ["*:9000"], "labels": {"other-key": "other-value"}}],
+        "static_configs": [{"targets": ["*:9000"], "labels": {"other_key": "other-value"}}],
     }
 ]
 OTHER_SCRAPE_METADATA = {

@@ -121,7 +121,7 @@ More complex scrape configurations are possible. For example
             {
                 "targets": ["10.1.32.215:7000", "*:8000"],
                 "labels": {
-                    "some-key": "some-value"
+                    "some_key": "some-value"
                 }
             }
         ]
@@ -151,7 +151,7 @@ each job must be given a unique name:
             {
                 "targets": ["*:7000"],
                 "labels": {
-                    "some-key": "some-value"
+                    "some_key": "some-value"
                 }
             }
         ]
@@ -163,7 +163,7 @@ each job must be given a unique name:
             {
                 "targets": ["*:8000"],
                 "labels": {
-                    "some-other-key": "some-other-value"
+                    "some_other_key": "some-other-value"
                 }
             }
         ]
@@ -1122,6 +1122,9 @@ class MetricsEndpointConsumer(Object):
                 scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
+
+        if not self._tool.validate_scrape_jobs(scrape_jobs):
+            return []
 
         return scrape_jobs
 
@@ -2472,6 +2475,19 @@ class CosTool:
                         if "error validating" in line
                     ]
                 )
+
+    def validate_scrape_jobs(self, jobs):
+        """Validate scrape jobs using cos-tool."""
+        conf = {"scrape_configs": jobs}
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            with open(tmpfile.name, "w") as f:
+                f.write(yaml.safe_dump(conf))
+            try:
+                self._exec([str(self.path), "validate-config", tmpfile.name])
+            except subprocess.CalledProcessError as e:
+                logger.error("Validating scrape jobs failed: {}".format(e.output))
+                return False
+        return True
 
     def inject_label_matchers(self, expression, topology) -> str:
         """Add label matchers to an expression."""
