@@ -709,11 +709,21 @@ class PrometheusCharm(CharmBase):
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
-            if (tls_config := job.get("tls_config")) and (ca_file := tls_config.get("ca_file")):
-                # Cert is transferred over relation data and needs to be written to a file on disk.
-                cert_filename = f"/etc/prometheus/{job['job_name']}.crt"
-                certs[cert_filename] = ca_file
-                job["tls_config"]["ca_file"] = cert_filename
+            if tls_config := job.get("tls_config"):
+                # Certs are transferred over relation data and need to be written to files on disk.
+                if ca_file := tls_config.get("ca_file"):
+                    filename = f"/etc/prometheus/{job['job_name']}.crt"
+                    certs[filename] = ca_file
+                    job["tls_config"]["ca_file"] = filename
+                if cert_file := tls_config.get("cert_file"):
+                    filename = f"/etc/prometheus/client-{job['job_name']}.crt"
+                    certs[filename] = cert_file
+                    job["tls_config"]["cert_file"] = filename
+                if key_file := tls_config.get("key_file"):
+                    filename = f"/etc/prometheus/client-{job['job_name']}.key"
+                    certs[filename] = key_file
+                    job["tls_config"]["key_file"] = filename
+
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         # Check if config changed, using its hash

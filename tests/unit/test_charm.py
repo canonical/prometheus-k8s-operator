@@ -728,7 +728,11 @@ class TestTlsConfig(unittest.TestCase):
                 "static_configs": [
                     {"targets": ["*:80"]},
                 ],
-                "tls_config": {"ca_file": "CERT DATA 2"},
+                "tls_config": {
+                    "ca_file": "CERT DATA 2",
+                    "cert_file": "CLIENT CERT 1",
+                    "key_file": "CLIENT KEY 1",
+                },
             },
         ]
 
