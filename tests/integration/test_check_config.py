@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+import subprocess
 
 import pytest
 from helpers import check_prometheus_is_ready, oci_image
@@ -68,30 +69,21 @@ async def test_good_config_validates_successfully(
 @pytest.mark.abort_on_fail
 async def test_bad_config_sets_action_results(ops_test, prometheus_charm, prometheus_tester_charm):
     """Deploy Prometheus and a single client with a good configuration."""
-    await asyncio.gather(
-        ops_test.model.deploy(
-            "prometheus-scrape-config-k8s",
-            channel="edge",
-            application_name=scrape_shim,
-            config={"scrape_interval": "NotANumber!!!"},
-        ),
-        ops_test.model.deploy(
-            prometheus_tester_charm,
-            resources=scrape_tester_resources,
-            application_name=bad_scrape_tester,
-        ),
-    )
-    await ops_test.model.wait_for_idle(apps=[scrape_shim, bad_scrape_tester])
+    await ops_test.model.wait_for_idle(apps=[prometheus_app_name])
 
-    await asyncio.gather(
-        ops_test.model.add_relation(
-            f"{bad_scrape_tester}:metrics-endpoint", f"{scrape_shim}:configurable-scrape-jobs"
-        ),
-        ops_test.model.add_relation(
-            f"{prometheus_app_name}:metrics-endpoint", f"{scrape_shim}:metrics-endpoint"
-        ),
+    # There seems to be no way to do this through libjuju
+    subprocess.check_call(
+        [
+            "juju",
+            "ssh",
+            "--model",
+            ops_test.model_full_name,
+            "--container",
+            "prometheus",
+            f"{prometheus_app_name}/0",
+            "echo bad-prometheus-config > /etc/prometheus/prometheus.yml",
+        ]
     )
-    await ops_test.model.wait_for_idle(apps=[prometheus_app_name, scrape_shim, bad_scrape_tester])
 
     # set some custom configs to later check they persisted across the test
     action = (
