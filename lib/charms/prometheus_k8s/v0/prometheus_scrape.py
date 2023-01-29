@@ -1871,7 +1871,13 @@ class MetricsEndpointAggregator(Object):
 
     _stored = StoredState()
 
-    def __init__(self, charm, relation_names: Optional[dict] = None, relabel_instance=True):
+    def __init__(
+        self,
+        charm,
+        relation_names: Optional[dict] = None,
+        relabel_instance=True,
+        resolve_addresses=False,
+    ):
         """Construct a `MetricsEndpointAggregator`.
 
         Args:
@@ -1887,6 +1893,9 @@ class MetricsEndpointAggregator(Object):
                 the Prometheus charm.
             relabel_instance: A boolean flag indicating if Prometheus
                 scrape job "instance" labels must refer to Juju Topology.
+            resolve_addresses: A boolean flag indiccating if the aggregator
+                should attempt to perform DNS lookups of targets and append
+                a `dns_name` label
         """
         self._charm = charm
 
@@ -1902,6 +1911,7 @@ class MetricsEndpointAggregator(Object):
         self._stored.set_default(jobs=[], alert_rules=[])
 
         self._relabel_instance = relabel_instance
+        self._resolve_addresses = resolve_addresses
 
         # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
@@ -2099,6 +2109,7 @@ class MetricsEndpointAggregator(Object):
         """
         juju_model = self.model.name
         juju_model_uuid = self.model.uuid
+
         job = {
             "job_name": self._job_name(application_name),
             "static_configs": [
@@ -2110,6 +2121,7 @@ class MetricsEndpointAggregator(Object):
                         "juju_application": application_name,
                         "juju_unit": unit_name,
                         "host": target["hostname"],
+                        **self._static_config_extra_labels(target),
                     },
                 }
                 for unit_name, target in targets.items()
@@ -2119,6 +2131,20 @@ class MetricsEndpointAggregator(Object):
         job.update(kwargs.get("updates", {}))
 
         return job
+
+    def _static_config_extra_labels(self, target: Dict[str, str]) -> Dict[str, str]:
+        """Build a list of extra static config parameters, if specified."""
+        extra_info = {}
+
+        if self._resolve_addresses:
+            try:
+                dns_name = socket.gethostbyaddr(target["hostname"])[0]
+            except OSError:
+                logger.debug("Could not perform DNS lookup for %s", target["hostname"])
+                dns_name = target["hostname"]
+            extra_info["dns_name"] = dns_name
+
+        return extra_info
 
     @property
     def _relabel_configs(self) -> list:
