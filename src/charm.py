@@ -717,14 +717,23 @@ class PrometheusCharm(CharmBase):
                     certs[filename] = ca_file
                     job["tls_config"]["ca_file"] = filename
                 # Certificate and key files for client cert authentication to the server.
-                if cert_file := tls_config.get("cert_file"):
+                if (cert_file := tls_config.get("cert_file")) and (
+                    key_file := tls_config.get("key_file")
+                ):
                     filename = f"/etc/prometheus/client-{job['job_name']}.crt"
                     certs[filename] = cert_file
                     job["tls_config"]["cert_file"] = filename
-                if key_file := tls_config.get("key_file"):
                     filename = f"/etc/prometheus/client-{job['job_name']}.key"
                     certs[filename] = key_file
                     job["tls_config"]["key_file"] = filename
+                elif "cert_file" in tls_config or "key_file" in tls_config:
+                    logger.error(
+                        'tls_config requires both "cert_file" and "key_file" if client authentication is to be used'
+                    )
+                    self.unit.status = BlockedStatus(
+                        "Invalid prometheus configuration; see debug logs"
+                    )
+                    return False
 
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
