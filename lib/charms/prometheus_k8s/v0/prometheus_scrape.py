@@ -2476,8 +2476,11 @@ class CosTool:
                     ]
                 )
 
-    def validate_scrape_jobs(self, jobs):
+    def validate_scrape_jobs(self, jobs: list) -> bool:
         """Validate scrape jobs using cos-tool."""
+        if not self.path:
+            logger.debug("`cos-tool` unavailable. Not validating scrape jobs.")
+            return True
         conf = {"scrape_configs": jobs}
         with tempfile.NamedTemporaryFile() as tmpfile:
             with open(tmpfile.name, "w") as f:
