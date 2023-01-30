@@ -711,10 +711,12 @@ class PrometheusCharm(CharmBase):
             job["honor_labels"] = True
             if tls_config := job.get("tls_config"):
                 # Certs are transferred over relation data and need to be written to files on disk.
+                # CA certificate to validate the server certificate with.
                 if ca_file := tls_config.get("ca_file"):
                     filename = f"/etc/prometheus/{job['job_name']}.crt"
                     certs[filename] = ca_file
                     job["tls_config"]["ca_file"] = filename
+                # Certificate and key files for client cert authentication to the server.
                 if cert_file := tls_config.get("cert_file"):
                     filename = f"/etc/prometheus/client-{job['job_name']}.crt"
                     certs[filename] = cert_file
