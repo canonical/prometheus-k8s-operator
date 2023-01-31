@@ -62,10 +62,11 @@ from ops.pebble import ExecError, Layer
 from prometheus_server import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
-PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
-RULES_DIR = "/etc/prometheus/rules"
-CONFIG_HASH_PATH = "/etc/prometheus/config.sha256"
-ALERTS_HASH_PATH = "/etc/prometheus/alerts.sha256"
+PROMETHEUS_DIR = "/etc/prometheus"
+PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
+RULES_DIR = f"{PROMETHEUS_DIR}/rules"
+CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
+ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
 logger = logging.getLogger(__name__)
 
@@ -713,17 +714,17 @@ class PrometheusCharm(CharmBase):
                 # Certs are transferred over relation data and need to be written to files on disk.
                 # CA certificate to validate the server certificate with.
                 if ca_file := tls_config.get("ca_file"):
-                    filename = f"/etc/prometheus/{job['job_name']}.crt"
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}.crt"
                     certs[filename] = ca_file
                     job["tls_config"]["ca_file"] = filename
                 # Certificate and key files for client cert authentication to the server.
                 if (cert_file := tls_config.get("cert_file")) and (
                     key_file := tls_config.get("key_file")
                 ):
-                    filename = f"/etc/prometheus/client-{job['job_name']}.crt"
+                    filename = f"{PROMETHEUS_DIR}/client-{job['job_name']}.crt"
                     certs[filename] = cert_file
                     job["tls_config"]["cert_file"] = filename
-                    filename = f"/etc/prometheus/client-{job['job_name']}.key"
+                    filename = f"{PROMETHEUS_DIR}/client-{job['job_name']}.key"
                     certs[filename] = key_file
                     job["tls_config"]["key_file"] = filename
                 elif "cert_file" in tls_config or "key_file" in tls_config:
