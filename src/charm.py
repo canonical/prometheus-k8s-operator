@@ -6,7 +6,6 @@
 """A Juju charm for Prometheus on Kubernetes."""
 import hashlib
 import logging
-import os
 import re
 import socket
 from pathlib import Path
@@ -474,7 +473,7 @@ class PrometheusCharm(CharmBase):
         """
         for topology_identifier, rules_file in alerts.items():
             filename = f"juju_{topology_identifier}.rules"
-            path = os.path.join(RULES_DIR, filename)
+            path = f"{RULES_DIR}/{filename}"
 
             rules = yaml.safe_dump(rules_file)
 
@@ -697,7 +696,7 @@ class PrometheusCharm(CharmBase):
         """
         prometheus_config = {
             "global": self._prometheus_global_config(),
-            "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
+            "rule_files": [f"{RULES_DIR}/juju_*.rules"],
             "scrape_configs": [],
         }
 
