@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 9
 
 log = logging.getLogger(__name__)
 
@@ -491,7 +491,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         _validate_data(remote_data, INGRESS_REQUIRES_UNIT_SCHEMA)
         remote_data["port"] = int(remote_data["port"])
         remote_data["strip-prefix"] = bool(remote_data.get("strip-prefix", False))
-        return remote_data
+        return typing.cast(RequirerData, remote_data)
 
     def _provider_app_data(self, relation: Relation) -> ProviderApplicationData:
         """Fetch and validate the provider's app databag."""
