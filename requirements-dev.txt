@@ -1,7 +1,0 @@
-# Copyright 2023 Canonical Ltd.
-# See LICENSE file for licensing details.
-
-# tox cannot parse this as part of a deps/commands section: it drops everything past the `#`
-# This req is here for the static-lib tox env, to avoid installing the entire `requirements.txt`,
-# which may result in blind spots around lib deps.
-git+https://github.com/canonical/observability-libs.git@feature/pipify#egg=jo11y&subdirectory=placeholder
