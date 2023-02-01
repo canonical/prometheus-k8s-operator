@@ -4,4 +4,6 @@ pyaml
 requests
 lightkube >= 0.11
 lightkube-models >= 1.22.0.4
+
+# This req is here because the prometheus charm itself is using jo11y
 git+https://github.com/canonical/observability-libs.git@feature/pipify#egg=jo11y&subdirectory=placeholder
