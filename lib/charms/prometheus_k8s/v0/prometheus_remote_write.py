@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import yaml
-from charms.observability_libs.v0.juju_topology import JujuTopology
+from jo11y.juju_topology import JujuTopology
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -47,6 +47,9 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 12
 
+PYDEPS = [
+    "git+https://github.com/canonical/observability-libs.git@feature/pipify#egg=jo11y&subdirectory=placeholder"
+]
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ from typing import List
 from unittest.mock import patch
 
 import yaml
-from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
@@ -22,6 +21,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
 from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
+from jo11y.juju_topology import JujuTopology
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness

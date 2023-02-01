@@ -16,7 +16,6 @@ from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsume
 from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
-from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
@@ -42,6 +41,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
+from jo11y.juju_topology import JujuTopology
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod

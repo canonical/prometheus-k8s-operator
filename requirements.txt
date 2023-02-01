@@ -4,3 +4,4 @@ pyaml
 requests
 lightkube >= 0.11
 lightkube-models >= 1.22.0.4
+git+https://github.com/canonical/observability-libs.git@feature/pipify#egg=jo11y&subdirectory=placeholder

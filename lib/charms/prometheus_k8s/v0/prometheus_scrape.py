@@ -346,7 +346,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
-from charms.observability_libs.v0.juju_topology import JujuTopology
+from jo11y.juju_topology import JujuTopology
 from ops.charm import CharmBase, RelationRole
 from ops.framework import (
     BoundEvent,
@@ -369,6 +369,10 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 LIBPATCH = 30
+
+PYDEPS = [
+    "git+https://github.com/canonical/observability-libs.git@feature/pipify#egg=jo11y&subdirectory=placeholder"
+]
 
 logger = logging.getLogger(__name__)
 
