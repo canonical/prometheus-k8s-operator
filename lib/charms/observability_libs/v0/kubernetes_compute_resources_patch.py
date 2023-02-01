@@ -135,7 +135,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 
 _Decimal = Union[Decimal, float, str, int]  # types that are potentially convertible to Decimal
@@ -158,21 +158,23 @@ def adjust_resource_requirements(
         An adjusted (limits, requests) 2-tuple.
 
     >>> adjust_resource_requirements({}, {})
-    ResourceRequirements(limits={}, requests={})
+    ResourceRequirements(claims=None, limits={}, requests={})
     >>> adjust_resource_requirements({"cpu": "1"}, {})
-    ResourceRequirements(limits={'cpu': '1'}, requests={'cpu': '1'})
+    ResourceRequirements(claims=None, limits={'cpu': '1'}, requests={'cpu': '1'})
     >>> adjust_resource_requirements({"cpu": "1"}, {"cpu": "2"}, True)
-    ResourceRequirements(limits={'cpu': '2'}, requests={'cpu': '2'})
+    ResourceRequirements(claims=None, limits={'cpu': '2'}, requests={'cpu': '2'})
     >>> adjust_resource_requirements({"cpu": "1"}, {"cpu": "2"}, False)
-    ResourceRequirements(limits={'cpu': '1'}, requests={'cpu': '1'})
+    ResourceRequirements(claims=None, limits={'cpu': '1'}, requests={'cpu': '1'})
     >>> adjust_resource_requirements({"cpu": "1"}, {"memory": "1G"}, True)
-    ResourceRequirements(limits={'cpu': '1'}, requests={'memory': '1G', 'cpu': '1'})
+    ResourceRequirements(claims=None, limits={'cpu': '1'}, requests={'memory': '1G', 'cpu': '1'})
     >>> adjust_resource_requirements({"cpu": "1"}, {"memory": "1G"}, False)
-    ResourceRequirements(limits={'cpu': '1'}, requests={'memory': '1G', 'cpu': '1'})
+    ResourceRequirements(claims=None, limits={'cpu': '1'}, requests={'memory': '1G', 'cpu': '1'})
     >>> adjust_resource_requirements({"cpu": "1", "memory": "1"}, {"memory": "2"}, True)
-    ResourceRequirements(limits={'cpu': '1', 'memory': '2'}, requests={'memory': '2', 'cpu': '1'})
+    ResourceRequirements(\
+claims=None, limits={'cpu': '1', 'memory': '2'}, requests={'memory': '2', 'cpu': '1'})
     >>> adjust_resource_requirements({"cpu": "1", "memory": "1"}, {"memory": "1G"}, False)
-    ResourceRequirements(limits={'cpu': '1', 'memory': '1'}, requests={'memory': '1', 'cpu': '1'})
+    ResourceRequirements(\
+claims=None, limits={'cpu': '1', 'memory': '1'}, requests={'memory': '1', 'cpu': '1'})
     >>> adjust_resource_requirements({"custom-resource": "1"}, {"custom-resource": "2"}, False)
     Traceback (most recent call last):
       ...

@@ -218,7 +218,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 logger = logging.getLogger(__name__)
 
@@ -235,9 +235,9 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": "Juju model",
-        "multi": False,
+        "multi": True,
         "name": "juju_model",
         "query": {
             "query": "label_values(up,juju_model)",
@@ -260,9 +260,9 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": "Juju model uuid",
-        "multi": False,
+        "multi": True,
         "name": "juju_model_uuid",
         "query": {
             "query": 'label_values(up{juju_model="$juju_model"},juju_model_uuid)',
@@ -285,9 +285,9 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": "Juju application",
-        "multi": False,
+        "multi": True,
         "name": "juju_application",
         "query": {
             "query": 'label_values(up{juju_model="$juju_model",juju_model_uuid="$juju_model_uuid"},juju_application)',
@@ -310,9 +310,9 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": "Juju unit",
-        "multi": False,
+        "multi": True,
         "name": "juju_unit",
         "query": {
             "query": 'label_values(up{juju_model="$juju_model",juju_model_uuid="$juju_model_uuid",juju_application="$juju_application"},juju_unit)',
@@ -335,9 +335,9 @@ DATASOURCE_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": None,
-        "multi": False,
+        "multi": True,
         "name": "prometheusds",
         "options": [],
         "query": "prometheus",
@@ -350,9 +350,9 @@ DATASOURCE_TEMPLATE_DROPDOWNS = [  # type: ignore
         "description": None,
         "error": None,
         "hide": 0,
-        "includeAll": False,
+        "includeAll": True,
         "label": None,
-        "multi": False,
+        "multi": True,
         "name": "lokids",
         "options": [],
         "query": "loki",
@@ -370,7 +370,7 @@ REACTIVE_CONVERTER = {  # type: ignore
     "description": None,
     "error": None,
     "hide": 0,
-    "includeAll": False,
+    "includeAll": True,
     "label": "hosts",
     "multi": True,
     "name": "host",
@@ -622,7 +622,6 @@ def _replace_template_fields(  # noqa: C901
         # Find panels nested under rows
         rows = dict_content.get("rows", {})
         if rows:
-
             for row_idx, row in enumerate(rows):
                 if "panels" in row.keys():
                     rows[row_idx]["panels"] = _template_panels(
@@ -1786,6 +1785,7 @@ class GrafanaDashboardAggregator(Object):
         builtins = self._maybe_get_builtin_dashboards(event)
 
         if not templates and not builtins:
+            logger.warning("NOTHING!")
             return {}
 
         dashboards = {}
