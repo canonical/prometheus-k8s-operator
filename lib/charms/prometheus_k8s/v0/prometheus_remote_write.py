@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 
 logger = logging.getLogger(__name__)
@@ -947,7 +947,6 @@ class PrometheusRemoteWriteProvider(Object):
             error_messages = []
             tool = CosTool(self._charm)
             for group in alert_rules["groups"]:
-
                 # Copy off rules, so we don't modify an object we're iterating over
                 rules = group["rules"]
                 for idx, alert_rule in enumerate(rules):
