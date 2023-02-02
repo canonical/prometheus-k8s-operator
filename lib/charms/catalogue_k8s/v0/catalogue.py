@@ -13,7 +13,7 @@ from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEven
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 0
-LIBPATCH = 3
+LIBPATCH = 4
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -57,7 +57,6 @@ class CatalogueConsumer(Object):
     def _register_refresh_event(
         self, refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None
     ):
-
         if not refresh_event:
             if len(self._charm.meta.containers) == 1:
                 if "kubernetes" in self._charm.meta.series:
@@ -168,7 +167,6 @@ class CatalogueProvider(Object):
         self.on.items_changed.emit(items=self.items)
 
     def _on_relation_changed(self, event):
-
         self.on.items_changed.emit(items=self.items)
 
     @property
