@@ -1118,13 +1118,10 @@ class MetricsEndpointConsumer(Object):
 
         for relation in self._charm.model.relations[self._relation_name]:
             static_scrape_jobs = self._static_scrape_config(relation)
-            if static_scrape_jobs:
+            if static_scrape_jobs and self._tool.validate_scrape_jobs(static_scrape_jobs):
                 scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
-
-        if not self._tool.validate_scrape_jobs(scrape_jobs):
-            return []
 
         return scrape_jobs
 
