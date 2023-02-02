@@ -61,4 +61,4 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: docker.io/ubuntu/prometheus:2.33-22.04_beta
+    upstream-source: ghcr.io/canonical/prometheus:latest

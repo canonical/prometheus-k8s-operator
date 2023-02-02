@@ -202,4 +202,4 @@ juju relate \
 ## OCI Images
 
 This charm by default uses the latest version of the
-[ubuntu/prometheus](https://hub.docker.com/r/ubuntu/prometheus) image.
+[canonical/prometheus](https://ghcr.io/canonical/prometheus) image.
