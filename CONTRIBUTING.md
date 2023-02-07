@@ -1,5 +1,13 @@
 # Contributing
 
+![GitHub License](https://img.shields.io/github/license/canonical/prometheus-k8s-operator)
+![GitHub Commit Activity](https://img.shields.io/github/commit-activity/y/canonical/prometheus-k8s-operator)
+![GitHub Lines of Code](https://img.shields.io/tokei/lines/github/canonical/prometheus-k8s-operator)
+![GitHub Issues](https://img.shields.io/github/issues/canonical/prometheus-k8s-operator)
+![GitHub PRs](https://img.shields.io/github/issues-pr/canonical/prometheus-k8s-operator)
+![GitHub Contributors](https://img.shields.io/github/contributors/canonical/prometheus-k8s-operator)
+![GitHub Watchers](https://img.shields.io/github/watchers/canonical/prometheus-k8s-operator?style=social)
+
 ## Overview
 
 This documents explains the processes and practices recommended for
