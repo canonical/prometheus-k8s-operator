@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 # Copyright 2020 Canonical Ltd.
 # See LICENSE file for licensing details.
 

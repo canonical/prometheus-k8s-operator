@@ -686,10 +686,27 @@ class InvalidAlertRuleEvent(EventBase):
         self.errors = snapshot["errors"]
 
 
+class InvalidScrapeJobEvent(EventBase):
+    """Event emitted when alert rule files are not valid."""
+
+    def __init__(self, handle, errors: str = ""):
+        super().__init__(handle)
+        self.errors = errors
+
+    def snapshot(self) -> Dict:
+        """Save error information."""
+        return {"errors": self.errors}
+
+    def restore(self, snapshot):
+        """Restore error information."""
+        self.errors = snapshot["errors"]
+
+
 class MetricsEndpointProviderEvents(ObjectEvents):
     """Events raised by :class:`InvalidAlertRuleEvent`s."""
 
     alert_rule_status_changed = EventSource(InvalidAlertRuleEvent)
+    invalid_scrape_job = EventSource(InvalidScrapeJobEvent)
 
 
 def _type_convert_stored(obj):
@@ -1115,11 +1132,30 @@ class MetricsEndpointConsumer(Object):
             its scrape targets.
         """
         scrape_jobs = []
+        # Temp
+        logger.error("Entering jobs")
 
         for relation in self._charm.model.relations[self._relation_name]:
+            # Temp
+            logger.error("Entered loop")
             static_scrape_jobs = self._static_scrape_config(relation)
-            if static_scrape_jobs and self._tool.validate_scrape_jobs(static_scrape_jobs):
-                scrape_jobs.extend(static_scrape_jobs)
+            # Temp
+            logger.error(f"static_scrape_jobs: {static_scrape_jobs}")
+            if static_scrape_jobs:
+                try:
+                    # Temp
+                    logger.error("Entering try")
+                    self._tool.validate_scrape_jobs(static_scrape_jobs)
+                except subprocess.CalledProcessError as e:
+                    # Temp
+                    logger.error("Except Clause")
+                    data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                    data["scrape_job_errors"] = str(e)
+                    relation.data[self._charm.app]["event"] = json.dumps(data)
+                else:
+                    # Temp
+                    logger.error("Else Clause")
+                    scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
 
@@ -1198,12 +1234,17 @@ class MetricsEndpointConsumer(Object):
                 )
                 continue
 
+            alerts[identifier] = alert_rules
+
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
-                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                if alerts[identifier]:
+                    del alerts[identifier]
+                if self._charm.unit.is_leader():
+                    data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                    data["errors"] = errmsg
+                    relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
-
-            alerts[identifier] = alert_rules
 
         return alerts
 
@@ -1663,6 +1704,10 @@ class MetricsEndpointProvider(Object):
                     self.on.alert_rule_status_changed.emit(valid=valid)
                 else:
                     self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
+
+                scrape_errors = ev.get("scrape_job_errors", None)
+                if scrape_errors:
+                    self.on.invalid_scrape_job.emit(errors=scrape_errors)
 
     def update_scrape_job_spec(self, jobs):
         """Update scrape job specification."""
@@ -2486,7 +2531,7 @@ class CosTool:
                 self._exec([str(self.path), "validate-config", tmpfile.name])
             except subprocess.CalledProcessError as e:
                 logger.error("Validating scrape jobs failed: {}".format(e.output))
-                return False
+                raise
         return True
 
     def inject_label_matchers(self, expression, topology) -> str:
