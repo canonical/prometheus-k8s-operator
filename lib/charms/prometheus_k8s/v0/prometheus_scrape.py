@@ -1147,11 +1147,13 @@ class MetricsEndpointConsumer(Object):
                     logger.error("Entering try")
                     self._tool.validate_scrape_jobs(static_scrape_jobs)
                 except subprocess.CalledProcessError as e:
-                    # Temp
-                    logger.error("Except Clause")
-                    data = json.loads(relation.data[self._charm.app].get("event", "{}"))
-                    data["scrape_job_errors"] = str(e)
-                    relation.data[self._charm.app]["event"] = json.dumps(data)
+                    if self._charm.unit.is_leader():
+                        # Temp
+                        logger.error("Except Clause")
+                        #TODO This requires a leader guard
+                        data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                        data["scrape_job_errors"] = str(e)
+                        relation.data[self._charm.app]["event"] = json.dumps(data)
                 else:
                     # Temp
                     logger.error("Else Clause")
