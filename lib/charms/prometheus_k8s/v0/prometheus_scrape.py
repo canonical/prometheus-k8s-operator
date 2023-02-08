@@ -1132,31 +1132,18 @@ class MetricsEndpointConsumer(Object):
             its scrape targets.
         """
         scrape_jobs = []
-        # Temp
-        logger.error("Entering jobs")
 
         for relation in self._charm.model.relations[self._relation_name]:
-            # Temp
-            logger.error("Entered loop")
             static_scrape_jobs = self._static_scrape_config(relation)
-            # Temp
-            logger.error(f"static_scrape_jobs: {static_scrape_jobs}")
             if static_scrape_jobs:
                 try:
-                    # Temp
-                    logger.error("Entering try")
                     self._tool.validate_scrape_jobs(static_scrape_jobs)
                 except subprocess.CalledProcessError as e:
                     if self._charm.unit.is_leader():
-                        # Temp
-                        logger.error("Except Clause")
-                        #TODO This requires a leader guard
                         data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                         data["scrape_job_errors"] = str(e)
                         relation.data[self._charm.app]["event"] = json.dumps(data)
                 else:
-                    # Temp
-                    logger.error("Else Clause")
                     scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
