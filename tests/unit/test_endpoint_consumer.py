@@ -502,6 +502,23 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertIn("unlabeled_external_cpu_alerts", alerts.keys())
         self.assertEqual(UNLABELED_ALERT_RULES, alerts["unlabeled_external_cpu_alerts"])
 
+    def test_bad_scrape_job(self):
+        bad_scrape_jobs = json.dumps([{
+            "metrics_path": "/metrics",
+            "static_configs": [{"targets": ["*:3100"]}],
+            "sample_limit": {"not_a_key": "not_a_value"},
+        }])
+        app_data = {"scrape_jobs": bad_scrape_jobs}
+
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(rel_id, "consumer", app_data)
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertTrue(len(jobs) == 0)
+        app_data = json.loads(self.harness.get_relation_data(rel_id, self.harness.charm.app.name).get("event", "{}"))
+        self.assertIn("scrape_job_errors", app_data)
+
+
 
 def juju_job_labels(job, num=0):
     """Fetch job labels.
