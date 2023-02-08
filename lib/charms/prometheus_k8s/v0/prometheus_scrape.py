@@ -1136,6 +1136,9 @@ class MetricsEndpointConsumer(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             static_scrape_jobs = self._static_scrape_config(relation)
             if static_scrape_jobs:
+                # Duplicate job names will cause validate_scrape_jobs to fail.
+                # Therefore we need to dedupe here and after all jobs are collected/
+                static_scrape_jobs = _dedupe_job_names(static_scrape_jobs)
                 try:
                     self._tool.validate_scrape_jobs(static_scrape_jobs)
                 except subprocess.CalledProcessError as e:
