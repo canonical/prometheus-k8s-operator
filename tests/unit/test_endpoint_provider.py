@@ -12,7 +12,6 @@ import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     AlertRules,
-    CosTool,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
@@ -21,7 +20,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
 from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
-from jo11y.juju_topology import JujuTopology
+from jo11y import CosTool, JujuTopology
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness

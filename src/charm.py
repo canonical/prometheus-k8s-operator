@@ -41,7 +41,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from jo11y.juju_topology import JujuTopology
+from jo11y import JujuTopology
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod

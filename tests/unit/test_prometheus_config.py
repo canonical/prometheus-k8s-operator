@@ -6,7 +6,7 @@ import unittest
 import uuid
 
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusConfig
-from jo11y.juju_topology import JujuTopology
+from jo11y import JujuTopology
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ import requests
 from charms.prometheus_k8s.v0.prometheus_remote_write import (
     CosTool as _CosTool_remote_write,
 )
-from charms.prometheus_k8s.v0.prometheus_scrape import CosTool as _CosTool_scrape
+from jo11y import CosTool as _CosTool_scrape
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 UNITTEST_DIR = Path(__file__).resolve().parent
