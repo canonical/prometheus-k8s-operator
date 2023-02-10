@@ -513,11 +513,19 @@ class TestEndpointConsumer(unittest.TestCase):
                 }
             ]
         )
-        app_data = {"scrape_jobs": bad_scrape_jobs}
+        app_data = {"scrape_jobs": bad_scrape_jobs, "scrape_metadata": json.dumps(SCRAPE_METADATA)}
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.harness.update_relation_data(rel_id, "consumer", app_data)
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider/0",
+            },
+        )
         jobs = self.harness.charm.prometheus_consumer.jobs()
         self.assertTrue(len(jobs) == 0)
         app_data = json.loads(
