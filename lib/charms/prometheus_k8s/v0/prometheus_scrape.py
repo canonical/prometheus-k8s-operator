@@ -1570,7 +1570,8 @@ class MetricsEndpointProvider(Object):
         if not refresh_event:
             # FIXME remove once podspec charms are verified.
             # `self.set_scrape_job_spec()` is called every re-init so this should not be needed.
-            if len(self._charm.meta.containers) == 1:
+            num_containers = len(self._charm.meta.containers)
+            if num_containers == 1:
                 if "kubernetes" in self._charm.meta.series:
                     # This is a podspec charm
                     refresh_event = [self._charm.on.update_status]
@@ -1579,12 +1580,14 @@ class MetricsEndpointProvider(Object):
                     container = list(self._charm.meta.containers.values())[0]
                     refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
             else:
-                logger.warning(
-                    "%d containers are present in metadata.yaml and "
-                    "refresh_event was not specified. Defaulting to update_status. "
-                    "Metrics IP may not be set in a timely fashion.",
-                    len(self._charm.meta.containers),
-                )
+                if num_containers:  # avoids noisy logs on non-K8s charms
+                    logger.warning(
+                        "%d containers are present in metadata.yaml and "
+                        "refresh_event was not specified. Defaulting to update_status. "
+                        "Metrics IP may not be set in a timely fashion.",
+                        num_containers,
+                    )
+
                 refresh_event = [self._charm.on.update_status]
 
         else:
