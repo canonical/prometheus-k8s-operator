@@ -907,7 +907,6 @@ class AlertRules:
                         alert_rule["expr"] = self.tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
                             self.topology.label_matcher_dict,
-                            type="promql",
                         )
 
             return alert_groups
@@ -1180,7 +1179,7 @@ class MetricsEndpointConsumer(Object):
             try:
                 scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                 identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                alerts[identifier] = self._tool.apply_label_matchers(alert_rules, type="promql")
+                alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
             except KeyError as e:
                 logger.debug(

@@ -260,7 +260,6 @@ class AlertRules:
                         alert_rule["expr"] = self.tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
                             self.topology.label_matcher_dict,
-                            type="promql",
                         )
 
             return alert_groups
@@ -966,7 +965,6 @@ class PrometheusRemoteWriteProvider(Object):
                         alert_rule["expr"] = tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
                             topology.label_matcher_dict,
-                            type="promql",
                         )
 
                         group["rules"][idx] = alert_rule
