@@ -368,7 +368,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 32
+LIBPATCH = 33
 
 logger = logging.getLogger(__name__)
 
@@ -1137,7 +1137,7 @@ class MetricsEndpointConsumer(Object):
             static_scrape_jobs = self._static_scrape_config(relation)
             if static_scrape_jobs:
                 # Duplicate job names will cause validate_scrape_jobs to fail.
-                # Therefore we need to dedupe here and after all jobs are collected/
+                # Therefore we need to dedupe here and after all jobs are collected.
                 static_scrape_jobs = _dedupe_job_names(static_scrape_jobs)
                 try:
                     self._tool.validate_scrape_jobs(static_scrape_jobs)
