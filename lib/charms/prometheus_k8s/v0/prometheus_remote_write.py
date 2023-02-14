@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 13
 
 
 logger = logging.getLogger(__name__)
@@ -569,26 +569,40 @@ class PrometheusRemoteWriteConsumer(Object):
     If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
     does not load the particular rule.
 
-    To avoid false positives and negatives in the evaluation of your alert rules,
-    you must always add the `%%juju_topology%%` token as label filters in the
-    PromQL expression, e.g.:
+    To avoid false positives and false negatives the library will inject label filters
+    automatically in the PromQL expression. For example if the charm provides an
+    alert rule like this one:
 
-        alert: UnitUnavailable
-        expr: up{%%juju_topology%%} < 1
-        for: 0m
-        labels:
-            severity: critical
-        annotations:
-            summary: Unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
-            description: >
-            The unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
+    ```yaml
+    alert: TraefikIngressUnitIsUnavailable
+    expr: up < 1
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: Traefik ingress unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
+      description: >
+        The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
+        LABELS = {{ $labels }}
+    ```
 
-    The `%%juju_topology%%` token will be replaced with label filters ensuring that
+    The `expr: up < 1` will be modified with label filters ensuring that
     the only timeseries evaluated are those scraped from this charm, and no other.
-    Failing to ensure that the `%%juju_topology%%` token is applied to each and every
-    of the queries timeseries will lead to unpredictable alert rule evaluation
-    if your charm is deployed multiple times and various of its instances are
-    monitored by the same Prometheus.
+
+
+    ```yaml
+    name: TraefikIngressUnitIsUnavailable
+    expr: up{juju_application="traefik",juju_charm="traefik-k8s",juju_model="cos",juju_model_uuid="b5ed878d-2671-42e8-873a-e8d58c0ec325"} < 1
+    labels:
+    juju_application: traefik
+    juju_charm: traefik-k8s
+    juju_model: cos
+    juju_model_uuid: b5ed878d-2671-42e8-873a-e8d58c0ec325
+    severity: critical
+    annotations:
+    description: The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable LABELS = {{ $labels }}
+    summary: Traefik ingress unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
+    ```
     """
 
     on = PrometheusRemoteWriteConsumerEvents()
