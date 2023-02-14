@@ -592,7 +592,11 @@ class PrometheusRemoteWriteConsumer(Object):
 
     ```yaml
     name: TraefikIngressUnitIsUnavailable
-    expr: up{juju_application="traefik",juju_charm="traefik-k8s",juju_model="cos",juju_model_uuid="b5ed878d-2671-42e8-873a-e8d58c0ec325"} < 1
+    expr: up{juju_application="traefik",
+             juju_charm="traefik-k8s",
+             juju_model="cos",
+             juju_model_uuid="b5ed878d-2671-42e8-873a-e8d58c0ec325"
+          } < 1
     labels:
     juju_application: traefik
     juju_charm: traefik-k8s
@@ -600,7 +604,9 @@ class PrometheusRemoteWriteConsumer(Object):
     juju_model_uuid: b5ed878d-2671-42e8-873a-e8d58c0ec325
     severity: critical
     annotations:
-    description: The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable LABELS = {{ $labels }}
+    description: >
+      The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
+      LABELS = {{ $labels }}
     summary: Traefik ingress unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
     ```
     """
