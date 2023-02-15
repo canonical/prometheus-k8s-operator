@@ -571,7 +571,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     To avoid false positives and false negatives the library will inject label filters
     automatically in the PromQL expression. For example if the charm provides an
-    alert rule like this one:
+    alert rule with an `expr` like this one:
 
     ```yaml
     alert: TraefikIngressUnitIsUnavailable
