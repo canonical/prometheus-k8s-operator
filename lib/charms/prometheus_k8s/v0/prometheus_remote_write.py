@@ -574,40 +574,24 @@ class PrometheusRemoteWriteConsumer(Object):
     alert rule with an `expr` like this one:
 
     ```yaml
-    alert: TraefikIngressUnitIsUnavailable
     expr: up < 1
-    for: 0m
-    labels:
-      severity: critical
-    annotations:
-      summary: Traefik ingress unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
-      description: >
-        The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
-        LABELS = {{ $labels }}
     ```
 
-    The `expr: up < 1` will be modified with label filters ensuring that
+   it will be modified with label filters ensuring that
     the only timeseries evaluated are those scraped from this charm, and no other.
 
 
     ```yaml
-    name: TraefikIngressUnitIsUnavailable
     expr: up{juju_application="traefik",
              juju_charm="traefik-k8s",
              juju_model="cos",
              juju_model_uuid="b5ed878d-2671-42e8-873a-e8d58c0ec325"
           } < 1
     labels:
-    juju_application: traefik
-    juju_charm: traefik-k8s
-    juju_model: cos
-    juju_model_uuid: b5ed878d-2671-42e8-873a-e8d58c0ec325
-    severity: critical
-    annotations:
-    description: >
-      The Traefik ingress unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
-      LABELS = {{ $labels }}
-    summary: Traefik ingress unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
+      juju_application: traefik
+      juju_charm: traefik-k8s
+      juju_model: cos
+      juju_model_uuid: b5ed878d-2671-42e8-873a-e8d58c0ec325
     ```
     """
 
