@@ -7,7 +7,9 @@ import hashlib
 import logging
 import os
 import re
+import signal
 import socket
+import sys
 from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
@@ -759,5 +761,11 @@ class PrometheusCharm(CharmBase):
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
 
+def _signal_worker(*args) -> None:
+    os.kill(os.getppid(), signal.SIGTERM)
+    sys.exit(0)
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, _signal_worker)
     main(PrometheusCharm)
