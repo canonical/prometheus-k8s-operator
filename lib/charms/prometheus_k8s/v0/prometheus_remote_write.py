@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 13
 
 
 logger = logging.getLogger(__name__)
@@ -497,98 +497,102 @@ class PrometheusRemoteWriteConsumerEvents(ObjectEvents):
 class PrometheusRemoteWriteConsumer(Object):
     """API that manages a required `prometheus_remote_write` relation.
 
-    The `PrometheusRemoteWriteConsumer` is intended to be used by charms that need to push data to
-    other charms over the Prometheus remote_write API.
+     The `PrometheusRemoteWriteConsumer` is intended to be used by charms that need to push data to
+     other charms over the Prometheus remote_write API.
 
-    The `PrometheusRemoteWriteConsumer` object can be instantiated as follows in your charm:
+     The `PrometheusRemoteWriteConsumer` object can be instantiated as follows in your charm:
 
-    ```
-    from charms.prometheus_k8s.v0.prometheus_remote_write import PrometheusRemoteWriteConsumer
+     ```
+     from charms.prometheus_k8s.v0.prometheus_remote_write import PrometheusRemoteWriteConsumer
 
-    def __init__(self, *args):
-        ...
-        self.remote_write_consumer = PrometheusRemoteWriteConsumer(self)
-        ...
-    ```
+     def __init__(self, *args):
+         ...
+         self.remote_write_consumer = PrometheusRemoteWriteConsumer(self)
+         ...
+     ```
 
-    The `PrometheusRemoteWriteConsumer` assumes that, in the `metadata.yaml` of your charm,
-    you declare a required relation as follows:
+     The `PrometheusRemoteWriteConsumer` assumes that, in the `metadata.yaml` of your charm,
+     you declare a required relation as follows:
 
-    ```
-    requires:
-        send-remote-write:  # Relation name
-            interface: prometheus_remote_write  # Relation interface
-    ```
+     ```
+     requires:
+         send-remote-write:  # Relation name
+             interface: prometheus_remote_write  # Relation interface
+     ```
 
-    The charmed operator is expected to use the `PrometheusRemoteWriteConsumer` as follows:
+     The charmed operator is expected to use the `PrometheusRemoteWriteConsumer` as follows:
 
-    ```
-    def __init__(self, *args):
-        ...
-        self.remote_write_consumer = PrometheusRemoteWriteConsumer(self)
-        ...
+     ```
+     def __init__(self, *args):
+         ...
+         self.remote_write_consumer = PrometheusRemoteWriteConsumer(self)
+         ...
 
-        self.framework.observe(
-            self.remote_write_consumer.on.endpoints_changed,
-            self._handle_endpoints_changed,
-        )
-    ```
-    The `endpoints_changed` event will fire in situations such as provider ip change (e.g.
-    relation created, provider upgrade, provider pod churn) or provider config change (e.g.
-    metadata settings).
+         self.framework.observe(
+             self.remote_write_consumer.on.endpoints_changed,
+             self._handle_endpoints_changed,
+         )
+     ```
+     The `endpoints_changed` event will fire in situations such as provider ip change (e.g.
+     relation created, provider upgrade, provider pod churn) or provider config change (e.g.
+     metadata settings).
 
-    Then, inside the logic of `_handle_endpoints_changed`, the updated endpoint list is
-    retrieved with:
+     Then, inside the logic of `_handle_endpoints_changed`, the updated endpoint list is
+     retrieved with:
 
-    ```
-    self.remote_write_consumer.endpoints
-    ```
+     ```
+     self.remote_write_consumer.endpoints
+     ```
 
-    which returns a dictionary structured like the Prometheus configuration object (see
-    https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
+     which returns a dictionary structured like the Prometheus configuration object (see
+     https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write).
 
-    Regarding the default relation name, `send-remote-write`: if you choose to change it,
-    you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
-    `relation_name` constructor argument. (The relation interface, on the other hand, is
-    fixed and, if you were to change it, your charm would not be able to relate with other
-    charms using the correct relation interface. The library prevents you from doing that by
-    raising an exception.)
+     Regarding the default relation name, `send-remote-write`: if you choose to change it,
+     you would need to explicitly provide it to the `PrometheusRemoteWriteConsumer` via the
+     `relation_name` constructor argument. (The relation interface, on the other hand, is
+     fixed and, if you were to change it, your charm would not be able to relate with other
+     charms using the correct relation interface. The library prevents you from doing that by
+     raising an exception.)
 
-    In any case, it is strongly discouraged to change the relation name: having consistent
-    relation names across charms that do similar things is good practice and more
-    straightforward for the users of your charm. The one exception to the rule above,
-    is if your charm needs to both consume and provide a relation using the
-    `prometheus_remote_write` interface, in which case changing the relation name to
-    differentiate between "incoming" and "outgoing" remote write interactions is necessary.
+     In any case, it is strongly discouraged to change the relation name: having consistent
+     relation names across charms that do similar things is good practice and more
+     straightforward for the users of your charm. The one exception to the rule above,
+     is if your charm needs to both consume and provide a relation using the
+     `prometheus_remote_write` interface, in which case changing the relation name to
+     differentiate between "incoming" and "outgoing" remote write interactions is necessary.
 
-    It is also possible to specify alert rules. By default, this library will search
-    `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
-    layouts resolves to `src/prometheus_alert_rules`. Each set of alert rules, grouped
-    by the topology identifier, goes into a separate `*.rule` file.
+     It is also possible to specify alert rules. By default, this library will search
+     `<charm_parent_dir>/prometheus_alert_rules`, which in standard charm
+     layouts resolves to `src/prometheus_alert_rules`. Each set of alert rules, grouped
+     by the topology identifier, goes into a separate `*.rule` file.
 
-    If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
-    does not load the particular rule.
+     If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
+     does not load the particular rule.
 
-    To avoid false positives and negatives in the evaluation of your alert rules,
-    you must always add the `%%juju_topology%%` token as label filters in the
-    PromQL expression, e.g.:
+     To avoid false positives and false negatives the library will inject label filters
+     automatically in the PromQL expression. For example if the charm provides an
+     alert rule with an `expr` like this one:
 
-        alert: UnitUnavailable
-        expr: up{%%juju_topology%%} < 1
-        for: 0m
-        labels:
-            severity: critical
-        annotations:
-            summary: Unit {{ $labels.juju_model }}/{{ $labels.juju_unit }} unavailable
-            description: >
-            The unit {{ $labels.juju_model }} {{ $labels.juju_unit }} is unavailable
+     ```yaml
+     expr: up < 1
+     ```
 
-    The `%%juju_topology%%` token will be replaced with label filters ensuring that
-    the only timeseries evaluated are those scraped from this charm, and no other.
-    Failing to ensure that the `%%juju_topology%%` token is applied to each and every
-    of the queries timeseries will lead to unpredictable alert rule evaluation
-    if your charm is deployed multiple times and various of its instances are
-    monitored by the same Prometheus.
+    it will be modified with label filters ensuring that
+     the only timeseries evaluated are those scraped from this charm, and no other.
+
+
+     ```yaml
+     expr: up{juju_application="traefik",
+              juju_charm="traefik-k8s",
+              juju_model="cos",
+              juju_model_uuid="b5ed878d-2671-42e8-873a-e8d58c0ec325"
+           } < 1
+     labels:
+       juju_application: traefik
+       juju_charm: traefik-k8s
+       juju_model: cos
+       juju_model_uuid: b5ed878d-2671-42e8-873a-e8d58c0ec325
+     ```
     """
 
     on = PrometheusRemoteWriteConsumerEvents()
