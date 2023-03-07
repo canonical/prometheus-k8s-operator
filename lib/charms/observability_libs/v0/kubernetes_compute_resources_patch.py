@@ -103,8 +103,6 @@ References:
 
 import decimal
 import logging
-import signal
-import sys
 from decimal import Decimal
 from math import ceil, floor
 from typing import Callable, Dict, List, Optional, Union
@@ -135,7 +133,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 
 _Decimal = Union[Decimal, float, str, int]  # types that are potentially convertible to Decimal
@@ -403,27 +401,12 @@ class ResourcePatcher:
             resource_reqs, self.get_actual(pod_name)
         )
 
-    def _handle_pod_termination(self, *args) -> None:
-        logger.debug(
-            "KubernetesComputeResourcesPatch's signal handler caught a SIGTERM, likely due to "
-            "pod termination during execution of `config-changed`. Exiting gracefully. "
-            "The hook being executed will be re-run by Juju once the pod is re-scheduled."
-        )
-        sys.exit(0)
-
     def apply(self, resource_reqs: ResourceRequirements) -> None:
         """Patch the Kubernetes resources created by Juju to limit cpu or mem."""
         # Need to ignore invalid input, otherwise the StatefulSet gives "FailedCreate" and the
         # charm would be stuck in unknown/lost.
         if self.is_patched(resource_reqs):
             return
-
-        # If it's not patched already, add a handler for SIGTERM prior to patching.
-        # Juju tries to send a SIGTERM to the CRI to exit gracefully when in CAAS mode, then
-        # the hook is re-executed, so we can "safely" trap it here without causing a hook
-        # failure if there is a race, and config-changed will retry (after it is applied and
-        # the pod is rescheduled)
-        signal.signal(signal.SIGTERM, self._handle_pod_termination)
 
         self.client.patch(
             StatefulSet,
