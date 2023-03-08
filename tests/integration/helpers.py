@@ -2,6 +2,7 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import grp
 import logging
 import subprocess
 from pathlib import Path
@@ -212,6 +213,16 @@ def oci_image(metadata_file: str, image_name: str) -> str:
         raise ValueError("Upstream source not found")
 
     return upstream_source
+
+
+def uk8s_group() -> str:
+    try:
+        # Classically confined microk8s
+        uk8s_group = grp.getgrnam("microk8s").gr_name
+    except KeyError:
+        # Strictly confined microk8s
+        uk8s_group = "snap_microk8s"
+    return uk8s_group
 
 
 def initial_workload_is_ready(ops_test, app_names) -> bool:
