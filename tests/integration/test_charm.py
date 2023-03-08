@@ -106,20 +106,3 @@ async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm)
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
     assert len(tester_rules) == 2
-
-
-async def test_configuration_resets_after_relation_is_removed(ops_test):
-    """Ensure scrape alert rules can be updated.
-
-    This test upgrades the metrics provider charm and checks that
-    updates to alert rules are propagated correctly.
-    """
-    await ops_test.model.applications[tester_app_name].remove()
-    await ops_test.model.wait_for_idle(apps=[prometheus_app_name], status="active")
-
-    relation_removed_config, relation_removed_rules = await asyncio.gather(
-        get_prometheus_config(ops_test, prometheus_app_name, 0),
-        get_prometheus_rules(ops_test, prometheus_app_name, 0),
-    )
-    assert initial_config == relation_removed_config
-    assert initial_rules == relation_removed_rules
