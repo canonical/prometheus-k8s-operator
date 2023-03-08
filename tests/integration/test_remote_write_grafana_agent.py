@@ -13,6 +13,7 @@ from helpers import (
     has_metric,
     oci_image,
     run_promql,
+    uk8s_group,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,7 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
 
     cmd = [
         "sg",
-        "microk8s",
+        uk8s_group(),
         "-c",
         " ".join(["microk8s.kubectl", "delete", "pod", "-n", ops_test.model_name, pod_name]),
     ]

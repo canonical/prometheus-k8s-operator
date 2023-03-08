@@ -18,7 +18,7 @@ import subprocess
 import urllib.request
 
 import pytest
-from helpers import oci_image, unit_address
+from helpers import oci_image, uk8s_group, unit_address
 from pytest_operator.plugin import OpsTest
 from workload import Prometheus
 
@@ -142,7 +142,7 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
 
     logger.info("First, disable metallb, just in case")
     try:
-        cmd = ["sg", "microk8s", "-c", "microk8s disable metallb"]
+        cmd = ["sg", uk8s_group(), "-c", "microk8s disable metallb"]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except Exception as e:
         print(e)
@@ -152,7 +152,7 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
 
     logger.info("Now enable metallb")
     try:
-        cmd = ["sg", "microk8s", "-c", f"microk8s enable metallb:{ip}-{ip}"]
+        cmd = ["sg", uk8s_group(), "-c", f"microk8s enable metallb:{ip}-{ip}"]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except Exception as e:
         print(e)
