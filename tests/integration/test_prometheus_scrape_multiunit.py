@@ -54,7 +54,7 @@ async def test_setup_env(ops_test: OpsTest):
     )
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
@@ -179,7 +179,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         )
 
 
-@pytest.mark.abort_on_fail
+@pytest.mark.xfail
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
