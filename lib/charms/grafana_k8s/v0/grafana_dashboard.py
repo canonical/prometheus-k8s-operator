@@ -218,7 +218,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 24
+LIBPATCH = 25
 
 logger = logging.getLogger(__name__)
 
@@ -366,7 +366,7 @@ DATASOURCE_TEMPLATE_DROPDOWNS = [  # type: ignore
 REACTIVE_CONVERTER = {  # type: ignore
     "allValue": None,
     "datasource": "${prometheusds}",
-    "definition": 'label_values(up{juju_model="$juju_model",juju_model_uuid="$juju_model_uuid",juju_application="$juju_application"},host)',
+    "definition": 'label_values(up{juju_model=~"$juju_model",juju_model_uuid=~"$juju_model_uuid",juju_application=~"$juju_application"},host)',
     "description": None,
     "error": None,
     "hide": 0,
@@ -376,7 +376,7 @@ REACTIVE_CONVERTER = {  # type: ignore
     "name": "host",
     "options": [],
     "query": {
-        "query": 'label_values(up{juju_model="$juju_model",juju_model_uuid="$juju_model_uuid",juju_application="$juju_application"},host)',
+        "query": 'label_values(up{juju_model=~"$juju_model",juju_model_uuid=~"$juju_model_uuid",juju_application=~"$juju_application"},host)',
         "refId": "StandardVariableQuery",
     },
     "refresh": 1,
@@ -1713,7 +1713,7 @@ class GrafanaDashboardAggregator(Object):
         `dashboard["__inputs"]` is a property sometimes set when exporting dashboards from
         the Grafana UI. It is not present in earlier Grafana versions, and can be disabled
         in 5.3.4 and above (optionally). If set, any values present will be substituted on
-        import. Some reactive charms use this for Prometheus. LMA2 uses dropdown selectors
+        import. Some reactive charms use this for Prometheus. COS uses dropdown selectors
         for datasources, and leaving this present results in "default" datasource values
         which are broken.
 
@@ -1799,7 +1799,11 @@ class GrafanaDashboardAggregator(Object):
             # Grafana won't load it. We have to unbox:
             # event.relation.data[event.<type>]["request_*"]["dashboard"]["dashboard"],
             # and the final unboxing is below.
-            dash = json.dumps(t["dashboard"])
+            #
+            # Apparently SOME newer dashboards (such as Ceph) do not have this double nesting, so
+            # now we get to account for both :toot:
+            dash = t.get("dashboard", {}) or t
+            dash = json.dumps(dash)
 
             # Replace the old-style datasource templates
             dash = re.sub(r"<< datasource >>", r"${prometheusds}", dash)
