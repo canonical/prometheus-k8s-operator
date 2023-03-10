@@ -341,7 +341,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
 class TestAlertsFilename(unittest.TestCase):
     REMOTE_SCRAPE_METADATA = {
         "model": "remote-model",
-        "model_uuid": "f299585c-9ac6-4b0c-ae06-46d1be2a7262",
+        "model_uuid": "be44e4b8-32eb-48e1-a843-b1c12e47b9b3",
         "application": "remote-app",
         "charm_name": "remote-charm",
     }
@@ -349,7 +349,7 @@ class TestAlertsFilename(unittest.TestCase):
     LABELED_ALERT_RULES = {
         "groups": [
             {
-                "name": "ZZZ_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+                "name": "ZZZ_a5edc336-b02e-4fad-b847-c530500c1c86_consumer-tester_alerts",
                 "rules": [
                     {
                         "alert": "CPUOverUse",
@@ -357,14 +357,14 @@ class TestAlertsFilename(unittest.TestCase):
                         "labels": {
                             "severity": "Low",
                             "juju_model": "ZZZ-model",
-                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                            "juju_model_uuid": "a5edc336-b02e-4fad-b847-c530500c1c86",
                             "juju_application": "zzz-app",
                         },
                     },
                 ],
             },
             {
-                "name": "AAA_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+                "name": "AAA_a5edc336-b02e-4fad-b847-c530500c1c86_consumer-tester_alerts",
                 "rules": [
                     {
                         "alert": "PrometheusTargetMissing",
@@ -372,7 +372,7 @@ class TestAlertsFilename(unittest.TestCase):
                         "labels": {
                             "severity": "critical",
                             "juju_model": "AAA-model",
-                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                            "juju_model_uuid": "a5edc336-b02e-4fad-b847-c530500c1c86",
                             "juju_application": "aaa-app",
                         },
                     },
@@ -441,12 +441,12 @@ class TestAlertsFilename(unittest.TestCase):
             },
         )
 
-        # THEN rules filename is derived from the contents of scrape_metadata
+        # THEN rules filename is derived from the contents of alert labels
         container = self.harness.charm.unit.get_container(self.harness.charm._name)
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {"/etc/prometheus/rules/juju_remote-model_f299585c_remote-app.rules"},
+            {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
@@ -470,9 +470,7 @@ class TestAlertsFilename(unittest.TestCase):
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {
-                "/etc/prometheus/rules/juju_ZZZ-model_f2c1b2a6-e006-11eb-ba80-0242ac130004_zzz-app.rules"
-            },
+            {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
@@ -495,7 +493,7 @@ class TestAlertsFilename(unittest.TestCase):
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {"/etc/prometheus/rules/juju_remote-model_f299585c_remote-app.rules"},
+            {"/etc/prometheus/rules/juju_remote-model_be44e4b8_remote-app.rules"},
         )
 
     @patch("charm.KubernetesServicePatch", lambda x, y: None)

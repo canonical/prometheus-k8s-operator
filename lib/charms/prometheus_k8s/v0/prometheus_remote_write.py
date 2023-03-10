@@ -22,7 +22,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -45,7 +45,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 
 logger = logging.getLogger(__name__)
@@ -833,7 +833,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         super().__init__(charm, relation_name)
         self._charm = charm
-        self.tool = CosTool(self._charm)
+        self._tool = CosTool(self._charm)
         self._relation_name = relation_name
         self._endpoint_schema = endpoint_schema
         self._endpoint_address = endpoint_address
@@ -904,6 +904,7 @@ class PrometheusRemoteWriteProvider(Object):
             }
         )
 
+    @property
     def alerts(self) -> dict:
         """Fetch alert rules from all relations.
 
@@ -940,67 +941,131 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
-
             if not alert_rules:
                 continue
 
-            if "groups" not in alert_rules:
-                logger.debug("No alert groups were found in relation data")
-                continue
-            # Construct an ID based on what's in the alert rules
-            error_messages = []
-            tool = CosTool(self._charm)
-            for group in alert_rules["groups"]:
-                # Copy off rules, so we don't modify an object we're iterating over
-                rules = group["rules"]
-                for idx, alert_rule in enumerate(rules):
-                    labels = alert_rule.get("labels")
+            alert_rules = self._inject_alert_expr_labels(alert_rules)
 
-                    if labels:
+            identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
+            if not topology:
+                try:
+                    scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
+                    identifier = JujuTopology.from_dict(scrape_metadata).identifier
+                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
+
+                except KeyError as e:
+                    logger.debug(
+                        "Relation %s has no 'scrape_metadata': %s",
+                        relation.id,
+                        e,
+                    )
+
+            if not identifier:
+                logger.error(
+                    "Alert rules were found but no usable group or identifier was present."
+                )
+                continue
+
+            _, errmsg = self._tool.validate_alert_rules(alert_rules)
+            if errmsg:
+                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                continue
+
+            alerts[identifier] = alert_rules
+
+        return alerts
+
+    def _get_identifier_by_alert_rules(
+        self, rules: Dict[str, Any]
+    ) -> Tuple[Union[str, None], Union[JujuTopology, None]]:
+        """Determine an appropriate dict key for alert rules.
+
+        The key is used as the filename when writing alerts to disk, so the structure
+        and uniqueness is important.
+
+        Args:
+            rules: a dict of alert rules
+        Returns:
+            A tuple containing an identifier, if found, and a JujuTopology, if it could
+            be constructed.
+        """
+        if "groups" not in rules:
+            logger.debug("No alert groups were found in relation data")
+            return None, None
+
+        # Construct an ID based on what's in the alert rules if they have labels
+        for group in rules["groups"]:
+            try:
+                labels = group["rules"][0]["labels"]
+                topology = JujuTopology(
+                    # Don't try to safely get required constructor fields. There's already
+                    # a handler for KeyErrors
+                    model_uuid=labels["juju_model_uuid"],
+                    model=labels["juju_model"],
+                    application=labels["juju_application"],
+                    unit=labels.get("juju_unit", ""),
+                    charm_name=labels.get("juju_charm", ""),
+                )
+                return topology.identifier, topology
+            except KeyError:
+                logger.debug("Alert rules were found but no usable labels were present")
+                continue
+
+        logger.warning(
+            "No labeled alert rules were found, and no 'scrape_metadata' "
+            "was available. Using the alert group name as filename."
+        )
+        try:
+            for group in rules["groups"]:
+                return group["name"], None
+        except KeyError:
+            logger.debug("No group name was found to use as identifier")
+
+        return None, None
+
+    def _inject_alert_expr_labels(self, rules: Dict[str, Any]) -> Dict[str, Any]:
+        """Iterate through alert rules and inject topology into expressions.
+
+        Args:
+            rules: a dict of alert rules
+        """
+        if "groups" not in rules:
+            return rules
+
+        modified_groups = []
+        for group in rules["groups"]:
+            # Copy off rules, so we don't modify an object we're iterating over
+            rules_copy = group["rules"]
+            for idx, rule in enumerate(rules_copy):
+                labels = rule.get("labels")
+
+                if labels:
+                    try:
                         topology = JujuTopology(
-                            model=labels.get("juju_model", ""),
-                            model_uuid=labels.get("juju_model_uuid", ""),
-                            application=labels.get("juju_application", ""),
+                            # Don't try to safely get required constructor fields. There's already
+                            # a handler for KeyErrors
+                            model_uuid=labels["juju_model_uuid"],
+                            model=labels["juju_model"],
+                            application=labels["juju_application"],
                             unit=labels.get("juju_unit", ""),
                             charm_name=labels.get("juju_charm", ""),
                         )
 
                         # Inject topology and put it back in the list
-                        alert_rule["expr"] = tool.inject_label_matchers(
-                            re.sub(r"%%juju_topology%%,?", "", alert_rule["expr"]),
+                        rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
                             topology.label_matcher_dict,
                         )
+                    except KeyError:
+                        # Some required JujuTopology key is missing. Just move on.
+                        pass
 
-                        group["rules"][idx] = alert_rule
-                try:
-                    labels = group["rules"][0]["labels"]
-                    identifier = JujuTopology(
-                        model=labels.get("juju_model", ""),
-                        model_uuid=labels.get("juju_model_uuid", ""),
-                        application=labels.get("juju_application", ""),
-                        unit=labels.get("juju_unit", ""),
-                        charm_name=labels.get("juju_charm", ""),
-                    ).identifier
+                    group["rules"][idx] = rule
 
-                    _, errmsg = self.tool.validate_alert_rules({"groups": [group]})
+            modified_groups.append(group)
 
-                    if errmsg:
-                        error_messages.append(errmsg)
-                        continue
-                    if identifier not in alerts:
-                        alerts[identifier] = {"groups": [group]}
-                    else:
-                        alerts[identifier]["groups"].append(group)
-                except KeyError:
-                    logger.error("Alert rules were found but no usable labels were present")
-
-            if error_messages:
-                relation.data[self._charm.app]["event"] = json.dumps(
-                    {"errors": "; ".join(error_messages)}
-                )
-                continue
-
-        return alerts
+        rules["groups"] = modified_groups
+        return rules
 
 
 # Copy/pasted from prometheus_scrape.py

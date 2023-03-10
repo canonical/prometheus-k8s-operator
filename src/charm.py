@@ -449,8 +449,8 @@ class PrometheusCharm(CharmBase):
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
-        metrics_consumer_alerts = self.metrics_consumer.alerts()
-        remote_write_alerts = self.remote_write_provider.alerts()
+        metrics_consumer_alerts = self.metrics_consumer.alerts
+        remote_write_alerts = self.remote_write_provider.alerts
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 

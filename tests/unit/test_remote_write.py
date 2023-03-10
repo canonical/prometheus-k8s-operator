@@ -263,7 +263,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
 
         self.harness.add_relation_unit(rel_id, "consumer/0")
 
-        alerts = self.harness.charm.remote_write_provider.alerts()
+        alerts = self.harness.charm.remote_write_provider.alerts
         alerts = list(alerts.values())[0]  # drop the topology identifier
         self.assertEqual(len(alerts), 1)
         self.assertDictEqual(alerts, ALERT_RULES)
