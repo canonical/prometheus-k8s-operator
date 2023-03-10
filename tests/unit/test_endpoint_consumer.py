@@ -69,7 +69,7 @@ SCRAPE_JOBS = [
 ALERT_RULES = {
     "groups": [
         {
-            "name": "None_f2c1b2a6-e006-11eb-ba80-0242ac130004_consumer-tester_alerts",
+            "name": "None_a5edc336-b02e-4fad-b847-c530500c1c86_consumer-tester_alerts",
             "rules": [
                 {
                     "alert": "CPUOverUse",
@@ -78,7 +78,7 @@ ALERT_RULES = {
                     "labels": {
                         "severity": "Low",
                         "juju_model": "None",
-                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_model_uuid": "a5edc336-b02e-4fad-b847-c530500c1c86",
                         "juju_application": "consumer-tester",
                     },
                     "annotations": {
@@ -94,7 +94,7 @@ ALERT_RULES = {
                     "labels": {
                         "severity": "critical",
                         "juju_model": "None",
-                        "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                        "juju_model_uuid": "a5edc336-b02e-4fad-b847-c530500c1c86",
                         "juju_application": "consumer-tester",
                     },
                     "annotations": {
@@ -445,7 +445,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
 
-        rules_file = self.harness.charm.prometheus_consumer.alerts()
+        rules_file = self.harness.charm.prometheus_consumer.alerts
         alerts = list(rules_file.values())[0]
 
         alert_names = [x["alert"] for x in alerts["groups"][0]["rules"]]
@@ -470,7 +470,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         with self.assertLogs(level="WARNING") as logger:
-            _ = self.harness.charm.prometheus_consumer.alerts()
+            _ = self.harness.charm.prometheus_consumer.alerts
             messages = logger.output
             self.assertEqual(len(messages), 1)
             self.assertIn(
@@ -491,15 +491,14 @@ class TestEndpointConsumer(unittest.TestCase):
         self.harness.add_relation_unit(rel_id, "consumer/0")
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         with self.assertLogs(level="DEBUG") as logger:
-            _ = self.harness.charm.prometheus_consumer.alerts()
+            _ = self.harness.charm.prometheus_consumer.alerts
             messages = logger.output
-            self.assertIn("Alert rules were found but no usable labels were present", messages[1])
             self.assertIn(
                 "No labeled alert rules were found, and no 'scrape_metadata' "
                 "was available. Using the alert group name as filename.",
-                messages[2],
+                messages[1],
             )
-        alerts = self.harness.charm.prometheus_consumer.alerts()
+        alerts = self.harness.charm.prometheus_consumer.alerts
         self.assertIn("unlabeled_external_cpu_alerts", alerts.keys())
         self.assertEqual(UNLABELED_ALERT_RULES, alerts["unlabeled_external_cpu_alerts"])
 
