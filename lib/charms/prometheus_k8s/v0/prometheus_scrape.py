@@ -1176,6 +1176,8 @@ class MetricsEndpointConsumer(Object):
             if not alert_rules:
                 continue
 
+            alert_rules = self._inject_alert_expr_labels(alert_rules)
+
             identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
             if not topology:
                 try:
@@ -1252,6 +1254,50 @@ class MetricsEndpointConsumer(Object):
             logger.debug("No group name was found to use as identifier")
 
         return None, None
+
+    def _inject_alert_expr_labels(self, rules: Dict[str, Any]) -> Dict[str, Any]:
+        """Iterate through alert rules and inject topology into expressions.
+
+        Args:
+            rules: a dict of alert rules
+        """
+        if "groups" not in rules:
+            return rules
+
+        modified_groups = []
+        for group in rules["groups"]:
+            # Copy off rules, so we don't modify an object we're iterating over
+            rules_copy = group["rules"]
+            for idx, rule in enumerate(rules_copy):
+                labels = rule.get("labels")
+
+                if labels:
+                    try:
+                        topology = JujuTopology(
+                            # Don't try to safely get required constructor fields. There's already
+                            # a handler for KeyErrors
+                            model_uuid=labels["juju_model_uuid"],
+                            model=labels["juju_model"],
+                            application=labels["juju_application"],
+                            unit=labels.get("juju_unit", ""),
+                            charm_name=labels.get("juju_charm", ""),
+                        )
+
+                        # Inject topology and put it back in the list
+                        rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
+                            topology.label_matcher_dict,
+                        )
+                    except KeyError:
+                        # Some required JujuTopology key is missing. Just move on.
+                        pass
+
+                    group["rules"][idx] = rule
+
+            modified_groups.append(group)
+
+        rules["groups"] = modified_groups
+        return rules
 
     def _static_scrape_config(self, relation) -> list:
         """Generate the static scrape configuration for a single relation.
