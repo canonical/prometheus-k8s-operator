@@ -498,7 +498,7 @@ class PrometheusCharm(CharmBase):
         args.append(f"--web.external-url={external_url}")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
-            args.append("--enable-feature=remote-write-receiver")
+            args.append("--web.enable-remote-write-receiver")
 
         args.append(f"--log.level={self.log_level}")
 
