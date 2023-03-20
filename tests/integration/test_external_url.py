@@ -111,7 +111,7 @@ async def wait_for_ingress(ops_test: OpsTest):
     ingressed_endpoints = await get_ingressed_endpoints()
     logger.debug("Waiting for endpoints to become reachable: %s", ingressed_endpoints)
     await ops_test.model.block_until(
-        lambda: all(Prometheus(ep).is_ready() for ep in ingressed_endpoints)
+        lambda: all(await Prometheus(ep).is_ready() for ep in ingressed_endpoints)
     )
 
 
@@ -131,8 +131,7 @@ async def force_update_status(ops_test: OpsTest):
 
 @pytest.mark.xfail
 async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
-    # Set up microk8s metallb addon, needed by traefik
-    logger.info("(Re)-enabling metallb")
+    # Assuming metallb is already enabled
     cmd = [
         "sh",
         "-c",
@@ -140,27 +139,6 @@ async def test_jobs_are_up_via_traefik(ops_test: OpsTest):
     ]
     result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     ip = result.stdout.decode("utf-8").strip()
-
-    logger.info("First, disable metallb, just in case")
-    try:
-        cmd = ["sg", uk8s_group(), "-c", "microk8s disable metallb"]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    except Exception as e:
-        print(e)
-        raise
-
-    await asyncio.sleep(30)  # why? just because, for now
-
-    logger.info("Now enable metallb")
-    try:
-        cmd = ["sg", uk8s_group(), "-c", f"microk8s enable metallb:{ip}-{ip}"]
-        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    except Exception as e:
-        print(e)
-        raise
-
-    # GIVEN metallb is ready
-    await asyncio.sleep(30)  # why? just because, for now
 
     # WHEN prometheus is related to traefik
     await ops_test.model.add_relation(f"{prometheus_app_name}:ingress", "traefik")
