@@ -18,7 +18,7 @@ import subprocess
 import urllib.request
 
 import pytest
-from helpers import oci_image, uk8s_group, unit_address
+from helpers import oci_image, unit_address
 from pytest_operator.plugin import OpsTest
 from workload import Prometheus
 
