@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 26
+LIBPATCH = 27
 
 logger = logging.getLogger(__name__)
 
@@ -1691,7 +1691,11 @@ class GrafanaDashboardAggregator(Object):
 
     def remove_dashboards(self, event: RelationBrokenEvent) -> None:
         """Remove a dashboard if the relation is broken."""
-        app_ids = _type_convert_stored(self._stored.id_mappings[event.app.name])  # type: ignore
+        app_ids = _type_convert_stored(self._stored.id_mappings.get(event.app.name, ""))  # type: ignore
+
+        if not app_ids:
+            logger.info("Could not look up stored dashboards for %s", event.app.name)  # type: ignore
+            return
 
         del self._stored.id_mappings[event.app.name]  # type: ignore
         for id in app_ids:
@@ -1731,14 +1735,10 @@ class GrafanaDashboardAggregator(Object):
                 for i in range(len(dash["templating"]["list"])):
                     if (
                         "datasource" in dash["templating"]["list"][i]
-                        and "Juju" in dash["templating"]["list"][i]["datasource"]
+                        and dash["templating"]["list"][i]["datasource"] is not None
                     ):
-                        dash["templating"]["list"][i]["datasource"] = r"${prometheusds}"
-                    if (
-                        "name" in dash["templating"]["list"][i]
-                        and dash["templating"]["list"][i]["name"] == "host"
-                    ):
-                        dash["templating"]["list"][i] = REACTIVE_CONVERTER
+                        if "Juju" in dash["templating"]["list"][i].get("datasource", ""):
+                            dash["templating"]["list"][i]["datasource"] = r"${prometheusds}"
 
                 # Strip out newly-added 'juju_application' template variables which
                 # don't line up with our drop-downs
@@ -1746,7 +1746,7 @@ class GrafanaDashboardAggregator(Object):
                 for i in range(len(dash["templating"]["list"])):
                     if (
                         "name" in dash["templating"]["list"][i]
-                        and dash["templating"]["list"][i]["name"] == "app"
+                        and dash["templating"]["list"][i].get("name", "") == "app"
                     ):
                         del dash_mutable["templating"]["list"][i]
 
@@ -1758,7 +1758,7 @@ class GrafanaDashboardAggregator(Object):
         if "__inputs" in dash:
             inputs = dash
             for i in range(len(dash["__inputs"])):
-                if dash["__inputs"][i]["pluginName"] == "Prometheus":
+                if dash["__inputs"][i].get("pluginName", "") == "Prometheus":
                     del inputs["__inputs"][i]
             if inputs:
                 dash["__inputs"] = inputs["__inputs"]
@@ -1813,13 +1813,22 @@ class GrafanaDashboardAggregator(Object):
             dash = re.sub(r"<< datasource >>", r"${prometheusds}", dash)
             dash = re.sub(r'"datasource": "prom.*?"', r'"datasource": "${prometheusds}"', dash)
             dash = re.sub(
+                r'"datasource": "\$datasource"', r'"datasource": "${prometheusds}"', dash
+            )
+            dash = re.sub(r'"uid": "\$datasource"', r'"uid": "${prometheusds}"', dash)
+            dash = re.sub(
                 r'"datasource": "(!?\w)[\w|\s|-]+?Juju generated.*?"',
                 r'"datasource": "${prometheusds}"',
                 dash,
             )
 
             # Yank out "new"+old LMA topology
-            dash = re.sub(r'(,?juju_application=~)"\$app"', r'\1"\$juju_application"', dash)
+            dash = re.sub(
+                r'(,?\s?juju_application=~)\\"\$app\\"', r'\1\\"$juju_application\\"', dash
+            )
+
+            # Replace old piechart panels
+            dash = re.sub(r'"type": "grafana-piechart-panel"', '"type": "piechart"', dash)
 
             from jinja2 import Template
 
