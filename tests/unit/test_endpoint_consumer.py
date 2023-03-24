@@ -54,13 +54,13 @@ SCRAPE_JOBS = [
         "job_name": "my-first-job",
         "metrics_path": "/one-path",
         "static_configs": [
-            {"targets": [FULL_TARGET, "*:7000"], "labels": {"some-key": "some-value"}}
+            {"targets": [FULL_TARGET, "*:7000"], "labels": {"some_key": "some-value"}}
         ],
     },
     {
         "job_name": "my-second-job",
         "static_configs": [
-            {"targets": ["*:8000"], "labels": {"some-other-key": "some-other-value"}}
+            {"targets": ["*:8000"], "labels": {"some_other_key": "some-other-value"}}
         ],
     },
 ]
@@ -133,7 +133,7 @@ UNLABELED_ALERT_RULES = {
 OTHER_SCRAPE_JOBS = [
     {
         "metrics_path": "/other-path",
-        "static_configs": [{"targets": ["*:9000"], "labels": {"other-key": "other-value"}}],
+        "static_configs": [{"targets": ["*:9000"], "labels": {"other_key": "other-value"}}],
     }
 ]
 OTHER_SCRAPE_METADATA = {
@@ -501,6 +501,37 @@ class TestEndpointConsumer(unittest.TestCase):
         alerts = self.harness.charm.prometheus_consumer.alerts
         self.assertIn("unlabeled_external_cpu_alerts", alerts.keys())
         self.assertEqual(UNLABELED_ALERT_RULES, alerts["unlabeled_external_cpu_alerts"])
+
+    def test_bad_scrape_job(self):
+        self.harness.set_leader(True)
+        bad_scrape_jobs = json.dumps(
+            [
+                {
+                    "metrics_path": "/metrics",
+                    "static_configs": [{"targets": ["*:3100"]}],
+                    "sample_limit": {"not_a_key": "not_a_value"},
+                }
+            ]
+        )
+        app_data = {"scrape_jobs": bad_scrape_jobs, "scrape_metadata": json.dumps(SCRAPE_METADATA)}
+
+        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
+        self.harness.add_relation_unit(rel_id, "consumer/0")
+        self.harness.update_relation_data(rel_id, "consumer", app_data)
+        self.harness.update_relation_data(
+            rel_id,
+            "consumer/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider/0",
+            },
+        )
+        jobs = self.harness.charm.prometheus_consumer.jobs()
+        self.assertTrue(len(jobs) == 0)
+        app_data = json.loads(
+            self.harness.get_relation_data(rel_id, self.harness.charm.app.name).get("event", "{}")
+        )
+        self.assertIn("scrape_job_errors", app_data)
 
 
 def juju_job_labels(job, num=0):

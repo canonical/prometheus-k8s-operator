@@ -49,7 +49,7 @@ JOBS: List[dict] = [
         "static_configs": [
             {
                 "targets": ["10.1.238.1:6000", "*:7000"],
-                "labels": {"some-key": "some-value"},
+                "labels": {"some_key": "some-value"},
             }
         ],
     },
@@ -57,7 +57,7 @@ JOBS: List[dict] = [
         "job_name": "my-second-job",
         "metrics_path": "another-path",
         "static_configs": [
-            {"targets": ["*:8000"], "labels": {"some-other-key": "some-other-value"}}
+            {"targets": ["*:8000"], "labels": {"some_other_key": "some-other-value"}}
         ],
     },
 ]
@@ -122,7 +122,7 @@ class EndpointProviderCharmWithLookaside(CharmBase):
                 "job_name": "dynamic-job",
                 "metrics_path": "another-path",
                 "static_configs": [
-                    {"targets": ["*:8000"], "labels": {"some-other-key": "some-other-value"}}
+                    {"targets": ["*:8000"], "labels": {"some_other_key": "some-other-value"}}
                 ],
             }
         ]
