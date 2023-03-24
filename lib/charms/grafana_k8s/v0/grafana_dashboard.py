@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 27
+LIBPATCH = 28
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ RELATION_INTERFACE_NAME = "grafana_dashboard"
 
 TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
     {
-        "allValue": None,
+        "allValue": ".*",
         "datasource": "${prometheusds}",
         "definition": "label_values(up,juju_model)",
         "description": None,
@@ -255,7 +255,7 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "useTags": False,
     },
     {
-        "allValue": None,
+        "allValue": ".*",
         "datasource": "${prometheusds}",
         "definition": 'label_values(up{juju_model=~"$juju_model"},juju_model_uuid)',
         "description": None,
@@ -280,7 +280,7 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "useTags": False,
     },
     {
-        "allValue": None,
+        "allValue": ".*",
         "datasource": "${prometheusds}",
         "definition": 'label_values(up{juju_model=~"$juju_model",juju_model_uuid=~"$juju_model_uuid"},juju_application)',
         "description": None,
@@ -305,7 +305,7 @@ TOPOLOGY_TEMPLATE_DROPDOWNS = [  # type: ignore
         "useTags": False,
     },
     {
-        "allValue": None,
+        "allValue": ".*",
         "datasource": "${prometheusds}",
         "definition": 'label_values(up{juju_model=~"$juju_model",juju_model_uuid=~"$juju_model_uuid",juju_application=~"$juju_application"},juju_unit)',
         "description": None,
