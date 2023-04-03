@@ -56,6 +56,11 @@ Relation provider                Requirer                         Interface     
 prometheus-k8s:prometheus-peers  prometheus-k8s:prometheus-peers  prometheus_peers  peer
 ```
 
+To run diagnostics on a running deployment,
+
+```bash
+tox -e diag -- prom/0
+```
 
 ### Accessing the Prometheus User Interface
 
