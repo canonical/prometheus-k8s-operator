@@ -347,7 +347,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from ops.charm import CharmBase, RelationRole
