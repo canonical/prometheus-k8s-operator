@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import socket
+from pathlib import Path
 from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
@@ -601,9 +602,15 @@ class PrometheusCharm(CharmBase):
         if not pvc_name:
             raise ValueError("No PVC found for pod " + pod_name)
 
+        namespace_file = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+        if namespace_file.exists():
+            namespace = namespace_file.read_text().strip()
+        else:
+            namespace = self.model.name
+
         capacity = cast(
             PersistentVolumeClaim,
-            client.get(PersistentVolumeClaim, name=pvc_name, namespace=self.model.name),
+            client.get(PersistentVolumeClaim, name=pvc_name, namespace=namespace),
         ).status.capacity["storage"]
 
         # The other kind of storage to query for is
