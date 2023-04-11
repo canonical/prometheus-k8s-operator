@@ -713,17 +713,17 @@ class PrometheusCharm(CharmBase):
                 # Certs are transferred over relation data and need to be written to files on disk.
                 # CA certificate to validate the server certificate with.
                 if ca_file := tls_config.get("ca_file"):
-                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}.crt"
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                     certs[filename] = ca_file
                     job["tls_config"]["ca_file"] = filename
                 # Certificate and key files for client cert authentication to the server.
                 if (cert_file := tls_config.get("cert_file")) and (
                     key_file := tls_config.get("key_file")
                 ):
-                    filename = f"{PROMETHEUS_DIR}/client-{job['job_name']}.crt"
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.crt"
                     certs[filename] = cert_file
                     job["tls_config"]["cert_file"] = filename
-                    filename = f"{PROMETHEUS_DIR}/client-{job['job_name']}.key"
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.key"
                     certs[filename] = key_file
                     job["tls_config"]["key_file"] = filename
                 elif "cert_file" in tls_config or "key_file" in tls_config:
