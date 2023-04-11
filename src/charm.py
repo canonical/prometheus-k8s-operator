@@ -77,6 +77,12 @@ def sha256(hashable) -> str:
     return hashlib.sha256(hashable).hexdigest()
 
 
+class ConfigError(Exception):
+    """Configuration specific errors."""
+
+    pass
+
+
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -350,6 +356,10 @@ class PrometheusCharm(CharmBase):
                     self._set_alerts(),
                 ]
             )
+        except ConfigError as e:
+            logger.error("Failed to generate configuration: %s", e)
+            self.unit.status = BlockedStatus(str(e))
+            return
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", e)
             self.unit.status = early_return_statuses["push_fail"]
@@ -727,13 +737,9 @@ class PrometheusCharm(CharmBase):
                     certs[filename] = key_file
                     job["tls_config"]["key_file"] = filename
                 elif "cert_file" in tls_config or "key_file" in tls_config:
-                    logger.error(
+                    raise ConfigError(
                         'tls_config requires both "cert_file" and "key_file" if client authentication is to be used'
                     )
-                    self.unit.status = BlockedStatus(
-                        "Invalid prometheus configuration; see debug logs"
-                    )
-                    return False
 
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
