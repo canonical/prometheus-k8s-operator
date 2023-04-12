@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 log = logging.getLogger(__name__)
 
@@ -801,7 +801,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         if not relation:
             return {}
 
-        if not relation.app and not relation.app.name:  # type: ignore
+        if not relation.app or not relation.app.name:  # type: ignore
             # FIXME Workaround for https://github.com/canonical/operator/issues/693
             # We must be in a relation_broken hook
             return {}
