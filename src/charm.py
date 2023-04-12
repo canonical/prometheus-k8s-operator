@@ -6,7 +6,6 @@
 """A Juju charm for Prometheus on Kubernetes."""
 import hashlib
 import logging
-import os
 import re
 import socket
 from pathlib import Path
@@ -62,10 +61,11 @@ from ops.pebble import ExecError, Layer
 from prometheus_server import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
-PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
-RULES_DIR = "/etc/prometheus/rules"
-CONFIG_HASH_PATH = "/etc/prometheus/config.sha256"
-ALERTS_HASH_PATH = "/etc/prometheus/alerts.sha256"
+PROMETHEUS_DIR = "/etc/prometheus"
+PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
+RULES_DIR = f"{PROMETHEUS_DIR}/rules"
+CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
+ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +75,12 @@ def sha256(hashable) -> str:
     if isinstance(hashable, str):
         hashable = hashable.encode("utf-8")
     return hashlib.sha256(hashable).hexdigest()
+
+
+class ConfigError(Exception):
+    """Configuration specific errors."""
+
+    pass
 
 
 class PrometheusCharm(CharmBase):
@@ -350,6 +356,10 @@ class PrometheusCharm(CharmBase):
                     self._set_alerts(),
                 ]
             )
+        except ConfigError as e:
+            logger.error("Failed to generate configuration: %s", e)
+            self.unit.status = BlockedStatus(str(e))
+            return
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", e)
             self.unit.status = early_return_statuses["push_fail"]
@@ -473,7 +483,7 @@ class PrometheusCharm(CharmBase):
         """
         for topology_identifier, rules_file in alerts.items():
             filename = f"juju_{topology_identifier}.rules"
-            path = os.path.join(RULES_DIR, filename)
+            path = f"{RULES_DIR}/{filename}"
 
             rules = yaml.safe_dump(rules_file)
 
@@ -696,7 +706,7 @@ class PrometheusCharm(CharmBase):
         """
         prometheus_config = {
             "global": self._prometheus_global_config(),
-            "rule_files": [os.path.join(RULES_DIR, "juju_*.rules")],
+            "rule_files": [f"{RULES_DIR}/juju_*.rules"],
             "scrape_configs": [],
         }
 
@@ -709,11 +719,28 @@ class PrometheusCharm(CharmBase):
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
-            if (tls_config := job.get("tls_config")) and (ca_file := tls_config.get("ca_file")):
-                # Cert is transferred over relation data and needs to be written to a file on disk.
-                cert_filename = f"/etc/prometheus/{job['job_name']}.crt"
-                certs[cert_filename] = ca_file
-                job["tls_config"]["ca_file"] = cert_filename
+            if tls_config := job.get("tls_config"):
+                # Certs are transferred over relation data and need to be written to files on disk.
+                # CA certificate to validate the server certificate with.
+                if ca_file := tls_config.get("ca_file"):
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
+                    certs[filename] = ca_file
+                    job["tls_config"]["ca_file"] = filename
+                # Certificate and key files for client cert authentication to the server.
+                if (cert_file := tls_config.get("cert_file")) and (
+                    key_file := tls_config.get("key_file")
+                ):
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.crt"
+                    certs[filename] = cert_file
+                    job["tls_config"]["cert_file"] = filename
+                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.key"
+                    certs[filename] = key_file
+                    job["tls_config"]["key_file"] = filename
+                elif "cert_file" in tls_config or "key_file" in tls_config:
+                    raise ConfigError(
+                        'tls_config requires both "cert_file" and "key_file" if client authentication is to be used'
+                    )
+
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
         # Check if config changed, using its hash

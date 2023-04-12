@@ -708,6 +708,12 @@ class TestTlsConfig(unittest.TestCase):
         self.rel_id = self.harness.add_relation(RELATION_NAME, "provider-app")
         self.harness.add_relation_unit(self.rel_id, "provider-app/0")
 
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.harness.set_model_name(self.__class__.__name__)
+        self.mock_capacity.return_value = "1Gi"
+
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
 
@@ -721,14 +727,18 @@ class TestTlsConfig(unittest.TestCase):
                 "static_configs": [
                     {"targets": ["*:80"]},
                 ],
-                "tls_config": {"ca_file": "CERT DATA 1"},
+                "tls_config": {"ca_file": "CA 1"},
             },
             {
                 "job_name": "job2",
                 "static_configs": [
                     {"targets": ["*:80"]},
                 ],
-                "tls_config": {"ca_file": "CERT DATA 2"},
+                "tls_config": {
+                    "ca_file": "CA 2",
+                    "cert_file": "CLIENT CERT 2",
+                    "key_file": "CLIENT KEY 2",
+                },
             },
         ]
 
@@ -748,9 +758,113 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
         container = self.harness.charm.unit.get_container("prometheus")
-        self.assertEqual(container.pull("/etc/prometheus/job1.crt").read(), "CERT DATA 1")
-        self.assertEqual(container.pull("/etc/prometheus/job2.crt").read(), "CERT DATA 2")
+        self.assertEqual(container.pull("/etc/prometheus/job1-ca.crt").read(), "CA 1")
+        self.assertEqual(container.pull("/etc/prometheus/job2-ca.crt").read(), "CA 2")
+        self.assertEqual(container.pull("/etc/prometheus/job2-client.crt").read(), "CLIENT CERT 2")
+        self.assertEqual(container.pull("/etc/prometheus/job2-client.key").read(), "CLIENT KEY 2")
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_no_tls_config(self, *_):
+        scrape_jobs = [
+            {
+                "job_name": "job1",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+            },
+        ]
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app",
+            {
+                "scrape_jobs": json.dumps(scrape_jobs),
+            },
+        )
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider-app/0",
+            },
+        )
+
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_tls_config_missing_cert(self, *_):
+        scrape_jobs = [
+            {
+                "job_name": "job1",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {
+                    "ca_file": "CA 1",
+                    "key_file": "CLIENT KEY 1",
+                },
+            },
+        ]
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app",
+            {
+                "scrape_jobs": json.dumps(scrape_jobs),
+            },
+        )
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider-app/0",
+            },
+        )
+
+        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    def test_tls_config_missing_key(self, *_):
+        scrape_jobs = [
+            {
+                "job_name": "job1",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {
+                    "ca_file": "CA 1",
+                    "cert_file": "CLIENT CERT 1",
+                },
+            },
+        ]
+
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app",
+            {
+                "scrape_jobs": json.dumps(scrape_jobs),
+            },
+        )
+        self.harness.update_relation_data(
+            self.rel_id,
+            "provider-app/0",
+            {
+                "prometheus_scrape_unit_address": "1.1.1.1",
+                "prometheus_scrape_unit_name": "provider-app/0",
+            },
+        )
+
+        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
