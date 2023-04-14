@@ -370,7 +370,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 34
+LIBPATCH = 35
 
 logger = logging.getLogger(__name__)
 
@@ -2248,7 +2248,7 @@ class MetricsEndpointAggregator(Object):
                 logger.debug("Could not perform DNS lookup for %s", target["hostname"])
                 dns_name = target["hostname"]
             extra_info["dns_name"] = dns_name
-        label_re = re.compile(r'(?P<label>[A-Za-z0-9_]+)\s?=\s?"(?P<value>.*?)",?')
+        label_re = re.compile(r'(?P<label>juju.*?)="(?P<value>.*?)",?')
 
         try:
             with urlopen(f'http://{target["hostname"]}:{target["port"]}/metrics') as resp:
@@ -2256,8 +2256,8 @@ class MetricsEndpointAggregator(Object):
                 for metric in data:
                     for match in label_re.finditer(metric):
                         extra_info[match.group("label")] = match.group("value")
-        except (HTTPError, URLError, Exception) as e:
-            logger.debug("Could not scrape target: ", e)
+        except (HTTPError, URLError, OSError, ConnectionResetError, Exception) as e:
+            logger.debug("Could not scrape target: %s", e)
         return extra_info
 
     @property
