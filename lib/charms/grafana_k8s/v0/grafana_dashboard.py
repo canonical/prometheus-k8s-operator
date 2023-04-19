@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 28
+LIBPATCH = 29
 
 logger = logging.getLogger(__name__)
 
@@ -1417,11 +1417,6 @@ class GrafanaDashboardConsumer(Object):
         # The only piece of data needed on this side of the relations is "templates"
         templates = data.pop("templates")
 
-        # Import only if a charmed operator uses the consumer, we don't impose these
-        # dependencies on the client
-        from jinja2 import Template
-        from jinja2.exceptions import TemplateSyntaxError
-
         # The dashboards are WAY too big since this ultimately calls out to Juju to
         # set the relation data, and it overflows the maximum argument length for
         # subprocess, so we have to use b64, annoyingly.
@@ -1434,14 +1429,12 @@ class GrafanaDashboardConsumer(Object):
         relation_has_invalid_dashboards = False
 
         for _, (fname, template) in enumerate(templates.items()):
-            decoded_content = None
             content = None
             error = None
             topology = template.get("juju_topology", {})
             try:
-                decoded_content = _decode_dashboard_content(template["content"])
+                content = _decode_dashboard_content(template["content"])
                 inject_dropdowns = template.get("inject_dropdowns", True)
-                content = Template(decoded_content).render()
                 content = self._manage_dashboard_uid(content, template)
                 content = _convert_dashboard_fields(content, inject_dropdowns)
 
@@ -1456,9 +1449,6 @@ class GrafanaDashboardConsumer(Object):
                 error = str(e.msg)
                 logger.warning("Invalid JSON in Grafana dashboard: {}".format(fname))
                 continue
-            except TemplateSyntaxError as e:
-                error = str(e)
-                relation_has_invalid_dashboards = True
 
             # Prepend the relation name and ID to the dashboard ID to avoid clashes with
             # multiple relations with apps from the same charm, or having dashboards with
@@ -1830,10 +1820,10 @@ class GrafanaDashboardAggregator(Object):
             # Replace old piechart panels
             dash = re.sub(r'"type": "grafana-piechart-panel"', '"type": "piechart"', dash)
 
-            from jinja2 import Template
+            from jinja2 import DebugUndefined, Template
 
             content = _encode_dashboard_content(
-                Template(dash).render(host=r"$host", datasource=r"${prometheusds}")  # type: ignore
+                Template(dash, undefined=DebugUndefined).render(datasource=r"${prometheusds}")  # type: ignore
             )
             id = "prog:{}".format(content[-24:-16])
 
