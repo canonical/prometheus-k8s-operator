@@ -370,7 +370,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 35
+LIBPATCH = 36
 
 logger = logging.getLogger(__name__)
 
@@ -715,13 +715,12 @@ def _type_convert_stored(obj):
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
-    elif isinstance(obj, StoredDict):
+    if isinstance(obj, StoredDict):
         rdict = {}  # type: Dict[Any, Any]
         for k in obj.keys():
             rdict[k] = _type_convert_stored(obj[k])
         return rdict
-    else:
-        return obj
+    return obj
 
 
 def _validate_relation_by_interface_and_direction(
@@ -1440,7 +1439,7 @@ def _dedupe_job_names(jobs: List[dict]):
                 job["job_name"] = "{}_{}".format(job["job_name"], hashed)
     new_jobs = []
     for key in jobs_dict:
-        new_jobs.extend([i for i in jobs_dict[key]])
+        new_jobs.extend(list(jobs_dict[key]))
 
     # Deduplicate jobs which are equal
     # Again this in O(n^2) but it should be okay
@@ -1796,8 +1795,7 @@ class MetricsEndpointProvider(Object):
         jobs = self._jobs if self._jobs else [DEFAULT_JOB]
         if callable(self._lookaside_jobs):
             return jobs + PrometheusConfig.sanitize_scrape_configs(self._lookaside_jobs())
-        else:
-            return jobs
+        return jobs
 
     @property
     def _scrape_metadata(self) -> dict:
@@ -2078,6 +2076,7 @@ class MetricsEndpointAggregator(Object):
         Args:
             targets: a `dict` containing target information
             app_name: a `str` identifying the application
+            kwargs: a `dict` of the extra arguments passed to the function
         """
         if not self._charm.unit.is_leader():
             return
@@ -2203,6 +2202,7 @@ class MetricsEndpointAggregator(Object):
                 "port".
             application_name: a string name of the application for
                 which this static scrape job is being constructed.
+            kwargs: a `dict` of the extra arguments passed to the function
 
         Returns:
             A dictionary corresponding to a Prometheus static scrape

@@ -254,7 +254,7 @@ class TestEndpointConsumer(unittest.TestCase):
             relabel_config = relabel_configs[0]
             self.assertGreaterEqual(
                 set(relabel_config.get("source_labels")),
-                set(["juju_model", "juju_model_uuid", "juju_application"]),
+                {"juju_model", "juju_model_uuid", "juju_application"},
             )
 
     def test_consumer_notifies_on_new_scrape_relation(self):
