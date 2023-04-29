@@ -15,8 +15,8 @@ def convert_k8s_quantity_to_legacy_binary_gigabytes(
     """Convert a K8s quantity string to legacy binary notation in GB, which prometheus expects.
 
     Args:
-        capacity, a storage quantity in K8s notation.
-        multiplier, an optional convenience argument for scaling capacity.
+        capacity: a storage quantity in K8s notation.
+        multiplier: an optional convenience argument for scaling capacity.
 
     Returns:
         The capacity, multiplied by `multiplier`, in Prometheus GB (legacy binary) notation.

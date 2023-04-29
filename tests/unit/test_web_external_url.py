@@ -8,10 +8,9 @@ from unittest.mock import patch
 
 import ops
 import yaml
+from charm import PROMETHEUS_CONFIG, PrometheusCharm
 from helpers import cli_arg, k8s_resource_multipatch, patch_network_get, prom_multipatch
 from ops.testing import Harness
-
-from charm import PROMETHEUS_CONFIG, PrometheusCharm
 
 ops.testing.SIMULATE_CAN_CONNECT = True
 logger = logging.getLogger(__name__)

@@ -218,7 +218,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     up_after = [int(next(iter(response))["value"][1]) for response in up_after]
     # The count after an upgrade must be greater than or equal to the count before the upgrade, for
     # every prometheus unit (units start at different times so the count across units may differ).
-    assert all([up_before[i] <= up_after[i] for i in range(num_units)])
+    assert all(up_before[i] <= up_after[i] for i in range(num_units))
 
 
 @pytest.mark.xfail

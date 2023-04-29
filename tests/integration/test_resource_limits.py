@@ -25,7 +25,7 @@ resched_timeout = 600
 
 CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
 default_limits = None
-default_requests = dict(cpu="0.25", memory="200Mi")
+default_requests = {"cpu": "0.25", "memory": "200Mi"}
 
 
 async def test_setup_env(ops_test: OpsTest):

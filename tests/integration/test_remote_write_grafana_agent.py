@@ -78,7 +78,7 @@ async def test_remote_write_with_grafana_agent(
     topology_labels = [
         f'{k}="{v}"' for k, v in tester_rules["labels"].items() if k.startswith("juju_")
     ]
-    assert all([field in expr for field in topology_labels])
+    assert all(field in expr for field in topology_labels)
 
     assert await has_metric(
         ops_test,
