@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 14
+LIBPATCH = 15
 
 logger = logging.getLogger(__name__)
 
@@ -173,13 +173,12 @@ def _type_convert_stored(obj):
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
-    elif isinstance(obj, StoredDict):
+    if isinstance(obj, StoredDict):
         rdict = {}
         for k in obj.keys():
             rdict[k] = _type_convert_stored(obj[k])
         return rdict
-    else:
-        return obj
+    return obj
 
 
 class RelationNotFoundError(Exception):
@@ -499,7 +498,7 @@ class GrafanaSourceConsumer(Object):
         # We're stuck with this forever now so upgrades work, or until such point as we can
         # break compatibility
         self._stored.set_default(  # type: ignore
-            sources=dict(),
+            sources={},
             sources_to_delete=set(),
         )
 
@@ -546,7 +545,7 @@ class GrafanaSourceConsumer(Object):
         """Generate configuration from data stored in relation data by providers."""
         source_data = json.loads(rel.data[rel.app].get("grafana_source_data", "{}"))  # type: ignore
         if not source_data:
-            return
+            return None
 
         data = []
 
@@ -700,7 +699,7 @@ class GrafanaSourceConsumer(Object):
         sources = []
         stored_sources = self.get_peer_data("sources")
         for source in stored_sources.values():
-            sources.extend([host for host in _type_convert_stored(source)])
+            sources.extend(list(_type_convert_stored(source)))
 
         return sources
 
