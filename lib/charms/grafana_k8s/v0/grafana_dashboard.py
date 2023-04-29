@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 29
+LIBPATCH = 30
 
 logger = logging.getLogger(__name__)
 
@@ -582,7 +582,7 @@ def _convert_dashboard_fields(content: str, inject_dropdowns: bool = True) -> st
 
     # If no existing template variables exist, just insert our own
     if "templating" not in dict_content:
-        dict_content["templating"] = {"list": [d for d in template_dropdowns]}  # type: ignore
+        dict_content["templating"] = {"list": list(template_dropdowns)}  # type: ignore
     else:
         # Otherwise, set a flag so we can go back later
         existing_templates = True
@@ -830,18 +830,18 @@ def _modify_panel(panel: dict, topology: dict, transformer: "CosTool") -> dict:
 
         if "datasource" not in panel.keys():
             continue
-        else:
-            if type(panel["datasource"]) == str:
-                if panel["datasource"] not in known_datasources:
-                    continue
-                querytype = known_datasources[panel["datasource"]]
-            elif type(panel["datasource"]) == dict:
-                if panel["datasource"]["uid"] not in known_datasources:
-                    continue
-                querytype = known_datasources[panel["datasource"]["uid"]]
-            else:
-                logger.error("Unknown datasource format: skipping")
+
+        if type(panel["datasource"]) == str:
+            if panel["datasource"] not in known_datasources:
                 continue
+            querytype = known_datasources[panel["datasource"]]
+        elif type(panel["datasource"]) == dict:
+            if panel["datasource"]["uid"] not in known_datasources:
+                continue
+            querytype = known_datasources[panel["datasource"]["uid"]]
+        else:
+            logger.error("Unknown datasource format: skipping")
+            continue
 
         # Capture all values inside `[]` into a list which we'll iterate over later to
         # put them back in-order. Then apply the regex again and replace everything with
@@ -901,13 +901,12 @@ def _type_convert_stored(obj):
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
-    elif isinstance(obj, StoredDict):
+    if isinstance(obj, StoredDict):
         rdict = {}  # type: Dict[Any, Any]
         for k in obj.keys():
             rdict[k] = _type_convert_stored(obj[k])
         return rdict
-    else:
-        return obj
+    return obj
 
 
 class GrafanaDashboardsChanged(EventBase):
@@ -1251,7 +1250,7 @@ class GrafanaDashboardProvider(Object):
     @property
     def dashboard_templates(self) -> List:
         """Return a list of the known dashboard templates."""
-        return [v for v in self._stored.dashboard_templates.values()]  # type: ignore
+        return list(self._stored.dashboard_templates.values())  # type: ignore
 
 
 class GrafanaDashboardConsumer(Object):
@@ -1305,7 +1304,7 @@ class GrafanaDashboardConsumer(Object):
         self._relation_name = relation_name
         self._tranformer = CosTool(self._charm)
 
-        self._stored.set_default(dashboards=dict())  # type: ignore
+        self._stored.set_default(dashboards={})  # type: ignore
 
         self.framework.observe(
             self._charm.on[self._relation_name].relation_changed,
@@ -1495,19 +1494,18 @@ class GrafanaDashboardConsumer(Object):
 
             # Dropping dashboards for a relation needs to be signalled
             return True
-        else:
-            stored_data = rendered_dashboards
-            currently_stored_data = self._get_stored_dashboards(relation.id)
 
-            coerced_data = (
-                _type_convert_stored(currently_stored_data) if currently_stored_data else {}
-            )
+        stored_data = rendered_dashboards
+        currently_stored_data = self._get_stored_dashboards(relation.id)
 
-            if not coerced_data == stored_data:
-                stored_dashboards = self.get_peer_data("dashboards")
-                stored_dashboards[relation.id] = stored_data
-                self.set_peer_data("dashboards", stored_dashboards)
-                return True
+        coerced_data = _type_convert_stored(currently_stored_data) if currently_stored_data else {}
+
+        if not coerced_data == stored_data:
+            stored_dashboards = self.get_peer_data("dashboards")
+            stored_dashboards[relation.id] = stored_data
+            self.set_peer_data("dashboards", stored_dashboards)
+            return True
+        return None  # type: ignore
 
     def _manage_dashboard_uid(self, dashboard: str, template: dict) -> str:
         """Add an uid to the dashboard if it is not present."""
