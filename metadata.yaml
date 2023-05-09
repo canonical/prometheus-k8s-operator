@@ -20,6 +20,7 @@ description: |
 website: https://charmhub.io/prometheus-k8s
 source: https://github.com/canonical/prometheus-k8s-operator
 issues: https://github.com/canonical/prometheus-k8s-operator/issues
+docs: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
 
 containers:
   prometheus:
