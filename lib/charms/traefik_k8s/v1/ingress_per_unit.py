@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 log = logging.getLogger(__name__)
 
@@ -166,13 +166,12 @@ def _type_convert_stored(obj):
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
-    elif isinstance(obj, StoredDict):
-        rdict = {}  # type: Dict[Any, Any]
+    if isinstance(obj, StoredDict):
+        rdict: Dict[Any, Any] = {}
         for k in obj.keys():
             rdict[k] = _type_convert_stored(obj[k])
         return rdict
-    else:
-        return obj
+    return obj
 
 
 def _validate_data(data, schema):
@@ -240,7 +239,7 @@ class _IngressPerUnitBase(Object):
                 (defaults to "ingress-per-unit").
         """
         super().__init__(charm, relation_name)
-        self.charm = charm  # type: CharmBase
+        self.charm: CharmBase = charm
 
         self.relation_name = relation_name
         self.app = self.charm.app
@@ -483,7 +482,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
             return {}
 
         databag = relation.data[remote_unit]
-        remote_data = {}  # type: Dict[str, Union[int, str]]
+        remote_data: Dict[str, Union[int, str]] = {}
         for k in ("port", "host", "model", "name", "mode", "strip-prefix"):
             v = databag.get(k)
             if v is not None:
@@ -544,8 +543,8 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
 
 class _IPUEvent(RelationEvent):
-    __args__ = ()  # type: Tuple[str, ...]
-    __optional_kwargs__ = {}  # type: Dict[str, Any]
+    __args__: Tuple[str, ...] = ()
+    __optional_kwargs__: Dict[str, Any] = {}
 
     @classmethod
     def __attrs__(cls):
@@ -645,7 +644,7 @@ class IngressPerUnitRequirerEvents(ObjectEvents):
 class IngressPerUnitRequirer(_IngressPerUnitBase):
     """Implementation of the requirer of ingress_per_unit."""
 
-    on = IngressPerUnitRequirerEvents()  # type: IngressPerUnitRequirerEvents
+    on: IngressPerUnitRequirerEvents = IngressPerUnitRequirerEvents()
     # used to prevent spurious urls to be sent out if the event we're currently
     # handling is a relation-broken one.
     _stored = StoredState()
@@ -669,24 +668,26 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         All request args must be given as keyword args.
 
         Args:
-            `charm`: the charm that is instantiating the library.
-            `relation_name`: the name of the relation name to bind to
+            charm: the charm that is instantiating the library.
+            relation_name: the name of the relation name to bind to
                 (defaults to "ingress-per-unit"; relation must be of interface
-                type "ingress_per_unit" and have "limit: 1")
-            `host`: Hostname to be used by the ingress provider to address the
+                type "ingress_per_unit" and have "limit: 1").
+            host: Hostname to be used by the ingress provider to address the
                 requirer unit; if unspecified, the FQDN of the unit will be
-                used instead
-            `port`: port to be used by the ingress provider to address the
+                used instead.
+            port: port to be used by the ingress provider to address the
                     requirer unit.
-            `listen_to`: Choose which events should be fired on this unit:
+            mode: mode to be used between "tcp" and "http".
+            listen_to: Choose which events should be fired on this unit:
                 "only-this-unit": this unit will only be notified when ingress
                   is ready/revoked for this unit.
                 "all-units": this unit will be notified when ingress is
                   ready/revoked for any unit of this application, including
                   itself.
                 "all": this unit will receive both event types (which means it
-                  will be notified *twice* of changes to this unit's ingress!)
-        """  # noqa: D417
+                  will be notified *twice* of changes to this unit's ingress!).
+            strip_prefix: remove prefixes from the URL path.
+        """
         super().__init__(charm, relation_name)
         self._stored.set_default(current_urls=None)  # type: ignore
 
