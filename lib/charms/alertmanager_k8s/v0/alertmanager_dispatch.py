@@ -42,7 +42,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -150,7 +150,7 @@ class AlertmanagerConsumer(RelationManagerBase):
             charm (CharmBase): consumer charm
     """
 
-    on = AlertmanagerConsumerEvents()
+    on = AlertmanagerConsumerEvents()  # pyright: ignore
 
     def __init__(self, charm: CharmBase, relation_name: str = "alerting"):
         super().__init__(charm, relation_name, RelationRole.requires)
@@ -168,7 +168,7 @@ class AlertmanagerConsumer(RelationManagerBase):
         """This hook notifies the charm that there may have been changes to the cluster."""
         if event.unit:  # event.unit may be `None` in the case of app data change
             # inform consumer about the change
-            self.on.cluster_changed.emit()
+            self.on.cluster_changed.emit()  # pyright: ignore
 
     def get_cluster_info(self) -> List[str]:
         """Returns a list of ip addresses of all the alertmanager units."""
@@ -184,12 +184,12 @@ class AlertmanagerConsumer(RelationManagerBase):
 
     def _on_relation_departed(self, _):
         """This hook notifies the charm that there may have been changes to the cluster."""
-        self.on.cluster_changed.emit()
+        self.on.cluster_changed.emit()  # pyright: ignore
 
     def _on_relation_broken(self, _):
         """This hook notifies the charm that a relation has been completely removed."""
         # inform consumer about the change
-        self.on.cluster_changed.emit()
+        self.on.cluster_changed.emit()  # pyright: ignore
 
 
 class AlertmanagerProvider(RelationManagerBase):
