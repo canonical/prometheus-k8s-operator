@@ -13,7 +13,7 @@ from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEven
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 0
-LIBPATCH = 4
+LIBPATCH = 5
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -151,7 +151,7 @@ class CatalogueEvents(ObjectEvents):
 class CatalogueProvider(Object):
     """`CatalogueProvider` is the side of the relation that serves the actual service catalogue."""
 
-    on = CatalogueEvents()
+    on = CatalogueEvents()  # pyright: ignore
 
     def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
         super().__init__(charm, relation_name)
@@ -164,10 +164,10 @@ class CatalogueProvider(Object):
         self.framework.observe(events.relation_broken, self._on_relation_broken)
 
     def _on_relation_broken(self, event):
-        self.on.items_changed.emit(items=self.items)
+        self.on.items_changed.emit(items=self.items)  # pyright: ignore
 
     def _on_relation_changed(self, event):
-        self.on.items_changed.emit(items=self.items)
+        self.on.items_changed.emit(items=self.items)  # pyright: ignore
 
     @property
     def items(self):
