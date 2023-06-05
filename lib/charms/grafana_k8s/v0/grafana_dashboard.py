@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 30
+LIBPATCH = 31
 
 logger = logging.getLogger(__name__)
 
@@ -955,7 +955,7 @@ class GrafanaDashboardEvent(EventBase):
         """Restore grafana source information."""
         self.error_message = snapshot["error_message"]
         self.valid = snapshot["valid"]
-        self.errors = json.loads(snapshot["errors"])
+        self.errors = json.loads(str(snapshot["errors"]))
 
 
 class GrafanaProviderEvents(ObjectEvents):
@@ -968,7 +968,7 @@ class GrafanaDashboardProvider(Object):
     """An API to provide Grafana dashboards to a Grafana charm."""
 
     _stored = StoredState()
-    on = GrafanaProviderEvents()
+    on = GrafanaProviderEvents()  # pyright: ignore
 
     def __init__(
         self,
@@ -1072,7 +1072,7 @@ class GrafanaDashboardProvider(Object):
         """
         # Update of storage must be done irrespective of leadership, so
         # that the stored state is there when this unit becomes leader.
-        stored_dashboard_templates = self._stored.dashboard_templates  # type: Any
+        stored_dashboard_templates: Any = self._stored.dashboard_templates  # pyright: ignore
 
         encoded_dashboard = _encode_dashboard_content(content)
 
@@ -1093,7 +1093,7 @@ class GrafanaDashboardProvider(Object):
         """Remove all dashboards to the relation added via :method:`add_dashboard`."""
         # Update of storage must be done irrespective of leadership, so
         # that the stored state is there when this unit becomes leader.
-        stored_dashboard_templates = self._stored.dashboard_templates  # type: Any
+        stored_dashboard_templates: Any = self._stored.dashboard_templates  # pyright: ignore
 
         for dashboard_id in list(stored_dashboard_templates.keys()):
             if dashboard_id.startswith("prog:"):
@@ -1120,7 +1120,7 @@ class GrafanaDashboardProvider(Object):
         # Ensure we do not leave outdated dashboards by removing from stored all
         # the encoded dashboards that start with "file/".
         if self._dashboards_path:
-            stored_dashboard_templates = self._stored.dashboard_templates  # type: Any
+            stored_dashboard_templates: Any = self._stored.dashboard_templates  # pyright: ignore
 
             for dashboard_id in list(stored_dashboard_templates.keys()):
                 if dashboard_id.startswith("file:"):
@@ -1174,7 +1174,7 @@ class GrafanaDashboardProvider(Object):
                 e.grafana_dashboards_absolute_path,
                 e.message,
             )
-            stored_dashboard_templates = self._stored.dashboard_templates  # type: Any
+            stored_dashboard_templates: Any = self._stored.dashboard_templates  # pyright: ignore
 
             for dashboard_id in list(stored_dashboard_templates.keys()):
                 if dashboard_id.startswith("file:"):
@@ -1212,16 +1212,18 @@ class GrafanaDashboardProvider(Object):
             valid = bool(data.get("valid", True))
             errors = data.get("errors", [])
             if valid and not errors:
-                self.on.dashboard_status_changed.emit(valid=valid)
+                self.on.dashboard_status_changed.emit(valid=valid)  # pyright: ignore
             else:
-                self.on.dashboard_status_changed.emit(valid=valid, errors=errors)
+                self.on.dashboard_status_changed.emit(  # pyright: ignore
+                    valid=valid, errors=errors
+                )
 
     def _upset_dashboards_on_relation(self, relation: Relation) -> None:
         """Update the dashboards in the relation data bucket."""
         # It's completely ridiculous to add a UUID, but if we don't have some
         # pseudo-random value, this never makes it across 'juju set-state'
         stored_data = {
-            "templates": _type_convert_stored(self._stored.dashboard_templates),
+            "templates": _type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
             "uuid": str(uuid.uuid4()),
         }
 
@@ -1256,7 +1258,7 @@ class GrafanaDashboardProvider(Object):
 class GrafanaDashboardConsumer(Object):
     """A consumer object for working with Grafana Dashboards."""
 
-    on = GrafanaDashboardEvents()
+    on = GrafanaDashboardEvents()  # pyright: ignore
     _stored = StoredState()
 
     def __init__(
@@ -1348,13 +1350,13 @@ class GrafanaDashboardConsumer(Object):
             changes = self._render_dashboards_and_signal_changed(event.relation)
 
         if changes:
-            self.on.dashboards_changed.emit()
+            self.on.dashboards_changed.emit()  # pyright: ignore
 
     def _on_grafana_peer_changed(self, _: RelationChangedEvent) -> None:
         """Emit dashboard events on peer events so secondary charm data updates."""
         if self._charm.unit.is_leader():
             return
-        self.on.dashboards_changed.emit()
+        self.on.dashboards_changed.emit()  # pyright: ignore
 
     def update_dashboards(self, relation: Optional[Relation] = None) -> None:
         """Re-establish dashboards on one or more relations.
@@ -1401,7 +1403,7 @@ class GrafanaDashboardConsumer(Object):
         """
         other_app = relation.app
 
-        raw_data = relation.data[other_app].get("dashboards", {})  # type: ignore
+        raw_data = relation.data[other_app].get("dashboards", "")  # pyright: ignore
 
         if not raw_data:
             logger.warning(
@@ -1509,12 +1511,12 @@ class GrafanaDashboardConsumer(Object):
 
     def _manage_dashboard_uid(self, dashboard: str, template: dict) -> str:
         """Add an uid to the dashboard if it is not present."""
-        dashboard = json.loads(dashboard)
+        dashboard_dict = json.loads(dashboard)
 
-        if not dashboard.get("uid", None) and "dashboard_alt_uid" in template:
-            dashboard["uid"] = template["dashboard_alt_uid"]
+        if not dashboard_dict.get("uid", None) and "dashboard_alt_uid" in template:
+            dashboard_dict["uid"] = template["dashboard_alt_uid"]
 
-        return json.dumps(dashboard)
+        return json.dumps(dashboard_dict)
 
     def _remove_all_dashboards_for_relation(self, relation: Relation) -> None:
         """If an errored dashboard is in stored data, remove it and trigger a deletion."""
@@ -1522,7 +1524,7 @@ class GrafanaDashboardConsumer(Object):
             stored_dashboards = self.get_peer_data("dashboards")
             stored_dashboards.pop(str(relation.id))
             self.set_peer_data("dashboards", stored_dashboards)
-            self.on.dashboards_changed.emit()
+            self.on.dashboards_changed.emit()  # pyright: ignore
 
     def _to_external_object(self, relation_id, dashboard):
         return {
@@ -1604,7 +1606,7 @@ class GrafanaDashboardAggregator(Object):
     """
 
     _stored = StoredState()
-    on = GrafanaProviderEvents()
+    on = GrafanaProviderEvents()  # pyright: ignore
 
     def __init__(
         self,
@@ -1669,7 +1671,7 @@ class GrafanaDashboardAggregator(Object):
         """Push dashboards to the downstream Grafana relation."""
         # It's still ridiculous to add a UUID here, but needed
         stored_data = {
-            "templates": _type_convert_stored(self._stored.dashboard_templates),
+            "templates": _type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
             "uuid": str(uuid.uuid4()),
         }
 
@@ -1690,7 +1692,7 @@ class GrafanaDashboardAggregator(Object):
             del self._stored.dashboard_templates[id]  # type: ignore
 
         stored_data = {
-            "templates": _type_convert_stored(self._stored.dashboard_templates),
+            "templates": _type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
             "uuid": str(uuid.uuid4()),
         }
 

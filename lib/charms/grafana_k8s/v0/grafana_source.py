@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 16
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,7 @@ DEFAULT_PEER_NAME = "grafana"
 RELATION_INTERFACE_NAME = "grafana_datasource"
 
 
-def _type_convert_stored(obj):
+def _type_convert_stored(obj) -> Union[dict, list]:
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
@@ -467,7 +467,7 @@ class GrafanaSourceProvider(Object):
 class GrafanaSourceConsumer(Object):
     """A consumer object for working with Grafana datasources."""
 
-    on = GrafanaSourceEvents()
+    on = GrafanaSourceEvents()  # pyright: ignore
     _stored = StoredState()
 
     def __init__(
@@ -532,14 +532,14 @@ class GrafanaSourceConsumer(Object):
 
             self.set_peer_data("sources", sources)
 
-        self.on.sources_changed.emit()
+        self.on.sources_changed.emit()  # pyright: ignore
 
     def _on_grafana_peer_changed(self, _: RelationChangedEvent) -> None:
         """Emit source events on peer events so secondary charm data updates."""
         if self._charm.unit.is_leader():
             return
-        self.on.sources_changed.emit()
-        self.on.sources_to_delete_changed.emit()
+        self.on.sources_changed.emit()  # pyright: ignore
+        self.on.sources_to_delete_changed.emit()  # pyright: ignore
 
     def _get_source_config(self, rel: Relation):
         """Generate configuration from data stored in relation data by providers."""
@@ -610,7 +610,7 @@ class GrafanaSourceConsumer(Object):
             removed_source = self._remove_source_from_datastore(event)
 
         if removed_source:
-            self.on.sources_to_delete_changed.emit()
+            self.on.sources_to_delete_changed.emit()  # pyright: ignore
 
     def _remove_source_from_datastore(self, event: RelationDepartedEvent) -> bool:
         """Remove the grafana-source from the datastore.
@@ -658,7 +658,7 @@ class GrafanaSourceConsumer(Object):
             return
 
         self._set_default_data()
-        sources = _type_convert_stored(self._stored.sources)
+        sources: dict = _type_convert_stored(self._stored.sources)  # pyright: ignore
         for rel_id in sources.keys():
             for i in range(len(sources[rel_id])):
                 sources[rel_id][i].update(
@@ -673,10 +673,14 @@ class GrafanaSourceConsumer(Object):
             self.set_peer_data("sources", sources)
 
         if self._stored.sources_to_delete:  # type: ignore
-            old_sources_to_delete = _type_convert_stored(self._stored.sources_to_delete)
+            old_sources_to_delete = _type_convert_stored(
+                self._stored.sources_to_delete  # pyright: ignore
+            )
             self._stored.sources_to_delete = set()
             peer_sources_to_delete = set(self.get_peer_data("sources_to_delete"))
-            sources_to_delete = set.union(old_sources_to_delete, peer_sources_to_delete)
+            sources_to_delete = set.union(
+                old_sources_to_delete, peer_sources_to_delete  # pyright: ignore
+            )
             self.set_peer_data("sources_to_delete", sources_to_delete)
 
     def update_sources(self, relation: Optional[Relation] = None) -> None:
