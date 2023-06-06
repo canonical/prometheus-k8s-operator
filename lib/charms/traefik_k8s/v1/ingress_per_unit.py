@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +113,7 @@ INGRESS_REQUIRES_UNIT_SCHEMA = {
         "port": {"type": "string"},
         "mode": {"type": "string"},
         "strip-prefix": {"type": "string"},
+        "redirect-https": {"type": "string"},
     },
     "required": ["model", "name", "host", "port"],
 }
@@ -152,6 +153,7 @@ RequirerData = TypedDict(
         "port": int,
         "mode": Optional[Literal["tcp", "http"]],
         "strip-prefix": Optional[bool],
+        "redirect-https": Optional[bool],
     },
     total=False,
 )
@@ -483,13 +485,14 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
         databag = relation.data[remote_unit]
         remote_data: Dict[str, Union[int, str]] = {}
-        for k in ("port", "host", "model", "name", "mode", "strip-prefix"):
+        for k in ("port", "host", "model", "name", "mode", "strip-prefix", "redirect-https"):
             v = databag.get(k)
             if v is not None:
                 remote_data[k] = v
         _validate_data(remote_data, INGRESS_REQUIRES_UNIT_SCHEMA)
         remote_data["port"] = int(remote_data["port"])
-        remote_data["strip-prefix"] = bool(remote_data.get("strip-prefix", False))
+        remote_data["strip-prefix"] = bool(remote_data.get("strip-prefix", "false") == "true")
+        remote_data["redirect-https"] = bool(remote_data.get("redirect-https", "false") == "true")
         return typing.cast(RequirerData, remote_data)
 
     def _provider_app_data(self, relation: Relation) -> ProviderApplicationData:
@@ -659,6 +662,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         mode: Literal["tcp", "http"] = "http",
         listen_to: Literal["only-this-unit", "all-units", "both"] = "only-this-unit",
         strip_prefix: bool = False,
+        redirect_https: bool = False,
     ):
         """Constructor for IngressPerUnitRequirer.
 
@@ -687,6 +691,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
                 "all": this unit will receive both event types (which means it
                   will be notified *twice* of changes to this unit's ingress!).
             strip_prefix: remove prefixes from the URL path.
+            redirect_https: redirect incoming requests to HTTPS
         """
         super().__init__(charm, relation_name)
         self._stored.set_default(current_urls=None)  # type: ignore
@@ -697,6 +702,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         self._port = port
         self._mode = mode
         self._strip_prefix = strip_prefix
+        self._redirect_https = redirect_https
 
         self.listen_to = listen_to
 
@@ -788,6 +794,9 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
 
         if self._strip_prefix:
             data["strip-prefix"] = "true"
+
+        if self._redirect_https:
+            data["redirect-https"] = "true"
 
         _validate_data(data, INGRESS_REQUIRES_UNIT_SCHEMA)
         self.relation.data[self.unit].update(data)
