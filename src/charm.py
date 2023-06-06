@@ -9,7 +9,7 @@ import logging
 import re
 import socket
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, Union, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -38,15 +38,24 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
     PrometheusConfig,
 )
+from charms.tls_certificates_interface.v2.tls_certificates import (
+    AllCertificatesInvalidatedEvent,
+    CertificateAvailableEvent,
+    CertificateExpiringEvent,
+    CertificateInvalidatedEvent,
+    TLSCertificatesRequiresV2,
+    generate_csr,
+    generate_private_key,
+)
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from lightkube import Client
+from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops.charm import ActionEvent, CharmBase
+from ops.charm import ActionEvent, CharmBase, RelationJoinedEvent
 from ops.main import main
 from ops.model import (
     ActiveStatus,
@@ -122,8 +131,8 @@ class PrometheusCharm(CharmBase):
             jobs=self.self_scraping_job,
             external_url=self.external_url,
             refresh_event=[  # needed for ingress
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
+                self.ingress.on.ready_for_unit,  # pyright: ignore
+                self.ingress.on.revoked_for_unit,  # pyright: ignore
                 self.on.update_status,
             ],
         )
@@ -147,10 +156,10 @@ class PrometheusCharm(CharmBase):
         self.catalogue = CatalogueConsumer(
             charm=self,
             refresh_event=[
-                self.on.prometheus_pebble_ready,
-                self.on.leader_elected,
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
+                self.on.prometheus_pebble_ready,  # pyright: ignore
+                self.on.leader_elected,  # pyright: ignore
+                self.ingress.on.ready_for_unit,  # pyright: ignore
+                self.ingress.on.revoked_for_unit,  # pyright: ignore
                 self.on.config_changed,  # web_external_url; also covers upgrade-charm
             ],
             item=CatalogueItem(
@@ -164,18 +173,61 @@ class PrometheusCharm(CharmBase):
             ),
         )
 
-        self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
+        # TLS Certificates
+        self.cert_subject = "prometheus"
+        self.certificates = TLSCertificatesRequiresV2(self, "certificates")
+        self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(
+            self.on.certificates_relation_joined,  # pyright: ignore
+            self._on_certificates_relation_joined,
+        )
+        self.framework.observe(
+            self.certificates.on.certificate_available,  # pyright: ignore
+            self._on_certificate_available,
+        )
+        self.framework.observe(
+            self.certificates.on.certificate_expiring,  # pyright: ignore
+            self._on_certificate_expiring,
+        )
+        self.framework.observe(
+            self.certificates.on.certificate_invalidated,  # pyright: ignore
+            self._on_certificate_invalidated,
+        )
+        self.framework.observe(
+            self.certificates.on.all_certificates_invalidated,  # pyright: ignore
+            self._on_all_certificates_invalidated,
+        )
+
+        self.framework.observe(
+            self.on.prometheus_pebble_ready, self._on_pebble_ready  # pyright: ignore
+        )
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
-        self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
-        self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
-        self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
-        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
-        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
-        self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
-        self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(
+            self.ingress.on.ready_for_unit, self._on_ingress_ready  # pyright: ignore
+        )
+        self.framework.observe(
+            self.ingress.on.revoked_for_unit, self._on_ingress_revoked  # pyright: ignore
+        )
+        self.framework.observe(
+            self.remote_write_provider.on.alert_rules_changed, self._configure  # pyright: ignore
+        )
+        self.framework.observe(
+            self.remote_write_provider.on.consumers_changed, self._configure  # pyright: ignore
+        )
+        self.framework.observe(
+            self.metrics_consumer.on.targets_changed, self._configure  # pyright: ignore
+        )
+        self.framework.observe(
+            self.alertmanager_consumer.on.cluster_changed, self._configure  # pyright: ignore
+        )
+        self.framework.observe(
+            self.resources_patch.on.patch_failed, self._on_k8s_patch_failed  # pyright: ignore
+        )
+        self.framework.observe(
+            self.on.validate_configuration_action, self._on_validate_config  # pyright: ignore
+        )
 
     @property
     def metrics_path(self):
@@ -587,7 +639,7 @@ class PrometheusCharm(CharmBase):
         ), "The 'database' storage is no longer in metadata: must update literals in charm code."
 
         # Get PVC capacity from kubernetes
-        client = Client()
+        client = Client()  # pyright: ignore
         pod_name = self.unit.name.replace("/", "-", -1)
 
         # Take the first volume whose name starts with "<app-name>-database-".
@@ -783,7 +835,7 @@ class PrometheusCharm(CharmBase):
             File contents if exists; None otherwise.
         """
         try:
-            return self.container.pull(path, encoding="utf-8").read()
+            return self.container.pull(path, encoding="utf-8").read()  # pyright: ignore
         except (FileNotFoundError, PebbleError):
             # Drop FileNotFoundError https://github.com/canonical/operator/issues/896
             return None
@@ -791,6 +843,119 @@ class PrometheusCharm(CharmBase):
     def _push(self, path, contents):
         """Push file to container, creating subdirs as necessary."""
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
+
+    def _on_install(self, event) -> None:
+        private_key_password = b"banana"  # TODO: what to put here?
+        private_key = generate_private_key(password=private_key_password)
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        replicas_relation.data[self.app].update(
+            {
+                "private_key_password": f"{private_key_password.decode()}",
+                "private_key": private_key.decode(),
+            }
+        )
+
+    def _on_certificates_relation_joined(self, event: RelationJoinedEvent) -> None:
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        private_key_password = replicas_relation.data[self.app].get("private_key_password")
+        private_key = replicas_relation.data[self.app].get("private_key")
+        if not private_key_password or not private_key:
+            return  # TODO: what do if that is none? default value? fail?
+        csr = generate_csr(
+            private_key=private_key.encode(),
+            private_key_password=private_key_password.encode(),
+            subject=self.cert_subject,
+        )
+        replicas_relation.data[self.app].update({"csr": csr.decode()})
+        self.certificates.request_certificate_creation(certificate_signing_request=csr)
+
+    def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        replicas_relation.data[self.app].update({"certificate": event.certificate})
+        replicas_relation.data[self.app].update({"ca": event.ca})
+        replicas_relation.data[self.app].update({"chain": event.chain})
+        self.unit.status = ActiveStatus()
+
+    def _on_certificate_expiring(
+        self, event: Union[CertificateExpiringEvent, CertificateInvalidatedEvent]
+    ) -> None:
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        old_csr = replicas_relation.data[self.app].get("csr")
+        if not old_csr:
+            return  # TODO: what do if that is none? default value? fail?
+        private_key_password = replicas_relation.data[self.app].get("private_key_password")
+        private_key = replicas_relation.data[self.app].get("private_key")
+        if not private_key_password or not private_key:
+            return  # TODO: what do if that is none? default value? fail?
+        new_csr = generate_csr(
+            private_key=private_key.encode(),
+            private_key_password=private_key_password.encode(),
+            subject=self.cert_subject,
+        )
+        self.certificates.request_certificate_renewal(
+            old_certificate_signing_request=old_csr.encode(),
+            new_certificate_signing_request=new_csr,
+        )
+        replicas_relation.data[self.app].update({"csr": new_csr.decode()})
+
+    def _certificate_revoked(self, event) -> None:
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        old_csr = replicas_relation.data[self.app].get("csr")
+        if not old_csr:
+            return  # TODO: what do if that is none? default value? fail?
+        private_key_password = replicas_relation.data[self.app].get("private_key_password")
+        private_key = replicas_relation.data[self.app].get("private_key")
+        if not private_key_password or not private_key:
+            return  # TODO: what do if that is none? default value? fail?
+        new_csr = generate_csr(
+            private_key=private_key.encode(),
+            private_key_password=private_key_password.encode(),
+            subject=self.cert_subject,
+        )
+        self.certificates.request_certificate_renewal(
+            old_certificate_signing_request=old_csr.encode(),
+            new_certificate_signing_request=new_csr,
+        )
+        replicas_relation.data[self.app].update({"csr": new_csr.decode()})
+        replicas_relation.data[self.app].pop("certificate")
+        replicas_relation.data[self.app].pop("ca")
+        replicas_relation.data[self.app].pop("chain")
+        self.unit.status = WaitingStatus("Waiting for new certificate")
+
+    def _on_certificate_invalidated(self, event: CertificateInvalidatedEvent) -> None:
+        replicas_relation = self.model.get_relation("replicas")
+        if not replicas_relation:
+            self.unit.status = WaitingStatus("Waiting for peer relation to be created")
+            event.defer()
+            return
+        if event.reason == "revoked":
+            self._certificate_revoked(event)
+        if event.reason == "expired":
+            self._on_certificate_expiring(event)
+
+    def _on_all_certificates_invalidated(self, event: AllCertificatesInvalidatedEvent) -> None:
+        # Do what you want with this information, probably remove all certificates.
+        pass
 
 
 if __name__ == "__main__":
