@@ -391,6 +391,7 @@ ALLOWED_KEYS = {
     "scheme",
     "basic_auth",
     "tls_config",
+    "authorization",
 }
 DEFAULT_JOB = {
     "metrics_path": "/metrics",
