@@ -370,7 +370,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 36
+LIBPATCH = 37
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +391,7 @@ ALLOWED_KEYS = {
     "scheme",
     "basic_auth",
     "tls_config",
+    "authorization",
 }
 DEFAULT_JOB = {
     "metrics_path": "/metrics",
