@@ -1793,10 +1793,10 @@ class MetricsEndpointProvider(Object):
            A list of dictionaries, where each dictionary specifies a
            single scrape job for Prometheus.
         """
-        jobs = self._jobs if self._jobs else [DEFAULT_JOB]
+        jobs = self._jobs or []
         if callable(self._lookaside_jobs):
-            return jobs + PrometheusConfig.sanitize_scrape_configs(self._lookaside_jobs())
-        return jobs
+            jobs.extend(PrometheusConfig.sanitize_scrape_configs(self._lookaside_jobs()))
+        return jobs or [DEFAULT_JOB]
 
     @property
     def _scrape_metadata(self) -> dict:
