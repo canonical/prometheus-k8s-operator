@@ -38,6 +38,9 @@ provides:
     interface: grafana_dashboard
   receive-remote-write:
     interface: prometheus_remote_write
+  tracing:
+    interface: tracing
+    limit: 1
 
 requires:
   metrics-endpoint:

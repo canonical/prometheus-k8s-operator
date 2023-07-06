@@ -57,5 +57,8 @@ follow_imports = "silent"
 module = ["ops.*"]
 follow_imports = "skip"
 
+[tool.pyright]
+extraPaths = ["lib"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

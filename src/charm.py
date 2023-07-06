@@ -43,6 +43,13 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
+from charms.tempo_k8s.v0.charm_instrumentation import (
+    trace_charm
+)
+from charms.tempo_k8s.v0.tempo_scrape import (
+    TracingEndpointProvider
+)
+
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
@@ -82,6 +89,7 @@ class ConfigError(Exception):
     pass
 
 
+@trace_charm(tempo_endpoint="tempo")
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -163,6 +171,7 @@ class PrometheusCharm(CharmBase):
                 ),
             ),
         )
+        self.tracing = TracingEndpointProvider(self)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -791,6 +800,10 @@ class PrometheusCharm(CharmBase):
     def _push(self, path, contents):
         """Push file to container, creating subdirs as necessary."""
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
+
+    @property
+    def tempo(self) -> Optional[str]:
+        return self.tracing.otlp_grpc_endpoint
 
 
 if __name__ == "__main__":
