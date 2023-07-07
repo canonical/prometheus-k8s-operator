@@ -424,7 +424,12 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
             static_configs,
             {
                 "alertmanagers": [
-                    {"scheme": "http", "path_prefix": "/", "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}]},
+                    {
+                        "scheme": "http",
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}],
+                        "tls_config": {"insecure_skip_verify": True},
+                    },
                 ],
             },
         )
@@ -447,6 +452,7 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                         "scheme": "http",
                         "path_prefix": "/",
                         "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
@@ -470,6 +476,7 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                         "scheme": "http",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
@@ -493,11 +500,13 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                         "scheme": "http",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                     {
                         "scheme": "https",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
@@ -520,16 +529,19 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
                         "scheme": "http",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                     {
                         "scheme": "http",
                         "path_prefix": "/some/other/path",
                         "static_configs": [{"targets": ["2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                     {
                         "scheme": "http",
                         "path_prefix": "/",
                         "static_configs": [{"targets": ["3.3.3.3"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },

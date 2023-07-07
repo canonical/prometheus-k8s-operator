@@ -613,7 +613,6 @@ class PrometheusConfig:
                     "scheme": scheme,
                     "path_prefix": path_prefix,
                     "static_configs": [{"targets": netlocs}],
-
                     # FIXME figure out how to get alertmanager's ca_file into here
                     #  Without this, prom logs errors:
                     #  [prometheus] ts=2023-07-07T01:24:21.581Z caller=notifier.go:532 level=error

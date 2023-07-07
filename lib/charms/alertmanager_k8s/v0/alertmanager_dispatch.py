@@ -281,7 +281,7 @@ class AlertmanagerProvider(RelationManagerBase):
         super().__init__(charm, relation_name, RelationRole.provides)
 
         # TODO: only use fqdn?
-        # We don't neet to worry about the literal "http" here because the external_url arg is set
+        # We don't need to worry about the literal "http" here because the external_url arg is set
         # by the charm. TODO: drop it after external_url becomes a mandatory arg.
         self._external_url = external_url or (lambda: f"http://{socket.getfqdn()}:{api_port}")
 
