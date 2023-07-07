@@ -370,7 +370,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 37
+LIBPATCH = 38
 
 logger = logging.getLogger(__name__)
 
@@ -602,15 +602,30 @@ class PrometheusConfig:
         # Create a mapping from paths to netlocs
         # Group alertmanager targets into a dictionary of lists:
         # {path: [netloc1, netloc2]}
-        paths = defaultdict(list)  # type: Dict[str, List[str]]
+        paths = defaultdict(list)  # type: Dict[Tuple[str, str], List[str]]
         for parsed in map(urlparse, sanitized):
             path = parsed.path or "/"
-            paths[path].append(parsed.netloc)
+            paths[(parsed.scheme, path)].append(parsed.netloc)
 
         return {
             "alertmanagers": [
-                {"path_prefix": path_prefix, "static_configs": [{"targets": netlocs}]}
-                for path_prefix, netlocs in paths.items()
+                {
+                    "scheme": scheme,
+                    "path_prefix": path_prefix,
+                    "static_configs": [{"targets": netlocs}],
+
+                    # FIXME figure out how to get alertmanager's ca_file into here
+                    #  Without this, prom logs errors:
+                    #  [prometheus] ts=2023-07-07T01:24:21.581Z caller=notifier.go:532 level=error
+                    #   component=notifier
+                    #   alertmanager=https://am-1.am-endpoints.test-prometheus-alerts-32k4.svc.cluster.local:9093/api/v2/alerts
+                    #   count=1
+                    #   msg="Error sending alert"
+                    #   err="Post \"https://am-1.am-endpoints.test-prometheus-alerts-32k4.svc.cluster.local:9093/api/v2/alerts\":
+                    #    x509: certificate signed by unknown authority"
+                    "tls_config": {"insecure_skip_verify": True},
+                }
+                for (scheme, path_prefix), netlocs in paths.items()
             ]
         }
 
