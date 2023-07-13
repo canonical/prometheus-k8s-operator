@@ -61,6 +61,11 @@ async def test_remote_write_with_grafana_agent(
         ops_test.model.add_relation(
             f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
         ),
+        # With a "remote-write" relation in place, grafana-agent will block without a matching
+        # "metrics-endpoint" relation, so relate back to prometheus just to get this covered.
+        ops_test.model.add_relation(
+            f"{prometheus_name}:self-metrics-endpoint", f"{agent_name}:metrics-endpoint"
+        ),
         ops_test.model.add_relation(
             f"{tester_name}:metrics-endpoint", f"{agent_name}:metrics-endpoint"
         ),
