@@ -54,7 +54,7 @@ async def test_remote_write_with_grafana_agent(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
+    await ops_test.model.wait_for_idle(apps=apps, wait_for_units=1)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await asyncio.gather(
