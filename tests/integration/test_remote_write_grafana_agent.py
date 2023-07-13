@@ -54,12 +54,17 @@ async def test_remote_write_with_grafana_agent(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=apps, status="active", wait_for_units=1)
+    await ops_test.model.wait_for_idle(apps=apps, wait_for_units=1)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await asyncio.gather(
         ops_test.model.add_relation(
             f"{prometheus_name}:receive-remote-write", f"{agent_name}:send-remote-write"
+        ),
+        # With a "remote-write" relation in place, grafana-agent will block without a matching
+        # "metrics-endpoint" relation, so relate back to prometheus just to get this covered.
+        ops_test.model.add_relation(
+            f"{prometheus_name}:self-metrics-endpoint", f"{agent_name}:metrics-endpoint"
         ),
         ops_test.model.add_relation(
             f"{tester_name}:metrics-endpoint", f"{agent_name}:metrics-endpoint"
