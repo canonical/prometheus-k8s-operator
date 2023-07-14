@@ -1367,29 +1367,40 @@ class MetricsEndpointConsumer(Object):
         if not relation.units:
             return []
 
-        scrape_jobs = json.loads(relation.data[relation.app].get("scrape_jobs", "[]"))
+        scrape_configs = json.loads(relation.data[relation.app].get("scrape_jobs", "[]"))
 
-        if not scrape_jobs:
+        if not scrape_configs:
             return []
 
         scrape_metadata = json.loads(relation.data[relation.app].get("scrape_metadata", "{}"))
 
         if not scrape_metadata:
-            return scrape_jobs
+            return scrape_configs
 
         topology = JujuTopology.from_dict(scrape_metadata)
 
         job_name_prefix = "juju_{}_prometheus_scrape".format(topology.identifier)
-        scrape_jobs = PrometheusConfig.prefix_job_names(scrape_jobs, job_name_prefix)
-        scrape_jobs = PrometheusConfig.sanitize_scrape_configs(scrape_jobs)
+        scrape_configs = PrometheusConfig.prefix_job_names(scrape_configs, job_name_prefix)
+        scrape_configs = PrometheusConfig.sanitize_scrape_configs(scrape_configs)
 
         hosts = self._relation_hosts(relation)
 
-        scrape_jobs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            scrape_jobs, hosts, topology
+        scrape_configs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            scrape_configs, hosts, topology
         )
 
-        return scrape_jobs
+        # If scheme is https but no ca section present, then auto add "insecure_skip_verify",
+        # otherwise scraping errors out with "x509: certificate signed by unknown authority".
+        # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#tls_config
+        for scrape_config in scrape_configs:
+            if scrape_config.get("scheme") == "https":
+                tls_config = scrape_config.get("tls_config", {})
+                ca_present = "ca" in tls_config or "ca_file" in tls_config
+                if not ca_present:
+                    tls_config["insecure_skip_verify"] = True
+                    scrape_config["tls_config"] = tls_config
+
+        return scrape_configs
 
     def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str]]:
         """Returns a mapping from unit names to (address, path) tuples, for the given relation."""
