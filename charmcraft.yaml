@@ -14,6 +14,7 @@ parts:
       - git
     charm-binary-python-packages:
       - jsonschema
+      - cryptography
       - pyyaml
       - requests
       - ops
