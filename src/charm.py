@@ -9,7 +9,7 @@ import logging
 import re
 import socket
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -110,16 +110,14 @@ class PrometheusCharm(CharmBase):
             resource_reqs_func=self._resource_reqs_from_config,
         )
 
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
-
-        url = self.external_url
-        extra_sans_dns = [str(urlparse(url).hostname)] if url else None
         self.cert_handler = CertHandler(
             charm=self,
             key="prometheus-server-cert",
             peer_relation_name="prometheus-peers",
-            extra_sans_dns=extra_sans_dns,
+            extra_sans_dns=self.sans(),
         )
+
+        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
         self._topology = JujuTopology.from_charm(self)
 
@@ -297,6 +295,19 @@ class PrometheusCharm(CharmBase):
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
         return f"{'https' if self._is_tls_enabled() else 'http'}://{socket.getfqdn()}:{self._port}"
+
+    def sans(self) -> List[str]:
+        """Return the list of SANs to be listed in a CSR.
+
+        Can't use `self.external_url` because of the circular dependency, but we also don't need
+        it, because we don't need to have the ingress URL in the SANs, only "our" hostnames.
+        """
+        sans = [socket.getfqdn()]
+        if web_external_url := self.model.config.get("web_external_url"):
+            # Make sure the config option is set to a valid URL (e.g. rather than a plain hostname)
+            if hostname := urlparse(web_external_url).hostname:
+                sans.append(hostname)
+        return sans
 
     def _is_tls_enabled(self):
         return bool(self.cert_handler.cert)
