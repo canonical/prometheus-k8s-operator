@@ -71,6 +71,7 @@ ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 # These are used to present to clients and to authenticate other servers.
 KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
 CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
+CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,7 @@ class PrometheusCharm(CharmBase):
 
         external_url = urlparse(self.external_url)
 
+        # FIXME: figure out if/how to deduplicate with self._default_config
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
@@ -239,7 +241,7 @@ class PrometheusCharm(CharmBase):
             "scheme": "http",  # replaced with "https" below if behind TLS
             "static_configs": [
                 {
-                    "targets": [f"localhost:{self._port}"],
+                    "targets": [f"{socket.getfqdn()}:{self._port}"],
                     "labels": {
                         "juju_model": self._topology.model,
                         "juju_model_uuid": self._topology.model_uuid,
@@ -269,7 +271,7 @@ class PrometheusCharm(CharmBase):
                 {
                     "scheme": "https",
                     "tls_config": {
-                        "ca_file": self.cert_handler.ca,
+                        "ca_file": CA_CERT_PATH,
                     },
                 }
             )
@@ -355,8 +357,15 @@ class PrometheusCharm(CharmBase):
         self.unit.status = BlockedStatus(event.message)
 
     def _on_server_cert_changed(self, _):
-        for path in [KEY_PATH, CERT_PATH]:
+        for path in [KEY_PATH, CERT_PATH, CA_CERT_PATH]:
             self.container.remove_path(path, recursive=True)
+
+        if self.cert_handler.ca:
+            self.container.push(
+                CA_CERT_PATH,
+                self.cert_handler.ca,
+                make_dirs=True,
+            )
         if self.cert_handler.cert and self.cert_handler.key:
             self.container.push(
                 CERT_PATH,

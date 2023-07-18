@@ -97,7 +97,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
 
         # AND default job is the default localhost:9090/metrics
         scrape_config = self.config_file["scrape_configs"][0]
-        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
+        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["fqdn:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/metrics")
 
         # AND the self-scrape job points to prom's fqdn
@@ -133,7 +133,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
 
         # AND default job is the default localhost:9090/metrics
         scrape_config = self.config_file["scrape_configs"][0]
-        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
+        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["fqdn:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/metrics")
 
         # AND the self-scrape job advertises a wildcard target on port 80
@@ -167,7 +167,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
 
         # AND default job is the default localhost:9090/metrics
         scrape_config = self.config_file["scrape_configs"][0]
-        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
+        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["fqdn:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/metrics")
 
         # AND the self-scrape job advertises a wildcard target on port 1234
@@ -203,7 +203,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
 
         # AND default job is the default localhost:9090/baz/metrics
         scrape_config = self.config_file["scrape_configs"][0]
-        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
+        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["fqdn:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/baz/metrics")
 
         # AND the self-scrape job advertises a wildcard target on port 80
@@ -237,7 +237,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
 
         # AND default job is the default localhost:9090/baz/metrics
         scrape_config = self.config_file["scrape_configs"][0]
-        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["localhost:9090"])
+        self.assertEqual(scrape_config["static_configs"][0]["targets"], ["fqdn:9090"])
         self.assertEqual(scrape_config["metrics_path"], "/baz/metrics")
 
         # AND the self-scrape job advertises a wildcard target on port 1234
