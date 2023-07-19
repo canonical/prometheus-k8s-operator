@@ -806,13 +806,30 @@ class PrometheusCharm(CharmBase):
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
-            if tls_config := job.get("tls_config"):
+
+            # If "tls_config" is absent but scheme is https, then set insecure_skip_verify.
+            default_tls_config = (
+                {"insecure_skip_verify": True} if job.get("scheme") == "https" else {}
+            )
+            if tls_config := job.get("tls_config", default_tls_config):
                 # Certs are transferred over relation data and need to be written to files on disk.
                 # CA certificate to validate the server certificate with.
-                if ca_file := tls_config.get("ca_file"):
+
+                # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
+                # prometheus and all scrape jobs are signed by the same CA.
+                if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
                     filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                     certs[filename] = ca_file
-                    job["tls_config"]["ca_file"] = filename
+                    job["tls_config"] = {**tls_config, **{"ca_file": filename}}
+                else:
+                    # The tls_config section is present, but we don't have any CA certs
+                    logger.warning(
+                        "The scrape job '%s' has a tls_config section specified, but no CA certs "
+                        "are available. Adding 'insecure_skip_verify' as a fallback.",
+                        job["job_name"],
+                    )
+                    job["tls_config"] = {**tls_config, **{"insecure_skip_verify": True}}
+
                 # Certificate and key files for client cert authentication to the server.
                 if (cert_file := tls_config.get("cert_file")) and (
                     key_file := tls_config.get("key_file")
@@ -825,7 +842,8 @@ class PrometheusCharm(CharmBase):
                     job["tls_config"]["key_file"] = filename
                 elif "cert_file" in tls_config or "key_file" in tls_config:
                     raise ConfigError(
-                        'tls_config requires both "cert_file" and "key_file" if client authentication is to be used'
+                        'tls_config requires both "cert_file" and "key_file" if client '
+                        "authentication is to be used"
                     )
 
             prometheus_config["scrape_configs"].append(job)  # type: ignore
