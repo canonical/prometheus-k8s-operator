@@ -4,7 +4,7 @@
 import unittest
 
 import responses
-from prometheus_server import Prometheus
+from prometheus_client import Prometheus
 
 
 class TestServerPrefix(unittest.TestCase):
@@ -20,7 +20,7 @@ class TestServerPrefix(unittest.TestCase):
                 self.assertEqual(p.base_url, "http://localhost:9090/foo")
 
     @responses.activate
-    def test_prometheus_server_without_route_prefix_returns_valid_data(self):
+    def test_prometheus_client_without_route_prefix_returns_valid_data(self):
         self.prometheus = Prometheus("http://localhost:9090")
 
         version = "1.0.0"
@@ -39,7 +39,7 @@ class TestServerPrefix(unittest.TestCase):
         self.assertEqual(got_version, version)
 
     @responses.activate
-    def test_prometheus_server_without_route_prefix_reload_configuration_success(self):
+    def test_prometheus_client_without_route_prefix_reload_configuration_success(self):
         self.prometheus = Prometheus("http://localhost:9090")
 
         responses.add(
@@ -51,7 +51,7 @@ class TestServerPrefix(unittest.TestCase):
         self.assertTrue(self.prometheus.reload_configuration())
 
     @responses.activate
-    def test_prometheus_server_without_route_prefix_reload_configuration_failure(self):
+    def test_prometheus_client_without_route_prefix_reload_configuration_failure(self):
         self.prometheus = Prometheus("http://localhost:9090")
 
         responses.add(
@@ -63,7 +63,7 @@ class TestServerPrefix(unittest.TestCase):
         self.assertFalse(self.prometheus.reload_configuration())
 
     @responses.activate
-    def test_prometheus_server_with_route_prefix_returns_valid_data(self):
+    def test_prometheus_client_with_route_prefix_returns_valid_data(self):
         self.prometheus = Prometheus("http://localhost:9090/foobar")
 
         version = "1.0.0"
@@ -82,7 +82,7 @@ class TestServerPrefix(unittest.TestCase):
         self.assertEqual(got_version, version)
 
     @responses.activate
-    def test_prometheus_server_with_route_prefix_reload_configuration_success(self):
+    def test_prometheus_client_with_route_prefix_reload_configuration_success(self):
         self.prometheus = Prometheus("http://localhost:9090/foobar")
 
         responses.add(
@@ -94,7 +94,7 @@ class TestServerPrefix(unittest.TestCase):
         self.assertTrue(self.prometheus.reload_configuration())
 
     @responses.activate
-    def test_prometheus_server_with_route_prefix_reload_configuration_failure(self):
+    def test_prometheus_client_with_route_prefix_reload_configuration_failure(self):
         self.prometheus = Prometheus("http://localhost:9090/foobar")
 
         responses.add(

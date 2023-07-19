@@ -52,7 +52,7 @@ class TestActiveStatus(unittest.TestCase):
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
-        with patch("prometheus_server.Prometheus.reload_configuration", lambda *a, **kw: True):
+        with patch("prometheus_client.Prometheus.reload_configuration", lambda *a, **kw: True):
             self.harness.begin_with_initial_hooks()
             self.harness.container_pebble_ready("prometheus")
 
@@ -82,7 +82,7 @@ class TestActiveStatus(unittest.TestCase):
             "ops.model.Container.replan", Mock(side_effect=ChangeError("err", change))
         )
         reload_patch = patch(
-            "prometheus_server.Prometheus.reload_configuration", lambda *a, **kw: False
+            "prometheus_client.Prometheus.reload_configuration", lambda *a, **kw: False
         )
         with replan_patch, reload_patch:
             self.harness.begin_with_initial_hooks()

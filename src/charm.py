@@ -58,7 +58,7 @@ from ops.model import (
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
-from prometheus_server import Prometheus
+from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_DIR = "/etc/prometheus"
@@ -144,7 +144,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_server = Prometheus(
+        self._prometheus_client = Prometheus(
             f"http://localhost:9090/{external_url.path.strip('/')}"
         )
 
@@ -474,7 +474,7 @@ class PrometheusCharm(CharmBase):
                 return
 
         elif should_reload:
-            reloaded = self._prometheus_server.reload_configuration()
+            reloaded = self._prometheus_client.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = early_return_statuses["cfg_load_fail"]
