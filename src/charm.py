@@ -147,17 +147,15 @@ class PrometheusCharm(CharmBase):
             f"{external_url.scheme}://localhost:9090/{external_url.path.strip('/')}"
         )
 
-        # FIXME code ordering problem: when CA is joined after remote-write, the scheme remains
-        #  http.
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-            endpoint_address=external_url.hostname or "",
-            endpoint_port=external_url.port or 443 if self._is_tls_enabled() else 80,
-            endpoint_schema=external_url.scheme,
-            endpoint_path=f"{external_url.path}/api/v1/write",
+            server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
+            endpoint_path="/api/v1/write",
         )
 
+        # FIXME code ordering problem: when CA is joined after remote-write, the scheme remains
+        #  http. `source_url` should be a callable.
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",

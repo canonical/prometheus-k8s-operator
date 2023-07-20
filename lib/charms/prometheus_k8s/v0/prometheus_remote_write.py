@@ -22,7 +22,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -41,7 +41,7 @@ from ops.model import Relation
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0
+LIBAPI = 0  # FIXME move this file to the /v1 folder after review (currently the diff is easier)
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
@@ -798,9 +798,8 @@ class PrometheusRemoteWriteProvider(Object):
         self,
         charm: CharmBase,
         relation_name: str = DEFAULT_RELATION_NAME,
-        endpoint_schema: str = "http",
-        endpoint_address: str = "",
-        endpoint_port: Union[str, int] = 9090,
+        *,
+        server_url_func: Callable[[], str] = lambda: f"http://{socket.getfqdn()}:9090",
         endpoint_path: str = "/api/v1/write",
     ):
         """API to manage a provided relation with the `prometheus_remote_write` interface.
@@ -809,14 +808,8 @@ class PrometheusRemoteWriteProvider(Object):
             charm: The charm object that instantiated this class.
             relation_name: Name of the relation with the `prometheus_remote_write` interface as
                 defined in metadata.yaml.
-            endpoint_schema: The URL schema for your remote_write endpoint. Defaults to `http`.
-            endpoint_address: The URL host for your remote_write endpoint as reachable
-                from the client. This might be either the pod IP, or you might want to
-                expose an address routable from outside the Kubernetes cluster, e.g., the
-                host address of an Ingress. If not provided, it defaults to the unit's FQDN.
-            endpoint_port: The URL port for your remote_write endpoint. Defaults to `9090`.
-            endpoint_path: The URL path for your remote_write endpoint.
-                Defaults to `/api/v1/write`.
+            server_url_func: A callable returning the URL for your prometheus server.
+            endpoint_path: The path of the server's remote_write endpoint.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -836,9 +829,7 @@ class PrometheusRemoteWriteProvider(Object):
         self._charm = charm
         self._tool = CosTool(self._charm)
         self._relation_name = relation_name
-        self._endpoint_schema = endpoint_schema
-        self._endpoint_address = endpoint_address
-        self._endpoint_port = int(endpoint_port)
+        self._get_server_url = server_url_func
         self._endpoint_path = endpoint_path
 
         on_relation = self._charm.on[self._relation_name]
@@ -861,7 +852,7 @@ class PrometheusRemoteWriteProvider(Object):
         self.on.consumers_changed.emit()
 
     def _on_relation_changed(self, event: RelationEvent) -> None:
-        """Flag Providers that data has changed so they can re-read alerts."""
+        """Flag Providers that data has changed, so they can re-read alerts."""
         self.on.alert_rules_changed.emit(event.relation.id)
 
     def update_endpoint(self, relation: Optional[Relation] = None) -> None:
@@ -889,19 +880,9 @@ class PrometheusRemoteWriteProvider(Object):
         Args:
             relation: The relation whose data to update.
         """
-        address = self._endpoint_address or socket.getfqdn()
-
-        path = self._endpoint_path or ""
-        if path and not path.startswith("/"):
-            path = "/{}".format(path)
-
-        endpoint_url = "{}://{}:{}{}".format(
-            self._endpoint_schema, address, str(self._endpoint_port), path
-        )
-
         relation.data[self._charm.unit]["remote_write"] = json.dumps(
             {
-                "url": endpoint_url,
+                "url": self._get_server_url().rstrip("/") + "/" + self._endpoint_path.strip("/"),
             }
         )
 

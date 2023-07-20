@@ -104,7 +104,13 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
             json.dumps(
-                [{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:9090"]}]}]
+                [
+                    {
+                        "metrics_path": "/metrics",
+                        "static_configs": [{"targets": ["*:9090"]}],
+                        "scheme": "http",
+                    }
+                ]
             ),
         )
         self.assertEqual(
@@ -139,7 +145,15 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         # AND the self-scrape job advertises a wildcard target on port 80
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
-            json.dumps([{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:80"]}]}]),
+            json.dumps(
+                [
+                    {
+                        "metrics_path": "/metrics",
+                        "static_configs": [{"targets": ["*:80"]}],
+                        "scheme": "http",
+                    }
+                ]
+            ),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
@@ -149,7 +163,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         # AND the remote-write provider points to prom's fqdn
         self.assertEqual(
             self.unit_data("receive-remote-write").get("remote_write"),
-            '{"url": "http://foo.bar:80/api/v1/write"}',
+            '{"url": "http://foo.bar/api/v1/write"}',
         )
 
     def test_web_external_has_hostname_and_port(self, *unused):
@@ -174,7 +188,13 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
             json.dumps(
-                [{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:1234"]}]}]
+                [
+                    {
+                        "metrics_path": "/metrics",
+                        "static_configs": [{"targets": ["*:1234"]}],
+                        "scheme": "http",
+                    }
+                ]
             ),
         )
         self.assertEqual(
@@ -209,7 +229,15 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         # AND the self-scrape job advertises a wildcard target on port 80
         self.assertEqual(
             self.app_data("self-metrics-endpoint").get("scrape_jobs"),
-            json.dumps([{"metrics_path": "/metrics", "static_configs": [{"targets": ["*:80"]}]}]),
+            json.dumps(
+                [
+                    {
+                        "metrics_path": "/metrics",
+                        "static_configs": [{"targets": ["*:80"]}],
+                        "scheme": "http",
+                    }
+                ]
+            ),
         )
         self.assertEqual(
             self.unit_data("self-metrics-endpoint").get("prometheus_scrape_unit_address"),
@@ -219,7 +247,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
         # AND the remote-write provider points to prom's fqdn
         self.assertEqual(
             self.unit_data("receive-remote-write").get("remote_write"),
-            '{"url": "http://foo.bar:80/baz/api/v1/write"}',
+            '{"url": "http://foo.bar/baz/api/v1/write"}',
         )
 
     def test_web_external_has_hostname_port_and_path(self, *unused):
@@ -248,6 +276,7 @@ class TestWebExternalUrlForCharm(unittest.TestCase):
                     {
                         "metrics_path": "/metrics",
                         "static_configs": [{"targets": ["*:1234"]}],
+                        "scheme": "http",
                     }
                 ]
             ),
