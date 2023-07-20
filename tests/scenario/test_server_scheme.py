@@ -37,7 +37,6 @@ class TestServerScheme:
                 Relation("self-metrics-endpoint", relation_id=10),  # external self-monitoring
                 Relation("grafana-source", relation_id=11),  # grafana
                 Relation("receive-remote-write", relation_id=12),  # grafana-agent
-
             ]
             for rel in rels:
                 state = add_relation_sequence(context, state, rel)
