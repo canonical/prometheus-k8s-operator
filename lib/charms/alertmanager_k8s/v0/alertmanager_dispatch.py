@@ -26,7 +26,7 @@ class SomeApplication(CharmBase):
 """
 import logging
 import socket
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Set
 from urllib.parse import urlparse
 
 import ops
@@ -171,14 +171,18 @@ class AlertmanagerConsumer(RelationManagerBase):
         #       - target2
         #
         # The approach we take here is:
-        # - A separate instance of this library is need for every 'alerting' relation.
+        # - A separate instance of this library is needed for every 'alerting' relation.
         # - Every alertmanager APP gets its own entry under the "alertmanagers" section.
-        # - This lib (alertmanager_dispatch) communicates k8s-cluster FQDN (per unit address).
-        # - All units of the same app are listed as targets under the same static_configs entry.
+        # - This lib (alertmanager_dispatch) advertises its highest priority URL. Note that this
+        #   means that with an ingress (per app) in place, there will be one address for all units,
+        #   while without ingress, k8s-cluster FQDN will be advertised, so there will be on per
+        #   unit. In the FQDN case, all units of the same app are listed as targets under the same
+        #   static_configs entry.
         #
-        # Since prometheus has unit addresses in its config, we need to emit the "cluster-changed"
-        # event on both relation-departed and relation-broken, because on scale-down e.g. from two
-        # to one unit we'd get a relation-departed, but not a relation-broken.
+        # Since prometheus may have unit addresses in its config, we need to emit the
+        # "cluster-changed" event on both relation-departed and relation-broken, because on
+        # scale-down e.g. from two to one unit we'd get a relation-departed, but not a
+        # relation-broken.
         self.framework.observe(
             self.charm.on[self.name].relation_departed,
             self._on_relation_departed,
@@ -205,16 +209,18 @@ class AlertmanagerConsumer(RelationManagerBase):
 
     def get_cluster_info_with_scheme(self) -> List[str]:
         """Returns a list of URLs of all the alertmanager units."""
-        # FIXME: in v1 of the lib, use a dict {"url": ...} so it's extendable
+        # FIXME: in v1 of the lib:
+        #  - use a dict {"url": ...} so it's extendable
+        #  - change return value to Set[str]
         if not (relation := self.charm.model.get_relation(self.name)):
             return []
 
-        alertmanagers: List[str] = []
+        alertmanagers: Set[str] = set()
         for unit in relation.units:
             address = relation.data[unit].get("public_address")
             scheme = relation.data[unit].get("scheme", "http")
             if address:
-                alertmanagers.append(f"{scheme}://{address}")
+                alertmanagers.add(f"{scheme}://{address}")
         return sorted(alertmanagers)
 
     def _on_relation_departed(self, _):
@@ -280,7 +286,6 @@ class AlertmanagerProvider(RelationManagerBase):
         # TODO: breaking change: force keyword-only args from relation_name onwards
         super().__init__(charm, relation_name, RelationRole.provides)
 
-        # TODO: only use fqdn?
         # We don't need to worry about the literal "http" here because the external_url arg is set
         # by the charm. TODO: drop it after external_url becomes a mandatory arg.
         self._external_url = external_url or (lambda: f"http://{socket.getfqdn()}:{api_port}")
@@ -305,7 +310,7 @@ class AlertmanagerProvider(RelationManagerBase):
         Addresses are without scheme.
         """
         # FIXME when `_external_url` is an ingress URL, we have a problem: we get the same URL for
-        #  both units, because alertmanager is ingress per unit. On prometheus side we can
+        #  both units, because alertmanager is ingress per app. On prometheus side we can
         #  deduplicate so that the config file only has one entry, but ideally the
         #  "alertmanagers.[].static_configs.targets" section in the prometheus config should list
         #  all units.
