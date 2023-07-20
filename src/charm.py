@@ -144,14 +144,16 @@ class PrometheusCharm(CharmBase):
             ],
         )
         self._prometheus_client = Prometheus(
-            f"http://localhost:9090/{external_url.path.strip('/')}"
+            f"{external_url.scheme}://localhost:9090/{external_url.path.strip('/')}"
         )
 
+        # FIXME code ordering problem: when CA is joined after remote-write, the scheme remains
+        #  http.
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             endpoint_address=external_url.hostname or "",
-            endpoint_port=external_url.port or 80,
+            endpoint_port=external_url.port or 443 if self._is_tls_enabled() else 80,
             endpoint_schema=external_url.scheme,
             endpoint_path=f"{external_url.path}/api/v1/write",
         )
@@ -837,6 +839,9 @@ class PrometheusCharm(CharmBase):
                 # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
                 # prometheus and all scrape jobs are signed by the same CA.
                 if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
+                    # TODO we shouldn't be passing CA certs over relation data, because that
+                    #  reduces to self-signed certs. Both parties need to separately trust the CA
+                    #  instead.
                     filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                     certs[filename] = ca_file
                     job["tls_config"] = {**tls_config, **{"ca_file": filename}}
