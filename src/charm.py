@@ -131,7 +131,6 @@ class PrometheusCharm(CharmBase):
 
         external_url = urlparse(self.external_url)
 
-        # FIXME: figure out if/how to deduplicate with self._default_config
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
@@ -206,15 +205,29 @@ class PrometheusCharm(CharmBase):
 
     @property
     def self_scraping_job(self):
-        """The scrape job used by Prometheus to scrape itself during self-monitoring."""
-        port = urlparse(self.external_url).port or 80
-        return [
-            {
-                # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-                # to specify it here.
-                "static_configs": [{"targets": [f"*:{port}"]}],
+        """Scrape config for "external" self monitoring.
+
+        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
+        Not to be confused with `self._default_config()`.
+        """
+        port = urlparse(self.external_url).port
+        # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
+        # to specify it here.
+        if self._is_tls_enabled():
+            config = {
+                "scheme": "https",
+                "tls_config": {
+                    "ca_file": self.cert_handler.ca,
+                },
+                "static_configs": [{"targets": [f"*:{port or 443}"]}],
             }
-        ]
+        else:
+            config = {
+                "scheme": "http",
+                "static_configs": [{"targets": [f"*:{port or 80}"]}],
+            }
+
+        return [config]
 
     @property
     def log_level(self):
@@ -233,7 +246,11 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _default_config(self):
-        """Default configuration for the Prometheus workload."""
+        """Default configuration for the Prometheus workload.
+
+        This scrape config is for prometheus to scrape itself, not to be confused with the
+        self-monitoring scrape job in `self_scraping_job()`.
+        """
         config = {
             "job_name": "prometheus",
             "scrape_interval": "5s",
