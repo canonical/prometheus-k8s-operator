@@ -396,6 +396,8 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.key,
                 make_dirs=True,
             )
+
+        self.grafana_source_provider.update_source(self.external_url)
         self._configure(_)
 
     def _configure(self, _):
