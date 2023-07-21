@@ -77,8 +77,9 @@ class TestServerScheme:
         # TODO figure out why relation-changed observer in tls_certificates is not being called
 
         # TODO how to manually emit the `cert_handler.on.cert_changed` event?
+        state = context.run("cert_handler.on.cert_changed", state)
 
         # THEN the pebble command has 'https' in the 'web.external-url' arg
         container = state.get_container("prometheus")
         command = container.layers["prometheus"].services["prometheus"].command
-        assert f"--web.external-url=https://{fqdn}:9093" in command
+        assert f"--web.external-url=https://{fqdn}:9090" in command
