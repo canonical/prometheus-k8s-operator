@@ -28,16 +28,16 @@ from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
     ServicePort,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointConsumer,
+    MetricsEndpointProvider,
+    PrometheusConfig,
+)
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
-)
-from charms.prometheus_k8s.v0.prometheus_scrape import (
-    MetricsEndpointConsumer,
-    MetricsEndpointProvider,
-    PrometheusConfig,
 )
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,

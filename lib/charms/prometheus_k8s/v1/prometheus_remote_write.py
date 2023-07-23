@@ -41,11 +41,11 @@ from ops.model import Relation
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0  # FIXME move this file to the /v1 folder after review (currently the diff is easier)
+LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 0
 
 
 logger = logging.getLogger(__name__)
