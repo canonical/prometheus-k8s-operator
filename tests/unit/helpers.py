@@ -7,7 +7,7 @@ from typing import Callable
 from unittest.mock import patch
 
 import requests
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     CosTool as _CosTool_remote_write,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import CosTool as _CosTool_scrape

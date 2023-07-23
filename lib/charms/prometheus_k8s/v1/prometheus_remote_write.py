@@ -503,7 +503,7 @@ class PrometheusRemoteWriteConsumer(Object):
      The `PrometheusRemoteWriteConsumer` object can be instantiated as follows in your charm:
 
      ```
-     from charms.prometheus_k8s.v0.prometheus_remote_write import PrometheusRemoteWriteConsumer
+     from charms.prometheus_k8s.v1.prometheus_remote_write import PrometheusRemoteWriteConsumer
 
      def __init__(self, *args):
          ...
@@ -762,7 +762,7 @@ class PrometheusRemoteWriteProvider(Object):
     The `PrometheusRemoteWriteProvider` object can be instantiated as follows in your charm:
 
     ```
-    from charms.prometheus_k8s.v0.prometheus_remote_write import PrometheusRemoteWriteProvider
+    from charms.prometheus_k8s.v1.prometheus_remote_write import PrometheusRemoteWriteProvider
 
     def __init__(self, *args):
         ...

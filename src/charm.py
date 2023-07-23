@@ -28,10 +28,10 @@ from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
     ServicePort,
 )
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import (
@@ -154,8 +154,6 @@ class PrometheusCharm(CharmBase):
             endpoint_path="/api/v1/write",
         )
 
-        # FIXME code ordering problem: when CA is joined after remote-write, the scheme remains
-        #  http. `source_url` should be a callable.
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",

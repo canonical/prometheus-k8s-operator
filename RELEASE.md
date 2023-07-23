@@ -34,7 +34,7 @@ Note: The charm revision and resource revisions will need to be set appropriatel
 ### Publish charm libraries
 ```shell
 charmcraft publish-lib charms.prometheus_k8s.v0.prometheus_scrape
-charmcraft publish-lib charms.prometheus_k8s.v0.prometheus_remote_write
+charmcraft publish-lib charms.prometheus_k8s.v1.prometheus_remote_write
 ```
 
 ## A note on granularity of revisions
