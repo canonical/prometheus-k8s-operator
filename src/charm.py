@@ -697,7 +697,7 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alertmanagers = self.alertmanager_consumer.get_cluster_info()
+        alertmanagers = self.alertmanager_consumer.get_cluster_info_with_scheme()
         if not alertmanagers:
             logger.debug("No alertmanagers available")
             return {}
