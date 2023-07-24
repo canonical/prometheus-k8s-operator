@@ -89,7 +89,7 @@ class ConfigError(Exception):
     pass
 
 
-@trace_charm(tempo_endpoint="tempo")
+@trace_charm(tracing_endpoint="tempo")
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
