@@ -49,6 +49,15 @@ requires:
     limit: 1
   catalogue:
     interface: catalogue
+  certificates:
+    interface: tls-certificates
+    limit: 1
+    description: |
+      Obtain a CA and a server certificate for Prometheus to use for TLS.
+      The same CA cert is used for all in-cluster requests, e.g.:
+      - (client) scraping targets for self-monitoring
+      - (client) posting alerts to alertmanager server
+      - (server) serving data to grafana
 
 peers:
   prometheus-peers:
