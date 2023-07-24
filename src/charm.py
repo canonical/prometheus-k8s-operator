@@ -38,18 +38,13 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
     PrometheusConfig,
 )
+from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
+from charms.tempo_k8s.v0.tempo_scrape import TracingEndpointProvider
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from charms.tempo_k8s.v0.charm_instrumentation import (
-    trace_charm
-)
-from charms.tempo_k8s.v0.tempo_scrape import (
-    TracingEndpointProvider
-)
-
 from lightkube import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
@@ -89,7 +84,7 @@ class ConfigError(Exception):
     pass
 
 
-@trace_charm(tempo_endpoint="tempo")
+@trace_charm(tracing_endpoint="tempo")
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -803,6 +798,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def tempo(self) -> Optional[str]:
+        """Tempo endpoint for charm tracing."""
         return self.tracing.otlp_grpc_endpoint
 
 
