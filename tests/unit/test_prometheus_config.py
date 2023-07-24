@@ -424,7 +424,12 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
             static_configs,
             {
                 "alertmanagers": [
-                    {"path_prefix": "/", "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}]},
+                    {
+                        "scheme": "http",
+                        "path_prefix": "/",
+                        "static_configs": [{"targets": ["1.1.1.1", "2.2.2.2"]}],
+                        "tls_config": {"insecure_skip_verify": True},
+                    },
                 ],
             },
         )
@@ -444,8 +449,10 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
             {
                 "alertmanagers": [
                     {
+                        "scheme": "http",
                         "path_prefix": "/",
                         "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
@@ -466,8 +473,40 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
             {
                 "alertmanagers": [
                     {
+                        "scheme": "http",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111", "2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
+                    },
+                ],
+            },
+        )
+
+    def test_ip_address_port_and_same_path_prefix_with_scheme(self):
+        # GIVEN a hostname:port/path, all with the same path
+        alertmanagers = ["http://1.1.1.1:1111/some/path", "https://2.2.2.2:2222/some/path"]
+
+        # WHEN rendered
+        static_configs = PrometheusConfig.render_alertmanager_static_configs(alertmanagers)
+
+        # THEN all targets are under the same static_config
+        # AND port makes part of the target string
+        # AND a path_prefix is rendered
+        self.assertEqual(
+            static_configs,
+            {
+                "alertmanagers": [
+                    {
+                        "scheme": "http",
+                        "path_prefix": "/some/path",
+                        "static_configs": [{"targets": ["1.1.1.1:1111"]}],
+                        "tls_config": {"insecure_skip_verify": True},
+                    },
+                    {
+                        "scheme": "https",
+                        "path_prefix": "/some/path",
+                        "static_configs": [{"targets": ["2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
@@ -487,16 +526,22 @@ class TestAlertmanagerStaticConfigs(unittest.TestCase):
             {
                 "alertmanagers": [
                     {
+                        "scheme": "http",
                         "path_prefix": "/some/path",
                         "static_configs": [{"targets": ["1.1.1.1:1111"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                     {
+                        "scheme": "http",
                         "path_prefix": "/some/other/path",
                         "static_configs": [{"targets": ["2.2.2.2:2222"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                     {
+                        "scheme": "http",
                         "path_prefix": "/",
                         "static_configs": [{"targets": ["3.3.3.3"]}],
+                        "tls_config": {"insecure_skip_verify": True},
                     },
                 ],
             },
