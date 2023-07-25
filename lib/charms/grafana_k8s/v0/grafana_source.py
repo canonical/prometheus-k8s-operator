@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 18
+LIBPATCH = 19
 
 logger = logging.getLogger(__name__)
 
@@ -398,31 +398,30 @@ class GrafanaSourceProvider(Object):
                 "`source_url` as the address."
             )
 
+        self._source_port = source_port
+        self._source_url = self._sanitize_source_url(source_url)
+
+        self.framework.observe(events.relation_joined, self._set_sources_from_event)
+        for ev in refresh_event:
+            self.framework.observe(ev, self._set_unit_details)
+
+    def _sanitize_source_url(self, source_url: Optional[str]) -> Optional[str]:
         if source_url and not re.match(r"^\w+://", source_url):
             logger.warning(
                 "'source_url' should start with a scheme, such as "
                 "'http://'. Assuming 'http://' since none is present."
             )
             source_url = "http://{}".format(source_url)
-
-        self._source_port = source_port
-        self._source_url = source_url
-
-        self.framework.observe(events.relation_joined, self._set_sources_from_event)
-        for ev in refresh_event:
-            self.framework.observe(ev, self._set_unit_details)
+        return source_url
 
     def update_source(self, source_url: Optional[str] = ""):
         """Trigger the update of relation data."""
-        if source_url:
-            self._source_url = source_url
+        self._source_url = self._sanitize_source_url(source_url)
 
-        rel = self._charm.model.get_relation(self._relation_name)
-
-        if not rel:
-            return
-
-        self._set_sources(rel)
+        for rel in self._charm.model.relations.get(self._relation_name, []):
+            if not rel:
+                continue
+            self._set_sources(rel)
 
     def _set_sources_from_event(self, event: RelationJoinedEvent) -> None:
         """Get a `Relation` object from the event to pass on."""
@@ -461,7 +460,7 @@ class GrafanaSourceProvider(Object):
         unit relation data for the Prometheus consumer.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            url = self._source_url or "{}:{}".format(socket.getfqdn(), self._source_port)
+            url = self._source_url or "http://{}:{}".format(socket.getfqdn(), self._source_port)
             if self._source_type == "mimir":
                 url = f"{url}/prometheus"
 
