@@ -39,6 +39,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
+from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
+from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -90,6 +92,7 @@ class ConfigError(Exception):
     pass
 
 
+@trace_charm(tracing_endpoint="tempo")
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -181,6 +184,7 @@ class PrometheusCharm(CharmBase):
                 ),
             ),
         )
+        self.tracing = TracingEndpointProvider(self)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -924,6 +928,11 @@ class PrometheusCharm(CharmBase):
     def _push(self, path, contents):
         """Push file to container, creating subdirs as necessary."""
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
+
+    @property
+    def tempo(self) -> Optional[str]:
+        """Tempo endpoint for charm tracing."""
+        return self.tracing.otlp_grpc_endpoint
 
 
 if __name__ == "__main__":

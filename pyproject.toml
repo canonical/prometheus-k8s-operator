@@ -1,5 +1,14 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
+[project]
+name = "prometheus-k8s"
+version = "0.1" # not relevant
+
+[project.optional-dependencies]
+lib_pydeps = [
+  "opentelemetry-exporter-otlp-proto-grpc",
+  "pydantic<2"
+]
 
 # Testing tools configuration
 [tool.coverage.run]
@@ -56,6 +65,11 @@ follow_imports = "silent"
 [[tool.mypy.overrides]]
 module = ["ops.*"]
 follow_imports = "skip"
+
+[tool.pyright]
+extraPaths = ["lib"]
+pythonVersion = "3.8"
+pythonPlatform = "All"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
