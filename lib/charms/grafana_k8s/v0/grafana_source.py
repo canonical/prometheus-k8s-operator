@@ -160,7 +160,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 17
+LIBPATCH = 18
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +321,7 @@ class GrafanaSourceProvider(Object):
         source_type: str,
         source_port: Optional[str] = "",
         source_url: Optional[str] = "",
-        refresh_event: Optional[BoundEvent] = None,
+        refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         relation_name: str = DEFAULT_RELATION_NAME,
         extra_fields: Optional[dict] = None,
     ) -> None:
@@ -359,7 +359,7 @@ class GrafanaSourceProvider(Object):
                 the default, so that people deploying your charm will have a
                 consistent experience with all other charms that provide
                 Grafana datasources.
-            refresh_event: a :class:`CharmEvents` event on which the IP
+            refresh_event: a :class:`CharmEvents` event (or a list of them) on which the IP
                 address should be refreshed in case of pod or
                 machine/VM restart.
             extra_fields: a :dict: which is used for additional information required
@@ -386,7 +386,11 @@ class GrafanaSourceProvider(Object):
         if not refresh_event:
             if len(self._charm.meta.containers) == 1:
                 container = list(self._charm.meta.containers.values())[0]
-                refresh_event = self._charm.on[container.name.replace("-", "_")].pebble_ready
+                refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
+            else:
+                refresh_event = []
+        elif not isinstance(refresh_event, list):
+            refresh_event = [refresh_event]
 
         if source_port and source_url:
             logger.warning(
@@ -405,8 +409,8 @@ class GrafanaSourceProvider(Object):
         self._source_url = source_url
 
         self.framework.observe(events.relation_joined, self._set_sources_from_event)
-        if refresh_event:
-            self.framework.observe(refresh_event, self._set_unit_details)
+        for ev in refresh_event:
+            self.framework.observe(ev, self._set_unit_details)
 
     def update_source(self, source_url: Optional[str] = ""):
         """Trigger the update of relation data."""
