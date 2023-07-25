@@ -233,14 +233,14 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_configuration_reload(self, trigger_configuration_reload, *unused):
         self.harness.update_config({"evaluation_interval": "1234m"})
         trigger_configuration_reload.assert_called()
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_configuration_reload_success(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = True
         self.harness.update_config({"evaluation_interval": "1234m"})
@@ -248,7 +248,7 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_configuration_reload_error(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = False
         self.harness.update_config({"evaluation_interval": "1234m"})
@@ -256,7 +256,7 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_configuration_reload_read_timeout(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = "read_timeout"
         self.harness.update_config({"evaluation_interval": "1234m"})
@@ -408,7 +408,7 @@ class TestAlertsFilename(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     @prom_multipatch
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
@@ -428,7 +428,7 @@ class TestAlertsFilename(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_charm_writes_meaningful_alerts_filename_1(self, *_):
         # WHEN relation data includes both scrape_metadata and labeled alerts
         self.harness.update_relation_data(
@@ -451,7 +451,7 @@ class TestAlertsFilename(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_charm_writes_meaningful_alerts_filename_2(self, *_):
         # TODO: merge the contents of these tests into a single test (and fix the bug!)
         # WHEN relation data includes only labeled alerts (no scrape_metadata)
@@ -475,7 +475,7 @@ class TestAlertsFilename(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_charm_writes_meaningful_alerts_filename_3(self, *_):
         # WHEN relation data includes scrape_metadata but _unlabeled_ alerts
         self.harness.update_relation_data(
@@ -498,7 +498,7 @@ class TestAlertsFilename(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_charm_writes_meaningful_alerts_filename_4(self, *_):
         # TODO: merge the contents of these tests into a single test (and fix the bug!)
         # WHEN relation data includes only _unlabeled_ alerts (no scrape_metadata)
@@ -530,7 +530,7 @@ class TestPebblePlan(unittest.TestCase):
     @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     @prom_multipatch
     def setUp(self, *_):
         self.harness = Harness(PrometheusCharm)
@@ -565,7 +565,7 @@ class TestPebblePlan(unittest.TestCase):
         stop_services=raise_if_called,
         restart_services=raise_if_called,
     )
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_no_restart_nor_reload_when_nothing_changes(self, reload_config_patch, *_):
         """When nothing changes, calling `_configure()` shouldn't result in downtime."""
         # GIVEN a pebble plan
@@ -598,7 +598,7 @@ class TestPebblePlan(unittest.TestCase):
     @patch("ops.testing._TestingPebbleClient.replan_services")
     @patch("ops.testing._TestingPebbleClient.start_services")
     @patch("ops.testing._TestingPebbleClient.restart_services")
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_workload_restarts_when_some_config_options_change(
         self, reload_config, restart, start, replan, *_
     ):
@@ -671,7 +671,7 @@ class TestPebblePlan(unittest.TestCase):
         stop_services=raise_if_called,
         restart_services=raise_if_called,
     )
-    @patch("prometheus_server.Prometheus.reload_configuration")
+    @patch("prometheus_client.Prometheus.reload_configuration")
     def test_workload_hot_reloads_when_some_config_options_change(self, reload_config_patch, *_):
         """Some config options go into the config file and require a reload (not restart)."""
         # GIVEN a pebble plan
@@ -718,7 +718,7 @@ class TestTlsConfig(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_ca_file(self, *_):
         scrape_jobs = [
             {
@@ -766,7 +766,7 @@ class TestTlsConfig(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_no_tls_config(self, *_):
         scrape_jobs = [
             {
@@ -797,7 +797,7 @@ class TestTlsConfig(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_tls_config_missing_cert(self, *_):
         scrape_jobs = [
             {
@@ -832,7 +832,7 @@ class TestTlsConfig(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_tls_config_missing_key(self, *_):
         scrape_jobs = [
             {
@@ -867,22 +867,40 @@ class TestTlsConfig(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("prometheus_server.Prometheus.reload_configuration", lambda *_: True)
+    @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_insecure_skip_verify(self, *_):
+        # GIVEN 3 scrape configs:
+        #  (1) no tls_config section
+        #  (2) empty tls_config section
+        #  (3) tls_config section with ca_file
+        #  (4) no tls_config section but with https scheme
         scrape_jobs = [
             {
                 "job_name": "job1",
                 "static_configs": [
                     {"targets": ["*:80"]},
                 ],
-                "tls_config": {"insecure_skip_verify": False},
             },
             {
                 "job_name": "job2",
                 "static_configs": [
                     {"targets": ["*:80"]},
                 ],
-                "tls_config": {"insecure_skip_verify": True},
+                "tls_config": {},
+            },
+            {
+                "job_name": "job3",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "tls_config": {"ca_file": "cert blob"},
+            },
+            {
+                "job_name": "job4",
+                "static_configs": [
+                    {"targets": ["*:80"]},
+                ],
+                "scheme": "https",
             },
         ]
 
@@ -906,9 +924,18 @@ class TestTlsConfig(unittest.TestCase):
         config_on_disk = container.pull("/etc/prometheus/prometheus.yml").read()
         as_dict = yaml.safe_load(config_on_disk)
         tls_subset = {
-            d["job_name"]: d["tls_config"]["insecure_skip_verify"]
+            d["job_name"]: d["tls_config"].get("insecure_skip_verify", None)
             for d in as_dict["scrape_configs"]
             if "tls_config" in d
         }
-        self.assertEqual(tls_subset["job1"], False)
-        self.assertEqual(tls_subset["job2"], True)
+        # THEN (1) there is no "tls_config" section in the config
+        self.assertNotIn("job1", tls_subset)
+
+        # AND (2) insecure_skip_very is auto added
+        self.assertEqual(tls_subset["job2"], None)
+
+        # AND (3) there is no "insecure_skip_very" in the config
+        self.assertEqual(tls_subset["job3"], None)
+
+        # AND (4) insecure_skip_very is True
+        self.assertEqual(tls_subset["job4"], True)

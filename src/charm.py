@@ -9,7 +9,7 @@ import logging
 import re
 import socket
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Dict, List, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -17,6 +17,7 @@ from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsume
 from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.observability_libs.v0.cert_handler import CertHandler
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
@@ -27,12 +28,6 @@ from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
     ServicePort,
 )
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
-    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
-)
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
-    PrometheusRemoteWriteProvider,
-)
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
@@ -40,6 +35,12 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 )
 from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
 from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
+    DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
+)
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
+    PrometheusRemoteWriteProvider,
+)
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -59,7 +60,7 @@ from ops.model import (
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
-from prometheus_server import Prometheus
+from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_DIR = "/etc/prometheus"
@@ -67,6 +68,13 @@ PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
+
+# Paths for the private key and the signed server certificate.
+# These are used to present to clients and to authenticate other servers.
+KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
+CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
+CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
+WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +114,13 @@ class PrometheusCharm(CharmBase):
             resource_reqs_func=self._resource_reqs_from_config,
         )
 
+        self.cert_handler = CertHandler(
+            charm=self,
+            key="prometheus-server-cert",
+            peer_relation_name="prometheus-peers",
+            extra_sans_dns=self.sans(),
+        )
+
         self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
 
         self._topology = JujuTopology.from_charm(self)
@@ -128,23 +143,25 @@ class PrometheusCharm(CharmBase):
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
                 self.on.update_status,
+                self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_server = Prometheus(web_route_prefix=external_url.path)
+        self._prometheus_client = Prometheus(
+            f"{external_url.scheme}://localhost:9090/{external_url.path.strip('/')}"
+        )
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-            endpoint_address=external_url.hostname or "",
-            endpoint_port=external_url.port or 80,
-            endpoint_schema=external_url.scheme,
-            endpoint_path=f"{external_url.path}/api/v1/write",
+            server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
+            endpoint_path="/api/v1/write",
         )
 
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
             source_url=self.external_url,
+            refresh_event=self.cert_handler.on.cert_changed,
         )
 
         self.catalogue = CatalogueConsumer(
@@ -155,6 +172,7 @@ class PrometheusCharm(CharmBase):
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
                 self.on.config_changed,  # web_external_url; also covers upgrade-charm
+                self.cert_handler.on.cert_changed,
             ],
             item=CatalogueItem(
                 name="Prometheus",
@@ -174,6 +192,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
+        self.framework.observe(self.cert_handler.on.cert_changed, self._on_server_cert_changed)
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -188,15 +207,29 @@ class PrometheusCharm(CharmBase):
 
     @property
     def self_scraping_job(self):
-        """The scrape job used by Prometheus to scrape itself during self-monitoring."""
-        port = urlparse(self.external_url).port or 80
-        return [
-            {
-                # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-                # to specify it here.
-                "static_configs": [{"targets": [f"*:{port}"]}],
+        """Scrape config for "external" self monitoring.
+
+        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
+        Not to be confused with `self._default_config()`.
+        """
+        port = urlparse(self.external_url).port
+        # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
+        # to specify it here.
+        if self._is_tls_enabled():
+            config = {
+                "scheme": "https",
+                "tls_config": {
+                    "ca_file": self.cert_handler.ca,
+                },
+                "static_configs": [{"targets": [f"*:{port or 443}"]}],
             }
-        ]
+        else:
+            config = {
+                "scheme": "http",
+                "static_configs": [{"targets": [f"*:{port or 80}"]}],
+            }
+
+        return [config]
 
     @property
     def log_level(self):
@@ -215,17 +248,21 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _default_config(self):
-        """Default configuration for the Prometheus workload."""
-        return {
+        """Default configuration for the Prometheus workload.
+
+        This scrape config is for prometheus to scrape itself, not to be confused with the
+        self-monitoring scrape job in `self_scraping_job()`.
+        """
+        config = {
             "job_name": "prometheus",
             "scrape_interval": "5s",
             "scrape_timeout": "5s",
             "metrics_path": self.metrics_path,
             "honor_timestamps": True,
-            "scheme": "http",
+            "scheme": "http",  # replaced with "https" below if behind TLS
             "static_configs": [
                 {
-                    "targets": [f"localhost:{self._port}"],
+                    "targets": [f"{socket.getfqdn()}:{self._port}"],
                     "labels": {
                         "juju_model": self._topology.model,
                         "juju_model_uuid": self._topology.model_uuid,
@@ -250,6 +287,18 @@ class PrometheusCharm(CharmBase):
             ],
         }
 
+        if self._is_tls_enabled():
+            config.update(
+                {
+                    "scheme": "https",
+                    "tls_config": {
+                        "ca_file": CA_CERT_PATH,
+                    },
+                }
+            )
+
+        return config
+
     @property
     def external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation.
@@ -268,7 +317,23 @@ class PrometheusCharm(CharmBase):
                 return ingress_url
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
-        return f"http://{socket.getfqdn()}:{self._port}"
+        return f"{'https' if self._is_tls_enabled() else 'http'}://{socket.getfqdn()}:{self._port}"
+
+    def sans(self) -> List[str]:
+        """Return the list of SANs to be listed in a CSR.
+
+        Can't use `self.external_url` because of the circular dependency, but we also don't need
+        it, because we don't need to have the ingress URL in the SANs, only "our" hostnames.
+        """
+        sans = [socket.getfqdn()]
+        if web_external_url := self.model.config.get("web_external_url"):
+            # Make sure the config option is set to a valid URL (e.g. rather than a plain hostname)
+            if hostname := urlparse(web_external_url).hostname:
+                sans.append(hostname)
+        return sans
+
+    def _is_tls_enabled(self):
+        return bool(self.cert_handler.cert)
 
     @property
     def _prometheus_layer(self) -> Layer:
@@ -311,6 +376,31 @@ class PrometheusCharm(CharmBase):
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self.unit.status = BlockedStatus(event.message)
+
+    def _on_server_cert_changed(self, _):
+        for path in [KEY_PATH, CERT_PATH, CA_CERT_PATH]:
+            self.container.remove_path(path, recursive=True)
+
+        if self.cert_handler.ca:
+            self.container.push(
+                CA_CERT_PATH,
+                self.cert_handler.ca,
+                make_dirs=True,
+            )
+        if self.cert_handler.cert and self.cert_handler.key:
+            self.container.push(
+                CERT_PATH,
+                self.cert_handler.cert,
+                make_dirs=True,
+            )
+            self.container.push(
+                KEY_PATH,
+                self.cert_handler.key,
+                make_dirs=True,
+            )
+
+        self.grafana_source_provider.update_source(self.external_url)
+        self._configure(_)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -405,7 +495,7 @@ class PrometheusCharm(CharmBase):
                 return
 
         elif should_reload:
-            reloaded = self._prometheus_server.reload_configuration()
+            reloaded = self._prometheus_client.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
                 self.unit.status = early_return_statuses["cfg_load_fail"]
@@ -508,6 +598,9 @@ class PrometheusCharm(CharmBase):
             "--web.console.templates=/usr/share/prometheus/consoles",
             "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
+
+        if self._web_config():
+            args.append(f"--web.config.file={WEB_CONFIG_PATH}")
 
         external_url = self.external_url
         args.append(f"--web.external-url={external_url}")
@@ -686,6 +779,20 @@ class PrometheusCharm(CharmBase):
 
         return global_config
 
+    def _web_config(self) -> Optional[dict]:
+        """Return the web.config.file contents as a dict, if TLS is enabled; otherwise None.
+
+        Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
+        """
+        if self._is_tls_enabled():
+            return {
+                "tls_server_config": {
+                    "cert_file": CERT_PATH,
+                    "key_file": KEY_PATH,
+                }
+            }
+        return None
+
     def _alerting_config(self) -> dict:
         """Construct Prometheus altering configuration.
 
@@ -722,13 +829,33 @@ class PrometheusCharm(CharmBase):
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
-            if tls_config := job.get("tls_config"):
+
+            # If "tls_config" is absent but scheme is https, then set insecure_skip_verify.
+            default_tls_config = (
+                {"insecure_skip_verify": True} if job.get("scheme") == "https" else {}
+            )
+            if tls_config := job.get("tls_config", default_tls_config):
                 # Certs are transferred over relation data and need to be written to files on disk.
                 # CA certificate to validate the server certificate with.
-                if ca_file := tls_config.get("ca_file"):
+
+                # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
+                # prometheus and all scrape jobs are signed by the same CA.
+                if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
+                    # TODO we shouldn't be passing CA certs over relation data, because that
+                    #  reduces to self-signed certs. Both parties need to separately trust the CA
+                    #  instead.
                     filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                     certs[filename] = ca_file
-                    job["tls_config"]["ca_file"] = filename
+                    job["tls_config"] = {**tls_config, **{"ca_file": filename}}
+                else:
+                    # The tls_config section is present, but we don't have any CA certs
+                    logger.warning(
+                        "The scrape job '%s' has a tls_config section specified, but no CA certs "
+                        "are available. Adding 'insecure_skip_verify' as a fallback.",
+                        job["job_name"],
+                    )
+                    job["tls_config"] = {**tls_config, **{"insecure_skip_verify": True}}
+
                 # Certificate and key files for client cert authentication to the server.
                 if (cert_file := tls_config.get("cert_file")) and (
                     key_file := tls_config.get("key_file")
@@ -741,7 +868,8 @@ class PrometheusCharm(CharmBase):
                     job["tls_config"]["key_file"] = filename
                 elif "cert_file" in tls_config or "key_file" in tls_config:
                     raise ConfigError(
-                        'tls_config requires both "cert_file" and "key_file" if client authentication is to be used'
+                        'tls_config requires both "cert_file" and "key_file" if client '
+                        "authentication is to be used"
                     )
 
             prometheus_config["scrape_configs"].append(job)  # type: ignore
@@ -758,6 +886,11 @@ class PrometheusCharm(CharmBase):
         self._push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
             self._push(filename, contents)
+
+        if web_config := self._web_config():
+            self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
+        else:
+            self.container.remove_path(WEB_CONFIG_PATH, recursive=True)
 
         self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")

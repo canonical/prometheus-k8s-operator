@@ -5,7 +5,6 @@
 
 import logging
 from typing import Union
-from urllib.parse import urljoin
 
 import requests
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
@@ -18,25 +17,17 @@ class Prometheus:
 
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 9090,
-        web_route_prefix: str = "",
+        endpoint_url: str = "http://localhost:9090",
         api_timeout=2.0,
     ):
         """Utility to manage a Prometheus application.
 
         Args:
-            host: Optional; host address of Prometheus application.
-            port: Optional; port on which Prometheus service is exposed.
-            web_route_prefix: Optional; the root path added to the Prometheus API path, e.g.,
-              when we relate to an ingress.
-            api_timeout: Optional; timeout (in seconds) to observe when interacting with the API.
+            endpoint_url: Prometheus endpoint URL.
+            api_timeout: Timeout (in seconds) to observe when interacting with the API.
         """
-        web_route_prefix = web_route_prefix.lstrip("/").rstrip("/")
-        self.base_url = f"http://{host.rstrip('/')}:{port}/" + web_route_prefix
-        if not self.base_url.endswith("/"):
-            self.base_url += "/"
-
+        # Make sure the URL str does not end with a '/'
+        self.base_url = endpoint_url.rstrip("/")
         self.api_timeout = api_timeout
 
     def reload_configuration(self) -> Union[bool, str]:
@@ -49,9 +40,9 @@ class Prometheus:
           "read_timeout" on a read timeout.
           False on error.
         """
-        url = urljoin(self.base_url, "-/reload")
+        url = f"{self.base_url}/-/reload"
         try:
-            response = requests.post(url, timeout=self.api_timeout)
+            response = requests.post(url, timeout=self.api_timeout, verify=False)
 
             if response.status_code == 200:
                 return True
@@ -72,10 +63,10 @@ class Prometheus:
             instance is not reachable then an empty dictionary is
             returned.
         """
-        url = urljoin(self.base_url, "api/v1/status/buildinfo")
+        url = f"{self.base_url}/api/v1/status/buildinfo"
 
         try:
-            response = requests.get(url, timeout=self.api_timeout)
+            response = requests.get(url, timeout=self.api_timeout, verify=False)
 
             if response.status_code == 200:
                 info = response.json()

@@ -6,13 +6,13 @@ import unittest
 from unittest.mock import patch
 
 from charm import Prometheus, PrometheusCharm
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
 )
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     RELATION_INTERFACE_NAME as RELATION_INTERFACE,
 )
-from charms.prometheus_k8s.v0.prometheus_remote_write import (
+from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
 from helpers import (
