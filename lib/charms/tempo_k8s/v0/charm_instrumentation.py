@@ -62,6 +62,7 @@ from typing import (
 )
 
 import opentelemetry
+from grpc import ChannelCredentials
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Span, TracerProvider
@@ -85,13 +86,14 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-grpc==1.17.0"]
 
 logger = logging.getLogger("tracing")
 
 tracer: ContextVar[Tracer] = ContextVar("tracer")
+_GetterType = Union[Callable[[CharmBase], Optional[str]], property]
 
 CHARM_TRACING_ENABLED = "CHARM_TRACING_ENABLED"
 
@@ -155,9 +157,52 @@ class UntraceableObjectError(TracingError):
     """Raised when an object you're attempting to instrument cannot be autoinstrumented."""
 
 
+def _get_tracing_endpoint(tracing_endpoint_getter, self, charm):
+    if isinstance(tracing_endpoint_getter, property):
+        tracing_endpoint = tracing_endpoint_getter.__get__(self)
+    else:  # method or callable
+        tracing_endpoint = tracing_endpoint_getter(self)
+
+    if tracing_endpoint is None:
+        logger.warning(
+            f"{charm}.{getattr(tracing_endpoint_getter, '__qualname__', str(tracing_endpoint_getter))} "
+            f"returned None; continuing with tracing DISABLED."
+        )
+        return
+    elif not isinstance(tracing_endpoint, str):
+        raise TypeError(
+            f"{charm}.{tracing_endpoint_getter} should return a tempo endpoint (string); "
+            f"got {tracing_endpoint} instead."
+        )
+    else:
+        logger.debug(f"Setting up span exporter to endpoint: {tracing_endpoint}")
+    return tracing_endpoint
+
+
+def _get_server_cert(server_cert_getter, self, charm):
+    if isinstance(server_cert_getter, property):
+        server_cert = server_cert_getter.__get__(self)
+    else:  # method or callable
+        server_cert = server_cert_getter(self)
+
+    if server_cert is None:
+        logger.warning(
+            f"{charm}.{server_cert_getter} returned None; continuing with INSECURE connection."
+        )
+        return
+    elif not isinstance(server_cert, str):
+        raise TypeError(
+            f"{charm}.{server_cert_getter} should return a valid tls cert (string); "
+            f"got {server_cert} instead."
+        )
+    logger.debug(f"Certificate successfully retrieved.")  # todo: some more validation?
+    return server_cert
+
+
 def _setup_root_span_initializer(
     charm: Type[CharmBase],
-    tracing_endpoint_getter: Callable[[CharmBase], Optional[str]],
+    tracing_endpoint_getter: _GetterType,
+    server_cert_getter: Optional[_GetterType],
     service_name: Optional[str] = None,
 ):
     """Patch the charm's initializer."""
@@ -192,25 +237,19 @@ def _setup_root_span_initializer(
             }
         )
         provider = TracerProvider(resource=resource)
-
-        if isinstance(tracing_endpoint_getter, property):
-            tracing_endpoint = tracing_endpoint_getter.__get__(self)
-        else:  # method or callable
-            tracing_endpoint = tracing_endpoint_getter(self)
-
-        if tracing_endpoint is None:
-            logger.warning(
-                f"{charm}.{tracing_endpoint_getter} returned None; continuing with tracing DISABLED."
-            )
+        tracing_endpoint = _get_tracing_endpoint(tracing_endpoint_getter, self, charm)
+        if not tracing_endpoint:
             return
-        elif not isinstance(tracing_endpoint, str):
-            raise TypeError(
-                f"{charm}.{tracing_endpoint_getter} should return a tempo endpoint (string); "
-                f"got {tracing_endpoint} instead."
-            )
-        else:
-            logger.debug(f"Setting up span exporter to endpoint: {tracing_endpoint}")
-            exporter = OTLPSpanExporter(endpoint=tracing_endpoint)
+
+        server_cert: Optional[str] = (
+            _get_server_cert(server_cert_getter, self, charm) if server_cert_getter else None
+        )
+        credentials = ChannelCredentials(server_cert) if server_cert else None
+        insecure = None if credentials else True
+
+        exporter = OTLPSpanExporter(
+            endpoint=tracing_endpoint, credentials=credentials, insecure=insecure, timeout=2
+        )
 
         processor = BatchSpanProcessor(exporter)
         provider.add_span_processor(processor)
@@ -252,7 +291,7 @@ def _setup_root_span_initializer(
             opentelemetry.context.detach(span_token)  # type: ignore
             tracer.reset(_tracer_token)
             tp = cast(TracerProvider, get_tracer_provider())
-            tp.force_flush()
+            tp.force_flush(timeout_millis=1000)  # don't block for too long
             tp.shutdown()
             original_close()
 
@@ -263,9 +302,12 @@ def _setup_root_span_initializer(
 
 
 def trace_charm(
-    tracing_endpoint: str, service_name: Optional[str] = None, extra_types: Sequence[type] = ()
+    tracing_endpoint: str,
+    server_cert: Optional[str] = None,
+    service_name: Optional[str] = None,
+    extra_types: Sequence[type] = (),
 ):
-    """Decorator to autoinstrument a charm.
+    """Autoinstrument the decorated charm with tracing telemetry.
 
     Use this function to get out-of-the-box traces for all events emitted on this charm and all
     method calls on instances of this class.
@@ -288,7 +330,9 @@ def trace_charm(
     >>>     def tempo_otlp_grpc_endpoint(self) -> Optional[str]:
     >>>         return self.tempo.otlp_grpc_endpoint
     >>>
-
+    :param server_cert: method or property on the charm type that returns an
+        optional tls certificate to be used when sending traces to a remote server.
+        If it returns None, an _insecure_ connection will be used.
     :param tracing_endpoint: name of a property on the charm type that returns an
         optional tempo url. If None, tracing will be effectively disabled. Else, traces will be
         pushed to that endpoint.
@@ -299,10 +343,11 @@ def trace_charm(
     """
 
     def _decorator(charm_type: Type[CharmBase]):
-        """Decorator to autoinstrument the wrapped charmbase type."""
+        """Autoinstrument the wrapped charmbase type."""
         _autoinstrument(
             charm_type,
             tracing_endpoint_getter=getattr(charm_type, tracing_endpoint),
+            server_cert_getter=getattr(charm_type, server_cert) if server_cert else None,
             service_name=service_name,
             extra_types=extra_types,
         )
@@ -313,7 +358,8 @@ def trace_charm(
 
 def _autoinstrument(
     charm_type: Type[CharmBase],
-    tracing_endpoint_getter: Union[Callable[[CharmBase], Optional[str]], property],
+    tracing_endpoint_getter: _GetterType,
+    server_cert_getter: Optional[_GetterType] = None,
     service_name: Optional[str] = None,
     extra_types: Sequence[type] = (),
 ) -> Type[CharmBase]:
@@ -324,9 +370,9 @@ def _autoinstrument(
 
     Usage:
 
-    >>> from charms.tempo_k8s.v0.charm_instrumentation import autoinstrument
+    >>> from charms.tempo_k8s.v0.charm_instrumentation import _autoinstrument
     >>> from ops.main import main
-    >>> autoinstrument(
+    >>> _autoinstrument(
     >>>         MyCharm,
     >>>         tracing_endpoint_getter=MyCharm.tempo_otlp_grpc_endpoint,
     >>>         service_name="MyCharm",
@@ -335,6 +381,8 @@ def _autoinstrument(
     >>> main(MyCharm)
 
     :param charm_type: the CharmBase subclass to autoinstrument.
+    :param server_cert_getter: method or property on the charm type that returns an
+        optional tls certificate to be used when sending traces to a remote server.
     :param tracing_endpoint_getter: method or property on the charm type that returns an
         optional tempo url. If None, tracing will be effectively disabled. Else, traces will be
         pushed to that endpoint.
@@ -344,7 +392,12 @@ def _autoinstrument(
         For example, charm libs, relation endpoint wrappers, workload abstractions, ...
     """
     logger.info(f"instrumenting {charm_type}")
-    _setup_root_span_initializer(charm_type, tracing_endpoint_getter, service_name=service_name)
+    _setup_root_span_initializer(
+        charm_type,
+        tracing_endpoint_getter,
+        server_cert_getter=server_cert_getter,
+        service_name=service_name,
+    )
     trace_type(charm_type)
     for type_ in extra_types:
         trace_type(type_)
