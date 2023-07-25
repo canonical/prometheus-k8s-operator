@@ -6,7 +6,8 @@ version = "0.1" # not relevant
 
 [project.optional-dependencies]
 lib_pydeps = [
-  "opentelemetry-exporter-otlp-proto-grpc"
+  "opentelemetry-exporter-otlp-proto-grpc",
+  "pydantic<2"
 ]
 
 # Testing tools configuration
