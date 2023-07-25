@@ -39,7 +39,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     PrometheusConfig,
 )
 from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
-from charms.tempo_k8s.v0.tempo_scrape import TracingEndpointProvider
+from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,

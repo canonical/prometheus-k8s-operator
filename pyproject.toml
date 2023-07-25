@@ -1,5 +1,9 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
+[project.optional-dependencies]
+lib_pydeps = [
+  "opentelemetry-exporter-otlp-proto-grpc"
+]
 
 # Testing tools configuration
 [tool.coverage.run]
