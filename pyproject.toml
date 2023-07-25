@@ -1,5 +1,9 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
+[project]
+name = "prometheus-k8s"
+version = "0.1" # not relevant
+
 [project.optional-dependencies]
 lib_pydeps = [
   "opentelemetry-exporter-otlp-proto-grpc"
