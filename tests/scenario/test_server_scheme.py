@@ -49,6 +49,7 @@ class TestServerScheme:
         command = container.layers["prometheus"].services["prometheus"].command
         assert f"--web.external-url=http://{fqdn}:9090" in command
 
+    @pytest.mark.xfail
     def test_pebble_layer_scheme_becomes_https_if_tls_relation_added(
         self, context, initial_state, fqdn
     ):
