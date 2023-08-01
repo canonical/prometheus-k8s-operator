@@ -40,7 +40,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
-from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -184,7 +184,7 @@ class PrometheusCharm(CharmBase):
                 ),
             ),
         )
-        self.tracing = TracingEndpointProvider(self)
+        self.tracing = TracingEndpointRequirer(self)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -932,7 +932,7 @@ class PrometheusCharm(CharmBase):
     @property
     def tempo(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
-        return self.tracing.otlp_grpc_endpoint
+        return self.tracing.otlp_grpc_endpoint()
 
 
 if __name__ == "__main__":

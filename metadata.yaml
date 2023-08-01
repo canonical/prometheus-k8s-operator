@@ -38,9 +38,6 @@ provides:
     interface: grafana_dashboard
   receive-remote-write:
     interface: prometheus_remote_write
-  tracing:
-    interface: tracing
-    limit: 1
 
 requires:
   metrics-endpoint:
@@ -61,6 +58,9 @@ requires:
       - (client) scraping targets for self-monitoring
       - (client) posting alerts to alertmanager server
       - (server) serving data to grafana
+  tracing:
+    interface: tracing
+    limit: 1
 
 peers:
   prometheus-peers:
