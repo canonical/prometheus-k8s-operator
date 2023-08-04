@@ -13,7 +13,7 @@ object from this charm library. For the simplest use cases, using the `TracingEn
 object only requires instantiating it, typically in the constructor of your charm. The
 `TracingEndpointRequirer` constructor requires the name of the relation over which a tracing endpoint
  is exposed by the Tempo charm. This relation must use the
-`tracing` interface. 
+`tracing` interface.
  The `TracingEndpointRequirer` object may be instantiated as follows
 
     from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
@@ -27,7 +27,7 @@ object only requires instantiating it, typically in the constructor of your char
 Note that the first argument (`self`) to `TracingEndpointRequirer` is always a reference to the
 parent charm.
 
-Units of provider charms obtain the tempo endpoint to which they will push their traces by using one 
+Units of provider charms obtain the tempo endpoint to which they will push their traces by using one
 of these  `TracingEndpointRequirer` attributes, depending on which protocol they support:
 - otlp_grpc_endpoint
 - otlp_http_endpoint
@@ -83,7 +83,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["pydantic<2.0"]
 
