@@ -6,47 +6,15 @@ This document explains how to integrate with the Tempo charm for the purpose of 
 tracing endpoint provided by Tempo. It also explains how alternative implementations of the Tempo charm
 may maintain the same interface and be backward compatible with all currently integrated charms.
 
-## Provider Library Usage
-
-Charms seeking to push traces to Tempo, must do so using the `TracingEndpointProvider`
-object from this charm library. For the simplest use cases, using the `TracingEndpointProvider`
-object only requires instantiating it, typically in the constructor of your charm. The
-`TracingEndpointProvider` constructor requires the name of the relation over which a tracing endpoint
- is exposed by the Tempo charm. This relation must use the
-`tracing` interface. 
- The `TracingEndpointProvider` object may be instantiated as follows
-
-    from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
-
-    def __init__(self, *args):
-        super().__init__(*args)
-        # ...
-        self.tracing = TracingEndpointProvider(self)
-        # ...
-
-Note that the first argument (`self`) to `TracingEndpointProvider` is always a reference to the
-parent charm.
-
-Units of provider charms obtain the tempo endpoint to which they will push their traces by using one 
-of these  `TracingEndpointProvider` attributes, depending on which protocol they support:
-- otlp_grpc_endpoint
-- otlp_http_endpoint
-- zipkin_endpoint
-- tempo_endpoint
-
 ## Requirer Library Usage
 
-The `TracingEndpointRequirer` object may be used by charms to manage relations with their
-trace sources. For this purposes a Tempo-like charm needs to do two things
-
-1. Instantiate the `TracingEndpointRequirer` object by providing it a
-reference to the parent (Tempo) charm and optionally the name of the relation that the Tempo charm
-uses to interact with its trace sources. This relation must conform to the `tracing` interface
-and it is strongly recommended that this relation be named `tracing` which is its
-default value.
-
-For example a Tempo charm may instantiate the `TracingEndpointRequirer` in its constructor as
-follows
+Charms seeking to push traces to Tempo, must do so using the `TracingEndpointRequirer`
+object from this charm library. For the simplest use cases, using the `TracingEndpointRequirer`
+object only requires instantiating it, typically in the constructor of your charm. The
+`TracingEndpointRequirer` constructor requires the name of the relation over which a tracing endpoint
+ is exposed by the Tempo charm. This relation must use the
+`tracing` interface.
+ The `TracingEndpointRequirer` object may be instantiated as follows
 
     from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 
@@ -54,6 +22,38 @@ follows
         super().__init__(*args)
         # ...
         self.tracing = TracingEndpointRequirer(self)
+        # ...
+
+Note that the first argument (`self`) to `TracingEndpointRequirer` is always a reference to the
+parent charm.
+
+Units of provider charms obtain the tempo endpoint to which they will push their traces by using one
+of these  `TracingEndpointRequirer` attributes, depending on which protocol they support:
+- otlp_grpc_endpoint
+- otlp_http_endpoint
+- zipkin_endpoint
+- tempo_endpoint
+
+## Requirer Library Usage
+
+The `TracingEndpointProvider` object may be used by charms to manage relations with their
+trace sources. For this purposes a Tempo-like charm needs to do two things
+
+1. Instantiate the `TracingEndpointProvider` object by providing it a
+reference to the parent (Tempo) charm and optionally the name of the relation that the Tempo charm
+uses to interact with its trace sources. This relation must conform to the `tracing` interface
+and it is strongly recommended that this relation be named `tracing` which is its
+default value.
+
+For example a Tempo charm may instantiate the `TracingEndpointProvider` in its constructor as
+follows
+
+    from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        # ...
+        self.tracing = TracingEndpointProvider(self)
         # ...
 
 
@@ -64,7 +64,13 @@ import logging
 from typing import TYPE_CHECKING, List, Literal, MutableMapping, Optional, Tuple, cast
 
 import pydantic
-from ops.charm import CharmBase, CharmEvents, RelationEvent, RelationRole
+from ops.charm import (
+    CharmBase,
+    CharmEvents,
+    RelationBrokenEvent,
+    RelationEvent,
+    RelationRole,
+)
 from ops.framework import EventSource, Object
 from ops.model import ModelError, Relation
 from pydantic import BaseModel
@@ -77,7 +83,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 6
 
 PYDEPS = ["pydantic<2.0"]
 
@@ -86,7 +92,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_RELATION_NAME = "tracing"
 RELATION_INTERFACE_NAME = "tracing"
 
-IngesterProtocol = Literal["otlp_grpc", "otlp_http", "zipkin", "tempo"]
+IngesterProtocol = Literal[
+    "otlp_grpc", "otlp_http", "zipkin", "tempo", "jaeger_http_thrift", "jaeger_grpc"
+]
 
 RawIngester = Tuple[IngesterProtocol, int]
 
@@ -97,6 +105,10 @@ class TracingError(RuntimeError):
 
 class DataValidationError(TracingError):
     """Raised when data validation fails on IPU relation data."""
+
+
+class AmbiguousRelationUsageError(TracingError):
+    """Raised when one wrongly assumes that there can only be one relation on an endpoint."""
 
 
 # todo: use fully-encoded json fields like Traefik does. MUCH neater
@@ -133,11 +145,15 @@ class DatabagModel(BaseModel):
 
 # todo use models from charm-relation-interfaces
 class Ingester(BaseModel):  # noqa: D101
+    """Ingester data structure."""
+
     protocol: IngesterProtocol
     port: int
 
 
-class TracingRequirerAppData(DatabagModel):  # noqa: D101
+class TracingProviderAppData(DatabagModel):  # noqa: D101
+    """Application databag model for the tracing provider."""
+
     host: str
     ingesters: List[Ingester]
 
@@ -290,7 +306,7 @@ def _validate_relation_by_interface_and_direction(
         raise TypeError("Unexpected RelationDirection: {}".format(expected_relation_role))
 
 
-class TracingEndpointRequirer(Object):
+class TracingEndpointProvider(Object):
     """Class representing a trace ingester service."""
 
     def __init__(
@@ -318,7 +334,7 @@ class TracingEndpointRequirer(Object):
                 role.
         """
         _validate_relation_by_interface_and_direction(
-            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.requires
+            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
         )
 
         super().__init__(charm, relation_name)
@@ -336,7 +352,7 @@ class TracingEndpointRequirer(Object):
         try:
             if self._charm.unit.is_leader():
                 for relation in self._charm.model.relations[self._relation_name]:
-                    TracingRequirerAppData(
+                    TracingProviderAppData(
                         host=self._host,
                         ingesters=[
                             Ingester(port=port, protocol=protocol)
@@ -359,6 +375,10 @@ class TracingEndpointRequirer(Object):
             raise
 
 
+class EndpointRemovedEvent(RelationBrokenEvent):
+    """Event representing a change in one of the ingester endpoints."""
+
+
 class EndpointChangedEvent(_AutoSnapshotEvent):
     """Event representing a change in one of the ingester endpoints."""
 
@@ -375,12 +395,13 @@ class EndpointChangedEvent(_AutoSnapshotEvent):
 
 
 class TracingEndpointEvents(CharmEvents):
-    """TracingEndpointProvider events."""
+    """TracingEndpointRequirer events."""
 
     endpoint_changed = EventSource(EndpointChangedEvent)
+    endpoint_removed = EventSource(EndpointRemovedEvent)
 
 
-class TracingEndpointProvider(Object):
+class TracingEndpointRequirer(Object):
     """A tracing endpoint for Tempo."""
 
     on = TracingEndpointEvents()  # type: ignore
@@ -390,15 +411,15 @@ class TracingEndpointProvider(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_RELATION_NAME,
     ):
-        """Construct a tracing provider for a Tempo charm.
+        """Construct a tracing requirer for a Tempo charm.
 
-        If your charm exposes a Tempo tracing endpoint, the `TracingEndpointProvider` object
-        enables your charm to easily communicate how to reach that endpoint.
-
+        If your application supports pushing traces to a distributed tracing backend, the
+        `TracingEndpointRequirer` object enables your charm to easily access endpoint information
+        exchanged over a `tracing` relation interface.
 
         Args:
             charm: a `CharmBase` object that manages this
-                `TracingEndpointProvider` object. Typically, this is `self` in the instantiating
+                `TracingEndpointRequirer` object. Typically, this is `self` in the instantiating
                 class.
             relation_name: an optional string name of the relation between `charm`
                 and the Tempo charmed service. The default is "tracing". It is strongly
@@ -416,48 +437,83 @@ class TracingEndpointProvider(Object):
                 role.
         """
         _validate_relation_by_interface_and_direction(
-            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
+            charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.requires
         )
 
         super().__init__(charm, relation_name)
+
+        self._is_single_endpoint = charm.meta.relations[relation_name].limit == 1
+
         self._charm = charm
         self._relation_name = relation_name
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_changed, self._on_tracing_relation_changed)
+        self.framework.observe(events.relation_broken, self._on_tracing_relation_broken)
 
-    def _is_ready(self, relation: Optional[Relation]):
+    @property
+    def relations(self) -> List[Relation]:
+        """The tracing relations associated with this endpoint."""
+        return self._charm.model.relations[self._relation_name]
+
+    @property
+    def _relation(self) -> Relation:
+        """If this wraps a single endpoint, the relation bound to it, if any."""
+        if not self._is_single_endpoint:
+            objname = type(self).__name__
+            raise AmbiguousRelationUsageError(
+                f"This {objname} wraps a {self._relation_name} endpoint that has "
+                "limit != 1. We can't determine what relation, of the possibly many, you are "
+                f"talking about. Please pass a relation instance while calling {objname}, "
+                "or set limit=1 in the charm metadata."
+            )
+        relations = self.relations
+        return relations[0] if relations else None
+
+    def is_ready(self, relation: Optional[Relation] = None):
+        """Is this endpoint ready?"""
+        relation = relation or self._relation
         if not relation:
-            logger.error("no relation")
+            logger.error(f"no relation on {self._relation_name}: tracing not ready")
             return False
         if relation.data is None:
-            logger.error("relation data is None")
+            logger.error(f"relation data is None for {relation}")
             return False
         if not relation.app:
             logger.error(f"{relation} event received but there is no relation.app")
+            return False
+        try:
+            TracingProviderAppData.load(relation.data[relation.app])
+        except (json.JSONDecodeError, pydantic.ValidationError):
+            logger.info(f"failed validating relation data for {relation}")
             return False
         return True
 
     def _on_tracing_relation_changed(self, event):
         """Notify the providers that there is new endpoint information available."""
         relation = event.relation
-        if not self._is_ready(relation):
+        if not self.is_ready(relation):
+            self.on.endpoint_removed.emit(relation)  # type: ignore
             return
 
-        data = TracingRequirerAppData.load(relation.data[relation.app])
-        if data:
-            self.on.endpoint_changed.emit(relation, data.host, [i.dict() for i in data.ingesters])  # type: ignore
+        data = TracingProviderAppData.load(relation.data[relation.app])
+        self.on.endpoint_changed.emit(relation, data.host, [i.dict() for i in data.ingesters])  # type: ignore
 
-    @property
-    def endpoints(self) -> Optional[TracingRequirerAppData]:
+    def _on_tracing_relation_broken(self, event: RelationBrokenEvent):
+        """Notify the providers that the endpoint is broken."""
+        relation = event.relation
+        self.on.endpoint_removed.emit(relation)
+
+    def get_all_endpoints(
+        self, relation: Optional[Relation] = None
+    ) -> Optional[TracingProviderAppData]:
         """Unmarshalled relation data."""
-        relation = self._charm.model.get_relation(self._relation_name)
-        if not self._is_ready(relation):
+        if not self.is_ready(relation or self._relation):
             return
-        return TracingRequirerAppData.load(relation.data[relation.app])  # type: ignore
+        return TracingProviderAppData.load(relation.data[relation.app])  # type: ignore
 
-    def _get_ingester(self, protocol: IngesterProtocol):
-        ep = self.endpoints
+    def _get_ingester(self, relation: Relation, protocol: IngesterProtocol):
+        ep = self.get_all_endpoints(relation)
         if not ep:
             return None
         try:
@@ -467,22 +523,28 @@ class TracingEndpointProvider(Object):
             logger.error(f"no ingester found with protocol={protocol!r}")
             return None
 
-    @property
-    def otlp_grpc_endpoint(self) -> Optional[str]:
+    def otlp_grpc_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``otlp_grpc`` protocol."""
-        return self._get_ingester("otlp_grpc")
+        return self._get_ingester(relation or self._relation, protocol="otlp_grpc")
 
-    @property
-    def otlp_http_endpoint(self) -> Optional[str]:
+    def otlp_http_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``otlp_http`` protocol."""
-        return self._get_ingester("otlp_http")
+        return self._get_ingester(relation or self._relation, protocol="otlp_http")
 
-    @property
-    def zipkin_endpoint(self) -> Optional[str]:
+    def zipkin_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``zipkin`` protocol."""
-        return self._get_ingester("zipkin")
+        return self._get_ingester(relation or self._relation, protocol="zipkin")
+
+    def tempo_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
+        """Ingester endpoint for the ``tempo`` protocol."""
+        return self._get_ingester(relation or self._relation, protocol="tempo")
 
     @property
-    def tempo_endpoint(self) -> Optional[str]:
-        """Ingester endpoint for the ``tempo`` protocol."""
-        return self._get_ingester("tempo")
+    def jaeger_http_thrift_endpoint(self) -> Optional[str]:
+        """Ingester endpoint for the ``jaeger_http_thrift`` protocol."""
+        return self._get_ingester("jaeger_http_thrift")
+
+    @property
+    def jaeger_grpc_endpoint(self) -> Optional[str]:
+        """Ingester endpoint for the ``jaeger_grpc`` protocol."""
+        return self._get_ingester("jaeger_grpc")

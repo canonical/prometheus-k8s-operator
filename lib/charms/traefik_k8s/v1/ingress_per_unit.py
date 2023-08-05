@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 13
 
 log = logging.getLogger(__name__)
 
@@ -184,8 +184,8 @@ def _validate_data(data, schema):
     if not DO_VALIDATION:
         return
     try:
-        jsonschema.validate(instance=data, schema=schema)
-    except jsonschema.ValidationError as e:
+        jsonschema.validate(instance=data, schema=schema)  # pyright: ignore[reportUnboundVariable]
+    except jsonschema.ValidationError as e:  # pyright: ignore[reportUnboundVariable]
         raise DataValidationError(data, schema) from e
 
 

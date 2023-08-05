@@ -40,13 +40,13 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
-from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from lightkube import Client
+from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
 from ops.charm import ActionEvent, CharmBase
@@ -184,7 +184,7 @@ class PrometheusCharm(CharmBase):
                 ),
             ),
         )
-        self.tracing = TracingEndpointProvider(self)
+        self.tracing = TracingEndpointRequirer(self)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -356,7 +356,7 @@ class PrometheusCharm(CharmBase):
             },
         }
 
-        return Layer(layer_config)
+        return Layer(layer_config)  # pyright: ignore
 
     def _resource_reqs_from_config(self):
         limits = {
@@ -375,7 +375,7 @@ class PrometheusCharm(CharmBase):
         self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
-        self.unit.status = BlockedStatus(event.message)
+        self.unit.status = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
         for path in [KEY_PATH, CERT_PATH, CA_CERT_PATH]:
@@ -684,7 +684,7 @@ class PrometheusCharm(CharmBase):
         ), "The 'database' storage is no longer in metadata: must update literals in charm code."
 
         # Get PVC capacity from kubernetes
-        client = Client()
+        client = Client()  # pyright: ignore
         pod_name = self.unit.name.replace("/", "-", -1)
 
         # Take the first volume whose name starts with "<app-name>-database-".
@@ -920,7 +920,7 @@ class PrometheusCharm(CharmBase):
             File contents if exists; None otherwise.
         """
         try:
-            return self.container.pull(path, encoding="utf-8").read()
+            return cast(str, self.container.pull(path, encoding="utf-8").read())
         except (FileNotFoundError, PebbleError):
             # Drop FileNotFoundError https://github.com/canonical/operator/issues/896
             return None
@@ -932,7 +932,7 @@ class PrometheusCharm(CharmBase):
     @property
     def tempo(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
-        return self.tracing.otlp_grpc_endpoint
+        return self.tracing.otlp_grpc_endpoint()
 
 
 if __name__ == "__main__":

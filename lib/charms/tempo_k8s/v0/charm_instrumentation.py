@@ -67,14 +67,15 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Span, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import INVALID_SPAN, Tracer
-from opentelemetry.trace import get_current_span as otlp_get_current_span
 from opentelemetry.trace import (
+    INVALID_SPAN,
+    Tracer,
     get_tracer,
     get_tracer_provider,
     set_span_in_context,
     set_tracer_provider,
 )
+from opentelemetry.trace import get_current_span as otlp_get_current_span
 from ops.charm import CharmBase
 from ops.framework import Framework
 
@@ -195,7 +196,7 @@ def _get_server_cert(server_cert_getter, self, charm):
             f"{charm}.{server_cert_getter} should return a valid tls cert (string); "
             f"got {server_cert} instead."
         )
-    logger.debug(f"Certificate successfully retrieved.")  # todo: some more validation?
+    logger.debug("Certificate successfully retrieved.")  # todo: some more validation?
     return server_cert
 
 
