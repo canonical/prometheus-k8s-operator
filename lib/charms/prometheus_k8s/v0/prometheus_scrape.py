@@ -343,9 +343,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import urlopen
 
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
@@ -370,7 +368,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 38
+LIBPATCH = 39
 
 logger = logging.getLogger(__name__)
 
@@ -2266,16 +2264,7 @@ class MetricsEndpointAggregator(Object):
                 logger.debug("Could not perform DNS lookup for %s", target["hostname"])
                 dns_name = target["hostname"]
             extra_info["dns_name"] = dns_name
-        label_re = re.compile(r'(?P<label>juju.*?)="(?P<value>.*?)",?')
 
-        try:
-            with urlopen(f'http://{target["hostname"]}:{target["port"]}/metrics') as resp:
-                data = resp.read().decode("utf-8").splitlines()
-                for metric in data:
-                    for match in label_re.finditer(metric):
-                        extra_info[match.group("label")] = match.group("value")
-        except (HTTPError, URLError, OSError, ConnectionResetError, Exception) as e:
-            logger.debug("Could not scrape target: %s", e)
         return extra_info
 
     @property
