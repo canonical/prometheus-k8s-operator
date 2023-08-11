@@ -2264,7 +2264,6 @@ class MetricsEndpointAggregator(Object):
                 logger.debug("Could not perform DNS lookup for %s", target["hostname"])
                 dns_name = target["hostname"]
             extra_info["dns_name"] = dns_name
-        re.compile(r'(?P<label>juju.*?)="(?P<value>.*?)",?')
 
         return extra_info
 
