@@ -18,7 +18,6 @@ ops.testing.SIMULATE_CAN_CONNECT = True
 logger = logging.getLogger(__name__)
 
 
-@patch("charm.KubernetesServicePatch", lambda x, y: None)
 @prom_multipatch
 class TestActiveStatus(unittest.TestCase):
     """Feature: Charm's status should reflect the correctness of the config / relations.

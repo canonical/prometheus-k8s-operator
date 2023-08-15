@@ -30,7 +30,6 @@ SCRAPE_METADATA = {
 
 @prom_multipatch
 class TestCharm(unittest.TestCase):
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @prom_multipatch
@@ -268,7 +267,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.mock_capacity = patcher.start()
         self.addCleanup(patcher.stop)
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
@@ -289,7 +287,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
@@ -378,7 +375,6 @@ class TestAlertsFilename(unittest.TestCase):
         ]
     }
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -398,7 +394,6 @@ class TestAlertsFilename(unittest.TestCase):
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
         self.harness.add_relation_unit(self.rel_id, "remote-app/0")
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -421,7 +416,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -445,7 +439,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -468,7 +461,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_remote-model_be44e4b8_remote-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -500,7 +492,6 @@ def raise_if_called(*_, **__):
 class TestPebblePlan(unittest.TestCase):
     """Test the pebble plan is kept up-to-date (situational awareness)."""
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -600,7 +591,6 @@ class TestPebblePlan(unittest.TestCase):
 
 @prom_multipatch
 class TestTlsConfig(unittest.TestCase):
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @prom_multipatch

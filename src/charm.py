@@ -24,10 +24,6 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
 )
-from charms.observability_libs.v1.kubernetes_service_patch import (
-    KubernetesServicePatch,
-    ServicePort,
-)
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
@@ -56,6 +52,7 @@ from ops.model import (
     BlockedStatus,
     MaintenanceStatus,
     ModelError,
+    OpenedPort,
     WaitingStatus,
 )
 from ops.pebble import Error as PebbleError
@@ -103,10 +100,7 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
         self.container = self.unit.get_container(self._name)
 
-        self.service_patch = KubernetesServicePatch(
-            self,
-            [ServicePort(self._port, name=f"{self.app.name}")],
-        )
+        self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
@@ -201,6 +195,22 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+
+    def set_ports(self):
+        """Open necessary (and close no longer needed) workload ports."""
+        planned_ports = {
+            OpenedPort("tcp", self._port),
+        }
+        actual_ports = self.unit.opened_ports()
+
+        # Ports may change across an upgrade, so need to sync
+        ports_to_close = actual_ports.difference(planned_ports)
+        for p in ports_to_close:
+            self.unit.close_port(p.protocol, p.port)
+
+        new_ports_to_open = planned_ports.difference(actual_ports)
+        for p in new_ports_to_open:
+            self.unit.open_port(p.protocol, p.port)
 
     @property
     def metrics_path(self):
