@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 32
+LIBPATCH = 33
 
 logger = logging.getLogger(__name__)
 
@@ -665,14 +665,14 @@ def _template_panels(
             continue
         if not existing_templates:
             datasource = panel.get("datasource")
-            if type(datasource) == str:
+            if isinstance(datasource, str):
                 if "loki" in datasource:
                     panel["datasource"] = "${lokids}"
                 elif "grafana" in datasource:
                     continue
                 else:
                     panel["datasource"] = "${prometheusds}"
-            elif type(datasource) == dict:
+            elif isinstance(datasource, dict):
                 # In dashboards exported by Grafana 9, datasource type is dict
                 dstype = datasource.get("type", "")
                 if dstype == "loki":
@@ -686,7 +686,7 @@ def _template_panels(
                 logger.error("Unknown datasource format: skipping")
                 continue
         else:
-            if type(panel["datasource"]) == str:
+            if isinstance(panel["datasource"], str):
                 if panel["datasource"].lower() in replacements.values():
                     # Already a known template variable
                     continue
@@ -701,7 +701,7 @@ def _template_panels(
                 if replacement:
                     used_replacements.append(ds)
                 panel["datasource"] = replacement or panel["datasource"]
-            elif type(panel["datasource"]) == dict:
+            elif isinstance(panel["datasource"], dict):
                 dstype = panel["datasource"].get("type", "")
                 if panel["datasource"].get("uid", "").lower() in replacements.values():
                     # Already a known template variable
@@ -831,7 +831,7 @@ def _modify_panel(panel: dict, topology: dict, transformer: "CosTool") -> dict:
         if "datasource" not in panel.keys():
             continue
 
-        if type(panel["datasource"]) == str:
+        if isinstance(panel["datasource"], str):
             if panel["datasource"] not in known_datasources:
                 continue
             querytype = known_datasources[panel["datasource"]]
