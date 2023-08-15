@@ -10,6 +10,8 @@ options:
     default: info
   web_external_url:
     description: |
+      DEPRECATED. This config option is no longer used, in favor of "skipPrefix".
+
       The URL under which Prometheus is externally reachable (for example,
       if Prometheus is served via a reverse proxy).
       Used for generating relative and absolute links back to

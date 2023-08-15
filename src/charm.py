@@ -9,7 +9,7 @@ import logging
 import re
 import socket
 from pathlib import Path
-from typing import Dict, List, Optional, cast
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -118,10 +118,12 @@ class PrometheusCharm(CharmBase):
             charm=self,
             key="prometheus-server-cert",
             peer_relation_name="prometheus-peers",
-            extra_sans_dns=self.sans(),
+            extra_sans_dns=[socket.getfqdn()],
         )
 
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+        self.ingress = IngressPerUnitRequirer(
+            self, relation_name="ingress", port=self._port, strip_prefix=True, redirect_https=True
+        )
 
         self._topology = JujuTopology.from_charm(self)
 
@@ -171,7 +173,7 @@ class PrometheusCharm(CharmBase):
                 self.on.leader_elected,
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
-                self.on.config_changed,  # web_external_url; also covers upgrade-charm
+                self.on.config_changed,  # also covers upgrade-charm
                 self.cert_handler.on.cert_changed,
             ],
             item=CatalogueItem(
@@ -311,26 +313,11 @@ class PrometheusCharm(CharmBase):
         routable from the outside, e.g., when deploying on MicroK8s on Linux.
         """
         try:
-            if web_external_url := self.model.config.get("web_external_url"):
-                return web_external_url
             if ingress_url := self.ingress.url:
                 return ingress_url
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
         return f"{'https' if self._is_tls_enabled() else 'http'}://{socket.getfqdn()}:{self._port}"
-
-    def sans(self) -> List[str]:
-        """Return the list of SANs to be listed in a CSR.
-
-        Can't use `self.external_url` because of the circular dependency, but we also don't need
-        it, because we don't need to have the ingress URL in the SANs, only "our" hostnames.
-        """
-        sans = [socket.getfqdn()]
-        if web_external_url := self.model.config.get("web_external_url"):
-            # Make sure the config option is set to a valid URL (e.g. rather than a plain hostname)
-            if hostname := urlparse(web_external_url).hostname:
-                sans.append(hostname)
-        return sans
 
     def _is_tls_enabled(self):
         return bool(self.cert_handler.cert)
