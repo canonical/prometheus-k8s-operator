@@ -789,7 +789,7 @@ class PrometheusCharm(CharmBase):
 
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
-        if self._is_tls_enabled():
+        if self._is_tls_enabled() and self.container.exists(CERT_PATH):
             return {
                 "tls_server_config": {
                     "cert_file": CERT_PATH,
