@@ -794,15 +794,15 @@ class PrometheusCharm(CharmBase):
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
         if self._is_tls_enabled():
-            if self.container.exists(CERT_PATH):
+            if not self.container.exists(CERT_PATH):
+                self.stop()
+            else:
                 return {
                     "tls_server_config": {
                         "cert_file": CERT_PATH,
                         "key_file": KEY_PATH,
                     }
                 }
-            else:
-                self.stop()
         return None
 
     def _alerting_config(self) -> dict:
