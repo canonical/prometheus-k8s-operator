@@ -339,7 +339,7 @@ class PrometheusCharm(CharmBase):
         return self.internal_url
 
     def _is_tls_enabled(self):
-        return bool(self.cert_handler.cert)
+        return self.cert_handler.enabled
 
     @property
     def _prometheus_layer(self) -> Layer:
@@ -363,6 +363,10 @@ class PrometheusCharm(CharmBase):
         }
 
         return Layer(layer_config)  # pyright: ignore
+
+    def stop(self) -> None:
+        """Stop Prometheus."""
+        self.container.stop("prometheus")
 
     def _resource_reqs_from_config(self):
         limits = {
@@ -789,13 +793,16 @@ class PrometheusCharm(CharmBase):
 
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
-        if self._is_tls_enabled() and self.container.exists(CERT_PATH):
-            return {
-                "tls_server_config": {
-                    "cert_file": CERT_PATH,
-                    "key_file": KEY_PATH,
+        if self._is_tls_enabled():
+            if self.container.exists(CERT_PATH):
+                return {
+                    "tls_server_config": {
+                        "cert_file": CERT_PATH,
+                        "key_file": KEY_PATH,
+                    }
                 }
-            }
+            else:
+                self.stop()
         return None
 
     def _alerting_config(self) -> dict:
