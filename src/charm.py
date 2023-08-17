@@ -116,7 +116,11 @@ class PrometheusCharm(CharmBase):
         )
 
         self.ingress = IngressPerUnitRequirer(
-            self, relation_name="ingress", port=self._port, strip_prefix=True, redirect_https=True
+            self,
+            relation_name="ingress",
+            port=self._port,
+            strip_prefix=True,
+            redirect_https=True,
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -142,9 +146,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(
-            f"{external_url.scheme}://localhost:9090/{external_url.path.strip('/')}"
-        )
+        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
@@ -312,6 +314,12 @@ class PrometheusCharm(CharmBase):
         return config
 
     @property
+    def internal_url(self) -> str:
+        """Returns workload's FQDN. Used for ingress."""
+        scheme = "https" if self._is_tls_enabled() else "http"
+        return f"{scheme}://{socket.getfqdn()}:{self._port}"
+
+    @property
     def external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation.
 
@@ -327,7 +335,7 @@ class PrometheusCharm(CharmBase):
                 return ingress_url
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
-        return f"{'https' if self._is_tls_enabled() else 'http'}://{socket.getfqdn()}:{self._port}"
+        return self.internal_url
 
     def _is_tls_enabled(self):
         return bool(self.cert_handler.cert)
@@ -599,8 +607,7 @@ class PrometheusCharm(CharmBase):
         if self._web_config():
             args.append(f"--web.config.file={WEB_CONFIG_PATH}")
 
-        external_url = self.external_url
-        args.append(f"--web.external-url={external_url}")
+        args.append(f"--web.external-url={self.internal_url}")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--web.enable-remote-write-receiver")
