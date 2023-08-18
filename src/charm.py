@@ -121,6 +121,7 @@ class PrometheusCharm(CharmBase):
             port=self._port,
             strip_prefix=True,
             redirect_https=True,
+            scheme=lambda: "https" if self._is_tls_enabled() else "http",
         )
 
         self._topology = JujuTopology.from_charm(self)
