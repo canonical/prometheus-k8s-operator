@@ -14,16 +14,12 @@ def tautology(*_, **__) -> bool:
 
 @pytest.fixture
 def prometheus_charm():
-    with patch("charm.KubernetesServicePatch"), patch(
-        "lightkube.core.client.GenericSyncClient"
-    ), patch.multiple(
+    with patch("lightkube.core.client.GenericSyncClient"), patch.multiple(
         "charm.KubernetesComputeResourcesPatch",
         _namespace="test-namespace",
         _patch=tautology,
         is_ready=tautology,
-    ), patch(
-        "prometheus_client.Prometheus.reload_configuration"
-    ), patch.multiple(
+    ), patch("prometheus_client.Prometheus.reload_configuration"), patch.multiple(
         "charm.PrometheusCharm",
         _promtool_check_config=lambda *_: ("stdout", ""),
         _prometheus_version="0.1.0",

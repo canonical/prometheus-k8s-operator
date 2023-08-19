@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 0
-LIBPATCH = 5
+LIBPATCH = 7
 
 
 class CertChanged(EventBase):
@@ -101,16 +101,17 @@ class CertHandler(Object):
             peer_relation_name: Must match metadata.yaml.
             certificates_relation_name: Must match metadata.yaml.
             cert_subject: Custom subject. Name collisions are under the caller's responsibility.
-            extra_sans_dns: Any additional DNS names apart from FQDN.
+            extra_sans_dns: DNS names. If none are given, use FQDN.
         """
         super().__init__(charm, key)
 
         self.charm = charm
-        self.cert_subject = cert_subject or charm.unit.name
-        self.cert_subject = charm.unit.name if not cert_subject else cert_subject
+        # We need to sanitize the unit name, otherwise route53 complains:
+        # "urn:ietf:params:acme:error:malformed" :: Domain name contains an invalid character
+        self.cert_subject = charm.unit.name.replace("/", "-") if not cert_subject else cert_subject
 
-        # Auto-include the fqdn and drop empty/duplicate sans
-        self.sans_dns = list(set(filter(None, (extra_sans_dns or []) + [socket.getfqdn()])))
+        # Use fqdn only if no SANs were given, and drop empty/duplicate SANs
+        self.sans_dns = list(set(filter(None, (extra_sans_dns or [socket.getfqdn()]))))
 
         self.peer_relation_name = peer_relation_name
         self.certificates_relation_name = certificates_relation_name

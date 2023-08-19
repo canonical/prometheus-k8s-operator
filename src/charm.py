@@ -9,7 +9,7 @@ import logging
 import re
 import socket
 from pathlib import Path
-from typing import Dict, List, Optional, cast
+from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -23,10 +23,6 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
-)
-from charms.observability_libs.v1.kubernetes_service_patch import (
-    KubernetesServicePatch,
-    ServicePort,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
@@ -56,6 +52,7 @@ from ops.model import (
     BlockedStatus,
     MaintenanceStatus,
     ModelError,
+    OpenedPort,
     WaitingStatus,
 )
 from ops.pebble import Error as PebbleError
@@ -103,10 +100,7 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
         self.container = self.unit.get_container(self._name)
 
-        self.service_patch = KubernetesServicePatch(
-            self,
-            [ServicePort(self._port, name=f"{self.app.name}")],
-        )
+        self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
@@ -118,10 +112,17 @@ class PrometheusCharm(CharmBase):
             charm=self,
             key="prometheus-server-cert",
             peer_relation_name="prometheus-peers",
-            extra_sans_dns=self.sans(),
+            extra_sans_dns=[socket.getfqdn()],
         )
 
-        self.ingress = IngressPerUnitRequirer(self, relation_name="ingress", port=self._port)
+        self.ingress = IngressPerUnitRequirer(
+            self,
+            relation_name="ingress",
+            port=self._port,
+            strip_prefix=True,
+            redirect_https=True,
+            scheme=lambda: "https" if self._is_tls_enabled() else "http",
+        )
 
         self._topology = JujuTopology.from_charm(self)
 
@@ -146,9 +147,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(
-            f"{external_url.scheme}://localhost:9090/{external_url.path.strip('/')}"
-        )
+        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
@@ -171,7 +170,7 @@ class PrometheusCharm(CharmBase):
                 self.on.leader_elected,
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
-                self.on.config_changed,  # web_external_url; also covers upgrade-charm
+                self.on.config_changed,  # also covers upgrade-charm
                 self.cert_handler.on.cert_changed,
             ],
             item=CatalogueItem(
@@ -199,6 +198,22 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+
+    def set_ports(self):
+        """Open necessary (and close no longer needed) workload ports."""
+        planned_ports = {
+            OpenedPort("tcp", self._port),
+        }
+        actual_ports = self.unit.opened_ports()
+
+        # Ports may change across an upgrade, so need to sync
+        ports_to_close = actual_ports.difference(planned_ports)
+        for p in ports_to_close:
+            self.unit.close_port(p.protocol, p.port)
+
+        new_ports_to_open = planned_ports.difference(actual_ports)
+        for p in new_ports_to_open:
+            self.unit.open_port(p.protocol, p.port)
 
     @property
     def metrics_path(self):
@@ -300,6 +315,12 @@ class PrometheusCharm(CharmBase):
         return config
 
     @property
+    def internal_url(self) -> str:
+        """Returns workload's FQDN. Used for ingress."""
+        scheme = "https" if self._is_tls_enabled() else "http"
+        return f"{scheme}://{socket.getfqdn()}:{self._port}"
+
+    @property
     def external_url(self) -> str:
         """Return the external hostname to be passed to ingress via the relation.
 
@@ -311,26 +332,11 @@ class PrometheusCharm(CharmBase):
         routable from the outside, e.g., when deploying on MicroK8s on Linux.
         """
         try:
-            if web_external_url := self.model.config.get("web_external_url"):
-                return web_external_url
             if ingress_url := self.ingress.url:
                 return ingress_url
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
-        return f"{'https' if self._is_tls_enabled() else 'http'}://{socket.getfqdn()}:{self._port}"
-
-    def sans(self) -> List[str]:
-        """Return the list of SANs to be listed in a CSR.
-
-        Can't use `self.external_url` because of the circular dependency, but we also don't need
-        it, because we don't need to have the ingress URL in the SANs, only "our" hostnames.
-        """
-        sans = [socket.getfqdn()]
-        if web_external_url := self.model.config.get("web_external_url"):
-            # Make sure the config option is set to a valid URL (e.g. rather than a plain hostname)
-            if hostname := urlparse(web_external_url).hostname:
-                sans.append(hostname)
-        return sans
+        return self.internal_url
 
     def _is_tls_enabled(self):
         return bool(self.cert_handler.cert)
@@ -602,8 +608,7 @@ class PrometheusCharm(CharmBase):
         if self._web_config():
             args.append(f"--web.config.file={WEB_CONFIG_PATH}")
 
-        external_url = self.external_url
-        args.append(f"--web.external-url={external_url}")
+        args.append(f"--web.external-url={self.internal_url}")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--web.enable-remote-write-receiver")

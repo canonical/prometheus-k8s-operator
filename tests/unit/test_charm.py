@@ -30,7 +30,6 @@ SCRAPE_METADATA = {
 
 @prom_multipatch
 class TestCharm(unittest.TestCase):
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @prom_multipatch
@@ -54,21 +53,6 @@ class TestCharm(unittest.TestCase):
             "grafana_source_host"
         ]
         self.assertEqual(grafana_host, "http://{}:{}".format(fqdn, "9090"))
-
-    @k8s_resource_multipatch
-    @patch("lightkube.core.client.GenericSyncClient")
-    def test_web_external_url_is_passed_to_grafana(self, *unused):
-        self.harness.set_leader(True)
-        self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
-
-        grafana_rel_id = self.harness.add_relation("grafana-source", "grafana")
-        self.harness.add_relation_unit(grafana_rel_id, "grafana/0")
-
-        grafana_host = self.harness.get_relation_data(
-            grafana_rel_id, self.harness.model.unit.name
-        )["grafana_source_host"]
-
-        self.assertEqual(grafana_host, "http://test:80/foo/bar")
 
     def test_default_cli_log_level_is_info(self):
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -118,26 +102,14 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    def test_web_external_url_has_precedence_over_ingress_relation(self, *unused):
+    def test_web_external_has_no_effect(self, *unused):
         self.harness.set_leader(True)
 
-        self.harness.update_config({"web_external_url": "http://test:80"})
-
-        rel_id = self.harness.add_relation("ingress", "traefik-ingress")
-        self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
+        self.harness.update_config({"web_external_url": "http://test:80/sub/path"})
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
-
-    @k8s_resource_multipatch
-    @patch("lightkube.core.client.GenericSyncClient")
-    def test_web_external_url_set(self, *unused):
-        self.harness.set_leader(True)
-
-        self.harness.update_config({"web_external_url": "http://test:80"})
-
-        plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
+        fqdn = socket.getfqdn()
+        self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
     def test_metrics_wal_compression_is_not_enabled_by_default(self):
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -295,7 +267,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.mock_capacity = patcher.start()
         self.addCleanup(patcher.stop)
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
@@ -316,7 +287,6 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
@@ -405,7 +375,6 @@ class TestAlertsFilename(unittest.TestCase):
         ]
     }
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -425,7 +394,6 @@ class TestAlertsFilename(unittest.TestCase):
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
         self.harness.add_relation_unit(self.rel_id, "remote-app/0")
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -448,7 +416,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -472,7 +439,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -495,7 +461,6 @@ class TestAlertsFilename(unittest.TestCase):
             {"/etc/prometheus/rules/juju_remote-model_be44e4b8_remote-app.rules"},
         )
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -527,7 +492,6 @@ def raise_if_called(*_, **__):
 class TestPebblePlan(unittest.TestCase):
     """Test the pebble plan is kept up-to-date (situational awareness)."""
 
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -594,75 +558,6 @@ class TestPebblePlan(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @patch("socket.getfqdn", new=lambda *args: "fqdn")
-    @patch("ops.testing._TestingPebbleClient.replan_services")
-    @patch("ops.testing._TestingPebbleClient.start_services")
-    @patch("ops.testing._TestingPebbleClient.restart_services")
-    @patch("prometheus_client.Prometheus.reload_configuration")
-    def test_workload_restarts_when_some_config_options_change(
-        self, reload_config, restart, start, replan, *_
-    ):
-        """Some config options go in as cli args and require workload restart."""
-        # GIVEN a pebble plan
-        first_plan = self.plan
-        self.assertTrue(self.service.is_running())
-
-        # WHEN web_external_url is set
-        self.harness.update_config({"web_external_url": "http://test:80/foo/bar"})
-
-        # THEN pebble service is updated
-        second_plan = self.plan
-        self.assertEqual(cli_arg(second_plan, "--web.external-url"), "http://test:80/foo/bar")
-        self.assertNotEqual(first_plan.to_dict(), second_plan.to_dict())
-
-        # AND workload is restarted
-        self.assertTrue(self.service.is_running())
-        self.assertTrue(restart.called or start.called or replan.called)
-        restart.reset_mock()
-        start.reset_mock()
-        replan.reset_mock()
-
-        # BUT reload is not invoked
-        reload_config.assert_not_called()
-
-        # WHEN web_external_url is changed
-        self.harness.update_config({"web_external_url": "http://test:80/foo/bar/baz"})
-
-        # THEN pebble service is updated
-        third_plan = self.plan
-        self.assertEqual(cli_arg(third_plan, "--web.external-url"), "http://test:80/foo/bar/baz")
-        self.assertNotEqual(second_plan.to_dict(), third_plan.to_dict())
-
-        # AND workload is restarted
-        self.assertTrue(self.service.is_running())
-        self.assertTrue(restart.called or start.called or replan.called)
-        restart.reset_mock()
-        start.reset_mock()
-        replan.reset_mock()
-
-        # BUT reload is not invoked
-        reload_config.assert_not_called()
-
-        # WHEN web_external_url is unset
-        self.harness.update_config(unset=["web_external_url"])
-
-        # THEN pebble service is updated
-        fourth_plan = self.plan
-        self.assertEqual(cli_arg(fourth_plan, "--web.external-url"), "http://fqdn:9090")
-        self.assertNotEqual(third_plan.to_dict(), fourth_plan.to_dict())
-
-        # AND workload is restarted
-        self.assertTrue(self.service.is_running())
-        self.assertTrue(restart.called or start.called or replan.called)
-        restart.reset_mock()
-        start.reset_mock()
-        replan.reset_mock()
-
-        # BUT reload is not invoked
-        reload_config.assert_not_called()
-
-    @k8s_resource_multipatch
-    @patch("lightkube.core.client.GenericSyncClient")
     @patch.multiple(
         "ops.testing._TestingPebbleClient",
         autostart_services=raise_if_called,
@@ -696,7 +591,6 @@ class TestPebblePlan(unittest.TestCase):
 
 @prom_multipatch
 class TestTlsConfig(unittest.TestCase):
-    @patch("charm.KubernetesServicePatch", lambda x, y: None)
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @prom_multipatch
