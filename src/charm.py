@@ -795,6 +795,8 @@ class PrometheusCharm(CharmBase):
         """
         if self._is_tls_enabled():
             if not self.container.exists(CERT_PATH):
+                # After a `stop`, the service will autostart on next call to `_configure`, which is
+                # expected to happen as soon as the the related CA replies with a cert.
                 self.stop()
             else:
                 return {
