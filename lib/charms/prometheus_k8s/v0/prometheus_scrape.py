@@ -371,6 +371,8 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 40
 
+PYDEPS = ["cosl"]
+
 logger = logging.getLogger(__name__)
 
 
