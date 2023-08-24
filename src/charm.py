@@ -411,6 +411,9 @@ class PrometheusCharm(CharmBase):
 
         self.grafana_source_provider.update_source(self.external_url)
         self._configure(_)
+        if isinstance(self.unit.status, WaitingStatus) and self.unit.status.message == "Waiting for TLS certificates to be written to file":
+            self.unit.status = ActiveStatus()
+
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -794,17 +797,12 @@ class PrometheusCharm(CharmBase):
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
         if self._is_tls_enabled():
-            if not self.container.exists(CERT_PATH):
-                # After a `stop`, the service will autostart on next call to `_configure`, which is
-                # expected to happen as soon as the the related CA replies with a cert.
-                self.stop()
-            else:
-                return {
-                    "tls_server_config": {
-                        "cert_file": CERT_PATH,
-                        "key_file": KEY_PATH,
-                    }
+            return {
+                "tls_server_config": {
+                    "cert_file": CERT_PATH,
+                    "key_file": KEY_PATH,
                 }
+            }
         return None
 
     def _alerting_config(self) -> dict:
@@ -901,10 +899,17 @@ class PrometheusCharm(CharmBase):
         for filename, contents in certs.items():
             self._push(filename, contents)
 
-        if web_config := self._web_config():
-            self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
+        if self._is_tls_enabled() and not self.container.exists(CERT_PATH):
+            # After a `stop`, the service will autostart on next call to `_configure`, which is
+            # expected to happen as soon as the the related CA replies with a cert.
+            self.stop()
+            if isinstance(self.unit.status, ActiveStatus):
+                self.unit.status = WaitingStatus("Waiting for TLS certificates to be written to file")
         else:
-            self.container.remove_path(WEB_CONFIG_PATH, recursive=True)
+            if web_config := self._web_config():
+                self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
+            else:
+                self.container.remove_path(WEB_CONFIG_PATH, recursive=True)
 
         self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
