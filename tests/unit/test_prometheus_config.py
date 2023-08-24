@@ -5,8 +5,8 @@ import logging
 import unittest
 import uuid
 
-from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusConfig
+from cosl import JujuTopology
 
 logger = logging.getLogger(__name__)
 
