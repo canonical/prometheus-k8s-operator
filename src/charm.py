@@ -411,9 +411,11 @@ class PrometheusCharm(CharmBase):
 
         self.grafana_source_provider.update_source(self.external_url)
         self._configure(_)
-        if isinstance(self.unit.status, WaitingStatus) and self.unit.status.message == "Waiting for TLS certificates to be written to file":
+        if (
+            isinstance(self.unit.status, WaitingStatus)
+            and self.unit.status.message == "Waiting for TLS certificates to be written to file"
+        ):
             self.unit.status = ActiveStatus()
-
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -904,7 +906,9 @@ class PrometheusCharm(CharmBase):
             # expected to happen as soon as the the related CA replies with a cert.
             self.stop()
             if isinstance(self.unit.status, ActiveStatus):
-                self.unit.status = WaitingStatus("Waiting for TLS certificates to be written to file")
+                self.unit.status = WaitingStatus(
+                    "Waiting for TLS certificates to be written to file"
+                )
         else:
             if web_config := self._web_config():
                 self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
