@@ -1,5 +1,5 @@
 cryptography
-jsonschema < 4
+jsonschema
 ops
 pyaml
 requests
