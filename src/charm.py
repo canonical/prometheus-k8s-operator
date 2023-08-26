@@ -147,7 +147,9 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
+        self._prometheus_client = Prometheus(
+            f"{external_url.scheme}://localhost:9090{external_url.path if external_url.path else ''}"
+        )
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
