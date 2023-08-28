@@ -431,7 +431,7 @@ class TestNonStandardProviders(unittest.TestCase):
 
             messages = sorted(logger.output)
             self.assertEqual(len(messages), 1)
-            self.assertIn("Failed to read alert rules from bad_yaml.rule", messages[0])
+            self.assertIn("Failed to read rules from bad_yaml.rule", messages[0])
 
 
 def sorted_matchers(matchers) -> str:
@@ -491,13 +491,13 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         )
 
     def test_non_recursive_is_default(self):
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(self.sandbox.getsyspath("/rules/prom/"))
         rules_file_dict = rules.as_dict()
         self.assertEqual({}, rules_file_dict)
 
     def test_non_recursive_lma_format_loading_from_root_dir(self):
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(self.sandbox.getsyspath("/rules/prom/lma_format/"))
         rules_file_dict = rules.as_dict()
 
@@ -519,7 +519,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.assertEqual(expected_rules_file, rules_file_dict)
 
     def test_non_recursive_official_format_loading_from_root_dir(self):
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(self.sandbox.getsyspath("/rules/prom/prom_format"))
         rules_file_dict = rules.as_dict()
 
@@ -546,7 +546,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
           - For rules in lma format, core group name is the filename
           - For rules in official format, core group name is the group name in the file
         """
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(self.sandbox.getsyspath("/rules/prom"), recursive=True)
         rules_file_dict = rules.as_dict()
 
@@ -586,7 +586,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         self.assertEqual({}, DeepDiff(expected_rules_file, rules_file_dict, ignore_order=True))
 
     def test_unit_not_in_alert_labels(self):
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(self.sandbox.getsyspath("/rules/prom"), recursive=True)
         rules_file_dict = rules.as_dict()
         for group in rules_file_dict["groups"]:
@@ -617,7 +617,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.makedirs("rules")
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -655,7 +655,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.makedirs("rules")
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -678,7 +678,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.makedirs("rules")
         sandbox.writetext("rules/file.rule", yaml.safe_dump(rules_file_dict))
 
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(sandbox.getsyspath("/rules"), recursive=False)
         rules_file_dict_read = rules.as_dict()
 
@@ -709,7 +709,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         sandbox.writetext("rules/a/file.rule", yaml.safe_dump(self.gen_rule(1)))
         sandbox.writetext("rules/a/b/file.rule", yaml.safe_dump(self.gen_rule(2)))
 
-        rules = AlertRules(topology=self.topology)
+        rules = AlertRules(query_type="promql", topology=self.topology)
         rules.add_path(sandbox.getsyspath("/rules"), recursive=True)
         rules_file_dict_read = rules.as_dict()
 
