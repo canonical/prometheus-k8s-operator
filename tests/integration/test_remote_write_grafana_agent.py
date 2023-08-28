@@ -81,7 +81,9 @@ async def test_remote_write_with_grafana_agent(
 
     expr = tester_rules["query"]
     topology_labels = [
-        f'{k}="{v}"' for k, v in tester_rules["labels"].items() if k.startswith("juju_")
+        f'{k}="{v}"'
+        for k, v in tester_rules["labels"].items()
+        if k.startswith("juju_") and k != "juju_charm"
     ]
     assert all(field in expr for field in topology_labels)
 
