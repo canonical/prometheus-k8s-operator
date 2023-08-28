@@ -18,13 +18,6 @@ provide a scrape target for Prometheus.
 Source code can be found on GitHub at:
  https://github.com/canonical/prometheus-k8s-operator/tree/main/lib/charms/prometheus_k8s
 
-## Dependencies
-
-Using this library requires you to fetch the juju_topology library from
-[observability-libs](https://charmhub.io/observability-libs/libraries/juju_topology).
-
-`charmcraft fetch-lib charms.observability_libs.v0.juju_topology`
-
 ## Provider Library Usage
 
 This Prometheus charm interacts with its scrape targets using its
@@ -369,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 40
+LIBPATCH = 41
 
 PYDEPS = ["cosl"]
 
@@ -1129,7 +1122,7 @@ class MetricsEndpointConsumer(Object):
                         # Inject topology and put it back in the list
                         rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
-                            topology.label_matcher_dict,
+                            topology.alert_expression_dict,
                         )
                     except KeyError:
                         # Some required JujuTopology key is missing. Just move on.

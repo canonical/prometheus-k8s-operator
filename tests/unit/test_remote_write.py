@@ -168,7 +168,6 @@ class TestRemoteWriteConsumer(unittest.TestCase):
                 self.assertIn("juju_model", expr)
                 self.assertIn("juju_model_uuid", expr)
                 self.assertIn("juju_application", expr)
-                self.assertIn("juju_charm", expr)
                 self.assertNotIn("juju_unit", expr)
                 self.assertEqual(
                     set(group["rules"][0]["labels"]),
@@ -196,7 +195,6 @@ class TestRemoteWriteConsumer(unittest.TestCase):
                 self.assertIn("juju_model", expr)
                 self.assertIn("juju_model_uuid", expr)
                 self.assertIn("juju_application", expr)
-                self.assertIn("juju_charm", expr)
                 self.assertIn("juju_unit", expr)
                 self.assertEqual(
                     set(group["rules"][0]["labels"]),

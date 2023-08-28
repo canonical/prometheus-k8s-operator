@@ -9,16 +9,16 @@ from typing import List
 from unittest.mock import patch
 
 import yaml
-from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
-    AlertRules,
     CosTool,
     MetricsEndpointProvider,
     RelationInterfaceMismatchError,
     RelationNotFoundError,
     RelationRoleMismatchError,
 )
+from cosl import JujuTopology
+from cosl.rules import AlertRules
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
 from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
@@ -375,7 +375,6 @@ class TestEndpointProvider(unittest.TestCase):
                 self.assertIn("juju_model", labels)
                 self.assertIn("juju_model_uuid", labels)
                 self.assertIn("juju_application", labels)
-                self.assertIn("juju_charm", labels)
 
 
 class CustomizableEndpointProviderCharm(CharmBase):
@@ -525,7 +524,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
-            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.label_matchers)}}} > 0.12",
+            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.alert_expression_str)}}} > 0.12",
             "labels": self.topology.label_matcher_dict,
         }
 
@@ -552,7 +551,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
 
         expected_alert_rule = {
             "alert": "CPUOverUse",
-            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.label_matchers)}}} > 0.12",
+            "expr": f"process_cpu_seconds_total{{{sorted_matchers(self.topology.alert_expression_str)}}} > 0.12",
             "labels": self.topology.label_matcher_dict,
         }
 
