@@ -407,6 +407,9 @@ class PrometheusCharm(CharmBase):
             )
 
         self.grafana_source_provider.update_source(self.external_url)
+        self.ingress.provide_ingress_requirements(
+            scheme="https" if self._is_tls_enabled() else "http", port=self._port
+        )
         self._configure(_)
         if (
             isinstance(self.unit.status, WaitingStatus)
