@@ -620,10 +620,10 @@ class PrometheusCharm(CharmBase):
         # For stripPrefix middleware to work correctly, we need to set web.external-url and
         # web.route-prefix in a particular way.
         # https://github.com/prometheus/prometheus/issues/1191
-        route_prefix = urlparse(self.external_url).path.strip('/')
-        external_url = f"{self.internal_url.rstrip('/')}/{route_prefix}".rstrip('/')
+        route_prefix = urlparse(self.external_url).path.strip("/")
+        external_url = f"{self.internal_url.rstrip('/')}/{route_prefix}".rstrip("/")
         args.append(f"--web.external-url={external_url}")
-        args.append(f"--web.route-prefix=/")
+        args.append("--web.route-prefix=/")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--web.enable-remote-write-receiver")
