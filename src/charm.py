@@ -119,7 +119,7 @@ class PrometheusCharm(CharmBase):
             self,
             relation_name="ingress",
             port=self._port,
-            strip_prefix=False,
+            strip_prefix=True,
             redirect_https=True,
             scheme=lambda: "https" if self._is_tls_enabled() else "http",
         )
@@ -147,9 +147,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(
-            f"{external_url.scheme}://localhost:9090{external_url.path if external_url.path else ''}"
-        )
+        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
@@ -619,7 +617,7 @@ class PrometheusCharm(CharmBase):
         if self._web_config():
             args.append(f"--web.config.file={WEB_CONFIG_PATH}")
 
-        args.append(f"--web.external-url={self.external_url}")
+        args.append(f"--web.external-url={self.internal_url}")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--web.enable-remote-write-receiver")
