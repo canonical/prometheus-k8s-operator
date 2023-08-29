@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 14
+LIBPATCH = 15
 
 log = logging.getLogger(__name__)
 
@@ -674,6 +674,8 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         listen_to: Literal["only-this-unit", "all-units", "both"] = "only-this-unit",
         strip_prefix: bool = False,
         redirect_https: bool = False,
+        # FIXME: now that `provide_ingress_requirements` takes a scheme, this arg can be changed to
+        #  str type in v2.
         scheme: typing.Callable[[], str] = lambda: "http",
     ):
         """Constructor for IngressPerUnitRequirer.
@@ -785,10 +787,13 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
             return False
         return bool(self.url)
 
-    def provide_ingress_requirements(self, *, host: Optional[str] = None, port: int):
+    def provide_ingress_requirements(
+        self, *, scheme: Optional[str] = None, host: Optional[str] = None, port: int
+    ):
         """Publishes the data that Traefik needs to provide ingress.
 
         Args:
+            scheme: Scheme to be used; if unspecified, use the one used by __init__.
             host: Hostname to be used by the ingress provider to address the
              requirer unit; if unspecified, FQDN will be used instead
             port: the port of the service (required)
@@ -798,13 +803,17 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         if not host:
             host = socket.getfqdn()
 
+        if not scheme:
+            # If scheme was not provided, use the one given to the constructor.
+            scheme = self._get_scheme()
+
         data = {
             "model": self.model.name,
             "name": self.unit.name,
             "host": host,
             "port": str(port),
             "mode": self._mode,
-            "scheme": self._get_scheme(),
+            "scheme": scheme,
         }
 
         if self._strip_prefix:

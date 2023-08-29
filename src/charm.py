@@ -73,6 +73,8 @@ CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
+WAITING_FOR_TLS = "Waiting for TLS certificates to be written to file"
+
 logger = logging.getLogger(__name__)
 
 
@@ -119,7 +121,7 @@ class PrometheusCharm(CharmBase):
             self,
             relation_name="ingress",
             port=self._port,
-            strip_prefix=False,
+            strip_prefix=True,
             redirect_https=True,
             scheme=lambda: "https" if self._is_tls_enabled() else "http",
         )
@@ -147,9 +149,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(
-            f"{external_url.scheme}://localhost:9090{external_url.path if external_url.path else ''}"
-        )
+        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
@@ -218,11 +218,6 @@ class PrometheusCharm(CharmBase):
             self.unit.open_port(p.protocol, p.port)
 
     @property
-    def metrics_path(self):
-        """The metrics path, adjusted by ingress path (if any)."""
-        return urlparse(self.external_url).path.rstrip("/") + "/metrics"
-
-    @property
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
@@ -274,7 +269,7 @@ class PrometheusCharm(CharmBase):
             "job_name": "prometheus",
             "scrape_interval": "5s",
             "scrape_timeout": "5s",
-            "metrics_path": self.metrics_path,
+            "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",  # replaced with "https" below if behind TLS
             "static_configs": [
@@ -412,10 +407,13 @@ class PrometheusCharm(CharmBase):
             )
 
         self.grafana_source_provider.update_source(self.external_url)
+        self.ingress.provide_ingress_requirements(
+            scheme="https" if self._is_tls_enabled() else "http", port=self._port
+        )
         self._configure(_)
         if (
             isinstance(self.unit.status, WaitingStatus)
-            and self.unit.status.message == "Waiting for TLS certificates to be written to file"
+            and self.unit.status.message == WAITING_FOR_TLS
         ):
             self.unit.status = ActiveStatus()
 
@@ -476,7 +474,7 @@ class PrometheusCharm(CharmBase):
             return
 
         try:
-            should_restart = self._update_layer()
+            layer_changed = self._update_layer()
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
             self.unit.status = early_return_statuses["layer_fail"]
@@ -495,23 +493,24 @@ class PrometheusCharm(CharmBase):
             self.unit.status = early_return_statuses["validation_fail"]
             return
 
-        if should_restart:
-            try:
-                # If a config is invalid then prometheus would exit immediately.
-                # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
-                # would be raised.
-                self.container.replan()
-                logger.info("Prometheus (re)started")
-            except PebbleError as e:
-                logger.error(
-                    "Failed to replan; pebble layer: %s; %s",
-                    self._prometheus_layer.to_dict(),
-                    e,
-                )
-                self.unit.status = early_return_statuses["restart_fail"]
-                return
+        try:
+            # If a config is invalid then prometheus would exit immediately.
+            # This would be caught by pebble (default timeout is 30 sec) and a ChangeError
+            # would be raised.
+            self.container.replan()
+            logger.info("Prometheus (re)started")
+        except PebbleError as e:
+            logger.error(
+                "Failed to replan; pebble layer: %s; %s",
+                self._prometheus_layer.to_dict(),
+                e,
+            )
+            self.unit.status = early_return_statuses["restart_fail"]
+            return
 
-        elif should_reload:
+        # We only need to reload if pebble didn't replan (if pebble replanned, then new config
+        # would be picked up on startup anyway).
+        if not layer_changed and should_reload:
             reloaded = self._prometheus_client.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
@@ -619,7 +618,13 @@ class PrometheusCharm(CharmBase):
         if self._web_config():
             args.append(f"--web.config.file={WEB_CONFIG_PATH}")
 
-        args.append(f"--web.external-url={self.external_url}")
+        # For stripPrefix middleware to work correctly, we need to set web.external-url and
+        # web.route-prefix in a particular way.
+        # https://github.com/prometheus/prometheus/issues/1191
+        route_prefix = urlparse(self.external_url).path.strip("/")
+        external_url = f"{self.internal_url.rstrip('/')}/{route_prefix}".rstrip("/")
+        args.append(f"--web.external-url={external_url}")
+        args.append("--web.route-prefix=/")
 
         if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
             args.append("--web.enable-remote-write-receiver")
@@ -890,14 +895,14 @@ class PrometheusCharm(CharmBase):
 
             prometheus_config["scrape_configs"].append(job)  # type: ignore
 
+        web_config = self._web_config()
+
         # Check if config changed, using its hash
         config_hash = sha256(
-            yaml.safe_dump({"prometheus_config": prometheus_config, "certs": certs})
+            yaml.safe_dump(
+                {"prometheus_config": prometheus_config, "web_config": web_config, "certs": certs}
+            )
         )
-        if config_hash == self._pull(CONFIG_HASH_PATH):
-            return False
-
-        logger.debug("Prometheus config changed")
 
         self._push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
@@ -905,17 +910,18 @@ class PrometheusCharm(CharmBase):
 
         if self._is_tls_enabled() and not self.container.exists(CERT_PATH):
             # After a `stop`, the service will autostart on next call to `_configure`, which is
-            # expected to happen as soon as the the related CA replies with a cert.
+            # expected to happen as soon as the related CA replies with a cert.
             self.stop()
             if isinstance(self.unit.status, ActiveStatus):
-                self.unit.status = WaitingStatus(
-                    "Waiting for TLS certificates to be written to file"
-                )
+                self.unit.status = WaitingStatus(WAITING_FOR_TLS)
+
+        if web_config:
+            self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
         else:
-            if web_config := self._web_config():
-                self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
-            else:
-                self.container.remove_path(WEB_CONFIG_PATH, recursive=True)
+            self.container.remove_path(WEB_CONFIG_PATH, recursive=True)
+
+        if config_hash == self._pull(CONFIG_HASH_PATH):
+            return False
 
         self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")

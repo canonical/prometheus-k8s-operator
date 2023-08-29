@@ -4,6 +4,9 @@ name: prometheus-k8s
 assumes:
   - k8s-api
 
+  # Juju 3.0.3+ needed for secrets and open-port
+  - juju >= 3.0.3
+
 summary: Prometheus for Kubernetes clusters
 
 description: |

@@ -506,7 +506,7 @@ class TestPebblePlan(unittest.TestCase):
         self.harness.set_model_name(self.__class__.__name__)
         self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
-        self.harness.container_pebble_ready("prometheus")
+        # self.harness.container_pebble_ready("prometheus")
 
         self.container_name = self.harness.charm._name
         self.container = self.harness.charm.unit.get_container(self.container_name)
@@ -523,8 +523,6 @@ class TestPebblePlan(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.multiple(
         "ops.testing._TestingPebbleClient",
-        autostart_services=raise_if_called,
-        replan_services=raise_if_called,
         start_services=raise_if_called,
         stop_services=raise_if_called,
         restart_services=raise_if_called,
@@ -560,8 +558,6 @@ class TestPebblePlan(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.multiple(
         "ops.testing._TestingPebbleClient",
-        autostart_services=raise_if_called,
-        replan_services=raise_if_called,
         start_services=raise_if_called,
         stop_services=raise_if_called,
         restart_services=raise_if_called,
