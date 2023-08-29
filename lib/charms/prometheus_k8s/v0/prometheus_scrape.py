@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 41
+LIBPATCH = 42
 
 PYDEPS = ["cosl"]
 
@@ -607,9 +607,6 @@ class PrometheusConfig:
                     "scheme": scheme,
                     "path_prefix": path_prefix,
                     "static_configs": [{"targets": netlocs}],
-                    # FIXME figure out how to get alertmanager's ca_file into here
-                    #  Without this, prom errors: "x509: certificate signed by unknown authority"
-                    "tls_config": {"insecure_skip_verify": True},
                 }
                 for (scheme, path_prefix), netlocs in paths.items()
             ]
@@ -1175,16 +1172,6 @@ class MetricsEndpointConsumer(Object):
         scrape_configs = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
             scrape_configs, hosts, topology
         )
-
-        # If scheme is https but no ca section present, then auto add "insecure_skip_verify",
-        # otherwise scraping errors out with "x509: certificate signed by unknown authority".
-        # https://prometheus.io/docs/prometheus/latest/configuration/configuration/#tls_config
-        for scrape_config in scrape_configs:
-            tls_config = scrape_config.get("tls_config", {})
-            ca_present = "ca" in tls_config or "ca_file" in tls_config
-            if scrape_config.get("scheme") == "https" and not ca_present:
-                tls_config["insecure_skip_verify"] = True
-                scrape_config["tls_config"] = tls_config
 
         return scrape_configs
 

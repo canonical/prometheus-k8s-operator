@@ -844,11 +844,7 @@ class PrometheusCharm(CharmBase):
         for job in scrape_jobs:
             job["honor_labels"] = True
 
-            # If "tls_config" is absent but scheme is https, then set insecure_skip_verify.
-            default_tls_config = (
-                {"insecure_skip_verify": True} if job.get("scheme") == "https" else {}
-            )
-            if tls_config := job.get("tls_config", default_tls_config):
+            if (tls_config := job.get("tls_config", {})) or job.get("scheme") == "https":
                 # Certs are transferred over relation data and need to be written to files on disk.
                 # CA certificate to validate the server certificate with.
 
@@ -865,10 +861,9 @@ class PrometheusCharm(CharmBase):
                     # The tls_config section is present, but we don't have any CA certs
                     logger.warning(
                         "The scrape job '%s' has a tls_config section specified, but no CA certs "
-                        "are available. Adding 'insecure_skip_verify' as a fallback.",
+                        "are available.",
                         job["job_name"],
                     )
-                    job["tls_config"] = {**tls_config, **{"insecure_skip_verify": True}}
 
                 # Certificate and key files for client cert authentication to the server.
                 if (cert_file := tls_config.get("cert_file")) and (
