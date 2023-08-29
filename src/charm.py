@@ -216,11 +216,6 @@ class PrometheusCharm(CharmBase):
             self.unit.open_port(p.protocol, p.port)
 
     @property
-    def metrics_path(self):
-        """The metrics path, adjusted by ingress path (if any)."""
-        return urlparse(self.external_url).path.rstrip("/") + "/metrics"
-
-    @property
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
@@ -272,7 +267,7 @@ class PrometheusCharm(CharmBase):
             "job_name": "prometheus",
             "scrape_interval": "5s",
             "scrape_timeout": "5s",
-            "metrics_path": self.metrics_path,
+            "metrics_path": "/metrics",
             "honor_timestamps": True,
             "scheme": "http",  # replaced with "https" below if behind TLS
             "static_configs": [
