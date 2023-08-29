@@ -73,6 +73,8 @@ CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
+WAITING_FOR_TLS = "Waiting for TLS certificates to be written to file"
+
 logger = logging.getLogger(__name__)
 
 
@@ -408,7 +410,7 @@ class PrometheusCharm(CharmBase):
         self._configure(_)
         if (
             isinstance(self.unit.status, WaitingStatus)
-            and self.unit.status.message == "Waiting for TLS certificates to be written to file"
+            and self.unit.status.message == WAITING_FOR_TLS
         ):
             self.unit.status = ActiveStatus()
 
@@ -908,9 +910,7 @@ class PrometheusCharm(CharmBase):
             # expected to happen as soon as the related CA replies with a cert.
             self.stop()
             if isinstance(self.unit.status, ActiveStatus):
-                self.unit.status = WaitingStatus(
-                    "Waiting for TLS certificates to be written to file"
-                )
+                self.unit.status = WaitingStatus(WAITING_FOR_TLS)
 
         if web_config:
             self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
