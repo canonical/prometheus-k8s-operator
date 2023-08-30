@@ -844,9 +844,8 @@ class PrometheusCharm(CharmBase):
         for job in scrape_jobs:
             job["honor_labels"] = True
 
-            tls_config = self._process_tls_config(job)
-            processed_job = tls_config["job"]
-            certs = {**certs, **tls_config["certs"]}
+            processed_job, processed_certs = self._process_tls_config(job)
+            certs = {**certs, **processed_certs}
             prometheus_config["scrape_configs"].append(processed_job)  # type: ignore
 
         # Check if config changed, using its hash
@@ -880,8 +879,8 @@ class PrometheusCharm(CharmBase):
         logger.info("Pushed new configuration")
         return True
 
-    def _process_tls_config(self, job) -> Dict:
-        certs = {}
+    def _process_tls_config(self, job):
+        certs: Dict[str, str] = {}  # Mapping form cert filename to cert content.
         if (tls_config := job.get("tls_config", {})) or job.get("scheme") == "https":
             # Certs are transferred over relation data and need to be written to files on disk.
             # CA certificate to validate the server certificate with.
@@ -919,7 +918,7 @@ class PrometheusCharm(CharmBase):
                     "authentication is to be used"
                 )
 
-        return {"job": job, "certs": certs}
+        return job, certs
 
     @property
     def _prometheus_version(self) -> Optional[str]:
