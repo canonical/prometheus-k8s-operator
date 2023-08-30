@@ -1176,6 +1176,8 @@ class MetricsEndpointConsumer(Object):
             scrape_configs, hosts, topology
         )
 
+        # For https scrape targets we still do not render a `tls_config` section because certs
+        # are expected to be made available by the charm via the `update-ca-certificates` mechanism.
         return scrape_configs
 
     def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str]]:
