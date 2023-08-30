@@ -846,54 +846,14 @@ class PrometheusCharm(CharmBase):
             prometheus_config["alerting"] = alerting_config
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
-        certs = {}
+        certs: Dict[str, str] = {}
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
             job["honor_labels"] = True
 
-            # If "tls_config" is absent but scheme is https, then set insecure_skip_verify.
-            default_tls_config = (
-                {"insecure_skip_verify": True} if job.get("scheme") == "https" else {}
-            )
-            if tls_config := job.get("tls_config", default_tls_config):
-                # Certs are transferred over relation data and need to be written to files on disk.
-                # CA certificate to validate the server certificate with.
-
-                # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
-                # prometheus and all scrape jobs are signed by the same CA.
-                if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
-                    # TODO we shouldn't be passing CA certs over relation data, because that
-                    #  reduces to self-signed certs. Both parties need to separately trust the CA
-                    #  instead.
-                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
-                    certs[filename] = ca_file
-                    job["tls_config"] = {**tls_config, **{"ca_file": filename}}
-                else:
-                    # The tls_config section is present, but we don't have any CA certs
-                    logger.warning(
-                        "The scrape job '%s' has a tls_config section specified, but no CA certs "
-                        "are available. Adding 'insecure_skip_verify' as a fallback.",
-                        job["job_name"],
-                    )
-                    job["tls_config"] = {**tls_config, **{"insecure_skip_verify": True}}
-
-                # Certificate and key files for client cert authentication to the server.
-                if (cert_file := tls_config.get("cert_file")) and (
-                    key_file := tls_config.get("key_file")
-                ):
-                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.crt"
-                    certs[filename] = cert_file
-                    job["tls_config"]["cert_file"] = filename
-                    filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.key"
-                    certs[filename] = key_file
-                    job["tls_config"]["key_file"] = filename
-                elif "cert_file" in tls_config or "key_file" in tls_config:
-                    raise ConfigError(
-                        'tls_config requires both "cert_file" and "key_file" if client '
-                        "authentication is to be used"
-                    )
-
-            prometheus_config["scrape_configs"].append(job)  # type: ignore
+            processed_job, processed_certs = self._process_tls_config(job)
+            certs = {**certs, **processed_certs}
+            prometheus_config["scrape_configs"].append(processed_job)  # type: ignore
 
         web_config = self._web_config()
 
@@ -926,6 +886,47 @@ class PrometheusCharm(CharmBase):
         self._push(CONFIG_HASH_PATH, config_hash)
         logger.info("Pushed new configuration")
         return True
+
+    def _process_tls_config(self, job):
+        certs: Dict[str, str] = {}  # Mapping form cert filename to cert content.
+        if (tls_config := job.get("tls_config", {})) or job.get("scheme") == "https":
+            # Certs are transferred over relation data and need to be written to files on disk.
+            # CA certificate to validate the server certificate with.
+
+            # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
+            # prometheus and all scrape jobs are signed by the same CA.
+            if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
+                # TODO we shouldn't be passing CA certs over relation data, because that
+                #  reduces to self-signed certs. Both parties need to separately trust the CA
+                #  instead.
+                filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
+                certs[filename] = ca_file
+                job["tls_config"] = {**tls_config, **{"ca_file": filename}}
+            else:
+                # The tls_config section is present, but we don't have any CA certs
+                logger.warning(
+                    "The scrape job '%s' has a tls_config section specified, but no CA certs "
+                    "are available.",
+                    job["job_name"],
+                )
+
+            # Certificate and key files for client cert authentication to the server.
+            if (cert_file := tls_config.get("cert_file")) and (
+                key_file := tls_config.get("key_file")
+            ):
+                filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.crt"
+                certs[filename] = cert_file
+                job["tls_config"]["cert_file"] = filename
+                filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.key"
+                certs[filename] = key_file
+                job["tls_config"]["key_file"] = filename
+            elif "cert_file" in tls_config or "key_file" in tls_config:
+                raise ConfigError(
+                    'tls_config requires both "cert_file" and "key_file" if client '
+                    "authentication is to be used"
+                )
+
+        return job, certs
 
     @property
     def _prometheus_version(self) -> Optional[str]:
