@@ -667,7 +667,9 @@ class PrometheusCharm(CharmBase):
         args.append(f"--web.external-url={external_url}")
         args.append("--web.route-prefix=/")
 
-        if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME]:
+        if self.model.relations[DEFAULT_REMOTE_WRITE_RELATION_NAME] or config.get(
+            "remote_write_receiver"
+        ):
             args.append("--web.enable-remote-write-receiver")
 
         args.append(f"--log.level={self.log_level}")
