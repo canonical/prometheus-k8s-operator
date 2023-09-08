@@ -86,11 +86,20 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-grpc==1.17.0"]
 
 logger = logging.getLogger("tracing")
+
+logger.warning(
+    "The charms.tempo_k8s.v0.charm_instrumentation charm lib has been renamed "
+    "to charms.tempo_k8s.v0.charm_tracing. Please delete this lib and fetch "
+    "charms.tempo_k8s.v0.charm_tracing instead. "
+    "This library is version-locked to 0.8 (no further versions will be released, ever) "
+    "and unmaintained. At some point this library might be deleted altogether and will no "
+    "longer be available in charmhub."
+)
 
 tracer: ContextVar[Tracer] = ContextVar("tracer")
 _GetterType = Union[Callable[[CharmBase], Optional[str]], property]
@@ -200,10 +209,10 @@ def _get_server_cert(server_cert_getter, self, charm):
 
 
 def _setup_root_span_initializer(
-    charm: Type[CharmBase],
-    tracing_endpoint_getter: _GetterType,
-    server_cert_getter: Optional[_GetterType],
-    service_name: Optional[str] = None,
+        charm: Type[CharmBase],
+        tracing_endpoint_getter: _GetterType,
+        server_cert_getter: Optional[_GetterType],
+        service_name: Optional[str] = None,
 ):
     """Patch the charm's initializer."""
     original_init = charm.__init__
@@ -302,10 +311,10 @@ def _setup_root_span_initializer(
 
 
 def trace_charm(
-    tracing_endpoint: str,
-    server_cert: Optional[str] = None,
-    service_name: Optional[str] = None,
-    extra_types: Sequence[type] = (),
+        tracing_endpoint: str,
+        server_cert: Optional[str] = None,
+        service_name: Optional[str] = None,
+        extra_types: Sequence[type] = (),
 ):
     """Autoinstrument the decorated charm with tracing telemetry.
 
@@ -357,11 +366,11 @@ def trace_charm(
 
 
 def _autoinstrument(
-    charm_type: Type[CharmBase],
-    tracing_endpoint_getter: _GetterType,
-    server_cert_getter: Optional[_GetterType] = None,
-    service_name: Optional[str] = None,
-    extra_types: Sequence[type] = (),
+        charm_type: Type[CharmBase],
+        tracing_endpoint_getter: _GetterType,
+        server_cert_getter: Optional[_GetterType] = None,
+        service_name: Optional[str] = None,
+        extra_types: Sequence[type] = (),
 ) -> Type[CharmBase]:
     """Set up tracing on this charm class.
 

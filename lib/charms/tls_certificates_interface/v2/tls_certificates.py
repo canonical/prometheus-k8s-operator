@@ -276,7 +276,6 @@ import copy
 import json
 import logging
 import uuid
-from collections import defaultdict
 from contextlib import suppress
 from datetime import datetime, timedelta
 from ipaddress import IPv4Address
@@ -309,7 +308,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 12
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -1062,7 +1061,7 @@ class TLSCertificatesProvidesV2(Object):
 
     def get_issued_certificates(
         self, relation_id: Optional[int] = None
-    ) -> Dict[str, Dict[str, str]]:
+    ) -> Dict[str, List[Dict[str, str]]]:
         """Returns a dictionary of issued certificates.
 
         It returns certificates from all relations if relation_id is not specified.
@@ -1071,7 +1070,7 @@ class TLSCertificatesProvidesV2(Object):
         Returns:
             dict: Certificates per application name.
         """
-        certificates: Dict[str, Dict[str, str]] = defaultdict(dict)
+        certificates: Dict[str, List[Dict[str, str]]] = {}
         relations = (
             [
                 relation
@@ -1084,11 +1083,17 @@ class TLSCertificatesProvidesV2(Object):
         for relation in relations:
             provider_relation_data = _load_relation_data(relation.data[self.charm.app])
             provider_certificates = provider_relation_data.get("certificates", [])
+
+            certificates[relation.app.name] = []  # type: ignore[union-attr]
             for certificate in provider_certificates:
                 if not certificate.get("revoked", False):
-                    certificates[relation.app.name].update(  # type: ignore[union-attr]
-                        {certificate["certificate_signing_request"]: certificate["certificate"]}
+                    certificates[relation.app.name].append(  # type: ignore[union-attr]
+                        {
+                            "csr": certificate["certificate_signing_request"],
+                            "certificate": certificate["certificate"],
+                        }
                     )
+
         return certificates
 
     def _on_relation_changed(self, event: RelationChangedEvent) -> None:
@@ -1165,17 +1170,20 @@ class TLSCertificatesProvidesV2(Object):
                 self.remove_certificate(certificate=certificate["certificate"])
 
     def get_requirer_csrs_with_no_certs(
-        self,
+        self, relation_id: Optional[int] = None
     ) -> List[Dict[str, Union[int, str, List[Dict[str, str]]]]]:
         """Filters the requirer's units csrs.
 
         Keeps the ones for which no certificate was provided.
 
+        Args:
+            relation_id (int): Relation id
+
         Returns:
             list: List of dictionaries that contain the unit's csrs
             that don't have a certificate issued.
         """
-        all_unit_csr_mappings = copy.deepcopy(self.get_requirer_csrs())
+        all_unit_csr_mappings = copy.deepcopy(self.get_requirer_csrs(relation_id=relation_id))
         for unit_csr_mapping in all_unit_csr_mappings:
             for csr in unit_csr_mapping["unit_csrs"]:  # type: ignore[union-attr]
                 if self.certificate_issued_for_csr(
@@ -1237,9 +1245,9 @@ class TLSCertificatesProvidesV2(Object):
             bool: True/False depending on whether a certificate has been issued for the given CSR.
         """
         issued_certificates_per_csr = self.get_issued_certificates()[app_name]
-        for request, cert in issued_certificates_per_csr.items():
-            if request == csr:
-                return csr_matches_certificate(csr, cert)
+        for issued_pair in issued_certificates_per_csr:
+            if "csr" in issued_pair and issued_pair["csr"] == csr:
+                return csr_matches_certificate(csr, issued_pair["certificate"])
         return False
 
 
