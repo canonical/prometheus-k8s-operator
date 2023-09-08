@@ -98,8 +98,9 @@ class ConfigError(Exception):
         CertHandler,
         MetricsEndpointConsumer,
         MetricsEndpointProvider,
-        Prometheus
-    ])
+        Prometheus,
+    ],
+)
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -420,8 +421,8 @@ class PrometheusCharm(CharmBase):
         )
         self._configure(_)
         if (
-                isinstance(self.unit.status, WaitingStatus)
-                and self.unit.status.message == WAITING_FOR_TLS
+            isinstance(self.unit.status, WaitingStatus)
+            and self.unit.status.message == WAITING_FOR_TLS
         ):
             self.unit.status = ActiveStatus()
 
@@ -531,8 +532,8 @@ class PrometheusCharm(CharmBase):
             logger.info("Prometheus configuration reloaded")
 
         if (
-                isinstance(self.unit.status, BlockedStatus)
-                and self.unit.status not in early_return_statuses.values()
+            isinstance(self.unit.status, BlockedStatus)
+            and self.unit.status not in early_return_statuses.values()
         ):
             return
 
@@ -709,7 +710,7 @@ class PrometheusCharm(CharmBase):
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
         assert (
-                "database" in self.model.storages
+            "database" in self.model.storages
         ), "The 'database' storage is no longer in metadata: must update literals in charm code."
 
         # Get PVC capacity from kubernetes
@@ -722,7 +723,7 @@ class PrometheusCharm(CharmBase):
         #              'persistentVolumeClaim': {'claimName': 'am-data-d7f6a623-am-0'}}, ...]
         pvc_name = ""
         for volume in cast(
-                Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
+            Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
         ).spec.volumes:
             if not volume.persistentVolumeClaim:
                 # The volumes 'charm-data' and 'kube-api-access-xxxxx' do not have PVCs - filter
@@ -802,7 +803,7 @@ class PrometheusCharm(CharmBase):
         global_config = {"scrape_interval": "1m", "scrape_timeout": "10s"}
 
         if config.get("evaluation_interval") and self._is_valid_timespec(
-                config["evaluation_interval"]
+            config["evaluation_interval"]
         ):
             global_config["evaluation_interval"] = config["evaluation_interval"]
 
@@ -920,7 +921,7 @@ class PrometheusCharm(CharmBase):
 
             # Certificate and key files for client cert authentication to the server.
             if (cert_file := tls_config.get("cert_file")) and (
-                    key_file := tls_config.get("key_file")
+                key_file := tls_config.get("key_file")
             ):
                 filename = f"{PROMETHEUS_DIR}/{job['job_name']}-client.crt"
                 certs[filename] = cert_file
