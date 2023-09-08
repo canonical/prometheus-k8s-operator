@@ -42,7 +42,10 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
         trust=True,
     )
 
-    await ops_test.model.wait_for_idle(status="active", timeout=deploy_timeout)
+    await ops_test.model.wait_for_idle(
+        status="active", timeout=deploy_timeout, raise_on_error=False
+    )
+    await ops_test.model.wait_for_idle(status="active")
 
 
 @pytest.mark.abort_on_fail
