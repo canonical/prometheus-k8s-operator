@@ -34,7 +34,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
-from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
+from charms.tempo_k8s.v0.charm_tracing import trace_charm
 from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
@@ -91,7 +91,16 @@ class ConfigError(Exception):
     pass
 
 
-@trace_charm(tracing_endpoint="tempo")
+@trace_charm(
+    tracing_endpoint="tempo",
+    extra_types=[
+        KubernetesComputeResourcesPatch,
+        CertHandler,
+        MetricsEndpointConsumer,
+        MetricsEndpointProvider,
+        Prometheus,
+    ],
+)
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 

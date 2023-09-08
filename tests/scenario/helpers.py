@@ -40,6 +40,15 @@ def add_relation_sequence(context: Context, state: State, relation: Relation):
         networks=state.networks + [Network.default(relation.endpoint)],
     )
     state_after_relation_created = context.run(relation.created_event, state_with_relation)
-    state_after_relation_joined = context.run(relation.joined_event, state_after_relation_created)
-    state_after_relation_changed = context.run(relation.changed_event, state_after_relation_joined)
+
+    # relation is not mutated!
+    relation_1 = state_after_relation_created.get_relations(relation.endpoint)[0]
+    state_after_relation_joined = context.run(
+        relation_1.joined_event, state_after_relation_created
+    )
+
+    relation_2 = state_after_relation_joined.get_relations(relation.endpoint)[0]
+    state_after_relation_changed = context.run(
+        relation_2.changed_event, state_after_relation_joined
+    )
     return state_after_relation_changed

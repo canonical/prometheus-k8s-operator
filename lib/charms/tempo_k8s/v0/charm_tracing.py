@@ -79,27 +79,18 @@ from ops.charm import CharmBase
 from ops.framework import Framework
 
 # The unique Charmhub library identifier, never change it
-LIBID = "0a8cf1b7b95d4cfcb90055f2d84897b3"
+LIBID = "cb1705dcd1a14ca09b2e60187d1215c7"
 
 # Increment this major API version when introducing breaking changes
 LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 2
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-grpc==1.17.0"]
 
 logger = logging.getLogger("tracing")
-
-logger.warning(
-    "The charms.tempo_k8s.v0.charm_instrumentation charm lib has been renamed "
-    "to charms.tempo_k8s.v0.charm_tracing. Please delete this lib and fetch "
-    "charms.tempo_k8s.v0.charm_tracing instead. "
-    "This library is version-locked to 0.8 (no further versions will be released, ever) "
-    "and unmaintained. At some point this library might be deleted altogether and will no "
-    "longer be available in charmhub."
-)
 
 tracer: ContextVar[Tracer] = ContextVar("tracer")
 _GetterType = Union[Callable[[CharmBase], Optional[str]], property]
@@ -113,7 +104,7 @@ def is_enabled() -> bool:
 
 
 @contextmanager
-def _charm_tracing_disabled():
+def charm_tracing_disabled():
     """Contextmanager to temporarily disable charm tracing.
 
     For usage in tests.
@@ -204,15 +195,15 @@ def _get_server_cert(server_cert_getter, self, charm):
             f"{charm}.{server_cert_getter} should return a valid tls cert (string); "
             f"got {server_cert} instead."
         )
-    logger.debug(f"Certificate successfully retrieved.")  # todo: some more validation?
+    logger.debug("Certificate successfully retrieved.")  # todo: some more validation?
     return server_cert
 
 
 def _setup_root_span_initializer(
-        charm: Type[CharmBase],
-        tracing_endpoint_getter: _GetterType,
-        server_cert_getter: Optional[_GetterType],
-        service_name: Optional[str] = None,
+    charm: Type[CharmBase],
+    tracing_endpoint_getter: _GetterType,
+    server_cert_getter: Optional[_GetterType],
+    service_name: Optional[str] = None,
 ):
     """Patch the charm's initializer."""
     original_init = charm.__init__
@@ -311,10 +302,10 @@ def _setup_root_span_initializer(
 
 
 def trace_charm(
-        tracing_endpoint: str,
-        server_cert: Optional[str] = None,
-        service_name: Optional[str] = None,
-        extra_types: Sequence[type] = (),
+    tracing_endpoint: str,
+    server_cert: Optional[str] = None,
+    service_name: Optional[str] = None,
+    extra_types: Sequence[type] = (),
 ):
     """Autoinstrument the decorated charm with tracing telemetry.
 
@@ -322,7 +313,7 @@ def trace_charm(
     method calls on instances of this class.
 
     Usage:
-    >>> from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
+    >>> from charms.tempo_k8s.v0.charm_tracing import trace_charm
     >>> from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
     >>> from ops import CharmBase
     >>>
@@ -366,11 +357,11 @@ def trace_charm(
 
 
 def _autoinstrument(
-        charm_type: Type[CharmBase],
-        tracing_endpoint_getter: _GetterType,
-        server_cert_getter: Optional[_GetterType] = None,
-        service_name: Optional[str] = None,
-        extra_types: Sequence[type] = (),
+    charm_type: Type[CharmBase],
+    tracing_endpoint_getter: _GetterType,
+    server_cert_getter: Optional[_GetterType] = None,
+    service_name: Optional[str] = None,
+    extra_types: Sequence[type] = (),
 ) -> Type[CharmBase]:
     """Set up tracing on this charm class.
 
@@ -379,7 +370,7 @@ def _autoinstrument(
 
     Usage:
 
-    >>> from charms.tempo_k8s.v0.charm_instrumentation import _autoinstrument
+    >>> from charms.tempo_k8s.v0.charm_tracing import _autoinstrument
     >>> from ops.main import main
     >>> _autoinstrument(
     >>>         MyCharm,
