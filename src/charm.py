@@ -8,6 +8,7 @@ import hashlib
 import logging
 import re
 import socket
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional, cast
 from urllib.parse import urlparse
@@ -72,8 +73,6 @@ KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
 CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
-
-WAITING_FOR_TLS = "Waiting for TLS certificates to be written to file"
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +143,7 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        external_url = urlparse(self.external_url)
+        urlparse(self.external_url)
 
         self._scraping = MetricsEndpointProvider(
             self,
@@ -158,7 +157,7 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
         )
-        self._prometheus_client = Prometheus(f"{external_url.scheme}://localhost:9090")
+        self._prometheus_client = Prometheus(self.internal_url)
 
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
@@ -345,6 +344,7 @@ class PrometheusCharm(CharmBase):
         return self.internal_url
 
     def _is_tls_enabled(self):
+        """Return True if the certificates relations is in place (cert may not be ready yet!)."""
         return self.cert_handler.enabled
 
     @property
@@ -370,10 +370,6 @@ class PrometheusCharm(CharmBase):
 
         return Layer(layer_config)  # pyright: ignore
 
-    def stop(self) -> None:
-        """Stop Prometheus."""
-        self.container.stop("prometheus")
-
     def _resource_reqs_from_config(self):
         limits = {
             "cpu": self.model.config.get("cpu"),
@@ -394,37 +390,56 @@ class PrometheusCharm(CharmBase):
         self.unit.status = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
-        for path in [KEY_PATH, CERT_PATH, CA_CERT_PATH]:
-            self.container.remove_path(path, recursive=True)
+        self._update_cert()
 
-        if self.cert_handler.ca:
-            self.container.push(
-                CA_CERT_PATH,
-                self.cert_handler.ca,
-                make_dirs=True,
-            )
-        if self.cert_handler.cert and self.cert_handler.key:
+        self.grafana_source_provider.update_source(self.external_url)
+        self.ingress.provide_ingress_requirements(
+            scheme=urlparse(self.internal_url).scheme, port=self._port
+        )
+        self._configure(_)
+
+    def _update_cert(self):
+        ca_cert_path = Path("/usr/local/share/ca-certificates/ca.crt")
+
+        if self.cert_handler.cert and self.cert_handler.key and self.cert_handler.ca:
+            # Save the workload certificates
             self.container.push(
                 CERT_PATH,
                 self.cert_handler.cert,
                 make_dirs=True,
             )
             self.container.push(
+                "/etc/grafana/grafana.key",
                 KEY_PATH,
-                self.cert_handler.key,
+                make_dirs=True,
+            )
+            # Save the CA among the trusted CAs and trust it
+            self.container.push(
+                ca_cert_path,
+                self.cert_handler.ca,
+                make_dirs=True,
+            )
+            # FIXME with the update-ca-certificates machinery prometheus shouldn't need
+            #  CA_CERT_PATH.
+            self.container.push(
+                CA_CERT_PATH,
+                self.cert_handler.ca,
                 make_dirs=True,
             )
 
-        self.grafana_source_provider.update_source(self.external_url)
-        self.ingress.provide_ingress_requirements(
-            scheme="https" if self._is_tls_enabled() else "http", port=self._port
-        )
-        self._configure(_)
-        if (
-            isinstance(self.unit.status, WaitingStatus)
-            and self.unit.status.message == WAITING_FOR_TLS
-        ):
-            self.unit.status = ActiveStatus()
+            # Repeat for the charm container. We need it there for prometheus client requests.
+            ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
+            ca_cert_path.write_text(self.cert_handler.ca)
+        else:
+            self.container.remove_path(CERT_PATH, recursive=True)
+            self.container.remove_path(KEY_PATH, recursive=True)
+            self.container.remove_path(ca_cert_path, recursive=True)
+            self.container.remove_path(CA_CERT_PATH, recursive=True)  # TODO: remove (see FIXME ^)
+            # Repeat for the charm container.
+            ca_cert_path.unlink(missing_ok=True)
+
+        self.container.exec(["update-ca-certificates", "--fresh"]).wait()
+        subprocess.run(["update-ca-certificates", "--fresh"])
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -539,7 +554,11 @@ class PrometheusCharm(CharmBase):
 
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self.external_url)
-        self.unit.status = ActiveStatus()
+
+        if self._is_tls_enabled() and not self.container.exists(CERT_PATH):
+            self.unit.status = WaitingStatus("Waiting for TLS certificates to be written to file")
+        else:
+            self.unit.status = ActiveStatus()
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
@@ -876,13 +895,6 @@ class PrometheusCharm(CharmBase):
         self._push(PROMETHEUS_CONFIG, yaml.safe_dump(prometheus_config))
         for filename, contents in certs.items():
             self._push(filename, contents)
-
-        if self._is_tls_enabled() and not self.container.exists(CERT_PATH):
-            # After a `stop`, the service will autostart on next call to `_configure`, which is
-            # expected to happen as soon as the related CA replies with a cert.
-            self.stop()
-            if isinstance(self.unit.status, ActiveStatus):
-                self.unit.status = WaitingStatus(WAITING_FOR_TLS)
 
         if web_config:
             self._push(WEB_CONFIG_PATH, yaml.safe_dump(web_config))
