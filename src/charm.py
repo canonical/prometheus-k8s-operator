@@ -143,8 +143,6 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        urlparse(self.external_url)
-
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
