@@ -401,7 +401,6 @@ class PrometheusCharm(CharmBase):
         )
 
     def _is_tls_ready(self) -> bool:
-        # self._update_cert()  # This setter has side effects to avoid code ordering issues.
         return (
             self.container.can_connect()
             and self.container.exists(CERT_PATH)
