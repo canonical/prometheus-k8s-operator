@@ -124,6 +124,8 @@ class PrometheusCharm(CharmBase):
             peer_relation_name="prometheus-peers",
             extra_sans_dns=[socket.getfqdn()],
         )
+        # Update certs here in init to avoid code ordering issues
+        self._update_cert()
 
         self.ingress = IngressPerUnitRequirer(
             self,
@@ -131,7 +133,7 @@ class PrometheusCharm(CharmBase):
             port=self._port,
             strip_prefix=True,
             redirect_https=True,
-            scheme=lambda: "https" if self._is_tls_enabled() else "http",
+            scheme=lambda: "https" if self._is_cert_available() else "http",
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -233,7 +235,7 @@ class PrometheusCharm(CharmBase):
         port = urlparse(self.external_url).port
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
         # to specify it here.
-        if self._is_tls_enabled():
+        if self._is_tls_ready():
             config = {
                 "scheme": "https",
                 "tls_config": {
@@ -305,7 +307,7 @@ class PrometheusCharm(CharmBase):
             ],
         }
 
-        if self._is_tls_enabled():
+        if self._is_cert_available():
             config.update(
                 {
                     "scheme": "https",
@@ -320,7 +322,7 @@ class PrometheusCharm(CharmBase):
     @property
     def internal_url(self) -> str:
         """Returns workload's FQDN. Used for ingress."""
-        scheme = "https" if self._is_tls_enabled() else "http"
+        scheme = "https" if self._is_cert_available() else "http"
         return f"{scheme}://{socket.getfqdn()}:{self._port}"
 
     @property
@@ -340,10 +342,6 @@ class PrometheusCharm(CharmBase):
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
         return self.internal_url
-
-    def _is_tls_enabled(self):
-        """Return True if the certificates relations is in place (cert may not be ready yet!)."""
-        return self.cert_handler.enabled
 
     @property
     def _prometheus_layer(self) -> Layer:
@@ -388,18 +386,36 @@ class PrometheusCharm(CharmBase):
         self.unit.status = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
-        self._update_cert()
-
         self.grafana_source_provider.update_source(self.external_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
         self._configure(_)
 
+    def _is_cert_available(self) -> bool:
+        return (
+            self.cert_handler.enabled
+            and self.cert_handler.cert
+            and self.cert_handler.key
+            and self.cert_handler.ca
+        )
+
+    def _is_tls_ready(self) -> bool:
+        # self._update_cert()  # This setter has side effects to avoid code ordering issues.
+        return (
+            self.container.can_connect()
+            and self.container.exists(CERT_PATH)
+            and self.container.exists(KEY_PATH)
+            and self.container.exists(CA_CERT_PATH)
+        )
+
     def _update_cert(self):
+        if not self.container.can_connect():
+            return
+
         ca_cert_path = Path("/usr/local/share/ca-certificates/ca.crt")
 
-        if self.cert_handler.cert and self.cert_handler.key and self.cert_handler.ca:
+        if self._is_cert_available():
             # Save the workload certificates
             self.container.push(
                 CERT_PATH,
@@ -407,8 +423,8 @@ class PrometheusCharm(CharmBase):
                 make_dirs=True,
             )
             self.container.push(
-                "/etc/grafana/grafana.key",
                 KEY_PATH,
+                self.cert_handler.key,
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
@@ -476,6 +492,9 @@ class PrometheusCharm(CharmBase):
         if not self.container.can_connect():
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
+
+        if self._is_cert_available() and not self.container.exists(CERT_PATH):
+            self._update_cert()
 
         try:
             # Need to reload if config or alerts changed.
@@ -553,10 +572,7 @@ class PrometheusCharm(CharmBase):
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self.external_url)
 
-        if self._is_tls_enabled() and not self.container.exists(CERT_PATH):
-            self.unit.status = WaitingStatus("Waiting for TLS certificates to be written to file")
-        else:
-            self.unit.status = ActiveStatus()
+        self.unit.status = ActiveStatus()
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
@@ -831,7 +847,7 @@ class PrometheusCharm(CharmBase):
 
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
-        if self._is_tls_enabled():
+        if self._is_tls_ready():
             return {
                 "tls_server_config": {
                     "cert_file": CERT_PATH,

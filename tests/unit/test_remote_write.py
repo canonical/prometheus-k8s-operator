@@ -218,6 +218,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
     def setUp(self, *unused):
         self.harness = Harness(PrometheusCharm)
         self.harness.set_model_info("lma", "12de4fae-06cc-4ceb-9089-567be09fec78")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates", "--fresh"], result=0)
         self.addCleanup(self.harness.cleanup)
 
         patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
