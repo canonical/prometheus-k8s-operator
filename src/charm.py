@@ -133,7 +133,7 @@ class PrometheusCharm(CharmBase):
             port=self._port,
             strip_prefix=True,
             redirect_https=True,
-            scheme=lambda: "https" if self._is_cert_available() else "http",
+            scheme=lambda: "https" if self._is_tls_ready() else "http",
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -307,7 +307,7 @@ class PrometheusCharm(CharmBase):
             ],
         }
 
-        if self._is_cert_available():
+        if self._is_tls_ready():
             config.update(
                 {
                     "scheme": "https",
@@ -322,7 +322,7 @@ class PrometheusCharm(CharmBase):
     @property
     def internal_url(self) -> str:
         """Returns workload's FQDN. Used for ingress."""
-        scheme = "https" if self._is_cert_available() else "http"
+        scheme = "https" if self._is_tls_ready() else "http"
         return f"{scheme}://{socket.getfqdn()}:{self._port}"
 
     @property
