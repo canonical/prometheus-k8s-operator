@@ -1,11 +1,15 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from scenario import Container, Context, Network, PeerRelation, Relation, State
+from scenario import Container, Context, ExecOutput, Network, PeerRelation, Relation, State
 
 
 def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) -> State:
-    container = Container("prometheus", can_connect=False)
+    container = Container(
+        "prometheus",
+        can_connect=False,
+        exec_mock={("update-ca-certificates", "--fresh"): ExecOutput(return_code=0, stdout="")},
+    )
     state = State(containers=[container])
     peer_rel = PeerRelation("prometheus-peers")
 

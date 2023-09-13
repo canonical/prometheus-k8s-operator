@@ -77,4 +77,4 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ghcr.io/canonical/prometheus:latest
+    upstream-source: ghcr.io/canonical/prometheus:dev
