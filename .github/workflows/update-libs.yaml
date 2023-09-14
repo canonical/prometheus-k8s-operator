@@ -11,4 +11,3 @@ jobs:
     name: Check libraries
     uses: canonical/observability/.github/workflows/update-libs.yaml@main
     secrets: inherit
-
