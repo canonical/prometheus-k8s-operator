@@ -33,8 +33,10 @@ container.push(certpath, self.cert_handler.cert)
 This library requires a peer relation to be declared in the requirer's metadata. Peer relation data
 is used for "persistent storage" of the private key and certs.
 """
+import ipaddress
 import json
 import socket
+from itertools import filterfalse
 from typing import List, Optional, Union
 
 try:
@@ -62,7 +64,16 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 0
-LIBPATCH = 7
+LIBPATCH = 8
+
+
+def is_ip_address(value: str) -> bool:
+    """Return True if the input value is a valid IPv4 address; False otherwise."""
+    try:
+        ipaddress.IPv4Address(value)
+        return True
+    except ipaddress.AddressValueError:
+        return False
 
 
 class CertChanged(EventBase):
@@ -88,7 +99,7 @@ class CertHandler(Object):
         peer_relation_name: str,
         certificates_relation_name: str = "certificates",
         cert_subject: Optional[str] = None,
-        extra_sans_dns: Optional[List[str]] = None,
+        extra_sans_dns: Optional[List[str]] = None,  # TODO: in v1, rename arg to `sans`
     ):
         """CertHandler is used to wrap TLS Certificates management operations for charms.
 
@@ -111,7 +122,9 @@ class CertHandler(Object):
         self.cert_subject = charm.unit.name.replace("/", "-") if not cert_subject else cert_subject
 
         # Use fqdn only if no SANs were given, and drop empty/duplicate SANs
-        self.sans_dns = list(set(filter(None, (extra_sans_dns or [socket.getfqdn()]))))
+        sans = list(set(filter(None, (extra_sans_dns or [socket.getfqdn()]))))
+        self.sans_ip = list(filter(is_ip_address, sans))
+        self.sans_dns = list(filterfalse(is_ip_address, sans))
 
         self.peer_relation_name = peer_relation_name
         self.certificates_relation_name = certificates_relation_name
@@ -229,6 +242,7 @@ class CertHandler(Object):
                 private_key=private_key.encode(),
                 subject=self.cert_subject,
                 sans_dns=self.sans_dns,
+                sans_ip=self.sans_ip,
             )
 
             if renew and self._csr:
@@ -237,7 +251,12 @@ class CertHandler(Object):
                     new_certificate_signing_request=csr,
                 )
             else:
-                logger.info("Creating CSR for %s with DNS %s", self.cert_subject, self.sans_dns)
+                logger.info(
+                    "Creating CSR for %s with DNS %s and IPs %s",
+                    self.cert_subject,
+                    self.sans_dns,
+                    self.sans_ip,
+                )
                 self.certificates.request_certificate_creation(certificate_signing_request=csr)
 
             # Note: CSR is being replaced with a new one, so until we get the new cert, we'd have

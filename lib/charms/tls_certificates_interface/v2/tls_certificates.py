@@ -298,7 +298,7 @@ from ops.charm import (
 )
 from ops.framework import EventBase, EventSource, Handle, Object
 from ops.jujuversion import JujuVersion
-from ops.model import SecretNotFoundError
+from ops.model import Relation, SecretNotFoundError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "afd8c2bccf834997afce12c2706d2ede"
@@ -308,7 +308,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 16
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -640,6 +640,17 @@ def generate_ca(
         private_key_object.public_key()  # type: ignore[arg-type]
     )
     subject_identifier = key_identifier = subject_identifier_object.public_bytes()
+    key_usage = x509.KeyUsage(
+        digital_signature=True,
+        key_encipherment=True,
+        key_cert_sign=True,
+        key_agreement=False,
+        content_commitment=False,
+        data_encipherment=False,
+        crl_sign=False,
+        encipher_only=False,
+        decipher_only=False,
+    )
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -657,6 +668,7 @@ def generate_ca(
             ),
             critical=False,
         )
+        .add_extension(key_usage, critical=True)
         .add_extension(
             x509.BasicConstraints(ca=True, path_length=None),
             critical=True,
@@ -689,7 +701,8 @@ def generate_certificate(
     """
     csr_object = x509.load_pem_x509_csr(csr)
     subject = csr_object.subject
-    issuer = x509.load_pem_x509_certificate(ca).issuer
+    ca_pem = x509.load_pem_x509_certificate(ca)
+    issuer = ca_pem.issuer
     private_key = serialization.load_pem_private_key(ca_key, password=ca_key_password)
 
     certificate_builder = (
@@ -700,6 +713,20 @@ def generate_certificate(
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.utcnow())
         .not_valid_after(datetime.utcnow() + timedelta(days=validity))
+        .add_extension(
+            x509.AuthorityKeyIdentifier(
+                key_identifier=ca_pem.extensions.get_extension_for_class(
+                    x509.SubjectKeyIdentifier
+                ).value.key_identifier,
+                authority_cert_issuer=None,
+                authority_cert_serial_number=None,
+            ),
+            critical=False,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(csr_object.public_key()), critical=False
+        )
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=False)
     )
 
     extensions_list = csr_object.extensions
@@ -730,6 +757,7 @@ def generate_certificate(
             extension.value,
             critical=extension.critical,
         )
+
     certificate_builder._version = x509.Version.v3
     cert = certificate_builder.sign(private_key, hashes.SHA256())  # type: ignore[arg-type]
     return cert.public_bytes(serialization.Encoding.PEM)
@@ -827,7 +855,7 @@ def generate_csr(
         sans_oid (list): List of registered ID SANs
         sans_dns (list): List of DNS subject alternative names (similar to the arg: sans)
         sans_ip (list): List of IP subject alternative names
-        additional_critical_extensions (list): List if critical additional extension objects.
+        additional_critical_extensions (list): List of critical additional extension objects.
             Object must be a x509 ExtensionType.
 
     Returns:
@@ -897,6 +925,22 @@ class TLSCertificatesProvidesV2(Object):
         self.charm = charm
         self.relationship_name = relationship_name
 
+    def _load_app_relation_data(self, relation: Relation) -> dict:
+        """Loads relation data from the application relation data bag.
+
+        Json loads all data.
+
+        Args:
+            relation_object: Relation data from the application databag
+
+        Returns:
+            dict: Relation data in dict format.
+        """
+        # If unit is not leader, it does not try to reach relation data.
+        if not self.model.unit.is_leader():
+            return {}
+        return _load_relation_data(relation.data[self.charm.app])
+
     def _add_certificate(
         self,
         relation_id: int,
@@ -931,7 +975,7 @@ class TLSCertificatesProvidesV2(Object):
             "ca": ca,
             "chain": chain,
         }
-        provider_relation_data = _load_relation_data(relation.data[self.charm.app])
+        provider_relation_data = self._load_app_relation_data(relation)
         provider_certificates = provider_relation_data.get("certificates", [])
         certificates = copy.deepcopy(provider_certificates)
         if new_certificate in certificates:
@@ -964,7 +1008,7 @@ class TLSCertificatesProvidesV2(Object):
             raise RuntimeError(
                 f"Relation {self.relationship_name} with relation id {relation_id} does not exist"
             )
-        provider_relation_data = _load_relation_data(relation.data[self.charm.app])
+        provider_relation_data = self._load_app_relation_data(relation)
         provider_certificates = provider_relation_data.get("certificates", [])
         certificates = copy.deepcopy(provider_certificates)
         for certificate_dict in certificates:
@@ -999,7 +1043,7 @@ class TLSCertificatesProvidesV2(Object):
         This method is meant to be used when the Root CA has changed.
         """
         for relation in self.model.relations[self.relationship_name]:
-            provider_relation_data = _load_relation_data(relation.data[self.charm.app])
+            provider_relation_data = self._load_app_relation_data(relation)
             provider_certificates = copy.deepcopy(provider_relation_data.get("certificates", []))
             for certificate in provider_certificates:
                 certificate["revoked"] = True
@@ -1081,7 +1125,7 @@ class TLSCertificatesProvidesV2(Object):
             else self.model.relations.get(self.relationship_name, [])
         )
         for relation in relations:
-            provider_relation_data = _load_relation_data(relation.data[self.charm.app])
+            provider_relation_data = self._load_app_relation_data(relation)
             provider_certificates = provider_relation_data.get("certificates", [])
 
             certificates[relation.app.name] = []  # type: ignore[union-attr]
@@ -1111,9 +1155,13 @@ class TLSCertificatesProvidesV2(Object):
         Returns:
             None
         """
-        assert event.unit is not None
+        if event.unit is None:
+            logger.error("Relation_changed event does not have a unit.")
+            return
+        if not self.model.unit.is_leader():
+            return
         requirer_relation_data = _load_relation_data(event.relation.data[event.unit])
-        provider_relation_data = _load_relation_data(event.relation.data[self.charm.app])
+        provider_relation_data = self._load_app_relation_data(event.relation)
         if not self._relation_data_is_valid(requirer_relation_data):
             logger.debug("Relation data did not pass JSON Schema validation")
             return
@@ -1152,7 +1200,7 @@ class TLSCertificatesProvidesV2(Object):
         )
         if not certificates_relation:
             raise RuntimeError(f"Relation {self.relationship_name} does not exist")
-        provider_relation_data = _load_relation_data(certificates_relation.data[self.charm.app])
+        provider_relation_data = self._load_app_relation_data(certificates_relation)
         list_of_csrs: List[str] = []
         for unit in certificates_relation.units:
             requirer_relation_data = _load_relation_data(certificates_relation.data[unit])
@@ -1184,16 +1232,19 @@ class TLSCertificatesProvidesV2(Object):
             that don't have a certificate issued.
         """
         all_unit_csr_mappings = copy.deepcopy(self.get_requirer_csrs(relation_id=relation_id))
+        filtered_all_unit_csr_mappings: List[Dict[str, Union[int, str, List[Dict[str, str]]]]] = []
         for unit_csr_mapping in all_unit_csr_mappings:
+            csrs_without_certs = []
             for csr in unit_csr_mapping["unit_csrs"]:  # type: ignore[union-attr]
-                if self.certificate_issued_for_csr(
+                if not self.certificate_issued_for_csr(
                     app_name=unit_csr_mapping["application_name"],  # type: ignore[arg-type]
                     csr=csr["certificate_signing_request"],  # type: ignore[index]
                 ):
-                    unit_csr_mapping["unit_csrs"].remove(csr)  # type: ignore[union-attr, arg-type]
-            if len(unit_csr_mapping["unit_csrs"]) == 0:  # type: ignore[arg-type]
-                all_unit_csr_mappings.remove(unit_csr_mapping)
-        return all_unit_csr_mappings
+                    csrs_without_certs.append(csr)
+            if csrs_without_certs:
+                unit_csr_mapping["unit_csrs"] = csrs_without_certs  # type: ignore[assignment]
+                filtered_all_unit_csr_mappings.append(unit_csr_mapping)
+        return filtered_all_unit_csr_mappings
 
     def get_requirer_csrs(
         self, relation_id: Optional[int] = None
