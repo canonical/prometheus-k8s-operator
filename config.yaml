@@ -72,8 +72,3 @@ options:
       automatically deduced from it).
       See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
     type: string
-  remote_write_receiver:
-    description: |
-      enforce the remote-write-receiver feature
-    type: boolean
-    default: false
