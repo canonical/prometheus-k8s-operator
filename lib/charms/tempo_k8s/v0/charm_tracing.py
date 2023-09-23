@@ -86,7 +86,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-grpc==1.17.0"]
 
@@ -313,7 +313,7 @@ def trace_charm(
     method calls on instances of this class.
 
     Usage:
-    >>> from charms.tempo_k8s.v0.charm_instrumentation import trace_charm
+    >>> from charms.tempo_k8s.v0.charm_tracing import trace_charm
     >>> from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
     >>> from ops import CharmBase
     >>>
@@ -370,7 +370,7 @@ def _autoinstrument(
 
     Usage:
 
-    >>> from charms.tempo_k8s.v0.charm_instrumentation import _autoinstrument
+    >>> from charms.tempo_k8s.v0.charm_tracing import _autoinstrument
     >>> from ops.main import main
     >>> _autoinstrument(
     >>>         MyCharm,
