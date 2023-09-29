@@ -386,10 +386,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
-        self.grafana_source_provider.update_source(self.external_url)
-        self.ingress.provide_ingress_requirements(
-            scheme=urlparse(self.internal_url).scheme, port=self._port
-        )
+        self._update_cert()
         self._configure(_)
 
     def _is_cert_available(self) -> bool:
@@ -492,8 +489,13 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        if self._is_cert_available() and not self.container.exists(CERT_PATH):
+        if self._is_cert_available() and not self._is_tls_ready():
             self._update_cert()
+
+        self.grafana_source_provider.update_source(self.external_url)
+        self.ingress.provide_ingress_requirements(
+            scheme=urlparse(self.internal_url).scheme, port=self._port
+        )
 
         try:
             # Need to reload if config or alerts changed.
