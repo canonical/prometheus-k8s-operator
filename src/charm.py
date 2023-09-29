@@ -14,7 +14,7 @@ from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
-from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
@@ -862,13 +862,13 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alertmanagers = self.alertmanager_consumer.get_cluster_info_with_scheme()
+        alertmanagers = self.alertmanager_consumer.get_cluster_info()
         if not alertmanagers:
             logger.debug("No alertmanagers available")
             return {}
 
         alerting_config: Dict[str, list] = PrometheusConfig.render_alertmanager_static_configs(
-            alertmanagers
+            list(alertmanagers)
         )
         return alerting_config
 
