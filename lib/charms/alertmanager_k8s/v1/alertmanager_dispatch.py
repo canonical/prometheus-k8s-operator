@@ -15,7 +15,7 @@ A typical example of including this library might be:
 
 ```python
 # ...
-from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 
 class SomeApplication(CharmBase):
   def __init__(self, *args):
@@ -25,11 +25,11 @@ class SomeApplication(CharmBase):
 ```
 """
 import logging
-import socket
-from typing import Callable, List, Optional, Set
+from typing import Dict, Optional, Set
 from urllib.parse import urlparse
 
 import ops
+import pydantic
 from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
@@ -38,16 +38,46 @@ from ops.model import Relation
 LIBID = "37f1ca6f8fe84e3092ebbf6dc2885310"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0
+LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 1
+
+PYDEPS = ["pydantic"]
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
 
 logger = logging.getLogger(__name__)
+
+
+class _ProviderSchemaV0(pydantic.BaseModel):
+    # Currently, the provider splits the URL and the consumer merges. That's why we switched to v1.
+    public_address: str
+    scheme: str = "http"
+
+
+class _ProviderSchemaV1(pydantic.BaseModel):
+    url: str
+
+    # The following are v0 fields that are continued to be populated for backwards compatibility.
+    # TODO: when we switch to pydantic 2+, use computed_field instead of the following fields, and
+    #  also drop the __init__.
+    #  https://docs.pydantic.dev/latest/api/fields/#pydantic.fields.computed_field
+    public_address: Optional[str]  # v0 relic
+    scheme: Optional[str]  # v0 relic
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        parsed = urlparse(kwargs["url"])
+        port = ":" + str(parsed.port) if parsed.port else ""
+        public_address = f"{parsed.hostname}{port}{parsed.path}"
+
+        # Derive v0 fields from v1 field
+        self.public_address = public_address
+        self.scheme = parsed.scheme
 
 
 class ClusterChanged(EventBase):
@@ -119,7 +149,7 @@ class AlertmanagerConsumer(RelationManagerBase):
     A typical example of importing this library might be
 
     ```python
-    from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+    from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
     ```
 
     In your charm's `__init__` method:
@@ -150,7 +180,7 @@ class AlertmanagerConsumer(RelationManagerBase):
 
     on = AlertmanagerConsumerEvents()  # pyright: ignore
 
-    def __init__(self, charm: CharmBase, relation_name: str = "alerting"):
+    def __init__(self, charm: CharmBase, *, relation_name: str = "alerting"):
         super().__init__(charm, relation_name, RelationRole.requires)
 
         self.framework.observe(
@@ -195,33 +225,27 @@ class AlertmanagerConsumer(RelationManagerBase):
             # inform consumer about the change
             self.on.cluster_changed.emit()  # pyright: ignore
 
-    def get_cluster_info(self) -> List[str]:
-        """Returns a list of addresses of all the alertmanager units."""
+    def get_cluster_info(self) -> Set[str]:
+        """Returns a list of URLs of all alertmanager units."""
         if not (relation := self.charm.model.get_relation(self.name)):
-            return []
-
-        alertmanagers: List[str] = []
-        for unit in relation.units:
-            address = relation.data[unit].get("public_address")
-            if address:
-                alertmanagers.append(address)
-        return sorted(alertmanagers)
-
-    def get_cluster_info_with_scheme(self) -> List[str]:
-        """Returns a list of URLs of all the alertmanager units."""
-        # FIXME: in v1 of the lib:
-        #  - use a dict {"url": ...} so it's extendable
-        #  - change return value to Set[str]
-        if not (relation := self.charm.model.get_relation(self.name)):
-            return []
+            return set()
 
         alertmanagers: Set[str] = set()
         for unit in relation.units:
-            address = relation.data[unit].get("public_address")
-            scheme = relation.data[unit].get("scheme", "http")
-            if address:
-                alertmanagers.add(f"{scheme}://{address}")
-        return sorted(alertmanagers)
+            if rel_data := relation.data[unit]:
+                try:  # v1
+                    data = _ProviderSchemaV1(**rel_data)
+                except pydantic.ValidationError as ev1:
+                    try:  # v0
+                        data = _ProviderSchemaV0(**rel_data)
+                    except pydantic.ValidationError as ev0:
+                        logger.warning("Relation data failed validation for v1: %s", ev1)
+                        logger.warning("Relation data failed validation for v0: %s", ev0)
+                    else:
+                        alertmanagers.add(f"{data.scheme}://{data.public_address}")
+                else:
+                    alertmanagers.add(data.url)
+        return alertmanagers
 
     def _on_relation_departed(self, _):
         """This hook notifies the charm that there may have been changes to the cluster."""
@@ -248,47 +272,40 @@ class AlertmanagerProvider(RelationManagerBase):
     A typical example of importing this library might be
 
     ```python
-    from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerProvider
+    from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerProvider
     ```
 
     In your charm's `__init__` method:
 
     ```python
-    self.alertmanager_provider = AlertmanagerProvider(self, self._relation_name, self._api_port)
+    self.alertmanager_provider = AlertmanagerProvider(
+        self, relation_name=self._relation_name, external_url=f"http://{socket.getfqdn()}:9093"
+    )
     ```
 
     Then inform consumers on any update to alertmanager cluster data via
 
     ```python
-    self.alertmanager_provider.update_relation_data()
+    self.alertmanager_provider.update(external_url=self.ingress.url)
     ```
 
     This provider auto-registers relation events on behalf of the main Alertmanager charm.
 
     Arguments:
-            charm (CharmBase): consumer charm
-            relation_name (str): relation name (not interface name)
-            api_port (int): alertmanager server's api port; this is needed here to avoid accessing
-                            charm constructs directly
-
-    Attributes:
-            charm (CharmBase): the Alertmanager charm
+            charm: consumer charm
+            external_url: URL for this unit's workload API endpoint
+            relation_name: relation name (not interface name)
     """
 
     def __init__(
         self,
-        charm,
-        relation_name: str = "alerting",
-        api_port: int = 9093,  # TODO: breaking change: drop this arg
+        charm: CharmBase,
         *,
-        external_url: Optional[Callable] = None,  # TODO: breaking change: make this mandatory
+        external_url: str,
+        relation_name: str = "alerting",
     ):
-        # TODO: breaking change: force keyword-only args from relation_name onwards
         super().__init__(charm, relation_name, RelationRole.provides)
-
-        # We don't need to worry about the literal "http" here because the external_url arg is set
-        # by the charm. TODO: drop it after external_url becomes a mandatory arg.
-        self._external_url = external_url or (lambda: f"http://{socket.getfqdn()}:{api_port}")
+        self._external_url = external_url
 
         events = self.charm.on[self.name]
 
@@ -302,9 +319,9 @@ class AlertmanagerProvider(RelationManagerBase):
         This is needed for consumers such as prometheus, which should be aware of all alertmanager
         instances.
         """
-        self.update_relation_data(event)
+        self._update_relation_data(event)
 
-    def _generate_relation_data(self, relation: Relation):
+    def _generate_relation_data(self, relation: Relation) -> Dict[str, str]:
         """Helper function to generate relation data in the correct format.
 
         Addresses are without scheme.
@@ -314,13 +331,10 @@ class AlertmanagerProvider(RelationManagerBase):
         #  deduplicate so that the config file only has one entry, but ideally the
         #  "alertmanagers.[].static_configs.targets" section in the prometheus config should list
         #  all units.
-        parsed = urlparse(self._external_url())
-        return {
-            "public_address": f"{parsed.hostname}:{parsed.port or 80}{parsed.path}",
-            "scheme": parsed.scheme,
-        }
+        data = _ProviderSchemaV1(url=self._external_url)
+        return data.dict()
 
-    def update_relation_data(self, event: Optional[RelationEvent] = None):
+    def _update_relation_data(self, event: Optional[RelationEvent] = None):
         """Helper function for updating relation data bags.
 
         This function can be used in two different ways:
@@ -346,3 +360,8 @@ class AlertmanagerProvider(RelationManagerBase):
             event.relation.data[self.charm.unit].update(
                 self._generate_relation_data(event.relation)
             )
+
+    def update(self, *, external_url: str):
+        """Update data pertaining to this relation manager (similar args to __init__)."""
+        self._external_url = external_url
+        self._update_relation_data()

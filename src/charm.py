@@ -14,7 +14,7 @@ from typing import Dict, Optional, cast
 from urllib.parse import urlparse
 
 import yaml
-from charms.alertmanager_k8s.v0.alertmanager_dispatch import AlertmanagerConsumer
+from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
@@ -386,10 +386,7 @@ class PrometheusCharm(CharmBase):
         self.unit.status = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
-        self.grafana_source_provider.update_source(self.external_url)
-        self.ingress.provide_ingress_requirements(
-            scheme=urlparse(self.internal_url).scheme, port=self._port
-        )
+        self._update_cert()
         self._configure(_)
 
     def _is_cert_available(self) -> bool:
@@ -492,8 +489,13 @@ class PrometheusCharm(CharmBase):
             self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
-        if self._is_cert_available() and not self.container.exists(CERT_PATH):
+        if self._is_cert_available() and not self._is_tls_ready():
             self._update_cert()
+
+        self.grafana_source_provider.update_source(self.external_url)
+        self.ingress.provide_ingress_requirements(
+            scheme=urlparse(self.internal_url).scheme, port=self._port
+        )
 
         try:
             # Need to reload if config or alerts changed.
@@ -860,13 +862,13 @@ class PrometheusCharm(CharmBase):
         Returns:
             a dictionary consisting of the alerting configuration for Prometheus.
         """
-        alertmanagers = self.alertmanager_consumer.get_cluster_info_with_scheme()
+        alertmanagers = self.alertmanager_consumer.get_cluster_info()
         if not alertmanagers:
             logger.debug("No alertmanagers available")
             return {}
 
         alerting_config: Dict[str, list] = PrometheusConfig.render_alertmanager_static_configs(
-            alertmanagers
+            list(alertmanagers)
         )
         return alerting_config
 
