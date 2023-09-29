@@ -61,7 +61,17 @@ follows
 """  # noqa: W505
 import json
 import logging
-from typing import TYPE_CHECKING, List, Literal, MutableMapping, Optional, Tuple, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Literal,
+    MutableMapping,
+    Optional,
+    Tuple,
+    cast,
+)
 
 import pydantic
 from ops.charm import (
@@ -83,7 +93,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 PYDEPS = ["pydantic<2.0"]
 
@@ -457,7 +467,7 @@ class TracingEndpointRequirer(Object):
         return self._charm.model.relations[self._relation_name]
 
     @property
-    def _relation(self) -> Relation:
+    def _relation(self) -> Optional[Relation]:
         """If this wraps a single endpoint, the relation bound to it, if any."""
         if not self._is_single_endpoint:
             objname = type(self).__name__
@@ -474,7 +484,7 @@ class TracingEndpointRequirer(Object):
         """Is this endpoint ready?"""
         relation = relation or self._relation
         if not relation:
-            logger.error(f"no relation on {self._relation_name}: tracing not ready")
+            logger.debug(f"no relation on {self._relation_name !r}: tracing not ready")
             return False
         if relation.data is None:
             logger.error(f"relation data is None for {relation}")
@@ -502,7 +512,7 @@ class TracingEndpointRequirer(Object):
     def _on_tracing_relation_broken(self, event: RelationBrokenEvent):
         """Notify the providers that the endpoint is broken."""
         relation = event.relation
-        self.on.endpoint_removed.emit(relation)
+        self.on.endpoint_removed.emit(relation)  # type: ignore
 
     def get_all_endpoints(
         self, relation: Optional[Relation] = None
@@ -512,7 +522,7 @@ class TracingEndpointRequirer(Object):
             return
         return TracingProviderAppData.load(relation.data[relation.app])  # type: ignore
 
-    def _get_ingester(self, relation: Relation, protocol: IngesterProtocol):
+    def _get_ingester(self, relation: Optional[Relation], protocol: IngesterProtocol):
         ep = self.get_all_endpoints(relation)
         if not ep:
             return None
@@ -539,12 +549,10 @@ class TracingEndpointRequirer(Object):
         """Ingester endpoint for the ``tempo`` protocol."""
         return self._get_ingester(relation or self._relation, protocol="tempo")
 
-    @property
-    def jaeger_http_thrift_endpoint(self) -> Optional[str]:
+    def jaeger_http_thrift_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``jaeger_http_thrift`` protocol."""
-        return self._get_ingester("jaeger_http_thrift")
+        return self._get_ingester(relation or self._relation, "jaeger_http_thrift")
 
-    @property
-    def jaeger_grpc_endpoint(self) -> Optional[str]:
+    def jaeger_grpc_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``jaeger_grpc`` protocol."""
-        return self._get_ingester("jaeger_grpc")
+        return self._get_ingester(relation or self._relation, "jaeger_grpc")
