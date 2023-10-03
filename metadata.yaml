@@ -77,4 +77,4 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ghcr.io/canonical/prometheus:dev
+    upstream-source: ubuntu/prometheus:2.46.0-22.04_stable
