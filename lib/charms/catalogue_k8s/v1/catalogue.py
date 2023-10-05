@@ -6,14 +6,14 @@
 import ipaddress
 import logging
 import socket
-from typing import List, Optional, Union
+from typing import Optional
 
 from ops.charm import CharmBase
-from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
+from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
-LIBAPI = 0
-LIBPATCH = 5
+LIBAPI = 1
+LIBPATCH = 0
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -21,7 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 class CatalogueItem:
-    """`CatalogueItem` represents an application entry sent to a catalogue."""
+    """`CatalogueItem` represents an application entry sent to a catalogue.
+
+    The icon is an iconify mdi string; see https://icon-sets.iconify.design/mdi.
+    """
 
     def __init__(self, name: str, url: str, icon: str, description: str = ""):
         self.name = name
@@ -38,7 +41,6 @@ class CatalogueConsumer(Object):
         charm,
         relation_name: str = DEFAULT_RELATION_NAME,
         item: Optional[CatalogueItem] = None,
-        refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
@@ -52,37 +54,10 @@ class CatalogueConsumer(Object):
         self.framework.observe(events.relation_departed, self._on_relation_changed)
         self.framework.observe(events.relation_created, self._on_relation_changed)
 
-        self._register_refresh_event(refresh_event)
+    def _on_relation_changed(self, _):
+        self._update_relation_data()
 
-    def _register_refresh_event(
-        self, refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None
-    ):
-        if not refresh_event:
-            if len(self._charm.meta.containers) == 1:
-                if "kubernetes" in self._charm.meta.series:
-                    # This is a podspec charm
-                    refresh_event = [self._charm.on.update_status]
-                else:
-                    # This is a sidecar/pebble charm
-                    container = list(self._charm.meta.containers.values())[0]
-                    refresh_event = [self._charm.on[container.name.replace("-", "_")].pebble_ready]
-            else:
-                logger.warning(
-                    "%d containers are present in metadata.yaml and "
-                    "refresh_event was not specified. Defaulting to update_status. "
-                    "External address may not be set in a timely fashion.",
-                    len(self._charm.meta.containers),
-                )
-                refresh_event = [self._charm.on.update_status]
-
-        else:
-            if not isinstance(refresh_event, list):
-                refresh_event = [refresh_event]
-
-        for ev in refresh_event:
-            self.framework.observe(ev, self._on_relation_changed)
-
-    def _on_relation_changed(self, event):
+    def _update_relation_data(self):
         if not self._charm.unit.is_leader():
             return
 
@@ -94,6 +69,11 @@ class CatalogueConsumer(Object):
             relation.data[self._charm.model.app]["description"] = self._item.description
             relation.data[self._charm.model.app]["url"] = self.unit_address(relation)
             relation.data[self._charm.model.app]["icon"] = self._item.icon
+
+    def update_item(self, item: CatalogueItem):
+        """Update the catalogue item."""
+        self._item = item
+        self._update_relation_data()
 
     def unit_address(self, relation):
         """The unit address of the consumer, on which it is reachable.

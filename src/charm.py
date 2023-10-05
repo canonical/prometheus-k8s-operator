@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 import yaml
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
-from charms.catalogue_k8s.v0.catalogue import CatalogueConsumer, CatalogueItem
+from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.observability_libs.v0.cert_handler import CertHandler
@@ -173,26 +173,7 @@ class PrometheusCharm(CharmBase):
             refresh_event=self.cert_handler.on.cert_changed,
         )
 
-        self.catalogue = CatalogueConsumer(
-            charm=self,
-            refresh_event=[
-                self.on.prometheus_pebble_ready,
-                self.on.leader_elected,
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
-                self.on.config_changed,  # also covers upgrade-charm
-                self.cert_handler.on.cert_changed,
-            ],
-            item=CatalogueItem(
-                name="Prometheus",
-                icon="chart-line-variant",
-                url=self.external_url,
-                description=(
-                    "Prometheus collects, stores and serves metrics as time series data, "
-                    "alongside optional key-value pairs called labels."
-                ),
-            ),
-        )
+        self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
         self.tracing = TracingEndpointRequirer(self)
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
@@ -224,6 +205,18 @@ class PrometheusCharm(CharmBase):
         new_ports_to_open = planned_ports.difference(actual_ports)
         for p in new_ports_to_open:
             self.unit.open_port(p.protocol, p.port)
+
+    @property
+    def _catalogue_item(self) -> CatalogueItem:
+        return CatalogueItem(
+            name="Prometheus",
+            icon="chart-line-variant",
+            url=self.external_url,
+            description=(
+                "Prometheus collects, stores and serves metrics as time series data, "
+                "alongside optional key-value pairs called labels."
+            ),
+        )
 
     @property
     def self_scraping_job(self):
@@ -572,6 +565,7 @@ class PrometheusCharm(CharmBase):
 
         self.remote_write_provider.update_endpoint()
         self.grafana_source_provider.update_source(self.external_url)
+        self.catalogue.update_item(item=self._catalogue_item)
 
         self.unit.status = ActiveStatus()
 
