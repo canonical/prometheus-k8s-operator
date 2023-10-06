@@ -77,4 +77,6 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ubuntu/prometheus:2.46.0-22.04_stable
+    # Use ghcr image until the missing udpate-ca-certificates issue is resolved.
+    # https://github.com/canonical/prometheus-rock/issues/33
+    upstream-source: ghcr.io/canonical/prometheus:dev
