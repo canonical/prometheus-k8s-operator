@@ -169,7 +169,7 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.external_url,
+            source_url=self.internal_url,  # https://github.com/canonical/operator/issues/970
             refresh_event=self.cert_handler.on.cert_changed,
         )
 
@@ -485,10 +485,14 @@ class PrometheusCharm(CharmBase):
         if self._is_cert_available() and not self._is_tls_ready():
             self._update_cert()
 
-        self.grafana_source_provider.update_source(self.external_url)
+        # We use the internal url for grafana source due to
+        # https://github.com/canonical/operator/issues/970
+        self.grafana_source_provider.update_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
+        self.remote_write_provider.update_endpoint()
+        self.catalogue.update_item(item=self._catalogue_item)
 
         try:
             # Need to reload if config or alerts changed.
@@ -562,10 +566,6 @@ class PrometheusCharm(CharmBase):
             and self.unit.status not in early_return_statuses.values()
         ):
             return
-
-        self.remote_write_provider.update_endpoint()
-        self.grafana_source_provider.update_source(self.external_url)
-        self.catalogue.update_item(item=self._catalogue_item)
 
         self.unit.status = ActiveStatus()
 
