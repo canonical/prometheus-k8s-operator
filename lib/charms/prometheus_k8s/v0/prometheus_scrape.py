@@ -1844,7 +1844,7 @@ class MetricsEndpointAggregator(Object):
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
         groups = [] + _type_convert_stored(
-           self._stored.alert_rules  # pyright: ignore
+            self._stored.alert_rules  # pyright: ignore
         )  # list of alert rule groups
         for relation in self.model.relations[self._alert_rules_relation]:
             unit_rules = self._get_alert_rules(relation)
