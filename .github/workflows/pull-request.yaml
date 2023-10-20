@@ -1,9 +1,5 @@
 name: Pull Requests
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   pull_request:
     branches:
@@ -12,5 +8,5 @@ on:
 jobs:
   pull-request:
     name: PR
-    uses: canonical/observability/.github/workflows/pull-request.yaml@main
+    uses: canonical/observability/.github/workflows/charm-pull-request.yaml@main
     secrets: inherit

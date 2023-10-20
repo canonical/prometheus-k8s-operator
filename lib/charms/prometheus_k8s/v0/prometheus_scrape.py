@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 42
+LIBPATCH = 43
 
 PYDEPS = ["cosl"]
 
@@ -764,7 +764,7 @@ def _validate_relation_by_interface_and_direction(
     actual_relation_interface = relation.interface_name
     if actual_relation_interface != expected_relation_interface:
         raise RelationInterfaceMismatchError(
-            relation_name, expected_relation_interface, actual_relation_interface
+            relation_name, expected_relation_interface, actual_relation_interface or "None"
         )
 
     if expected_relation_role == RelationRole.provides:
@@ -857,7 +857,7 @@ class MonitoringEvents(ObjectEvents):
 class MetricsEndpointConsumer(Object):
     """A Prometheus based Monitoring service."""
 
-    on = MonitoringEvents()
+    on = MonitoringEvents()  # pyright: ignore
 
     def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
         """A Prometheus based Monitoring service.
@@ -1294,7 +1294,7 @@ def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> st
 class MetricsEndpointProvider(Object):
     """A metrics endpoint for Prometheus."""
 
-    on = MetricsEndpointProviderEvents()
+    on = MetricsEndpointProviderEvents()  # pyright: ignore
 
     def __init__(
         self,
@@ -1836,14 +1836,16 @@ class MetricsEndpointAggregator(Object):
             return
 
         jobs = [] + _type_convert_stored(
-            self._stored.jobs
+            self._stored.jobs  # pyright: ignore
         )  # list of scrape jobs, one per relation
         for relation in self.model.relations[self._target_relation]:
             targets = self._get_targets(relation)
             if targets and relation.app:
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
-        groups = [] + _type_convert_stored(self._stored.alert_rules)  # list of alert rule groups
+        groups = [] + _type_convert_stored(
+            self._stored.alert_rules  # pyright: ignore
+        )  # list of alert rule groups
         for relation in self.model.relations[self._alert_rules_relation]:
             unit_rules = self._get_alert_rules(relation)
             if unit_rules and relation.app:
@@ -1895,7 +1897,7 @@ class MetricsEndpointAggregator(Object):
             jobs.append(updated_job)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
-            if not _type_convert_stored(self._stored.jobs) == jobs:
+            if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
 
     def _on_prometheus_targets_departed(self, event):
@@ -1947,7 +1949,7 @@ class MetricsEndpointAggregator(Object):
 
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
-            if not _type_convert_stored(self._stored.jobs) == jobs:
+            if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
 
     def _job_name(self, appname) -> str:
@@ -2126,7 +2128,7 @@ class MetricsEndpointAggregator(Object):
                 groups.append(updated_group)
             relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
-            if not _type_convert_stored(self._stored.alert_rules) == groups:
+            if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
 
     def _on_alert_rules_departed(self, event):
@@ -2176,7 +2178,7 @@ class MetricsEndpointAggregator(Object):
                 json.dumps({"groups": groups}) if groups else "{}"
             )
 
-            if not _type_convert_stored(self._stored.alert_rules) == groups:
+            if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
 
     def _get_alert_rules(self, relation) -> dict:
