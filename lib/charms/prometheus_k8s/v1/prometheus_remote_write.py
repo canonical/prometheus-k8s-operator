@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 PYDEPS = ["cosl"]
 
@@ -211,7 +211,7 @@ def _validate_relation_by_interface_and_direction(
     actual_relation_interface = relation.interface_name
     if actual_relation_interface != expected_relation_interface:
         raise RelationInterfaceMismatchError(
-            relation_name, expected_relation_interface, actual_relation_interface
+            relation_name, expected_relation_interface, actual_relation_interface or "None"
         )
 
     if expected_relation_role == RelationRole.provides:
@@ -394,7 +394,7 @@ class PrometheusRemoteWriteConsumer(Object):
      ```
     """
 
-    on = PrometheusRemoteWriteConsumerEvents()
+    on = PrometheusRemoteWriteConsumerEvents()  # pyright: ignore
 
     def __init__(
         self,
@@ -458,7 +458,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
     def _handle_endpoints_changed(self, event: RelationEvent) -> None:
-        if self._charm.unit.is_leader():
+        if self._charm.unit.is_leader() and event.app is not None:
             ev = json.loads(event.relation.data[event.app].get("event", "{}"))
 
             if ev:
@@ -591,7 +591,7 @@ class PrometheusRemoteWriteProvider(Object):
     name to differentiate between "incoming" and "outgoing" remote write interactions is necessary.
     """
 
-    on = PrometheusRemoteWriteProviderEvents()
+    on = PrometheusRemoteWriteProviderEvents()  # pyright: ignore
 
     def __init__(
         self,

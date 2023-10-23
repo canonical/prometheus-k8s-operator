@@ -385,9 +385,9 @@ class PrometheusCharm(CharmBase):
     def _is_cert_available(self) -> bool:
         return (
             self.cert_handler.enabled
-            and self.cert_handler.cert
-            and self.cert_handler.key
-            and self.cert_handler.ca
+            and (self.cert_handler.cert is not None)
+            and (self.cert_handler.key is not None)
+            and (self.cert_handler.ca is not None)
         )
 
     def _is_tls_ready(self) -> bool:
@@ -408,31 +408,31 @@ class PrometheusCharm(CharmBase):
             # Save the workload certificates
             self.container.push(
                 CERT_PATH,
-                self.cert_handler.cert,
+                self.cert_handler.cert,  # pyright: ignore
                 make_dirs=True,
             )
             self.container.push(
                 KEY_PATH,
-                self.cert_handler.key,
+                self.cert_handler.key,  # pyright: ignore
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
             self.container.push(
                 ca_cert_path,
-                self.cert_handler.ca,
+                self.cert_handler.ca,  # pyright: ignore
                 make_dirs=True,
             )
             # FIXME with the update-ca-certificates machinery prometheus shouldn't need
             #  CA_CERT_PATH.
             self.container.push(
                 CA_CERT_PATH,
-                self.cert_handler.ca,
+                self.cert_handler.ca,  # pyright: ignore
                 make_dirs=True,
             )
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(self.cert_handler.ca)
+            ca_cert_path.write_text(self.cert_handler.ca)  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
