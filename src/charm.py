@@ -63,6 +63,7 @@ from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
 PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
+PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
@@ -171,6 +172,7 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.internal_url,  # https://github.com/canonical/operator/issues/970
             refresh_event=self.cert_handler.on.cert_changed,
+            extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
@@ -827,7 +829,10 @@ class PrometheusCharm(CharmBase):
             a dictionary consisting of global configuration for Prometheus.
         """
         config = self.model.config
-        global_config = {"scrape_interval": "1m", "scrape_timeout": "10s"}
+        global_config = {
+            "scrape_interval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL,
+            "scrape_timeout": "10s",
+        }
 
         if config.get("evaluation_interval") and self._is_valid_timespec(
             config["evaluation_interval"]
