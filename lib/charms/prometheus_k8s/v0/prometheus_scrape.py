@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 43
+LIBPATCH = 44
 
 PYDEPS = ["cosl"]
 
@@ -1028,6 +1028,10 @@ class MetricsEndpointConsumer(Object):
                     "Alert rules were found but no usable group or identifier was present."
                 )
                 continue
+
+            # We need to append the relation info to the identifier. This is to allow for cases for there are two
+            # relations which eventually scrape the same application. Issue #551.
+            identifier = f"{identifier}_{relation.name}_{relation.id}"
 
             alerts[identifier] = alert_rules
 
