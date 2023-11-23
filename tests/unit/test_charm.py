@@ -413,7 +413,9 @@ class TestAlertsFilename(unittest.TestCase):
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
+            {
+                f"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app_{RELATION_NAME}_{self.rel_id}.rules"
+            },
         )
 
     @k8s_resource_multipatch
@@ -436,7 +438,9 @@ class TestAlertsFilename(unittest.TestCase):
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app.rules"},
+            {
+                f"/etc/prometheus/rules/juju_ZZZ-model_a5edc336_zzz-app_{RELATION_NAME}_{self.rel_id}.rules"
+            },
         )
 
     @k8s_resource_multipatch
@@ -458,7 +462,9 @@ class TestAlertsFilename(unittest.TestCase):
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
             {file.path for file in files},
-            {"/etc/prometheus/rules/juju_remote-model_be44e4b8_remote-app.rules"},
+            {
+                f"/etc/prometheus/rules/juju_remote-model_be44e4b8_remote-app_{RELATION_NAME}_{self.rel_id}.rules"
+            },
         )
 
     @k8s_resource_multipatch
@@ -480,7 +486,8 @@ class TestAlertsFilename(unittest.TestCase):
         container = self.harness.charm.unit.get_container(self.harness.charm._name)
         files = container.list_files("/etc/prometheus/rules")
         self.assertEqual(
-            {file.path for file in files}, {"/etc/prometheus/rules/juju_ZZZ_group_alerts.rules"}
+            {file.path for file in files},
+            {f"/etc/prometheus/rules/juju_ZZZ_group_alerts_{RELATION_NAME}_{self.rel_id}.rules"},
         )
 
 

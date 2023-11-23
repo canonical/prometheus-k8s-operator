@@ -1015,7 +1015,6 @@ class MetricsEndpointConsumer(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
 
                 except KeyError as e:
                     logger.debug(
@@ -1029,6 +1028,10 @@ class MetricsEndpointConsumer(Object):
                     "Alert rules were found but no usable group or identifier was present."
                 )
                 continue
+
+            # We need to append the relation info to the identifier. This is to allow for cases for there are two
+            # relations which eventually scrape the same application. Issue #551.
+            identifier = f"{identifier}_{relation.name}_{relation.id}"
 
             alerts[identifier] = alert_rules
 
