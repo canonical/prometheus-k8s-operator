@@ -499,8 +499,9 @@ class TestEndpointConsumer(unittest.TestCase):
                 messages[1],
             )
         alerts = self.harness.charm.prometheus_consumer.alerts
-        self.assertIn("unlabeled_external_cpu_alerts", alerts.keys())
-        self.assertEqual(UNLABELED_ALERT_RULES, alerts["unlabeled_external_cpu_alerts"])
+        identifier = f"unlabeled_external_cpu_alerts_{RELATION_NAME}_{rel_id}"
+        self.assertIn(identifier, alerts.keys())
+        self.assertEqual(UNLABELED_ALERT_RULES, alerts[identifier])
 
     def test_bad_scrape_job(self):
         self.harness.set_leader(True)
