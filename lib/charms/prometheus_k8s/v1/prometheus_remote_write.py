@@ -749,6 +749,7 @@ class PrometheusRemoteWriteProvider(Object):
 
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
+                logger.error(f"Invalid alert rule file: {errmsg}")
                 if self._charm.unit.is_leader():
                     data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                     data["errors"] = errmsg
