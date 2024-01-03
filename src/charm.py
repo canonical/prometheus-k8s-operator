@@ -753,7 +753,7 @@ class PrometheusCharm(CharmBase):
         pvc_name = ""
         for volume in cast(
             Pod, client.get(Pod, name=pod_name, namespace=self.model.name)
-        ).spec.volumes:
+        ).spec.volumes:  # pyright: ignore
             if not volume.persistentVolumeClaim:
                 # The volumes 'charm-data' and 'kube-api-access-xxxxx' do not have PVCs - filter
                 # those out.
@@ -776,7 +776,9 @@ class PrometheusCharm(CharmBase):
         capacity = cast(
             PersistentVolumeClaim,
             client.get(PersistentVolumeClaim, name=pvc_name, namespace=namespace),
-        ).status.capacity["storage"]
+        ).status.capacity[  # pyright: ignore
+            "storage"
+        ]
 
         # The other kind of storage to query for is
         # client.get(...).spec.resources.requests["storage"]

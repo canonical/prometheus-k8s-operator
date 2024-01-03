@@ -93,7 +93,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 PYDEPS = ["pydantic<2.0"]
 
@@ -494,7 +494,7 @@ class TracingEndpointRequirer(Object):
             return False
         try:
             TracingProviderAppData.load(relation.data[relation.app])
-        except (json.JSONDecodeError, pydantic.ValidationError):
+        except (json.JSONDecodeError, pydantic.ValidationError, DataValidationError):
             logger.info(f"failed validating relation data for {relation}")
             return False
         return True

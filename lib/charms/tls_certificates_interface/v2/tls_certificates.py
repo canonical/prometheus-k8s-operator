@@ -298,7 +298,7 @@ from ops.charm import (
 )
 from ops.framework import EventBase, EventSource, Handle, Object
 from ops.jujuversion import JujuVersion
-from ops.model import Relation, SecretNotFoundError
+from ops.model import ModelError, Relation, RelationDataContent, SecretNotFoundError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "afd8c2bccf834997afce12c2706d2ede"
@@ -308,7 +308,7 @@ LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 20
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -600,23 +600,26 @@ class CertificateRevocationRequestEvent(EventBase):
         self.chain = snapshot["chain"]
 
 
-def _load_relation_data(raw_relation_data: dict) -> dict:
+def _load_relation_data(relation_data_content: RelationDataContent) -> dict:
     """Loads relation data from the relation data bag.
 
     Json loads all data.
 
     Args:
-        raw_relation_data: Relation data from the databag
+        relation_data_content: Relation data from the databag
 
     Returns:
         dict: Relation data in dict format.
     """
     certificate_data = dict()
-    for key in raw_relation_data:
-        try:
-            certificate_data[key] = json.loads(raw_relation_data[key])
-        except (json.decoder.JSONDecodeError, TypeError):
-            certificate_data[key] = raw_relation_data[key]
+    try:
+        for key in relation_data_content:
+            try:
+                certificate_data[key] = json.loads(relation_data_content[key])
+            except (json.decoder.JSONDecodeError, TypeError):
+                certificate_data[key] = relation_data_content[key]
+    except ModelError:
+        pass
     return certificate_data
 
 
@@ -1257,12 +1260,24 @@ class TLSCertificatesProvidesV2(Object):
                 )
                 self.remove_certificate(certificate=certificate["certificate"])
 
-    def get_requirer_csrs_with_no_certs(
+    def get_outstanding_certificate_requests(
         self, relation_id: Optional[int] = None
     ) -> List[Dict[str, Union[int, str, List[Dict[str, str]]]]]:
-        """Filters the requirer's units csrs.
+        """Returns CSR's for which no certificate has been issued.
 
-        Keeps the ones for which no certificate was provided.
+        Example return: [
+            {
+                "relation_id": 0,
+                "application_name": "tls-certificates-requirer",
+                "unit_name": "tls-certificates-requirer/0",
+                "unit_csrs": [
+                    {
+                        "certificate_signing_request": "-----BEGIN CERTIFICATE REQUEST-----...",
+                        "is_ca": false
+                    }
+                ]
+            }
+        ]
 
         Args:
             relation_id (int): Relation id
@@ -1279,6 +1294,7 @@ class TLSCertificatesProvidesV2(Object):
                 if not self.certificate_issued_for_csr(
                     app_name=unit_csr_mapping["application_name"],  # type: ignore[arg-type]
                     csr=csr["certificate_signing_request"],  # type: ignore[index]
+                    relation_id=relation_id,
                 ):
                     csrs_without_certs.append(csr)
             if csrs_without_certs:
@@ -1325,17 +1341,21 @@ class TLSCertificatesProvidesV2(Object):
                 )
         return unit_csr_mappings
 
-    def certificate_issued_for_csr(self, app_name: str, csr: str) -> bool:
+    def certificate_issued_for_csr(
+        self, app_name: str, csr: str, relation_id: Optional[int]
+    ) -> bool:
         """Checks whether a certificate has been issued for a given CSR.
 
         Args:
             app_name (str): Application name that the CSR belongs to.
             csr (str): Certificate Signing Request.
-
+            relation_id (Optional[int]): Relation ID
         Returns:
             bool: True/False depending on whether a certificate has been issued for the given CSR.
         """
-        issued_certificates_per_csr = self.get_issued_certificates()[app_name]
+        issued_certificates_per_csr = self.get_issued_certificates(relation_id=relation_id)[
+            app_name
+        ]
         for issued_pair in issued_certificates_per_csr:
             if "csr" in issued_pair and issued_pair["csr"] == csr:
                 return csr_matches_certificate(csr, issued_pair["certificate"])
