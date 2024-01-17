@@ -115,7 +115,9 @@ class PrometheusCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.status = CompositeStatus()
+        self.status = CompositeStatus(
+            retention_size=ActiveStatus(), timespec=ActiveStatus(), k8s_patch=ActiveStatus()
+        )
 
         self._name = "prometheus"
         self._port = 9090
