@@ -287,10 +287,10 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
-       # AND WHEN the config option is set and then unset
+        # AND WHEN the config option is set and then unset
         self.harness.update_config({"maximum_retention_size": "50%"})
         self.harness.update_config(unset={"maximum_retention_size"})
-        
+
         # THEN the pebble plan is back to 80%
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
@@ -306,7 +306,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
 
-        for (set_point, read_back) in [("0%", "0GB"), ("50%", "0.5GB"), ("100%", "1GB")]:
+        for set_point, read_back in [("0%", "0GB"), ("50%", "0.5GB"), ("100%", "1GB")]:
             with self.subTest(limit=set_point):
                 # WHEN a limit is set
                 self.harness.update_config({"maximum_retention_size": set_point})
@@ -314,7 +314,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
                 # THEN the pebble plan the adjusted capacity
                 plan = self.harness.get_container_pebble_plan("prometheus")
                 self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), read_back)
-        
+
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_invalid_retention_size_config_option_string(self, *unused):

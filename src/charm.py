@@ -7,12 +7,10 @@
 import hashlib
 import logging
 import re
-from typing import TypedDict
-
 import socket
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -56,8 +54,8 @@ from ops.model import (
     MaintenanceStatus,
     ModelError,
     OpenedPort,
-    WaitingStatus,
     StatusBase,
+    WaitingStatus,
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
@@ -95,6 +93,8 @@ class ConfigError(Exception):
 
 
 class CompositeStatus(TypedDict):
+    """Per-component status holder."""
+
     retention_size: StatusBase
     timespec: StatusBase
     k8s_patch: StatusBase
@@ -696,7 +696,9 @@ class PrometheusCharm(CharmBase):
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
-                self.status["retention_size"] = BlockedStatus(f"Error calculating retention size: {e}")
+                self.status["retention_size"] = BlockedStatus(
+                    f"Error calculating retention size: {e}"
+                )
             except LightkubeApiError as e:
                 self.status["retention_size"] = BlockedStatus(
                     "Error calculating retention size "
