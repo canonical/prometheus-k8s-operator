@@ -7,6 +7,8 @@
 import hashlib
 import logging
 import re
+from typing import TypedDict
+
 import socket
 import subprocess
 from pathlib import Path
@@ -55,6 +57,7 @@ from ops.model import (
     ModelError,
     OpenedPort,
     WaitingStatus,
+    StatusBase,
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
@@ -91,6 +94,12 @@ class ConfigError(Exception):
     pass
 
 
+class CompositeStatus(TypedDict):
+    retention_size: StatusBase
+    timespec: StatusBase
+    k8s_patch: StatusBase
+
+
 @trace_charm(
     tracing_endpoint="tempo",
     extra_types=[
@@ -106,6 +115,7 @@ class PrometheusCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.status = CompositeStatus()
 
         self._name = "prometheus"
         self._port = 9090
@@ -379,7 +389,7 @@ class PrometheusCharm(CharmBase):
         self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
-        self.unit.status = BlockedStatus(cast(str, event.message))
+        self.status["k8s_patch"] = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
         self._update_cert()
@@ -564,13 +574,7 @@ class PrometheusCharm(CharmBase):
 
             logger.info("Prometheus configuration reloaded")
 
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status not in early_return_statuses.values()
-        ):
-            return
-
-        self.unit.status = ActiveStatus()
+        self.unit.status = StatusBase._get_highest_priority(list(self.status.values()))
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
@@ -681,7 +685,7 @@ class PrometheusCharm(CharmBase):
 
         except ValueError as e:
             logger.warning(e)
-            self.unit.status = BlockedStatus(f"Invalid retention size: {e}")
+            self.status["retention_size"] = BlockedStatus(f"Invalid retention size: {e}")
 
         else:
             # `storage.tsdb.retention.size` uses the legacy binary format, so "GB" and not "GiB"
@@ -692,15 +696,16 @@ class PrometheusCharm(CharmBase):
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
-                self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
+                self.status["retention_size"] = BlockedStatus(f"Error calculating retention size: {e}")
             except LightkubeApiError as e:
-                self.unit.status = BlockedStatus(
+                self.status["retention_size"] = BlockedStatus(
                     "Error calculating retention size "
                     f"(try running `juju trust` on this application): {e}"
                 )
             else:
                 logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
                 args.append(f"--storage.tsdb.retention.size={capacity}")
+                self.status["retention_size"] = ActiveStatus()
 
         command = ["/bin/prometheus"] + args
 
@@ -808,7 +813,7 @@ class PrometheusCharm(CharmBase):
             r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
         )
         if not (matched := timespec_re.search(timeval)):
-            self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
+            self.status["timespec"] = BlockedStatus(f"Invalid time spec : {timeval}")
 
         return bool(matched)
 
