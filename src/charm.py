@@ -7,6 +7,8 @@
 import hashlib
 import logging
 import re
+from typing import List, TypedDict, cast
+
 import socket
 import subprocess
 from pathlib import Path
@@ -574,7 +576,7 @@ class PrometheusCharm(CharmBase):
 
             logger.info("Prometheus configuration reloaded")
 
-        self.unit.status = StatusBase._get_highest_priority(list(self.status.values()))
+        self.unit.status = StatusBase._get_highest_priority(cast(List[StatusBase], list(self.status.values())))
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
