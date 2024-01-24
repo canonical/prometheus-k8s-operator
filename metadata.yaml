@@ -79,4 +79,5 @@ resources:
     description: Container image for Prometheus
     # Use ghcr image until the missing udpate-ca-certificates issue is resolved.
     # https://github.com/canonical/prometheus-rock/issues/33
-    upstream-source: ghcr.io/canonical/prometheus:dev
+    #upstream-source: ghcr.io/canonical/prometheus:dev
+    upstream-source: ubuntu/prometheus:2-22.04
