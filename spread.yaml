@@ -14,9 +14,9 @@
 project: prometheus-k8s
 
 prepare: |
-    # Without this command, spread fails with:
-    # error: too early for operation, device not yet seeded or device model not acknowledged
-    systemctl start snapd.seeded.service
+  # Without this command, spread fails with:
+  # error: too early for operation, device not yet seeded or device model not acknowledged
+  systemctl start snapd.seeded.service
   
   # Install Juju
   snap install juju --channel=3.3/stable
