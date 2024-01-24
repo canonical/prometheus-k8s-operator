@@ -1,0 +1,68 @@
+# Project: prometheus-k8s
+# Backend: multipass/lxd? 4cpu7gb, 8cpu16gb, amd, arm
+# System: doesn't matter for charms
+# Suite: group of tasks
+
+
+# Task: one and same dir per suite, one dir per task, and one task.yaml inside it
+
+# Variants: juju, uk8s versions
+
+# spread -list prints out [backend:system:suite/task:variant]
+
+
+project: prometheus-k8s
+
+prepare: |
+  systemctl start snapd.seeded.service
+  
+  # Install Juju
+  snap install juju --channel=3.3/stable
+  
+  # Make sure juju directory is there
+  # https://bugs.launchpad.net/juju/+bug/1995697
+  sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
+
+backends:
+  lxd:
+    systems: [ubuntu-20.04]
+
+suites:
+  tests/spread/k8s/:
+    summary: Prometheus-k8s tests
+
+    prepare: |
+
+      # Install MicroK8s
+      snap install microk8s --channel=1.26-strict/stable
+      usermod -a -G snap_microk8s ubuntu
+      #usermod -a -G microk8s ubuntu
+      microk8s status --wait-ready
+
+      # The dns addon will restart the api server so you may see a blip in the availability
+      # Separating addons to avoid errors such as
+      # dial tcp 127.0.0.1:16443: connect: connection refused
+      microk8s.enable dns rbac
+      microk8s.kubectl rollout status deployments/coredns -n kube-system -w --timeout=600s
+
+      # wait for storage become available
+      microk8s.enable hostpath-storage
+      microk8s.kubectl rollout status deployments/hostpath-provisioner -n kube-system -w --timeout=600s
+
+      # MetalLB
+      ip_range="$(ip -4 -j route get 2.2.2.2 | jq -r '.[] | .prefsrc')/32"
+      microk8s enable metallb:$ip_range
+      microk8s.kubectl rollout status daemonset.apps/speaker -n metallb-system -w --timeout=600s
+
+      # bootstrap controllers
+      sudo -u ubuntu juju bootstrap microk8s microk8s
+      sudo -u ubuntu juju add-model --config logging-config="<root>=WARNING; unit=DEBUG" --config update-status-hook-interval="60m" welcome-k8s
+
+
+path: /remote/path
+
+exclude:
+  - .tox/*
+  - .git/*
+  - .mypy_cache/*
+
