@@ -1,40 +1,7 @@
 summary: Greet the planet
 
 prepare: |
-    
-    # Get IP range for MetalLB
-
-    # Install Juju
-    snap install juju --channel=3.3/stable
-    snap install microk8s --channel=1.26-strict/stable
-    snap refresh
-
-    # Make sure juju directory is there
-    # https://bugs.launchpad.net/juju/+bug/1995697
-    sudo -u ubuntu mkdir -p /home/ubuntu/.local/share/juju
-
-    usermod -a -G snap_microk8s ubuntu
-    usermod -a -G microk8s ubuntu
-    microk8s status --wait-ready
-
-    # The dns addon will restart the api server so you may see a blip in the availability
-    # Separating addons to avoid errors such as
-    # dial tcp 127.0.0.1:16443: connect: connection refused
-    microk8s.enable dns rbac
-    microk8s.kubectl rollout status deployments/coredns -n kube-system -w --timeout=600s
-
-    # wait for storage become available
-    microk8s.enable hostpath-storage
-    microk8s.kubectl rollout status deployments/hostpath-provisioner -n kube-system -w --timeout=600s
-
-    # MetalLB
-    ip_range="$(ip -4 -j route get 2.2.2.2 | jq -r '.[] | .prefsrc')/32"
-    microk8s enable metallb:$ip_range
-    microk8s.kubectl rollout status daemonset.apps/speaker -n metallb-system -w --timeout=600s
-
-    # bootstrap controllers
-    sudo -u ubuntu juju bootstrap microk8s microk8s
-    sudo -u ubuntu juju add-model --config logging-config="<root>=WARNING; unit=DEBUG" --config update-status-hook-interval="60m" welcome-k8s
+    sudo -u ubuntu juju add-model --config logging-config="<root>=WARNING; unit=DEBUG" --config update-status-hook-interval="60m" integration-k8s
 
 execute: |
     tox -vve integration

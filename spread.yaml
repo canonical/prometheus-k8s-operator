@@ -14,7 +14,9 @@
 project: prometheus-k8s
 
 prepare: |
-  systemctl start snapd.seeded.service
+    # Without this command, spread fails with:
+    # error: too early for operation, device not yet seeded or device model not acknowledged
+    systemctl start snapd.seeded.service
   
   # Install Juju
   snap install juju --channel=3.3/stable
@@ -54,9 +56,8 @@ suites:
       microk8s enable metallb:$ip_range
       microk8s.kubectl rollout status daemonset.apps/speaker -n metallb-system -w --timeout=600s
 
-      # bootstrap controllers
+      # bootstrap controller
       sudo -u ubuntu juju bootstrap microk8s microk8s
-      sudo -u ubuntu juju add-model --config logging-config="<root>=WARNING; unit=DEBUG" --config update-status-hook-interval="60m" welcome-k8s
 
 
 path: /remote/path
