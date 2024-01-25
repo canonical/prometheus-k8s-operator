@@ -282,7 +282,8 @@ class PrometheusCharm(CharmBase):
                         "juju_model": self._topology.model,
                         "juju_model_uuid": self._topology.model_uuid,
                         "juju_application": self._topology.application,
-                        "juju_unit": self._topology.charm_name,
+                        "juju_unit": self._topology.unit,
+                        "juju_charm": self._topology.charm_name,
                         "host": "localhost",
                     },
                 }
