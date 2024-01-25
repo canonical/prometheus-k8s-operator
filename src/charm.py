@@ -10,7 +10,7 @@ import re
 import socket
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, TypedDict, cast
+from typing import Dict, Optional, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -46,6 +46,7 @@ from cosl import JujuTopology
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
+from ops import CollectStatusEvent, StoredState
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import (
@@ -96,7 +97,6 @@ class CompositeStatus(TypedDict):
     """Per-component status holder."""
 
     retention_size: StatusBase
-    timespec: StatusBase
     k8s_patch: StatusBase
 
 
@@ -113,10 +113,15 @@ class CompositeStatus(TypedDict):
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
+    _stored = StoredState()
+
     def __init__(self, *args):
         super().__init__(*args)
-        self.status = CompositeStatus(
-            retention_size=ActiveStatus(), timespec=ActiveStatus(), k8s_patch=ActiveStatus()
+
+        # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
+        # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
+        self._stored.set_default(
+            status=CompositeStatus(retention_size=ActiveStatus(), k8s_patch=ActiveStatus())
         )
 
         self._name = "prometheus"
@@ -203,6 +208,30 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
+
+    def _on_collect_unit_status(self, event: CollectStatusEvent):
+        # "Pull" statuses
+        if not self.container.can_connect():
+            event.add_status(MaintenanceStatus("Configuring Prometheus"))
+
+        if not self._is_valid_timespec(
+            retention_time := self.model.config.get("metrics_retention_time", "")
+        ):
+            BlockedStatus(f"Invalid time spec : {retention_time}")
+
+        # "Push" statuses
+        if self.resources_patch.is_ready():
+            self._stored.status["k8s_patch"] = ActiveStatus()
+        else:
+            if isinstance(self._stored.status["k8s_patch"], ActiveStatus):
+                self._stored.status["k8s_patch"] = WaitingStatus(
+                    "Waiting for resource limit patch to apply"
+                )
+            return
+
+        for status in self._stored.status.values():
+            event.add_status(status)
 
     def set_ports(self):
         """Open necessary (and close no longer needed) workload ports."""
@@ -391,7 +420,7 @@ class PrometheusCharm(CharmBase):
         self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
-        self.status["k8s_patch"] = BlockedStatus(cast(str, event.message))
+        self._stored.status["k8s_patch"] = BlockedStatus(cast(str, event.message))
 
     def _on_server_cert_changed(self, _):
         self._update_cert()
@@ -489,12 +518,9 @@ class PrometheusCharm(CharmBase):
         }
 
         if not self.resources_patch.is_ready():
-            if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
-                self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
             return
 
         if not self.container.can_connect():
-            self.unit.status = MaintenanceStatus("Configuring Prometheus")
             return
 
         if self._is_cert_available() and not self._is_tls_ready():
@@ -575,10 +601,6 @@ class PrometheusCharm(CharmBase):
                 return
 
             logger.info("Prometheus configuration reloaded")
-
-        self.unit.status = StatusBase._get_highest_priority(
-            cast(List[StatusBase], list(self.status.values()))
-        )
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
@@ -689,7 +711,7 @@ class PrometheusCharm(CharmBase):
 
         except ValueError as e:
             logger.warning(e)
-            self.status["retention_size"] = BlockedStatus(f"Invalid retention size: {e}")
+            self._stored.status["retention_size"] = BlockedStatus(f"Invalid retention size: {e}")
 
         else:
             # `storage.tsdb.retention.size` uses the legacy binary format, so "GB" and not "GiB"
@@ -700,18 +722,18 @@ class PrometheusCharm(CharmBase):
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
-                self.status["retention_size"] = BlockedStatus(
+                self._stored.status["retention_size"] = BlockedStatus(
                     f"Error calculating retention size: {e}"
                 )
             except LightkubeApiError as e:
-                self.status["retention_size"] = BlockedStatus(
+                self._stored.status["retention_size"] = BlockedStatus(
                     "Error calculating retention size "
                     f"(try running `juju trust` on this application): {e}"
                 )
             else:
                 logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
                 args.append(f"--storage.tsdb.retention.size={capacity}")
-                self.status["retention_size"] = ActiveStatus()
+                self._stored.status["retention_size"] = ActiveStatus()
 
         command = ["/bin/prometheus"] + args
 
@@ -818,9 +840,7 @@ class PrometheusCharm(CharmBase):
         timespec_re = re.compile(
             r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
         )
-        if not (matched := timespec_re.search(timeval)):
-            self.status["timespec"] = BlockedStatus(f"Invalid time spec : {timeval}")
-
+        matched = timespec_re.search(timeval)
         return bool(matched)
 
     def _percent_string_to_ratio(self, percentage: str) -> float:

@@ -216,6 +216,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_success(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = True
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch
@@ -322,6 +323,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
         # WHEN the config option is set to an invalid string
@@ -330,6 +332,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         # THEN cli arg is unspecified and the unit is blocked
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertIsNone(cli_arg(plan, "--storage.tsdb.retention.size"))
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
         # AND WHEN the config option is corrected
@@ -338,6 +341,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         # THEN cli arg is updated and the unit is goes back to active
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.42GB")
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
 
@@ -689,6 +693,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
         container = self.harness.charm.unit.get_container("prometheus")
         self.assertEqual(container.pull("/etc/prometheus/job1-ca.crt").read(), "CA 1")
@@ -725,6 +730,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch
