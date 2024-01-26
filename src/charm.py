@@ -98,6 +98,7 @@ class CompositeStatus(TypedDict):
 
     retention_size: StatusBase
     k8s_patch: StatusBase
+    config: StatusBase
 
 
 @trace_charm(
@@ -121,7 +122,9 @@ class PrometheusCharm(CharmBase):
         # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
         # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
         self._stored.set_default(
-            status=CompositeStatus(retention_size=ActiveStatus(), k8s_patch=ActiveStatus())
+            status=CompositeStatus(
+                retention_size=ActiveStatus(), k8s_patch=ActiveStatus(), config=ActiveStatus()
+            )
         )
 
         self._name = "prometheus"
@@ -546,19 +549,23 @@ class PrometheusCharm(CharmBase):
             )
         except ConfigError as e:
             logger.error("Failed to generate configuration: %s", e)
-            self.unit.status = BlockedStatus(str(e))
+            self._stored.status["config"] = BlockedStatus(str(e))
             return
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", e)
-            self.unit.status = early_return_statuses["push_fail"]
+            self._stored.status["config"] = early_return_statuses["push_fail"]
             return
+        else:
+            self._stored.status["config"] = ActiveStatus()
 
         try:
             layer_changed = self._update_layer()
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
-            self.unit.status = early_return_statuses["layer_fail"]
+            self._stored.status["config"] = early_return_statuses["layer_fail"]
             return
+        else:
+            self._stored.status["config"] = ActiveStatus()
 
         try:
             output, err = self._promtool_check_config()
@@ -566,12 +573,14 @@ class PrometheusCharm(CharmBase):
                 logger.error(
                     "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
                 )
-                self.unit.status = early_return_statuses["config_invalid"]
+                self._stored.status["config"] = early_return_statuses["config_invalid"]
                 return
         except PebbleError as e:
             logger.error("Failed to validate prometheus config: %s", e)
-            self.unit.status = early_return_statuses["validation_fail"]
+            self._stored.status["config"] = early_return_statuses["validation_fail"]
             return
+        else:
+            self._stored.status["config"] = ActiveStatus()
 
         try:
             # If a config is invalid then prometheus would exit immediately.
@@ -585,8 +594,10 @@ class PrometheusCharm(CharmBase):
                 self._prometheus_layer.to_dict(),
                 e,
             )
-            self.unit.status = early_return_statuses["restart_fail"]
+            self._stored.status["config"] = early_return_statuses["restart_fail"]
             return
+        else:
+            self._stored.status["config"] = ActiveStatus()
 
         # We only need to reload if pebble didn't replan (if pebble replanned, then new config
         # would be picked up on startup anyway).
@@ -594,13 +605,14 @@ class PrometheusCharm(CharmBase):
             reloaded = self._prometheus_client.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
-                self.unit.status = early_return_statuses["cfg_load_fail"]
+                self._stored.status["config"] = early_return_statuses["cfg_load_fail"]
                 return
             if reloaded == "read_timeout":
-                self.unit.status = early_return_statuses["cfg_load_timeout"]
+                self._stored.status["config"] = early_return_statuses["cfg_load_timeout"]
                 return
 
             logger.info("Prometheus configuration reloaded")
+            self._stored.status["config"] = ActiveStatus()
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.

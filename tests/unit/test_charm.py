@@ -225,6 +225,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_error(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = False
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
     @k8s_resource_multipatch
@@ -233,6 +234,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_read_timeout(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = "read_timeout"
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
 
 
@@ -766,6 +768,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
     @k8s_resource_multipatch
@@ -801,4 +804,5 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)

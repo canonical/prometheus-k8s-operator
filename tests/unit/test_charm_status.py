@@ -91,6 +91,7 @@ class TestActiveStatus(unittest.TestCase):
             # WHEN no config is provided or relations created
 
             # THEN the unit goes into blocked state
+            self.harness.evaluate_status()
             self.assertIsInstance(self.harness.charm.unit.status, BlockedStatus)
 
             # AND pebble plan is not empty
