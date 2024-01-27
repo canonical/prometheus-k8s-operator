@@ -110,7 +110,8 @@ def to_tuple(status: StatusBase) -> Tuple[str, str]:
 
 def to_status(tpl: Tuple[str, str]) -> StatusBase:
     """Convert a tuple to a StatusBase, so it could be used natively with ops."""
-    return StatusBase.from_name(*tpl)
+    name, message = tpl
+    return StatusBase.from_name(name, message)
 
 
 @trace_charm(
@@ -229,9 +230,8 @@ class PrometheusCharm(CharmBase):
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
-        if not self._is_valid_timespec(
-            retention_time := self.model.config.get("metrics_retention_time", "")
-        ):
+        retention_time = self.model.config.get("metrics_retention_time", "")
+        if not self._is_valid_timespec(retention_time):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
         # "Push" statuses
