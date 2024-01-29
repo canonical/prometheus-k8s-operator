@@ -216,6 +216,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_success(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = True
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch
@@ -224,6 +225,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_error(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = False
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
     @k8s_resource_multipatch
@@ -232,6 +234,7 @@ class TestCharm(unittest.TestCase):
     def test_configuration_reload_read_timeout(self, trigger_configuration_reload, *unused):
         trigger_configuration_reload.return_value = "read_timeout"
         self.harness.update_config({"evaluation_interval": "1234m"})
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
 
 
@@ -287,6 +290,14 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
 
+        # AND WHEN the config option is set and then unset
+        self.harness.update_config({"maximum_retention_size": "50%"})
+        self.harness.update_config(unset={"maximum_retention_size"})
+
+        # THEN the pebble plan is back to 80%
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.8GB")
+
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_multiplication_factor_applied_to_pvc_capacity(self, *unused):
@@ -294,16 +305,46 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         # GIVEN a capacity limit in binary notation (k8s notation)
         self.mock_capacity.return_value = "1Gi"
 
-        # AND a multiplication factor as a config option
-        self.harness.update_config({"maximum_retention_size": "50%"})
-
         # WHEN the charm starts
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
 
-        # THEN the pebble plan the adjusted capacity
+        for set_point, read_back in [("0%", "0GB"), ("50%", "0.5GB"), ("100%", "1GB")]:
+            with self.subTest(limit=set_point):
+                # WHEN a limit is set
+                self.harness.update_config({"maximum_retention_size": set_point})
+
+                # THEN the pebble plan the adjusted capacity
+                plan = self.harness.get_container_pebble_plan("prometheus")
+                self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), read_back)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_invalid_retention_size_config_option_string(self, *unused):
+        # GIVEN a running charm with default values
+        self.mock_capacity.return_value = "1Gi"
+        self.harness.begin_with_initial_hooks()
+        self.harness.container_pebble_ready("prometheus")
+        self.harness.evaluate_status()
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
+
+        # WHEN the config option is set to an invalid string
+        self.harness.update_config({"maximum_retention_size": "42"})
+
+        # THEN cli arg is unspecified and the unit is blocked
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.5GB")
+        self.assertIsNone(cli_arg(plan, "--storage.tsdb.retention.size"))
+        self.harness.evaluate_status()
+        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+
+        # AND WHEN the config option is corrected
+        self.harness.update_config({"maximum_retention_size": "42%"})
+
+        # THEN cli arg is updated and the unit is goes back to active
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.42GB")
+        self.harness.evaluate_status()
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
 
 @prom_multipatch
@@ -654,6 +695,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
         container = self.harness.charm.unit.get_container("prometheus")
         self.assertEqual(container.pull("/etc/prometheus/job1-ca.crt").read(), "CA 1")
@@ -690,6 +732,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch
@@ -725,6 +768,7 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
     @k8s_resource_multipatch
@@ -760,4 +804,5 @@ class TestTlsConfig(unittest.TestCase):
             },
         )
 
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)

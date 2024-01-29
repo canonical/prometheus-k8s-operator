@@ -241,6 +241,7 @@ class TestRemoteWriteProvider(unittest.TestCase):
             self.harness.get_relation_data(rel_id, self.harness.charm.unit.name),
             {"remote_write": json.dumps({"url": "http://fqdn:9090/api/v1/write"})},
         )
+        self.harness.evaluate_status()
         self.assertIsInstance(self.harness.charm.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch

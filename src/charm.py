@@ -10,7 +10,7 @@ import re
 import socket
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -46,6 +46,7 @@ from cosl import JujuTopology
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
+from ops import CollectStatusEvent, StoredState
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import (
@@ -54,6 +55,7 @@ from ops.model import (
     MaintenanceStatus,
     ModelError,
     OpenedPort,
+    StatusBase,
     WaitingStatus,
 )
 from ops.pebble import Error as PebbleError
@@ -91,6 +93,27 @@ class ConfigError(Exception):
     pass
 
 
+class CompositeStatus(TypedDict):
+    """Per-component status holder."""
+
+    # These are going to go into stored state, so we must use marshallable objects.
+    # They are passed to StatusBase.from_name().
+    retention_size: Tuple[str, str]
+    k8s_patch: Tuple[str, str]
+    config: Tuple[str, str]
+
+
+def to_tuple(status: StatusBase) -> Tuple[str, str]:
+    """Convert a StatusBase to tuple, so it is marshallable into StoredState."""
+    return status.name, status.message
+
+
+def to_status(tpl: Tuple[str, str]) -> StatusBase:
+    """Convert a tuple to a StatusBase, so it could be used natively with ops."""
+    name, message = tpl
+    return StatusBase.from_name(name, message)
+
+
 @trace_charm(
     tracing_endpoint="tempo",
     extra_types=[
@@ -104,8 +127,20 @@ class ConfigError(Exception):
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
+    _stored = StoredState()
+
     def __init__(self, *args):
         super().__init__(*args)
+
+        # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
+        # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
+        self._stored.set_default(
+            status=CompositeStatus(
+                retention_size=to_tuple(ActiveStatus()),
+                k8s_patch=to_tuple(ActiveStatus()),
+                config=to_tuple(ActiveStatus()),
+            )
+        )
 
         self._name = "prometheus"
         self._port = 9090
@@ -191,6 +226,17 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
+
+    def _on_collect_unit_status(self, event: CollectStatusEvent):
+        # "Pull" statuses
+        retention_time = self.model.config.get("metrics_retention_time", "")
+        if not self._is_valid_timespec(retention_time):
+            event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
+
+        # "Push" statuses
+        for status in self._stored.status.values():
+            event.add_status(to_status(status))
 
     def set_ports(self):
         """Open necessary (and close no longer needed) workload ports."""
@@ -379,7 +425,7 @@ class PrometheusCharm(CharmBase):
         self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
-        self.unit.status = BlockedStatus(cast(str, event.message))
+        self._stored.status["k8s_patch"] = to_tuple(BlockedStatus(cast(str, event.message)))
 
     def _on_server_cert_changed(self, _):
         self._update_cert()
@@ -476,13 +522,21 @@ class PrometheusCharm(CharmBase):
             ),
         }
 
-        if not self.resources_patch.is_ready():
-            if isinstance(self.unit.status, ActiveStatus) or self.unit.status.message == "":
-                self.unit.status = WaitingStatus("Waiting for resource limit patch to apply")
+        # "is_ready" is a racy check, so we do it once here (instead of in collect-status)
+        if self.resources_patch.is_ready():
+            self._stored.status["k8s_patch"] = to_tuple(ActiveStatus())
+        else:
+            if isinstance(to_status(self._stored.status["k8s_patch"]), ActiveStatus):
+                self._stored.status["k8s_patch"] = to_tuple(
+                    WaitingStatus("Waiting for resource limit patch to apply")
+                )
             return
 
-        if not self.container.can_connect():
-            self.unit.status = MaintenanceStatus("Configuring Prometheus")
+        # "can_connect" is a racy check, so we do it once here (instead of in collect-status)
+        if self.container.can_connect():
+            self._stored.status["config"] = to_tuple(ActiveStatus())
+        else:
+            self._stored.status["config"] = to_tuple(MaintenanceStatus("Configuring Prometheus"))
             return
 
         if self._is_cert_available() and not self._is_tls_ready():
@@ -508,19 +562,23 @@ class PrometheusCharm(CharmBase):
             )
         except ConfigError as e:
             logger.error("Failed to generate configuration: %s", e)
-            self.unit.status = BlockedStatus(str(e))
+            self._stored.status["config"] = to_tuple(BlockedStatus(str(e)))
             return
         except PebbleError as e:
             logger.error("Failed to push updated config/alert files: %s", e)
-            self.unit.status = early_return_statuses["push_fail"]
+            self._stored.status["config"] = to_tuple(early_return_statuses["push_fail"])
             return
+        else:
+            self._stored.status["config"] = to_tuple(ActiveStatus())
 
         try:
             layer_changed = self._update_layer()
         except (TypeError, PebbleError) as e:
             logger.error("Failed to update prometheus service: %s", e)
-            self.unit.status = early_return_statuses["layer_fail"]
+            self._stored.status["config"] = to_tuple(early_return_statuses["layer_fail"])
             return
+        else:
+            self._stored.status["config"] = to_tuple(ActiveStatus())
 
         try:
             output, err = self._promtool_check_config()
@@ -528,12 +586,14 @@ class PrometheusCharm(CharmBase):
                 logger.error(
                     "Invalid prometheus configuration. Stdout: %s Stderr: %s", output, err
                 )
-                self.unit.status = early_return_statuses["config_invalid"]
+                self._stored.status["config"] = to_tuple(early_return_statuses["config_invalid"])
                 return
         except PebbleError as e:
             logger.error("Failed to validate prometheus config: %s", e)
-            self.unit.status = early_return_statuses["validation_fail"]
+            self._stored.status["config"] = to_tuple(early_return_statuses["validation_fail"])
             return
+        else:
+            self._stored.status["config"] = to_tuple(ActiveStatus())
 
         try:
             # If a config is invalid then prometheus would exit immediately.
@@ -547,8 +607,10 @@ class PrometheusCharm(CharmBase):
                 self._prometheus_layer.to_dict(),
                 e,
             )
-            self.unit.status = early_return_statuses["restart_fail"]
+            self._stored.status["config"] = to_tuple(early_return_statuses["restart_fail"])
             return
+        else:
+            self._stored.status["config"] = to_tuple(ActiveStatus())
 
         # We only need to reload if pebble didn't replan (if pebble replanned, then new config
         # would be picked up on startup anyway).
@@ -556,21 +618,14 @@ class PrometheusCharm(CharmBase):
             reloaded = self._prometheus_client.reload_configuration()
             if not reloaded:
                 logger.error("Prometheus failed to reload the configuration")
-                self.unit.status = early_return_statuses["cfg_load_fail"]
+                self._stored.status["config"] = to_tuple(early_return_statuses["cfg_load_fail"])
                 return
             if reloaded == "read_timeout":
-                self.unit.status = early_return_statuses["cfg_load_timeout"]
+                self._stored.status["config"] = to_tuple(early_return_statuses["cfg_load_timeout"])
                 return
 
             logger.info("Prometheus configuration reloaded")
-
-        if (
-            isinstance(self.unit.status, BlockedStatus)
-            and self.unit.status not in early_return_statuses.values()
-        ):
-            return
-
-        self.unit.status = ActiveStatus()
+            self._stored.status["config"] = to_tuple(ActiveStatus())
 
     def _on_pebble_ready(self, event) -> None:
         """Pebble ready hook.
@@ -681,7 +736,9 @@ class PrometheusCharm(CharmBase):
 
         except ValueError as e:
             logger.warning(e)
-            self.unit.status = BlockedStatus(f"Invalid retention size: {e}")
+            self._stored.status["retention_size"] = to_tuple(
+                BlockedStatus(f"Invalid retention size: {e}")
+            )
 
         else:
             # `storage.tsdb.retention.size` uses the legacy binary format, so "GB" and not "GiB"
@@ -692,15 +749,20 @@ class PrometheusCharm(CharmBase):
                     self._get_pvc_capacity(), ratio
                 )
             except ValueError as e:
-                self.unit.status = BlockedStatus(f"Error calculating retention size: {e}")
+                self._stored.status["retention_size"] = to_tuple(
+                    BlockedStatus(f"Error calculating retention size: {e}")
+                )
             except LightkubeApiError as e:
-                self.unit.status = BlockedStatus(
-                    "Error calculating retention size "
-                    f"(try running `juju trust` on this application): {e}"
+                self._stored.status["retention_size"] = to_tuple(
+                    BlockedStatus(
+                        "Error calculating retention size "
+                        f"(try running `juju trust` on this application): {e}"
+                    )
                 )
             else:
                 logger.debug("Retention size limit set to %s (%s%%)", capacity, ratio * 100)
                 args.append(f"--storage.tsdb.retention.size={capacity}")
+                self._stored.status["retention_size"] = to_tuple(ActiveStatus())
 
         command = ["/bin/prometheus"] + args
 
@@ -807,9 +869,7 @@ class PrometheusCharm(CharmBase):
         timespec_re = re.compile(
             r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
         )
-        if not (matched := timespec_re.search(timeval)):
-            self.unit.status = BlockedStatus(f"Invalid time spec : {timeval}")
-
+        matched = timespec_re.search(timeval)
         return bool(matched)
 
     def _percent_string_to_ratio(self, percentage: str) -> float:
