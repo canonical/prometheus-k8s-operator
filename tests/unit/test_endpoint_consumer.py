@@ -493,11 +493,13 @@ class TestEndpointConsumer(unittest.TestCase):
         with self.assertLogs(level="DEBUG") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts
             messages = logger.output
-            self.assertIn(
+
+            searched_message = (
                 "No labeled alert rules were found, and no 'scrape_metadata' "
-                "was available. Using the alert group name as filename.",
-                messages[1],
+                "was available. Using the alert group name as filename."
             )
+            any_matches = any(searched_message in log_message for log_message in messages)
+            self.assertTrue(any_matches)
         alerts = self.harness.charm.prometheus_consumer.alerts
         identifier = f"unlabeled_external_cpu_alerts_{RELATION_NAME}_{rel_id}"
         self.assertIn(identifier, alerts.keys())

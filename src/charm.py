@@ -35,8 +35,8 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
-from charms.tempo_k8s.v0.charm_tracing import trace_charm
-from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
+from charms.tempo_k8s.v1.charm_tracing import trace_charm
+from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -116,6 +116,7 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
 
 @trace_charm(
     tracing_endpoint="tempo",
+    server_cert="server_cert_path",
     extra_types=[
         KubernetesComputeResourcesPatch,
         CertHandler,
@@ -1061,7 +1062,12 @@ class PrometheusCharm(CharmBase):
     @property
     def tempo(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
-        return self.tracing.otlp_grpc_endpoint()
+        return self.tracing.otlp_http_endpoint()
+
+    @property
+    def server_cert_path(self) -> Optional[str]:
+        """Server certificate path for TLS tracing."""
+        return CERT_PATH
 
 
 if __name__ == "__main__":
