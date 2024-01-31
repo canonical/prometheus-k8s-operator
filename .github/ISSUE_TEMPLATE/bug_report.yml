@@ -22,7 +22,7 @@ body:
     attributes:
       label: To Reproduce
       description: >
-        Please provide a step-by-step instruction of how to reproduce the behavior.
+        Please provide the output of `juju export-bundle` and step-by-step instructions for how to reproduce the behavior.
       placeholder: |
         1. `juju deploy ...`
         2. `juju relate ...`
