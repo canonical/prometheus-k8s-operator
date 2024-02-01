@@ -20,6 +20,7 @@ parts:
       - ops
       - wheel==0.37.1
       - setuptools==45.2.0
+      - pydantic>=2
   cos-tool:
     plugin: dump
     source: .

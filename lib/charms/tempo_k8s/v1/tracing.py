@@ -16,7 +16,7 @@ object only requires instantiating it, typically in the constructor of your char
 `tracing` interface.
  The `TracingEndpointRequirer` object may be instantiated as follows
 
-    from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
+    from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -48,7 +48,7 @@ default value.
 For example a Tempo charm may instantiate the `TracingEndpointProvider` in its constructor as
 follows
 
-    from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+    from charms.tempo_k8s.v1.tracing import TracingEndpointProvider
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -83,19 +83,19 @@ from ops.charm import (
 )
 from ops.framework import EventSource, Object
 from ops.model import ModelError, Relation
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # The unique Charmhub library identifier, never change it
 LIBID = "12977e9aa0b34367903d8afeb8c3d85d"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0
+LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 2
 
-PYDEPS = ["pydantic<2.0"]
+PYDEPS = ["pydantic>=2"]
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,7 @@ IngesterProtocol = Literal[
 ]
 
 RawIngester = Tuple[IngesterProtocol, int]
+BUILTIN_JUJU_KEYS = {"ingress-address", "private-address", "egress-subnets"}
 
 
 class TracingError(RuntimeError):
@@ -121,36 +122,60 @@ class AmbiguousRelationUsageError(TracingError):
     """Raised when one wrongly assumes that there can only be one relation on an endpoint."""
 
 
-# todo: use fully-encoded json fields like Traefik does. MUCH neater
 class DatabagModel(BaseModel):
     """Base databag model."""
 
-    _NEST_UNDER = None
+    model_config = ConfigDict(
+        # Allow instantiating this class by field name (instead of forcing alias).
+        populate_by_name=True,
+        # Custom config key: whether to nest the whole datastructure (as json)
+        # under a field or spread it out at the toplevel.
+        _NEST_UNDER=None,
+    )  # type: ignore
+    """Pydantic config."""
 
     @classmethod
     def load(cls, databag: MutableMapping):
         """Load this model from a Juju databag."""
-        if cls._NEST_UNDER:
-            return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
+        nest_under = cls.model_config.get("_NEST_UNDER")
+        if nest_under:
+            return cls.parse_obj(json.loads(databag[nest_under]))
 
-        data = {k: json.loads(v) for k, v in databag.items()}
+        try:
+            data = {k: json.loads(v) for k, v in databag.items() if k not in BUILTIN_JUJU_KEYS}
+        except json.JSONDecodeError as e:
+            msg = f"invalid databag contents: expecting json. {databag}"
+            logger.error(msg)
+            raise DataValidationError(msg) from e
 
         try:
             return cls.parse_raw(json.dumps(data))  # type: ignore
         except pydantic.ValidationError as e:
-            msg = f"failed to validate remote unit databag: {databag}"
+            msg = f"failed to validate databag: {databag}"
             logger.error(msg, exc_info=True)
             raise DataValidationError(msg) from e
 
-    def dump(self, databag: MutableMapping):
-        """Write the contents of this model to Juju databag."""
-        if self._NEST_UNDER:
-            databag[self._NEST_UNDER] = self.json()
+    def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
+        """Write the contents of this model to Juju databag.
 
-        dct = self.dict()
-        for key, field in self.__fields__.items():  # type: ignore
+        :param databag: the databag to write the data to.
+        :param clear: ensure the databag is cleared before writing it.
+        """
+        if clear and databag:
+            databag.clear()
+
+        if databag is None:
+            databag = {}
+        nest_under = self.model_config.get("_NEST_UNDER")
+        if nest_under:
+            databag[nest_under] = self.json()
+
+        dct = self.model_dump()
+        for key, field in self.model_fields.items():  # type: ignore
             value = dct[key]
             databag[field.alias or key] = json.dumps(value)
+
+        return databag
 
 
 # todo use models from charm-relation-interfaces
@@ -522,13 +547,21 @@ class TracingEndpointRequirer(Object):
             return
         return TracingProviderAppData.load(relation.data[relation.app])  # type: ignore
 
-    def _get_ingester(self, relation: Optional[Relation], protocol: IngesterProtocol):
+    def _get_ingester(
+        self, relation: Optional[Relation], protocol: IngesterProtocol, ssl: bool = False
+    ):
         ep = self.get_all_endpoints(relation)
         if not ep:
             return None
         try:
             ingester: Ingester = next(filter(lambda i: i.protocol == protocol, ep.ingesters))
-            return f"{ep.host}:{ingester.port}"
+            if ingester.protocol in ["otlp_grpc", "jaeger_grpc"]:
+                if ssl:
+                    logger.warning("unused ssl argument - was the right protocol called?")
+                return f"{ep.host}:{ingester.port}"
+            if ssl:
+                return f"https://{ep.host}:{ingester.port}"
+            return f"http://{ep.host}:{ingester.port}"
         except StopIteration:
             logger.error(f"no ingester found with protocol={protocol!r}")
             return None
@@ -537,21 +570,41 @@ class TracingEndpointRequirer(Object):
         """Ingester endpoint for the ``otlp_grpc`` protocol."""
         return self._get_ingester(relation or self._relation, protocol="otlp_grpc")
 
-    def otlp_http_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
-        """Ingester endpoint for the ``otlp_http`` protocol."""
-        return self._get_ingester(relation or self._relation, protocol="otlp_http")
+    def otlp_http_endpoint(
+        self, relation: Optional[Relation] = None, ssl: bool = False
+    ) -> Optional[str]:
+        """Ingester endpoint for the ``otlp_http`` protocol.
 
-    def zipkin_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
-        """Ingester endpoint for the ``zipkin`` protocol."""
-        return self._get_ingester(relation or self._relation, protocol="zipkin")
+        The provided endpoint does not contain the endpoint suffix. If the instrumenting library needs the full path,
+        your endpoint code needs to add the ``/v1/traces`` suffix.
+        """
+        return self._get_ingester(relation or self._relation, protocol="otlp_http", ssl=ssl)
 
-    def tempo_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
+    def zipkin_endpoint(
+        self, relation: Optional[Relation] = None, ssl: bool = False
+    ) -> Optional[str]:
+        """Ingester endpoint for the ``zipkin`` protocol.
+
+        The provided endpoint does not contain the endpoint suffix. If the instrumenting library needs the full path,
+        your endpoint code needs to add the ``/api/v2/spans`` suffix.
+        """
+        return self._get_ingester(relation or self._relation, protocol="zipkin", ssl=ssl)
+
+    def tempo_endpoint(
+        self, relation: Optional[Relation] = None, ssl: bool = False
+    ) -> Optional[str]:
         """Ingester endpoint for the ``tempo`` protocol."""
-        return self._get_ingester(relation or self._relation, protocol="tempo")
+        return self._get_ingester(relation or self._relation, protocol="tempo", ssl=ssl)
 
-    def jaeger_http_thrift_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
-        """Ingester endpoint for the ``jaeger_http_thrift`` protocol."""
-        return self._get_ingester(relation or self._relation, "jaeger_http_thrift")
+    def jaeger_http_thrift_endpoint(
+        self, relation: Optional[Relation] = None, ssl: bool = False
+    ) -> Optional[str]:
+        """Ingester endpoint for the ``jaeger_http_thrift`` protocol.
+
+        The provided endpoint does not contain the endpoint suffix. If the instrumenting library needs the full path,
+        your endpoint code needs to add the ``/api/traces`` suffix.
+        """
+        return self._get_ingester(relation or self._relation, "jaeger_http_thrift", ssl=ssl)
 
     def jaeger_grpc_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``jaeger_grpc`` protocol."""
