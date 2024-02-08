@@ -491,8 +491,8 @@ class PrometheusCharm(CharmBase):
             # Repeat for the charm container.
             ca_cert_path.unlink(missing_ok=True)
 
-        self.container.exec(["update-ca-certificates", "--fresh"]).wait()
-        subprocess.run(["update-ca-certificates", "--fresh"])
+        self.container.exec(["update-ca-certificates", "--fresh"], timeout=3).wait()
+        subprocess.run(["update-ca-certificates", "--fresh"], timeout=3)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -775,7 +775,7 @@ class PrometheusCharm(CharmBase):
         Returns:
             A 2-tuple, (stdout, stderr).
         """
-        proc = self.container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG])
+        proc = self.container.exec(["/usr/bin/promtool", "check", "config", PROMETHEUS_CONFIG], timeout=3)
         try:
             output, err = proc.wait_output()
         except ExecError as e:
@@ -1035,7 +1035,7 @@ class PrometheusCharm(CharmBase):
         """
         if not self.container.can_connect():
             return None
-        version_output, _ = self.container.exec(["/bin/prometheus", "--version"]).wait_output()
+        version_output, _ = self.container.exec(["/bin/prometheus", "--version"], timeout=3).wait_output()
         # Output looks like this:
         # prometheus, version 2.33.5 (branch: ...
         result = re.search(r"version (\d*\.\d*\.\d*)", version_output)
