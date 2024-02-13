@@ -8,3 +8,4 @@ lightkube >= 0.11
 lightkube-models >= 1.22.0.4
 # From PYDEPS
 importlib-metadata~=6.0.0
+opentelemetry-exporter-otlp-proto-http
