@@ -1,4 +1,4 @@
-# Copyright 2022 Pietro Pasotti
+# Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 """## Overview.
 
@@ -93,7 +93,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 PYDEPS = ["pydantic>=2"]
 
@@ -151,8 +151,12 @@ class DatabagModel(BaseModel):
         try:
             return cls.parse_raw(json.dumps(data))  # type: ignore
         except pydantic.ValidationError as e:
-            msg = f"failed to validate databag: {databag}"
-            logger.error(msg, exc_info=True)
+            if not data:
+                # databag is empty; this is usually expected
+                raise DataValidationError("empty databag")
+
+            msg = f"failed to validate databag contents: {data!r} as {cls}"
+            logger.debug(msg, exc_info=True)
             raise DataValidationError(msg) from e
 
     def dump(self, databag: Optional[MutableMapping] = None, clear: bool = True):
@@ -194,8 +198,8 @@ class TracingProviderAppData(DatabagModel):  # noqa: D101
 
 
 class _AutoSnapshotEvent(RelationEvent):
-    __args__ = ()  # type: Tuple[str, ...]
-    __optional_kwargs__ = {}  # type: Dict[str, Any]
+    __args__: Tuple[str, ...] = ()
+    __optional_kwargs__: Dict[str, Any] = {}
 
     @classmethod
     def __attrs__(cls):

@@ -146,7 +146,7 @@ LIBAPI = 1
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 1
+LIBPATCH = 2
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-http>=1.21.0"]
 
@@ -200,15 +200,12 @@ def _get_tracer() -> Optional[Tracer]:
         return tracer.get()
     except LookupError:
         try:
-            logger.debug("tracer was not found in context variable, looking up in default context")
             ctx: Context = copy_context()
             if context_tracer := _get_tracer_from_context(ctx):
                 return context_tracer.get()
             else:
-                logger.debug("Couldn't find context var for tracer: span will be skipped")
                 return None
         except LookupError as err:
-            logger.debug(f"Couldn't find tracer: span will be skipped, err: {err}")
             return None
 
 
@@ -219,7 +216,6 @@ def _span(name: str) -> Generator[Optional[Span], Any, Any]:
         with tracer.start_as_current_span(name) as span:
             yield cast(Span, span)
     else:
-        logger.debug("tracer not found")
         yield None
 
 
@@ -243,9 +239,9 @@ def _get_tracing_endpoint(tracing_endpoint_getter, self, charm):
         tracing_endpoint = tracing_endpoint_getter(self)
 
     if tracing_endpoint is None:
-        logger.warning(
-            f"{charm}.{getattr(tracing_endpoint_getter, '__qualname__', str(tracing_endpoint_getter))} "
-            f"returned None; continuing with tracing DISABLED."
+        logger.debug(
+            "Charm tracing is disabled. Tracing endpoint is not defined - "
+            "tracing is not available or relation is not set."
         )
         return
     elif not isinstance(tracing_endpoint, str):
@@ -266,7 +262,7 @@ def _get_server_cert(server_cert_getter, self, charm):
 
     if server_cert is None:
         logger.warning(
-            f"{charm}.{server_cert_getter} returned None; continuing with INSECURE connection."
+            f"{charm}.{server_cert_getter} returned None; sending traces over INSECURE connection."
         )
         return
     elif not Path(server_cert).is_absolute():
@@ -274,7 +270,6 @@ def _get_server_cert(server_cert_getter, self, charm):
             f"{charm}.{server_cert_getter} should return a valid tls cert absolute path (string | Path)); "
             f"got {server_cert} instead."
         )
-    logger.debug("Certificate successfully retrieved.")  # todo: some more validation?
     return server_cert
 
 
@@ -300,7 +295,6 @@ def _setup_root_span_initializer(
 
         original_event_context = framework._event_context
 
-        logging.debug("Initializing opentelemetry tracer...")
         _service_name = service_name or self.app.name
 
         resource = Resource.create(

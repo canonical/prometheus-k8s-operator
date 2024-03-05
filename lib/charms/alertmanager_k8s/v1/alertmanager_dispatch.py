@@ -33,6 +33,7 @@ import pydantic
 from ops.charm import CharmBase, RelationEvent, RelationJoinedEvent, RelationRole
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
+from pydantic import computed_field
 
 # The unique Charmhub library identifier, never change it
 LIBID = "37f1ca6f8fe84e3092ebbf6dc2885310"
@@ -42,9 +43,9 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
-PYDEPS = ["pydantic"]
+PYDEPS = ["pydantic>=2"]
 
 # Set to match metadata.yaml
 INTERFACE_NAME = "alertmanager_dispatch"
@@ -61,23 +62,20 @@ class _ProviderSchemaV0(pydantic.BaseModel):
 class _ProviderSchemaV1(pydantic.BaseModel):
     url: str
 
-    # The following are v0 fields that are continued to be populated for backwards compatibility.
-    # TODO: when we switch to pydantic 2+, use computed_field instead of the following fields, and
-    #  also drop the __init__.
-    #  https://docs.pydantic.dev/latest/api/fields/#pydantic.fields.computed_field
-    public_address: Optional[str]  # v0 relic
-    scheme: Optional[str]  # v0 relic
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        parsed = urlparse(kwargs["url"])
+    @computed_field
+    @property
+    def public_address(self) -> Optional[str]:
+        # v0 relic
+        parsed = urlparse(self.url)
         port = ":" + str(parsed.port) if parsed.port else ""
-        public_address = f"{parsed.hostname}{port}{parsed.path}"
+        return f"{parsed.hostname}{port}{parsed.path}"
 
-        # Derive v0 fields from v1 field
-        self.public_address = public_address
-        self.scheme = parsed.scheme
+    @computed_field
+    @property
+    def scheme(self) -> Optional[str]:
+        # v0 relic
+        parsed = urlparse(self.url)
+        return parsed.scheme
 
 
 class ClusterChanged(EventBase):
@@ -332,7 +330,7 @@ class AlertmanagerProvider(RelationManagerBase):
         #  "alertmanagers.[].static_configs.targets" section in the prometheus config should list
         #  all units.
         data = _ProviderSchemaV1(url=self._external_url)
-        return data.dict()
+        return data.model_dump()
 
     def _update_relation_data(self, event: Optional[RelationEvent] = None):
         """Helper function for updating relation data bags.
