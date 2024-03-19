@@ -133,7 +133,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 
 _Decimal = Union[Decimal, float, str, int]  # types that are potentially convertible to Decimal
@@ -364,7 +364,7 @@ class ResourcePatcher:
         Returns:
             bool: A boolean indicating if the service patch has been applied.
         """
-        return equals_canonically(self.get_templated(), resource_reqs)
+        return equals_canonically(self.get_templated(), resource_reqs)  # pyright: ignore
 
     def get_templated(self) -> Optional[ResourceRequirements]:
         """Returns the resource limits specified in the StatefulSet template."""
@@ -397,8 +397,8 @@ class ResourcePatcher:
             self.get_templated(),
             self.get_actual(pod_name),
         )
-        return self.is_patched(resource_reqs) and equals_canonically(
-            resource_reqs, self.get_actual(pod_name)
+        return self.is_patched(resource_reqs) and equals_canonically(  # pyright: ignore
+            resource_reqs, self.get_actual(pod_name)  # pyright: ignore
         )
 
     def apply(self, resource_reqs: ResourceRequirements) -> None:
