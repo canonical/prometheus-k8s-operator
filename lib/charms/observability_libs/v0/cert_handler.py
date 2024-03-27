@@ -37,22 +37,25 @@ import ipaddress
 import json
 import socket
 from itertools import filterfalse
-from typing import List, Optional, Union
+from typing import List, Optional, Union, cast
 
 try:
-    from charms.tls_certificates_interface.v2.tls_certificates import (  # type: ignore
+    from charms.tls_certificates_interface.v3.tls_certificates import (  # type: ignore
         AllCertificatesInvalidatedEvent,
         CertificateAvailableEvent,
         CertificateExpiringEvent,
         CertificateInvalidatedEvent,
-        TLSCertificatesRequiresV2,
+        TLSCertificatesRequiresV3,
         generate_csr,
         generate_private_key,
     )
-except ImportError:
+except ImportError as e:
     raise ImportError(
-        "charms.tls_certificates_interface.v2.tls_certificates is missing; please get it through charmcraft fetch-lib"
-    )
+        "failed to import charms.tls_certificates_interface.v3.tls_certificates; "
+        "Either the library itself is missing (please get it through charmcraft fetch-lib) "
+        "or one of its dependencies is unmet."
+    ) from e
+
 import logging
 
 from ops.charm import CharmBase, RelationBrokenEvent
@@ -64,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 0
-LIBPATCH = 9
+LIBPATCH = 11
 
 
 def is_ip_address(value: str) -> bool:
@@ -129,7 +132,7 @@ class CertHandler(Object):
         self.peer_relation_name = peer_relation_name
         self.certificates_relation_name = certificates_relation_name
 
-        self.certificates = TLSCertificatesRequiresV2(self.charm, self.certificates_relation_name)
+        self.certificates = TLSCertificatesRequiresV3(self.charm, self.certificates_relation_name)
 
         self.framework.observe(
             self.charm.on.config_changed,
@@ -279,7 +282,7 @@ class CertHandler(Object):
         if clear_cert:
             self._ca_cert = ""
             self._server_cert = ""
-            self._chain = []
+            self._chain = ""
 
     def _on_certificate_available(self, event: CertificateAvailableEvent) -> None:
         """Get the certificate from the event and store it in a peer relation.
@@ -301,7 +304,7 @@ class CertHandler(Object):
         if event_csr == self._csr:
             self._ca_cert = event.ca
             self._server_cert = event.certificate
-            self._chain = event.chain
+            self._chain = event.chain_as_pem()
             self.on.cert_changed.emit()  # pyright: ignore
 
     @property
@@ -372,21 +375,29 @@ class CertHandler(Object):
         rel.data[self.charm.unit].update({"certificate": value})
 
     @property
-    def _chain(self) -> List[str]:
+    def _chain(self) -> str:
         if self._peer_relation:
-            if chain := self._peer_relation.data[self.charm.unit].get("chain", []):
-                return json.loads(chain)
-        return []
+            if chain := self._peer_relation.data[self.charm.unit].get("chain", ""):
+                chain = json.loads(chain)
+
+                # In a previous version of this lib, chain used to be a list.
+                # Convert the List[str] to str, per
+                # https://github.com/canonical/tls-certificates-interface/pull/141
+                if isinstance(chain, list):
+                    chain = "\n\n".join(reversed(chain))
+
+                return cast(str, chain)
+        return ""
 
     @_chain.setter
-    def _chain(self, value: List[str]):
+    def _chain(self, value: str):
         # Caller must guard. We want the setter to fail loudly. Failure must have a side effect.
         rel = self._peer_relation
         assert rel is not None  # For type checker
         rel.data[self.charm.unit].update({"chain": json.dumps(value)})
 
     @property
-    def chain(self) -> List[str]:
+    def chain(self) -> str:
         """Return the ca chain."""
         return self._chain
 
