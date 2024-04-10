@@ -146,9 +146,9 @@ LIBAPI = 1
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 2
+LIBPATCH = 5
 
-PYDEPS = ["opentelemetry-exporter-otlp-proto-http>=1.21.0"]
+PYDEPS = ["opentelemetry-exporter-otlp-proto-http==1.21.0"]
 
 logger = logging.getLogger("tracing")
 
@@ -205,7 +205,7 @@ def _get_tracer() -> Optional[Tracer]:
                 return context_tracer.get()
             else:
                 return None
-        except LookupError as err:
+        except LookupError:
             return None
 
 
@@ -240,8 +240,8 @@ def _get_tracing_endpoint(tracing_endpoint_getter, self, charm):
 
     if tracing_endpoint is None:
         logger.debug(
-            "Charm tracing is disabled. Tracing endpoint is not defined - "
-            "tracing is not available or relation is not set."
+            f"{charm}.{tracing_endpoint_getter} returned None; quietly disabling "
+            f"charm_tracing for the run."
         )
         return
     elif not isinstance(tracing_endpoint, str):
@@ -310,7 +310,18 @@ def _setup_root_span_initializer(
             }
         )
         provider = TracerProvider(resource=resource)
-        tracing_endpoint = _get_tracing_endpoint(tracing_endpoint_getter, self, charm)
+        try:
+            tracing_endpoint = _get_tracing_endpoint(tracing_endpoint_getter, self, charm)
+        except Exception:
+            # if anything goes wrong with retrieving the endpoint, we go on with tracing disabled.
+            # better than breaking the charm.
+            logger.exception(
+                f"exception retrieving the tracing "
+                f"endpoint from {charm}.{tracing_endpoint_getter}; "
+                f"proceeding with charm_tracing DISABLED. "
+            )
+            return
+
         if not tracing_endpoint:
             return
 
@@ -528,6 +539,10 @@ def _trace_callable(callable: _F, qualifier: str, static: bool = False) -> _F:
         name = getattr(callable, "__qualname__", getattr(callable, "__name__", str(callable)))
         with _span(f"{'(static) ' if static else ''}{qualifier} call: {name}"):  # type: ignore
             if static:
+                # fixme: do we or don't we need [1:]?
+                #  The _trace_callable decorator doesn't always play nice with @staticmethods.
+                #  Sometimes it will receive 'self', sometimes it won't.
+                # return callable(*args, **kwargs)  # type: ignore
                 return callable(*args[1:], **kwargs)  # type: ignore
             return callable(*args, **kwargs)  # type: ignore
 
