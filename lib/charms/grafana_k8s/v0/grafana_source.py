@@ -32,6 +32,8 @@ The default arguments are:
     `refresh_event`: A `PebbleReady` event from `charm`, used to refresh
         the IP address sent to Grafana on a charm lifecycle event or
         pod restart
+    `extra_fields`: None
+    `secure_extra_fields`: None
 
 The value of `source_url` should be a fully-resolvable URL for a valid Grafana
 source, e.g., `http://example.com/api` or similar.
@@ -160,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 21
 
 logger = logging.getLogger(__name__)
 
@@ -324,6 +326,7 @@ class GrafanaSourceProvider(Object):
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         relation_name: str = DEFAULT_RELATION_NAME,
         extra_fields: Optional[dict] = None,
+        secure_extra_fields: Optional[dict] = None,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -364,6 +367,8 @@ class GrafanaSourceProvider(Object):
                 machine/VM restart.
             extra_fields: a :dict: which is used for additional information required
                 for some datasources in the `jsonData` field
+            secure_extra_fields: a :dict: which is used for additional information required
+                for some datasources in the `secureJsonData`
         """
         _validate_relation_by_interface_and_direction(
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
@@ -382,6 +387,7 @@ class GrafanaSourceProvider(Object):
                 extra_fields["implementation"] = "prometheus"
 
         self._extra_fields = extra_fields
+        self._secure_extra_fields = secure_extra_fields
 
         if not refresh_event:
             if len(self._charm.meta.containers) == 1:
@@ -450,6 +456,7 @@ class GrafanaSourceProvider(Object):
             "application": str(self._charm.model.app.name),
             "type": self._source_type,
             "extra_fields": self._extra_fields,
+            "secure_extra_fields": self._secure_extra_fields,
         }
         return data
 
@@ -574,6 +581,9 @@ class GrafanaSourceConsumer(Object):
             if source_data.get("extra_fields", None):
                 host_data["extra_fields"] = source_data.get("extra_fields")
 
+            if source_data.get("secure_extra_fields", None):
+                host_data["secure_extra_fields"] = source_data.get("secure_extra_fields")
+
             if host_data["source_name"] in sources_to_delete:
                 sources_to_delete.remove(host_data["source_name"])
 
@@ -648,7 +658,7 @@ class GrafanaSourceConsumer(Object):
 
     def _remove_source(self, source_name: str) -> None:
         """Remove a datasource by name."""
-        sources_to_delete = self.get_peer_data("sources_to_delete")
+        sources_to_delete = self.get_peer_data("sources_to_delete") or []
         if source_name not in sources_to_delete:
             sources_to_delete.append(source_name)
             self.set_peer_data("sources_to_delete", sources_to_delete)
@@ -713,7 +723,7 @@ class GrafanaSourceConsumer(Object):
     @property
     def sources_to_delete(self) -> List[str]:
         """Returns an array of source names which have been removed."""
-        return self.get_peer_data("sources_to_delete")
+        return self.get_peer_data("sources_to_delete") or []
 
     def _set_default_data(self) -> None:
         """Set defaults if they are not in peer relation data."""
@@ -724,9 +734,23 @@ class GrafanaSourceConsumer(Object):
 
     def set_peer_data(self, key: str, data: Any) -> None:
         """Put information into the peer data bucket instead of `StoredState`."""
-        self._charm.peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore[attr-defined]
+        peers = self._charm.peers  # type: ignore[attr-defined]
+        if not peers:
+            # https://bugs.launchpad.net/juju/+bug/1998282
+            logger.info("set_peer_data: no peer relation. Is the charm being installed/removed?")
+            return
+
+        peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore[attr-defined]
 
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
+        peers = self._charm.peers  # type: ignore[attr-defined]
+        if not peers:
+            # https://bugs.launchpad.net/juju/+bug/1998282
+            logger.warning(
+                "get_peer_data: no peer relation. Is the charm being installed/removed?"
+            )
+            return {}
+
         data = self._charm.peers.data[self._charm.app].get(key, "")  # type: ignore[attr-defined]
         return json.loads(data) if data else {}

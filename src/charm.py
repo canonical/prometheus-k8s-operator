@@ -77,6 +77,10 @@ CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
+# To keep a tidy debug-log, we suppress some DEBUG/INFO logs from some imported libs,
+# even when charm logging is set to a lower level.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
