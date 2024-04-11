@@ -236,7 +236,7 @@ class PrometheusCharm(CharmBase):
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
         retention_time = self.model.config.get("metrics_retention_time", "")
-        if not self._is_valid_timespec(retention_time):
+        if not self._is_valid_timespec(cast(str, retention_time)):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
         # "Push" statuses
@@ -301,7 +301,7 @@ class PrometheusCharm(CharmBase):
     def log_level(self):
         """The log level configured for the charm."""
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
-        log_level = self.model.config["log_level"].lower()
+        log_level = cast(str, self.model.config["log_level"]).lower()
 
         if log_level not in allowed_log_levels:
             logging.warning(
@@ -733,11 +733,11 @@ class PrometheusCharm(CharmBase):
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
-        if self._is_valid_timespec(retention_time := config.get("metrics_retention_time", "")):
+        if self._is_valid_timespec(retention_time := cast(str, config.get("metrics_retention_time", ""))):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
 
         try:
-            ratio = self._percent_string_to_ratio(config.get("maximum_retention_size", ""))
+            ratio = self._percent_string_to_ratio(cast(str, config.get("maximum_retention_size", "")))
 
         except ValueError as e:
             logger.warning(e)
@@ -903,9 +903,9 @@ class PrometheusCharm(CharmBase):
         }
 
         if config.get("evaluation_interval") and self._is_valid_timespec(
-            config["evaluation_interval"]
+            cast(str, config["evaluation_interval"])
         ):
-            global_config["evaluation_interval"] = config["evaluation_interval"]
+            global_config["evaluation_interval"] = cast(str, config["evaluation_interval"])
 
         return global_config
 
