@@ -733,11 +733,15 @@ class PrometheusCharm(CharmBase):
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
-        if self._is_valid_timespec(retention_time := cast(str, config.get("metrics_retention_time", ""))):
+        if self._is_valid_timespec(
+            retention_time := cast(str, config.get("metrics_retention_time", ""))
+        ):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
 
         try:
-            ratio = self._percent_string_to_ratio(cast(str, config.get("maximum_retention_size", "")))
+            ratio = self._percent_string_to_ratio(
+                cast(str, config.get("maximum_retention_size", ""))
+            )
 
         except ValueError as e:
             logger.warning(e)
