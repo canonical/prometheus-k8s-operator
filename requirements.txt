@@ -1,7 +1,7 @@
 cosl
 cryptography
 jsonschema
-ops @ git+https://github.com/tonyandrewmeyer/operator@fix-config-types-1182
+ops
 pyaml
 requests
 lightkube >= 0.11
