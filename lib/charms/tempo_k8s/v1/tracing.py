@@ -93,7 +93,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 PYDEPS = ["pydantic>=2"]
 
@@ -106,7 +106,7 @@ IngesterProtocol = Literal[
     "otlp_grpc", "otlp_http", "zipkin", "tempo", "jaeger_http_thrift", "jaeger_grpc"
 ]
 
-RawIngester = Tuple[IngesterProtocol, int, str]
+RawIngester = Tuple[IngesterProtocol, int]
 BUILTIN_JUJU_KEYS = {"ingress-address", "private-address", "egress-subnets"}
 
 
@@ -190,7 +190,6 @@ class Ingester(BaseModel):  # noqa: D101
 
     protocol: IngesterProtocol
     port: int
-    path: Optional[str] = None
 
 
 class TracingProviderAppData(DatabagModel):  # noqa: D101
@@ -397,8 +396,8 @@ class TracingEndpointProvider(Object):
                     TracingProviderAppData(
                         host=self._host,
                         ingesters=[
-                            Ingester(port=port, protocol=protocol, path=path)
-                            for protocol, port, path in self._ingesters
+                            Ingester(port=port, protocol=protocol)
+                            for protocol, port in self._ingesters
                         ],
                     ).dump(relation.data[self._charm.app])
 
@@ -581,8 +580,7 @@ class TracingEndpointRequirer(Object):
             # TCP protocols don't want an http/https scheme prefix
             base_url = base_url.split("://")[1]
 
-        suffix = receiver.path or ""
-        return f"{base_url}{suffix}"
+        return f"{base_url}"
 
     def otlp_grpc_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``otlp_grpc`` protocol."""
