@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 0
-LIBPATCH = 11
+LIBPATCH = 12
 
 
 def is_ip_address(value: str) -> bool:
@@ -240,6 +240,13 @@ class CertHandler(Object):
 
         This method intentionally does not emit any events, leave it for caller's responsibility.
         """
+        # if we are in a relation-broken hook, we might not have a relation to publish the csr to.
+        if not self.charm.model.get_relation(self.certificates_relation_name):
+            logger.warning(
+                f"No {self.certificates_relation_name!r} relation found. " f"Cannot generate csr."
+            )
+            return
+
         # At this point, assuming "peer joined" and "certificates joined" have already fired
         # (caller must guard) so we must have a private_key entry in relation data at our disposal.
         # Otherwise, traceback -> debug.
