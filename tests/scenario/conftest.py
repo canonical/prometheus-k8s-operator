@@ -3,6 +3,7 @@
 
 from unittest.mock import patch
 
+import os
 import pytest
 from charm import PrometheusCharm
 from scenario import Context
@@ -29,4 +30,4 @@ def prometheus_charm():
 
 @pytest.fixture(scope="function")
 def context(prometheus_charm):
-    return Context(charm_type=prometheus_charm)
+    return Context(charm_type=prometheus_charm, juju_version="3.0.3")
