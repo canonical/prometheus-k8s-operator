@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 45
+LIBPATCH = 46
 
 PYDEPS = ["cosl"]
 
@@ -521,8 +521,8 @@ class PrometheusConfig:
                         # for such a target. Therefore labeling with Juju topology, excluding the
                         # unit name.
                         non_wildcard_static_config["labels"] = {
-                            **non_wildcard_static_config.get("labels", {}),
                             **topology.label_matcher_dict,
+                            **non_wildcard_static_config.get("labels", {}),
                         }
 
                     non_wildcard_static_configs.append(non_wildcard_static_config)
@@ -547,9 +547,9 @@ class PrometheusConfig:
                         if topology:
                             # Add topology labels
                             modified_static_config["labels"] = {
-                                **modified_static_config.get("labels", {}),
                                 **topology.label_matcher_dict,
                                 **{"juju_unit": unit_name},
+                                **modified_static_config.get("labels", {}),
                             }
 
                             # Instance relabeling for topology should be last in order.
