@@ -18,12 +18,12 @@ from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsume
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
-from charms.observability_libs.v0.cert_handler import CertHandler
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
 )
+from charms.observability_libs.v1.cert_handler import CertHandler
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
@@ -162,8 +162,7 @@ class PrometheusCharm(CharmBase):
         self.cert_handler = CertHandler(
             charm=self,
             key="prometheus-server-cert",
-            peer_relation_name="prometheus-peers",
-            extra_sans_dns=[socket.getfqdn()],
+            sans=[socket.getfqdn()],
         )
         # Update certs here in init to avoid code ordering issues
         self._update_cert()
@@ -285,7 +284,7 @@ class PrometheusCharm(CharmBase):
             config = {
                 "scheme": "https",
                 "tls_config": {
-                    "ca_file": self.cert_handler.ca,
+                    "ca_file": self.cert_handler.ca_cert,
                 },
                 "static_configs": [{"targets": [f"*:{port or 443}"]}],
             }
@@ -439,9 +438,9 @@ class PrometheusCharm(CharmBase):
     def _is_cert_available(self) -> bool:
         return (
             self.cert_handler.enabled
-            and (self.cert_handler.cert is not None)
-            and (self.cert_handler.key is not None)
-            and (self.cert_handler.ca is not None)
+            and (self.cert_handler.server_cert is not None)
+            and (self.cert_handler.private_key is not None)
+            and (self.cert_handler.ca_cert is not None)
         )
 
     def _is_tls_ready(self) -> bool:
@@ -462,31 +461,31 @@ class PrometheusCharm(CharmBase):
             # Save the workload certificates
             self.container.push(
                 CERT_PATH,
-                self.cert_handler.cert,  # pyright: ignore
+                self.cert_handler.server_cert,  # pyright: ignore
                 make_dirs=True,
             )
             self.container.push(
                 KEY_PATH,
-                self.cert_handler.key,  # pyright: ignore
+                self.cert_handler.private_key,  # pyright: ignore
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
             self.container.push(
                 ca_cert_path,
-                self.cert_handler.ca,  # pyright: ignore
+                self.cert_handler.ca_cert,  # pyright: ignore
                 make_dirs=True,
             )
             # FIXME with the update-ca-certificates machinery prometheus shouldn't need
             #  CA_CERT_PATH.
             self.container.push(
                 CA_CERT_PATH,
-                self.cert_handler.ca,  # pyright: ignore
+                self.cert_handler.ca_cert,  # pyright: ignore
                 make_dirs=True,
             )
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(self.cert_handler.ca)  # pyright: ignore
+            ca_cert_path.write_text(self.cert_handler.ca_cert)  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
@@ -997,7 +996,7 @@ class PrometheusCharm(CharmBase):
 
             # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
             # prometheus and all scrape jobs are signed by the same CA.
-            if ca_file := tls_config.get("ca_file") or self.cert_handler.ca:
+            if ca_file := tls_config.get("ca_file") or self.cert_handler.ca_cert:
                 # TODO we shouldn't be passing CA certs over relation data, because that
                 #  reduces to self-signed certs. Both parties need to separately trust the CA
                 #  instead.

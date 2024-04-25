@@ -29,4 +29,4 @@ def prometheus_charm():
 
 @pytest.fixture(scope="function")
 def context(prometheus_charm):
-    return Context(charm_type=prometheus_charm)
+    return Context(charm_type=prometheus_charm, juju_version="3.0.3")
