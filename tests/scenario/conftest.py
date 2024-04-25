@@ -3,7 +3,6 @@
 
 from unittest.mock import patch
 
-import os
 import pytest
 from charm import PrometheusCharm
 from scenario import Context
