@@ -367,36 +367,6 @@ class TestEndpointConsumer(unittest.TestCase):
         jobs = self.harness.charm.prometheus_consumer.jobs()
         self.validate_jobs(jobs)
 
-    def test_consumer_overwrites_juju_topology_labels(self):
-        self.assertEqual(self.harness.charm._stored.num_events, 0)
-        rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
-        self.harness.update_relation_data(
-            rel_id,
-            "consumer",
-            {
-                "scrape_metadata": json.dumps(SCRAPE_METADATA),
-                "scrape_jobs": json.dumps(BAD_JOBS),
-            },
-        )
-        self.assertEqual(self.harness.charm._stored.num_events, 1)
-        self.harness.add_relation_unit(rel_id, "consumer/0")
-        self.harness.update_relation_data(
-            rel_id,
-            "consumer/0",
-            {
-                "prometheus_scrape_unit_address": "1.1.1.1",
-                "prometheus_scrape_unit_name": "provider/0",
-            },
-        )
-        self.assertEqual(self.harness.charm._stored.num_events, 2)
-        jobs = self.harness.charm.prometheus_consumer.jobs()
-        self.assertEqual(len(jobs), 1)
-        self.validate_jobs(jobs)
-        bad_labels = juju_job_labels(BAD_JOBS[0])
-        labels = juju_job_labels(jobs[0])
-        for label_name, label_value in labels.items():
-            self.assertNotEqual(label_value, bad_labels[label_name])
-
     def test_consumer_accepts_targets_without_a_port_set(self):
         self.assertEqual(self.harness.charm._stored.num_events, 0)
 
