@@ -94,7 +94,7 @@ juju relate kube-state-metrics-k8s prometheus-k8s
 Charms that seek to provide metrics endpoints and alert rules for Prometheus must do so using the provided [`prometheus_scrape`](https://charmhub.io/prometheus-k8s/libraries/prometheus_scrape) charm library.  This library by implementing the `metrics-endpoint` relation, not only ensures that scrape jobs and alert rules are forward to Prometheus but also that these are updated any time the metrics provider charm is upgraded. For example new alert rules may be added or old ones removed by updating and releasing a new version of the metrics provider charm. While it is safe to update alert rules as desired, care must be taken when updating scrape job specifications as this has the potential to break the continuity of the scraped metrics time series. In particular changing the following keys in the scrape job can break time series continuity
 - `job_name`
 - `relabel_configs`
-- `metrics_relabel_configs`
+- `metric_relabel_configs`
 - Any label set by `static_configs`
 
 Evaluation of alert rules forwarded through the [`prometheus_scrape`](https://charmhub.io/prometheus-k8s/libraries/prometheus_scrape) interface are automatically limited to the charmed application that provided these rules. This ensures that alert rule evaluation is scoped down to the charm providing the rules.
@@ -106,7 +106,7 @@ Evaluation of alert rules forwarded through the [`prometheus_scrape`](https://ch
     interface: alertmanager_dispatch
 ```
 
-The [Alertmanager Charm](https://charmhub.io/alertmanager-k8s) aggregates, deduplicates, groups and routes alerts to selected "receivers". Alertmanager receives its alerts from Prometheus and this interaction is set up and configured using the `alertmanager` relation through the [`alertmanager_dispatch`](https://charmhub.io/alertmanager-k8s/libraries/alertmanager_dispatch) interface. Over this relation the Alertmanager charm keeps Prometheus informed of all Alertmanager instances (units) to which alerts must be forwarded.  If your charm sets any alert rules then almost always it would need a relation with an Alertmanager charm which had been configured to forward alerts to specific receivers. In the absence of such a relation alerts even when raised will only be visible in the Prometheus user interface. A prudent approach to setting up an Observability stack is to do so in a manner such that it draws your attention to alarms as and when they are raised, without you having to periodically check a dashboard. 
+The [Alertmanager Charm](https://charmhub.io/alertmanager-k8s) aggregates, deduplicates, groups and routes alerts to selected "receivers". Alertmanager receives its alerts from Prometheus and this interaction is set up and configured using the `alertmanager` relation through the [`alertmanager_dispatch`](https://charmhub.io/alertmanager-k8s/libraries/alertmanager_dispatch) interface. Over this relation the Alertmanager charm keeps Prometheus informed of all Alertmanager instances (units) to which alerts must be forwarded.  If your charm sets any alert rules then almost always it would need a relation with an Alertmanager charm which had been configured to forward alerts to specific receivers. In the absence of such a relation alerts even when raised will only be visible in the Prometheus user interface. A prudent approach to setting up an Observability stack is to do so in a manner such that it draws your attention to alarms as and when they are raised, without you having to periodically check a dashboard.
 
 #### Ingress
 
@@ -145,12 +145,12 @@ Through this relation, Prometheus provides its URL to [Catalogue K8s Charmed Ope
     interface: grafana_datasource
 ```
 
-The [Grafana Charm](https://charmhub.io/grafana-k8s) provides a data visualization solution  for metrics aggregated by Prometheus and supports the creation of bespoke dashboards for such visualization. Grafana requires a data source for its dashboards and this Prometheus charm provides the data source through the `grafana-source` relation using the [`grafana_datasource`](https://charmhub.io/grafana-k8s/libraries/grafana_source) interface. To visualize your charms metrics using Grafana  the following steps are required 
+The [Grafana Charm](https://charmhub.io/grafana-k8s) provides a data visualization solution  for metrics aggregated by Prometheus and supports the creation of bespoke dashboards for such visualization. Grafana requires a data source for its dashboards and this Prometheus charm provides the data source through the `grafana-source` relation using the [`grafana_datasource`](https://charmhub.io/grafana-k8s/libraries/grafana_source) interface. To visualize your charms metrics using Grafana  the following steps are required
 - Add a relation between your charm (say `cassandra-k8s`) and Prometheus so that Prometheus can aggregate the metrics.
 - Add a relation between the Grafana and Prometheus charm so that metrics are forwarded to Grafana.
 - Add a relation between your charm and Grafana so that your charm can forward dashboards for its metrics to Grafana.
 
-For example 
+For example
 ```
 juju relate cassandra-k8s prometheus-k8s
 juju relate prometheus-k8s grafana-k8s
