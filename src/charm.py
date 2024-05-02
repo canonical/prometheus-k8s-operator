@@ -56,7 +56,7 @@ from ops.model import (
     ModelError,
     OpenedPort,
     StatusBase,
-    WaitingStatus,
+    WaitingStatus, Relation,
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
@@ -209,7 +209,8 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.internal_url,  # https://github.com/canonical/operator/issues/970
+            source_url=self.internal_url,
+            # https://github.com/canonical/operator/issues/970
             refresh_event=self.cert_handler.on.cert_changed,
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
         )
