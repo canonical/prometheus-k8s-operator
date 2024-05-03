@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 1
-LIBPATCH = 7
+LIBPATCH = 8
 
 VAULT_SECRET_LABEL = "cert-handler-private-vault"
 
@@ -349,7 +349,17 @@ class CertHandler(Object):
         )
 
     def _on_upgrade_charm(self, _):
+        has_privkey = self.vault.get_value("private-key")
+
         self._migrate_vault()
+
+        # If we already have a csr, but the pre-migration vault has no privkey stored,
+        # the csr must have been signed with a privkey that is now outdated and utterly lost.
+        # So we throw away the csr and generate a new one (and a new privkey along with it).
+        if not has_privkey and self._csr:
+            logger.debug("CSR and privkey out of sync after charm upgrade. Renewing CSR.")
+            # this will call `self.private_key` which will generate a new privkey.
+            self._generate_csr(renew=True)
 
     def _migrate_vault(self):
         peer_backend = _RelationVaultBackend(self.charm, relation_name="peers")
@@ -358,12 +368,19 @@ class CertHandler(Object):
             # we are on recent juju
             if self.vault.retrieve():
                 # we already were on recent juju: nothing to migrate
+                logger.debug(
+                    "Private key is already stored as a juju secret. Skipping private key migration."
+                )
                 return
 
             # we used to be on old juju: our secret stuff is in peer data
-            if peer_backend.retrieve():
+            if contents := peer_backend.retrieve():
+                logger.debug(
+                    "Private key found in relation data. "
+                    "Migrating private key to a juju secret."
+                )
                 # move over to secret-backed storage
-                self.vault.store(peer_backend.retrieve())
+                self.vault.store(contents)
 
                 # clear the peer storage
                 peer_backend.clear()
