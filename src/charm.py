@@ -36,7 +36,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
-from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
+from charms.tempo_k8s.v2.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -119,8 +119,8 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
 
 
 @trace_charm(
-    tracing_endpoint="tempo",
-    server_cert="server_cert_path",
+    tracing_endpoint="tracing_endpoint",
+    server_cert="server_ca_cert_path",
     extra_types=[
         KubernetesComputeResourcesPatch,
         CertHandler,
@@ -133,6 +133,7 @@ class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
     _stored = StoredState()
+    _ca_cert_path = "/usr/local/share/ca-certificates/ca.crt"
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -215,7 +216,7 @@ class PrometheusCharm(CharmBase):
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
-        self.tracing = TracingEndpointRequirer(self)
+        self.tracing = TracingEndpointRequirer(self, protocols=["otlp_http"])
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -455,8 +456,7 @@ class PrometheusCharm(CharmBase):
         if not self.container.can_connect():
             return
 
-        ca_cert_path = Path("/usr/local/share/ca-certificates/ca.crt")
-
+        ca_cert_path = Path(self._ca_cert_path)
         if self._is_cert_available():
             # Save the workload certificates
             self.container.push(
@@ -1067,14 +1067,16 @@ class PrometheusCharm(CharmBase):
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
     @property
-    def tempo(self) -> Optional[str]:
+    def tracing_endpoint(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
-        return self.tracing.otlp_http_endpoint()
+        if self.tracing.is_ready():
+            return self.tracing.get_endpoint("otlp_http")
+        return None
 
     @property
-    def server_cert_path(self) -> Optional[str]:
-        """Server certificate path for TLS tracing."""
-        return CERT_PATH
+    def server_ca_cert_path(self) -> Optional[str]:
+        """Server CA certificate path for TLS tracing."""
+        return self._ca_cert_path if self.cert_handler.enabled else None
 
 
 if __name__ == "__main__":
