@@ -93,7 +93,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["pydantic>=2"]
 
@@ -361,6 +361,8 @@ class TracingEndpointProvider(Object):
 
         Args:
             charm: a `CharmBase` instance that manages this instance of the Tempo service.
+            host: hostname.
+            ingesters: list of ingester protocols that are enabled on this endpoint.
             relation_name: an optional string name of the relation between `charm`
                 and the Tempo charmed service. The default is "tracing".
 
