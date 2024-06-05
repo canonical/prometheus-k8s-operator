@@ -317,7 +317,7 @@ LIBAPI = 3
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 15
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -1091,6 +1091,13 @@ def generate_csr(  # noqa: C901
 
     signed_certificate = csr.sign(signing_key, hashes.SHA256())  # type: ignore[arg-type]
     return signed_certificate.public_bytes(serialization.Encoding.PEM)
+
+
+def get_sha256_hex(data: str) -> str:
+    """Calculate the hash of the provided data and return the hexadecimal representation."""
+    digest = hashes.Hash(hashes.SHA256())
+    digest.update(data.encode())
+    return digest.finalize().hex()
 
 
 def csr_matches_certificate(csr: str, cert: str) -> bool:
@@ -1872,9 +1879,15 @@ class TLSCertificatesRequiresV3(Object):
         ]
         for certificate in provider_certificates:
             if certificate.csr in requirer_csrs:
+                csr_in_sha256_hex = get_sha256_hex(certificate.csr)
                 if certificate.revoked:
                     with suppress(SecretNotFoundError):
-                        secret = self.model.get_secret(label=f"{LIBID}-{certificate.csr}")
+                        logger.debug(
+                            "Removing secret with label %s",
+                            f"{LIBID}-{csr_in_sha256_hex}",
+                        )
+                        secret = self.model.get_secret(
+                            label=f"{LIBID}-{csr_in_sha256_hex}")
                         secret.remove_all_revisions()
                     self.on.certificate_invalidated.emit(
                         reason="revoked",
@@ -1885,16 +1898,23 @@ class TLSCertificatesRequiresV3(Object):
                     )
                 else:
                     try:
-                        secret = self.model.get_secret(label=f"{LIBID}-{certificate.csr}")
-                        secret.set_content({"certificate": certificate.certificate})
+                        logger.debug(
+                            "Setting secret with label %s", f"{LIBID}-{csr_in_sha256_hex}"
+                        )
+                        secret = self.model.get_secret(label=f"{LIBID}-{csr_in_sha256_hex}")
+                        secret.set_content(
+                            {"certificate": certificate.certificate, "csr": certificate.csr}
+                        )
                         secret.set_info(
                             expire=self._get_next_secret_expiry_time(certificate),
                         )
                     except SecretNotFoundError:
-                        logger.debug("Adding secret with label %s", f"{LIBID}-{certificate.csr}")
+                        logger.debug(
+                            "Creating new secret with label %s", f"{LIBID}-{csr_in_sha256_hex}"
+                        )
                         secret = self.charm.unit.add_secret(
-                            {"certificate": certificate.certificate},
-                            label=f"{LIBID}-{certificate.csr}",
+                            {"certificate": certificate.certificate, "csr": certificate.csr},
+                            label=f"{LIBID}-{csr_in_sha256_hex}",
                             expire=self._get_next_secret_expiry_time(certificate),
                         )
                     self.on.certificate_available.emit(
@@ -1957,7 +1977,7 @@ class TLSCertificatesRequiresV3(Object):
         """
         if not event.secret.label or not event.secret.label.startswith(f"{LIBID}-"):
             return
-        csr = event.secret.label[len(f"{LIBID}-") :]
+        csr = event.secret.get_content()["csr"]
         provider_certificate = self._find_certificate_in_relation_data(csr)
         if not provider_certificate:
             # A secret expired but we did not find matching certificate. Cleaning up
