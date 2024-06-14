@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 1
-LIBPATCH = 9
+LIBPATCH = 10
 
 VAULT_SECRET_LABEL = "cert-handler-private-vault"
 
@@ -274,6 +274,7 @@ class CertHandler(Object):
         *,
         key: str,
         certificates_relation_name: str = "certificates",
+        peer_relation_name: str = "peers",
         cert_subject: Optional[str] = None,
         sans: Optional[List[str]] = None,
     ):
@@ -285,7 +286,11 @@ class CertHandler(Object):
             charm: The owning charm.
             key: A manually-crafted, static, unique identifier used by ops to identify events.
              It shouldn't change between one event to another.
-            certificates_relation_name: Must match metadata.yaml.
+            certificates_relation_name: Name of the certificates relation over which we obtain TLS certificates.
+                Must match metadata.yaml.
+            peer_relation_name: Name of a peer relation used to store our secrets.
+                Only used on older Juju versions where secrets are not supported.
+                Must match metadata.yaml.
             cert_subject: Custom subject. Name collisions are under the caller's responsibility.
             sans: DNS names. If none are given, use FQDN.
         """
@@ -309,7 +314,7 @@ class CertHandler(Object):
             # self.framework.observe(self.charm.on.secret_remove, self._rotate_csr)
 
         else:
-            vault_backend = _RelationVaultBackend(charm, relation_name="peers")
+            vault_backend = _RelationVaultBackend(charm, relation_name=peer_relation_name)
         self.vault = Vault(vault_backend)
 
         self.certificates_relation_name = certificates_relation_name
@@ -514,7 +519,7 @@ class CertHandler(Object):
         # ignoring all but the last one.
         if len(csrs) > 1:
             logger.warning(
-                "Multiple CSRs found in `certificates` relation. "
+                f"Multiple CSRs found in {self.certificates_relation_name!r} relation. "
                 "cert_handler is not ready to expect it."
             )
 
