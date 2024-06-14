@@ -6,6 +6,10 @@ on:
       - main
 
 jobs:
+  check-terraform-module:
+    name: Check Terraform Module
+    uses: canonical/observability/.github/workflows/terraform.yaml@main
+    secrets: inherit
   pull-request:
     name: PR
     uses: canonical/observability/.github/workflows/charm-pull-request.yaml@main
