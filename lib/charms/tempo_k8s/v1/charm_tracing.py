@@ -126,15 +126,14 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Span, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import INVALID_SPAN, Tracer
+from opentelemetry.trace import get_current_span as otlp_get_current_span
 from opentelemetry.trace import (
-    INVALID_SPAN,
-    Tracer,
     get_tracer,
     get_tracer_provider,
     set_span_in_context,
     set_tracer_provider,
 )
-from opentelemetry.trace import get_current_span as otlp_get_current_span
 from ops.charm import CharmBase
 from ops.framework import Framework
 
@@ -147,7 +146,7 @@ LIBAPI = 1
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 8
+LIBPATCH = 9
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-http==1.21.0"]
 
@@ -295,8 +294,8 @@ def _setup_root_span_initializer(
         # self.handle = Handle(None, self.handle_kind, None)
 
         original_event_context = framework._event_context
-
-        _service_name = service_name or self.app.name
+        # default service name isn't just app name because it could conflict with the workload service name
+        _service_name = service_name or f"{self.app.name}-charm"
 
         resource = Resource.create(
             attributes={
