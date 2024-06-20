@@ -58,7 +58,7 @@ except ImportError as e:
 
 import logging
 
-from ops.charm import CharmBase, RelationBrokenEvent
+from ops.charm import CharmBase
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.jujuversion import JujuVersion
 from ops.model import Relation, Secret, SecretNotFoundError
@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 1
-LIBPATCH = 10
+LIBPATCH = 11
 
 VAULT_SECRET_LABEL = "cert-handler-private-vault"
 
@@ -260,7 +260,13 @@ class Vault:
 
     def clear(self):
         """Clear the vault."""
-        self._backend.clear()
+        try:
+            self._backend.clear()
+        except SecretNotFoundError:
+            # guard against: https://github.com/canonical/observability-libs/issues/95
+            # this is fine, it might mean an earlier hook had already called .clear()
+            # not sure what exactly the root cause is, might be a juju bug
+            logger.debug("Could not clear vault: secret is gone already.")
 
 
 class CertHandler(Object):
@@ -343,10 +349,6 @@ class CertHandler(Object):
         self.framework.observe(
             self.certificates.on.all_certificates_invalidated,  # pyright: ignore
             self._on_all_certificates_invalidated,
-        )
-        self.framework.observe(
-            self.charm.on[self.certificates_relation_name].relation_broken,  # pyright: ignore
-            self._on_certificates_relation_broken,
         )
         self.framework.observe(
             self.charm.on.upgrade_charm,  # pyright: ignore
@@ -574,14 +576,13 @@ class CertHandler(Object):
             self.on.cert_changed.emit()  # pyright: ignore
 
     def _on_all_certificates_invalidated(self, _: AllCertificatesInvalidatedEvent) -> None:
-        # Do what you want with this information, probably remove all certificates
-        # Note: assuming "limit: 1" in metadata
-        self._generate_csr(overwrite=True, clear_cert=True)
-        self.on.cert_changed.emit()  # pyright: ignore
-
-    def _on_certificates_relation_broken(self, _: RelationBrokenEvent) -> None:
         """Clear all secrets data when removing the relation."""
+        # Note: assuming "limit: 1" in metadata
+        # The "certificates_relation_broken" event is converted to "all invalidated" custom
+        # event by the tls-certificates library. Per convention, we let the lib manage the
+        # relation and we do not observe "certificates_relation_broken" directly.
         self.vault.clear()
+        # We do not generate a CSR here because the relation is gone.
         self.on.cert_changed.emit()  # pyright: ignore
 
     def _check_juju_supports_secrets(self) -> bool:
