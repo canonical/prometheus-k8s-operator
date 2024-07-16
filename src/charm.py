@@ -210,7 +210,7 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.internal_url,  # https://github.com/canonical/operator/issues/970
+            source_url=self.external_url,
             refresh_event=self.cert_handler.on.cert_changed,
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
         )
