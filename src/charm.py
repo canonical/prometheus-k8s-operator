@@ -212,7 +212,7 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.external_url,
             refresh_event=[
-                self.ingres.on.ready_for_unit,
+                self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
                 self.on.update_status,
                 self.cert_handler.on.cert_changed,
