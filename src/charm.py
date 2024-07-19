@@ -24,16 +24,16 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     adjust_resource_requirements,
 )
 from charms.observability_libs.v1.cert_handler import CertHandler
-from charms.prometheus_k8s.v1.prometheus_scrape import (
-    MetricsEndpointConsumer,
-    MetricsEndpointProvider,
-    PrometheusConfig,
-)
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as DEFAULT_REMOTE_WRITE_RELATION_NAME,
 )
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
+)
+from charms.prometheus_k8s.v1.prometheus_scrape import (
+    MetricsEndpointConsumer,
+    MetricsEndpointProvider,
+    PrometheusConfig,
 )
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
 from charms.tempo_k8s.v2.tracing import TracingEndpointRequirer
