@@ -24,7 +24,7 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     adjust_resource_requirements,
 )
 from charms.observability_libs.v1.cert_handler import CertHandler
-from charms.prometheus_k8s.v0.prometheus_scrape import (
+from charms.prometheus_k8s.v1.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
     PrometheusConfig,

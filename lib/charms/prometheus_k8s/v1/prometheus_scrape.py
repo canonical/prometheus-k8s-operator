@@ -321,12 +321,14 @@ over unit relation data using the `prometheus_scrape_unit_name` and
 of Metrics provider charms hold eponymous information.
 
 """  # noqa: W505
-
+import base64
+import binascii
 import copy
 import hashlib
 import ipaddress
 import json
 import logging
+import lzma
 import os
 import platform
 import re
@@ -358,11 +360,11 @@ from ops.model import Relation
 LIBID = "bc84295fef5f4049878f07b131968ee2"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0
+LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 47
+LIBPATCH = 0
 
 PYDEPS = ["cosl"]
 
@@ -398,6 +400,22 @@ DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+
+def _encode_content(content: Union[str, bytes]) -> str:
+    if isinstance(content, str):
+        content = bytes(content, "utf-8")
+
+    return base64.b64encode(lzma.compress(content)).decode("utf-8")
+
+
+def _decode_content(encoded_content: str) -> str:
+    try:
+        # Assuming content is encoded, try decoding it.
+        return lzma.decompress(base64.b64decode(encoded_content.encode("utf-8"))).decode()
+    except (binascii.Error, lzma.LZMAError):
+        # Failed to base64-decode or decompress, so probably not encoded. Return as is.
+        return encoded_content
 
 
 class PrometheusConfig:
@@ -1004,7 +1022,9 @@ class MetricsEndpointConsumer(Object):
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            alert_rules = json.loads(
+                _decode_content(relation.data[relation.app].get("alert_rules", "{}"))
+            )
             if not alert_rules:
                 continue
 
@@ -1158,7 +1178,9 @@ class MetricsEndpointConsumer(Object):
         if not relation.units:
             return []
 
-        scrape_configs = json.loads(relation.data[relation.app].get("scrape_jobs", "[]"))
+        scrape_configs = json.loads(
+            _decode_content(relation.data[relation.app].get("scrape_jobs", "[]"))
+        )
 
         if not scrape_configs:
             return []
@@ -1857,8 +1879,10 @@ class MetricsEndpointAggregator(Object):
                 group = {"name": self.group_name(appname), "rules": rules}
                 groups.append(group)
 
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
-        event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+        event.relation.data[self._charm.app]["scrape_jobs"] = _encode_content(json.dumps(jobs))
+        event.relation.data[self._charm.app]["alert_rules"] = _encode_content(
+            json.dumps({"groups": groups})
+        )
 
     def _on_prometheus_targets_changed(self, event):
         """Update scrape jobs in response to scrape target changes.
@@ -1894,11 +1918,13 @@ class MetricsEndpointAggregator(Object):
         updated_job = self._static_scrape_job(targets, app_name, **kwargs)
 
         for relation in self.model.relations[self._prometheus_relation]:
-            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            jobs = json.loads(
+                _decode_content(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            )
             # list of scrape jobs that have not changed
             jobs = [job for job in jobs if updated_job["job_name"] != job["job_name"]]
             jobs.append(updated_job)
-            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+            relation.data[self._charm.app]["scrape_jobs"] = _encode_content(json.dumps(jobs))
 
             if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
@@ -1927,7 +1953,9 @@ class MetricsEndpointAggregator(Object):
             return
 
         for relation in self.model.relations[self._prometheus_relation]:
-            jobs = json.loads(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            jobs = json.loads(
+                _decode_content(relation.data[self._charm.app].get("scrape_jobs", "[]"))
+            )
             if not jobs:
                 continue
 
@@ -1950,7 +1978,7 @@ class MetricsEndpointAggregator(Object):
                 changed_job["static_configs"] = configs_kept  # type: ignore
                 jobs.append(changed_job)
 
-            relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+            relation.data[self._charm.app]["scrape_jobs"] = _encode_content(json.dumps(jobs))
 
             if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
@@ -2119,7 +2147,9 @@ class MetricsEndpointAggregator(Object):
         updated_group = {"name": self.group_name(name), "rules": rules}
 
         for relation in self.model.relations[self._prometheus_relation]:
-            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            alert_rules = json.loads(
+                _decode_content(relation.data[self._charm.app].get("alert_rules", "{}"))
+            )
             groups = alert_rules.get("groups", [])
             # list of alert rule groups that have not changed
             for group in groups:
@@ -2129,7 +2159,9 @@ class MetricsEndpointAggregator(Object):
 
             if updated_group["name"] not in [g["name"] for g in groups]:
                 groups.append(updated_group)
-            relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+            relation.data[self._charm.app]["alert_rules"] = _encode_content(
+                json.dumps({"groups": groups})
+            )
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
@@ -2150,7 +2182,9 @@ class MetricsEndpointAggregator(Object):
             return
 
         for relation in self.model.relations[self._prometheus_relation]:
-            alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
+            alert_rules = json.loads(
+                _decode_content(relation.data[self._charm.app].get("alert_rules", "{}"))
+            )
             if not alert_rules:
                 continue
 
@@ -2177,7 +2211,7 @@ class MetricsEndpointAggregator(Object):
                 changed_group["rules"] = rules_kept  # type: ignore
                 groups.append(changed_group)
 
-            relation.data[self._charm.app]["alert_rules"] = (
+            relation.data[self._charm.app]["alert_rules"] = _encode_content(
                 json.dumps({"groups": groups}) if groups else "{}"
             )
 
@@ -2204,7 +2238,7 @@ class MetricsEndpointAggregator(Object):
         """
         rules = {}
         for unit in relation.units:
-            unit_rules = yaml.safe_load(relation.data[unit].get("groups", ""))
+            unit_rules = yaml.safe_load(_decode_content(relation.data[unit].get("groups", "")))
             if unit_rules:
                 rules.update({unit.name: unit_rules})
 
