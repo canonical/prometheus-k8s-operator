@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from charms.prometheus_k8s.v1.prometheus_scrape import MetricsEndpointAggregator
+from charms.prometheus_k8s.v1.prometheus_scrape import MetricsEndpointAggregator, _decode_content
 from ops.charm import CharmBase
 from ops.testing import Harness
 
@@ -119,7 +119,7 @@ class TestEndpointAggregator(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         expected_jobs = [
             {
                 "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
@@ -154,7 +154,7 @@ class TestEndpointAggregator(unittest.TestCase):
             prometheus_rel_id, self.harness.model.app.name
         )
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1)
         group = groups[0]
@@ -206,7 +206,7 @@ class TestEndpointAggregator(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         expected_jobs = [
             {
                 "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
@@ -241,7 +241,7 @@ class TestEndpointAggregator(unittest.TestCase):
             prometheus_rel_id, self.harness.model.app.name
         )
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1)
         group = groups[0]
@@ -300,7 +300,7 @@ class TestEndpointAggregator(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         self.assertEqual(len(scrape_jobs), 2)
 
         expected_jobs = [
@@ -364,7 +364,7 @@ class TestEndpointAggregator(unittest.TestCase):
             prometheus_rel_id, self.harness.model.app.name
         )
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 2)
         expected_groups = [
@@ -444,11 +444,11 @@ class TestEndpointAggregator(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         self.assertEqual(len(scrape_jobs), 2)
 
         self.harness.remove_relation_unit(target_rel_id_2, "target-app-2/0")
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         self.assertEqual(len(scrape_jobs), 1)
 
         expected_jobs = [
@@ -495,12 +495,12 @@ class TestEndpointAggregator(unittest.TestCase):
             prometheus_rel_id, self.harness.model.app.name
         )
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 2)
 
         self.harness.remove_relation_unit(alert_rules_rel_id_2, "rules-app-2/0")
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1)
 
@@ -560,13 +560,13 @@ class TestEndpointAggregator(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
 
         self.assertEqual(len(scrape_jobs), 1)
         self.assertEqual(len(scrape_jobs[0].get("static_configs")), 2)
 
         self.harness.remove_relation_unit(target_rel_id, "target-app/1")
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
 
         self.assertEqual(len(scrape_jobs), 1)
         self.assertEqual(len(scrape_jobs[0].get("static_configs")), 1)
@@ -614,13 +614,13 @@ class TestEndpointAggregator(unittest.TestCase):
             prometheus_rel_id, self.harness.model.app.name
         )
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1)
 
         self.harness.remove_relation_unit(alert_rules_rel_id, "rules-app/1")
 
-        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        alert_rules = json.loads(_decode_content(prometheus_rel_data.get("alert_rules", "{}")))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1)
 
@@ -682,7 +682,7 @@ class TestEndpointAggregatorWithRelabeling(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         expected_jobs = [
             {
                 "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
@@ -728,7 +728,7 @@ class TestEndpointAggregatorWithRelabeling(unittest.TestCase):
         prometheus_rel_data = self.harness.get_relation_data(
             prometheus_rel_id, self.harness.model.app.name
         )
-        scrape_jobs = json.loads(prometheus_rel_data.get("scrape_jobs", "[]"))
+        scrape_jobs = json.loads(_decode_content(prometheus_rel_data.get("scrape_jobs", "[]")))
         expected_jobs = [
             {
                 "job_name": "juju_testmodel_12de4fa_target-app_prometheus_scrape",
