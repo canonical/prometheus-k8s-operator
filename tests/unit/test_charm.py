@@ -95,6 +95,9 @@ class TestCharm(unittest.TestCase):
 
         rel_id = self.harness.add_relation("ingress", "traefik-ingress")
         self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
+        self.harness.update_relation_data(rel_id, "traefik-ingress/0", key_values={"ingress": yaml.safe_dump({"prometheus/0": {"url": "http://test:80"}})})
+
+        assert self.harness.charm.ingress.url
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         fqdn = socket.getfqdn()
