@@ -96,11 +96,20 @@ class TestCharm(unittest.TestCase):
         rel_id = self.harness.add_relation("ingress", "traefik-ingress")
         self.harness.add_relation_unit(rel_id, "traefik-ingress/0")
 
-        with patch("charms.observability_libs.v0.kubernetes_compute_resources_patch.KubernetesComputeResourcesPatch.is_ready", new=lambda _: True):
-            self.harness.update_relation_data(rel_id, "traefik-ingress", key_values={"ingress": yaml.safe_dump({"prometheus-k8s/0": {"url": "http://test:80"}})})
+        with patch(
+            "charms.observability_libs.v0.kubernetes_compute_resources_patch.KubernetesComputeResourcesPatch.is_ready",
+            new=lambda _: True,
+        ):
+            self.harness.update_relation_data(
+                rel_id,
+                "traefik-ingress",
+                key_values={
+                    "ingress": yaml.safe_dump({"prometheus-k8s/0": {"url": "http://test:80"}})
+                },
+            )
 
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://test:80")
+        self.assertEqual(cli_arg(plan, "--web.external-url"), "http://test:80")
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
