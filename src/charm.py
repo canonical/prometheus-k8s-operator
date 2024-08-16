@@ -60,6 +60,7 @@ from ops.model import (
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
+
 from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 

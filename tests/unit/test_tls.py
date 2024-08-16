@@ -4,13 +4,14 @@
 import unittest
 from unittest.mock import patch
 
-from charm import Prometheus, PrometheusCharm
 from helpers import (
     k8s_resource_multipatch,
     patch_network_get,
     prom_multipatch,
 )
 from ops.testing import Harness
+
+from charm import Prometheus, PrometheusCharm
 
 
 @prom_multipatch
