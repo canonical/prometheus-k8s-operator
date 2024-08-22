@@ -13,6 +13,7 @@ parts:
     build-packages:
       - git
     charm-binary-python-packages:
+      - pip>=24
       - jsonschema
       - cryptography
       - pyyaml
@@ -20,7 +21,7 @@ parts:
       - ops
       - wheel==0.37.1
       - setuptools==45.2.0
-      - pydantic>=2
+      - pydantic
       - pydantic-core
   cos-tool:
     plugin: dump
