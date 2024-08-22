@@ -12,6 +12,8 @@ parts:
   charm:
     build-packages:
       - git
+      - rustc
+      - cargo
     charm-binary-python-packages:
       - pip>=24
       - jsonschema
