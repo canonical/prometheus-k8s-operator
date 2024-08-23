@@ -5,9 +5,10 @@
 from unittest.mock import patch
 
 import pytest
-from charm import PrometheusCharm
 from interface_tester import InterfaceTester
 from scenario import Container, ExecOutput, State
+
+from charm import PrometheusCharm
 
 
 def tautology(*_, **__) -> bool:

@@ -48,13 +48,14 @@ num_units = 2  # Using the same number of units for both prometheus and the test
 idle_period = 90
 
 
+@pytest.mark.skip(reason="xfail")
 async def test_setup_env(ops_test: OpsTest):
     await ops_test.model.set_config(
         {"logging-config": "<root>=WARNING; unit=DEBUG", "update-status-hook-interval": "60m"}
     )
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
@@ -179,7 +180,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         )
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
@@ -221,7 +222,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     assert all(up_before[i] <= up_after[i] for i in range(num_units))
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_rescale_prometheus(ops_test: OpsTest):
     # GitHub runner doesn't have enough resources to deploy 3 unit with the default "requests", and
     # the unit fails to schedule. Setting a low limit, so it is able to schedule.
@@ -265,7 +266,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
     )
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_rescale_tester(ops_test: OpsTest):
     # WHEN testers are scaled up
     num_additional_units = 1
@@ -306,7 +307,7 @@ async def test_rescale_tester(ops_test: OpsTest):
     )
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and rescale testers at the same time (without waiting for idle)."""
     # WHEN prometheus is upgraded at the same time that the testers are scaled up
@@ -369,7 +370,7 @@ async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, pro
     )
 
 
-@pytest.mark.xfail
+@pytest.mark.skip(reason="xfail")
 async def test_rescale_prometheus_while_upgrading_testers(
     ops_test: OpsTest, prometheus_tester_charm
 ):

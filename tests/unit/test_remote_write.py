@@ -5,7 +5,6 @@ import json
 import unittest
 from unittest.mock import patch
 
-from charm import Prometheus, PrometheusCharm
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     DEFAULT_RELATION_NAME as RELATION_NAME,
 )
@@ -26,6 +25,8 @@ from ops import framework
 from ops.charm import CharmBase
 from ops.model import ActiveStatus
 from ops.testing import Harness
+
+from charm import Prometheus, PrometheusCharm
 
 METADATA = f"""
 name: consumer-tester

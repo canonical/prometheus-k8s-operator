@@ -4,8 +4,9 @@
 from unittest.mock import patch
 
 import pytest
-from charm import PrometheusCharm
 from scenario import Context
+
+from charm import PrometheusCharm
 
 
 def tautology(*_, **__) -> bool:

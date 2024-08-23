@@ -60,6 +60,7 @@ from ops.model import (
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
+
 from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
@@ -725,8 +726,7 @@ class PrometheusCharm(CharmBase):
         # For stripPrefix middleware to work correctly, we need to set web.external-url and
         # web.route-prefix in a particular way.
         # https://github.com/prometheus/prometheus/issues/1191
-        route_prefix = urlparse(self.external_url).path.strip("/")
-        external_url = f"{self.internal_url.rstrip('/')}/{route_prefix}".rstrip("/")
+        external_url = self.external_url.rstrip("/")
         args.append(f"--web.external-url={external_url}")
         args.append("--web.route-prefix=/")
 

@@ -4,6 +4,7 @@
 import unittest
 
 import responses
+
 from prometheus_client import Prometheus
 
 
