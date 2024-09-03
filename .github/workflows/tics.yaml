@@ -17,3 +17,4 @@ jobs:
           filelist: .
           recalc: ALL
           project: prometheus-k8s-operator
+          branchname: master
