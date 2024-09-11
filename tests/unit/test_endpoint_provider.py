@@ -21,7 +21,7 @@ from cosl import JujuTopology
 from cosl.rules import AlertRules
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
-from helpers import PROJECT_DIR, UNITTEST_DIR, patch_network_get
+from helpers import PROJECT_DIR, UNITTEST_DIR
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
@@ -190,7 +190,6 @@ class TestEndpointProvider(unittest.TestCase):
         )
         self.assertRaises(RelationRoleMismatchError, harness.begin)
 
-    @patch_network_get()
     def test_provider_sets_scrape_metadata(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -206,8 +205,8 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("model_uuid", scrape_metadata)
         self.assertIn("application", scrape_metadata)
 
-    @patch_network_get()
     def test_provider_unit_sets_address_on_pebble_ready(self):
+        self.harness.add_network("10.1.157.116")
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.container_pebble_ready("prometheus-tester")
 
@@ -219,8 +218,8 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
 
-    @patch_network_get()
     def test_provider_unit_sets_address_on_relation_joined(self):
+        self.harness.add_network("10.1.157.116")
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
 
@@ -233,7 +232,6 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
         self.assertIn("prometheus_scrape_unit_name", data)
 
-    @patch_network_get()
     def test_provider_sets_external_url(self):
         harness = Harness(EndpointProviderCharmExternalUrl, meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
@@ -251,7 +249,6 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_unit_address"], "9.12.20.18")
         self.assertIn("prometheus_scrape_unit_name", data)
 
-    @patch_network_get()
     def test_provider_can_set_lookaside_data(self):
         harness = Harness(EndpointProviderCharmWithLookaside, meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
@@ -270,7 +267,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("dynamic-job", names)
 
     @patch("socket.getfqdn", new=lambda *args: "some.host")
-    @patch_network_get(private_address=None)
+    @patch("ops.Network.bind_address", new="not-an-ip")
     def test_provider_unit_sets_fqdn_if_not_address_on_relation_joined(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -284,7 +281,6 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertEqual(data["prometheus_scrape_unit_address"], "some.host")
         self.assertIn("prometheus_scrape_unit_name", data)
 
-    @patch_network_get()
     def test_provider_supports_multiple_jobs(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -301,7 +297,6 @@ class TestEndpointProvider(unittest.TestCase):
         job_names = [job["job_name"] for job in JOBS]
         self.assertListEqual(names, job_names)
 
-    @patch_network_get()
     def test_provider_sanitizes_jobs(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -317,7 +312,6 @@ class TestEndpointProvider(unittest.TestCase):
             keys = set(job.keys())
             self.assertTrue(keys.issubset(ALLOWED_KEYS))
 
-    @patch_network_get()
     def test_each_alert_rule_is_topology_labeled(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -354,7 +348,6 @@ class TestEndpointProvider(unittest.TestCase):
                     self.assertIn("juju_unit", rule["labels"])
                     self.assertIn("juju_unit=", rule["expr"])
 
-    @patch_network_get()
     def test_each_alert_expression_is_topology_labeled(self):
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
         self.harness.add_relation_unit(rel_id, "provider/0")
@@ -408,7 +401,6 @@ class TestNonStandardProviders(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.begin()
 
-    @patch_network_get()
     def test_a_bad_alert_expression_logs_an_error(self):
         self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_expressions"))
 
@@ -420,7 +412,6 @@ class TestNonStandardProviders(unittest.TestCase):
             self.assertEqual(len(messages), 1)
             self.assertIn("Invalid rules file: missing_expr.rule", messages[0])
 
-    @patch_network_get()
     def test_a_bad_alert_rules_logs_an_error(self):
         self.setup(alert_rules_path=str(UNITTEST_DIR / "bad_alert_rules"))
 
@@ -750,7 +741,6 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.begin()
 
-    @patch_network_get()
     def test_unit_label_is_retained_if_hard_coded(self):
         self.setup(alert_rules_path=str(UNITTEST_DIR / "alert_rules_with_unit_topology"))
         rel_id = self.harness.add_relation("metrics-endpoint", "provider")
@@ -779,7 +769,6 @@ class TestNoLeader(unittest.TestCase):
         self.harness.set_leader(False)
         self.harness.begin_with_initial_hooks()
 
-    @patch_network_get()
     def test_alert_rules(self):
         """Verify alert rules are added when leader is elected after the relation is created."""
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
@@ -819,7 +808,6 @@ class TestBakedInAlertRules(unittest.TestCase):
         self.harness.set_leader(True)
         self.harness.begin_with_initial_hooks()
 
-    @patch_network_get()
     def test_alert_rules(self):
         """Verify alert rules are added when leader is elected after the relation is created."""
         rel_id = self.harness.add_relation(RELATION_NAME, "provider")
