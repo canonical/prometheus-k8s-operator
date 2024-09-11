@@ -10,3 +10,11 @@ parts:
   charm:
     build-packages:
     - git
+    charm-binary-python-packages:
+      - jsonschema
+      - cryptography
+      - pyyaml
+      - requests
+      - ops
+      - cosl
+      - pydantic>=2
