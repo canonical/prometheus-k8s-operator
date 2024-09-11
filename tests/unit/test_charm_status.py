@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 import ops
-from helpers import k8s_resource_multipatch, patch_network_get, prom_multipatch
+from helpers import k8s_resource_multipatch, prom_multipatch
 from ops.model import ActiveStatus, BlockedStatus
 from ops.pebble import Change, ChangeError, ChangeID
 from ops.testing import Harness
@@ -46,7 +46,6 @@ class TestActiveStatus(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
-    @patch_network_get()
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
@@ -69,7 +68,6 @@ class TestActiveStatus(unittest.TestCase):
             self.harness.container_pebble_ready("prometheus")
             self.assertEqual(self.harness.get_workload_version(), "0.1.0")
 
-    @patch_network_get()
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_unit_is_blocked_if_reload_configuration_fails(self, *unused):
