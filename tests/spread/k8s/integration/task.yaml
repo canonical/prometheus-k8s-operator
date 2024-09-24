@@ -1,0 +1,8 @@
+summary: Greet the planet
+
+prepare: |
+    sudo -u ubuntu juju add-model --config logging-config="<root>=WARNING; unit=DEBUG" --config update-status-hook-interval="60m" integration-k8s
+
+execute: |
+    tox -vve integration
+
