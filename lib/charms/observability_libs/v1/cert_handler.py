@@ -26,7 +26,7 @@ You can then observe the library's custom event and make use of the key and cert
 self.framework.observe(self.cert_handler.on.cert_changed, self._on_server_cert_changed)
 
 container.push(keypath, self.cert_handler.private_key)
-container.push(certpath, self.cert_handler.servert_cert)
+container.push(certpath, self.cert_handler.server_cert)
 ```
 
 Since this library uses [Juju Secrets](https://juju.is/docs/juju/secret) it requires Juju >= 3.0.3.
@@ -59,7 +59,7 @@ except ImportError as e:
 import logging
 
 from ops.charm import CharmBase
-from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents, StoredState
 from ops.jujuversion import JujuVersion
 from ops.model import Relation, Secret, SecretNotFoundError
 
@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 1
-LIBPATCH = 11
+LIBPATCH = 13
 
 VAULT_SECRET_LABEL = "cert-handler-private-vault"
 
@@ -273,6 +273,7 @@ class CertHandler(Object):
     """A wrapper for the requirer side of the TLS Certificates charm library."""
 
     on = CertHandlerEvents()  # pyright: ignore
+    _stored = StoredState()
 
     def __init__(
         self,
@@ -283,6 +284,7 @@ class CertHandler(Object):
         peer_relation_name: str = "peers",
         cert_subject: Optional[str] = None,
         sans: Optional[List[str]] = None,
+        refresh_events: Optional[List[BoundEvent]] = None,
     ):
         """CertHandler is used to wrap TLS Certificates management operations for charms.
 
@@ -299,8 +301,17 @@ class CertHandler(Object):
                 Must match metadata.yaml.
             cert_subject: Custom subject. Name collisions are under the caller's responsibility.
             sans: DNS names. If none are given, use FQDN.
+            refresh_events: an optional list of bound events which
+                will be observed to replace the current CSR with a new one
+                if there are changes in the CSR's DNS SANs or IP SANs.
+                Then, subsequently, replace its corresponding certificate with a new one.
         """
         super().__init__(charm, key)
+        # use StoredState to store the hash of the CSR
+        # to potentially trigger a CSR renewal on `refresh_events`
+        self._stored.set_default(
+            csr_hash=None,
+        )
         self.charm = charm
 
         # We need to sanitize the unit name, otherwise route53 complains:
@@ -354,6 +365,15 @@ class CertHandler(Object):
             self.charm.on.upgrade_charm,  # pyright: ignore
             self._on_upgrade_charm,
         )
+
+        if refresh_events:
+            for ev in refresh_events:
+                self.framework.observe(ev, self._on_refresh_event)
+
+    def _on_refresh_event(self, _):
+        """Replace the latest current CSR with a new one if there are any SANs changes."""
+        if self._stored.csr_hash != self._csr_hash:
+            self._generate_csr(renew=True)
 
     def _on_upgrade_charm(self, _):
         has_privkey = self.vault.get_value("private-key")
@@ -420,6 +440,20 @@ class CertHandler(Object):
         return True
 
     @property
+    def _csr_hash(self) -> int:
+        """A hash of the config that constructs the CSR.
+
+        Only include here the config options that, should they change, should trigger a renewal of
+        the CSR.
+        """
+        return hash(
+            (
+                tuple(self.sans_dns),
+                tuple(self.sans_ip),
+            )
+        )
+
+    @property
     def available(self) -> bool:
         """Return True if all certs are available in relation data; False otherwise."""
         return (
@@ -483,6 +517,8 @@ class CertHandler(Object):
                     self.sans_ip,
                 )
                 self.certificates.request_certificate_creation(certificate_signing_request=csr)
+
+            self._stored.csr_hash = self._csr_hash
 
         if clear_cert:
             self.vault.clear()
@@ -548,9 +584,19 @@ class CertHandler(Object):
 
     @property
     def chain(self) -> Optional[str]:
-        """Return the ca chain bundled as a single PEM string."""
+        """Return the entire chain bundled as a single PEM string. This includes, if available, the certificate, intermediate CAs, and the root CA.
+
+        If the server certificate is not set in the chain by the provider, we'll add it
+        to the top of the chain so that it could be used by a server.
+        """
         cert = self.get_cert()
-        return cert.chain_as_pem() if cert else None
+        if not cert:
+            return None
+        chain = cert.chain_as_pem()
+        if cert.certificate not in chain:
+            # add server cert to chain
+            chain = cert.certificate + "\n\n" + chain
+        return chain
 
     def _on_certificate_expiring(
         self, event: Union[CertificateExpiringEvent, CertificateInvalidatedEvent]
