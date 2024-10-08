@@ -277,13 +277,13 @@ juju relate <tls-certificates provider charm> <tls-certificates requirer charm>
 """  # noqa: D405, D410, D411, D214, D416
 
 import copy
+import ipaddress
 import json
 import logging
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from ipaddress import IPv4Address
 from typing import List, Literal, Optional, Union
 
 from cryptography import x509
@@ -305,6 +305,7 @@ from ops.model import (
     ModelError,
     Relation,
     RelationDataContent,
+    Secret,
     SecretNotFoundError,
     Unit,
 )
@@ -317,7 +318,7 @@ LIBAPI = 3
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 20
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -735,16 +736,16 @@ def calculate_expiry_notification_time(
     """
     if provider_recommended_notification_time is not None:
         provider_recommended_notification_time = abs(provider_recommended_notification_time)
-        provider_recommendation_time_delta = (
-            expiry_time - timedelta(hours=provider_recommended_notification_time)
+        provider_recommendation_time_delta = expiry_time - timedelta(
+            hours=provider_recommended_notification_time
         )
         if validity_start_time < provider_recommendation_time_delta:
             return provider_recommendation_time_delta
 
     if requirer_recommended_notification_time is not None:
         requirer_recommended_notification_time = abs(requirer_recommended_notification_time)
-        requirer_recommendation_time_delta = (
-            expiry_time - timedelta(hours=requirer_recommended_notification_time)
+        requirer_recommendation_time_delta = expiry_time - timedelta(
+            hours=requirer_recommended_notification_time
         )
         if validity_start_time < requirer_recommendation_time_delta:
             return requirer_recommendation_time_delta
@@ -1077,7 +1078,7 @@ def generate_csr(  # noqa: C901
     if sans_oid:
         _sans.extend([x509.RegisteredID(x509.ObjectIdentifier(san)) for san in sans_oid])
     if sans_ip:
-        _sans.extend([x509.IPAddress(IPv4Address(san)) for san in sans_ip])
+        _sans.extend([x509.IPAddress(ipaddress.ip_address(san)) for san in sans_ip])
     if sans:
         _sans.extend([x509.DNSName(san) for san in sans])
     if sans_dns:
@@ -1109,25 +1110,16 @@ def csr_matches_certificate(csr: str, cert: str) -> bool:
     Returns:
         bool: True/False depending on whether the CSR matches the certificate.
     """
-    try:
-        csr_object = x509.load_pem_x509_csr(csr.encode("utf-8"))
-        cert_object = x509.load_pem_x509_certificate(cert.encode("utf-8"))
+    csr_object = x509.load_pem_x509_csr(csr.encode("utf-8"))
+    cert_object = x509.load_pem_x509_certificate(cert.encode("utf-8"))
 
-        if csr_object.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ) != cert_object.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ):
-            return False
-        if (
-            csr_object.public_key().public_numbers().n  # type: ignore[union-attr]
-            != cert_object.public_key().public_numbers().n  # type: ignore[union-attr]
-        ):
-            return False
-    except ValueError:
-        logger.warning("Could not load certificate or CSR.")
+    if csr_object.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ) != cert_object.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ):
         return False
     return True
 
@@ -1457,18 +1449,31 @@ class TLSCertificatesProvidesV3(Object):
         Returns:
             None
         """
-        provider_certificates = self.get_provider_certificates(relation_id)
-        requirer_csrs = self.get_requirer_csrs(relation_id)
+        provider_certificates = self.get_unsolicited_certificates(relation_id=relation_id)
+        for provider_certificate in provider_certificates:
+            self.on.certificate_revocation_request.emit(
+                certificate=provider_certificate.certificate,
+                certificate_signing_request=provider_certificate.csr,
+                ca=provider_certificate.ca,
+                chain=provider_certificate.chain,
+            )
+            self.remove_certificate(certificate=provider_certificate.certificate)
+
+    def get_unsolicited_certificates(
+        self, relation_id: Optional[int] = None
+    ) -> List[ProviderCertificate]:
+        """Return provider certificates for which no certificate requests exists.
+
+        Those certificates should be revoked.
+        """
+        unsolicited_certificates: List[ProviderCertificate] = []
+        provider_certificates = self.get_provider_certificates(relation_id=relation_id)
+        requirer_csrs = self.get_requirer_csrs(relation_id=relation_id)
         list_of_csrs = [csr.csr for csr in requirer_csrs]
         for certificate in provider_certificates:
             if certificate.csr not in list_of_csrs:
-                self.on.certificate_revocation_request.emit(
-                    certificate=certificate.certificate,
-                    certificate_signing_request=certificate.csr,
-                    ca=certificate.ca,
-                    chain=certificate.chain,
-                )
-                self.remove_certificate(certificate=certificate.certificate)
+                unsolicited_certificates.append(certificate)
+        return unsolicited_certificates
 
     def get_outstanding_certificate_requests(
         self, relation_id: Optional[int] = None
@@ -1886,8 +1891,7 @@ class TLSCertificatesRequiresV3(Object):
                             "Removing secret with label %s",
                             f"{LIBID}-{csr_in_sha256_hex}",
                         )
-                        secret = self.model.get_secret(
-                            label=f"{LIBID}-{csr_in_sha256_hex}")
+                        secret = self.model.get_secret(label=f"{LIBID}-{csr_in_sha256_hex}")
                         secret.remove_all_revisions()
                     self.on.certificate_invalidated.emit(
                         reason="revoked",
@@ -1975,9 +1979,10 @@ class TLSCertificatesRequiresV3(Object):
         Args:
             event (SecretExpiredEvent): Juju event
         """
-        if not event.secret.label or not event.secret.label.startswith(f"{LIBID}-"):
+        csr = self._get_csr_from_secret(event.secret)
+        if not csr:
+            logger.error("Failed to get CSR from secret %s", event.secret.label)
             return
-        csr = event.secret.get_content()["csr"]
         provider_certificate = self._find_certificate_in_relation_data(csr)
         if not provider_certificate:
             # A secret expired but we did not find matching certificate. Cleaning up
@@ -2017,3 +2022,18 @@ class TLSCertificatesRequiresV3(Object):
                 continue
             return provider_certificate
         return None
+
+    def _get_csr_from_secret(self, secret: Secret) -> str:
+        """Extract the CSR from the secret label or content.
+
+        This function is a workaround to maintain backwards compatibility
+        and fix the issue reported in
+        https://github.com/canonical/tls-certificates-interface/issues/228
+        """
+        if not (csr := secret.get_content().get("csr", "")):
+            # In versions <14 of the Lib we were storing the CSR in the label of the secret
+            # The CSR now is stored int the content of the secret, which was a breaking change
+            # Here we get the CSR if the secret was created by an app using libpatch 14 or lower
+            if secret.label and secret.label.startswith(f"{LIBID}-"):
+                csr = secret.label[len(f"{LIBID}-") :]
+        return csr
