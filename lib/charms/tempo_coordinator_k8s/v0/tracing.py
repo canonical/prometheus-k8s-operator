@@ -16,7 +16,7 @@ object only requires instantiating it, typically in the constructor of your char
  This relation must use the `tracing` interface.
  The `TracingEndpointRequirer` object may be instantiated as follows
 
-    from charms.tempo_k8s.v2.tracing import TracingEndpointRequirer
+    from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -58,7 +58,7 @@ default value.
 For example a Tempo charm may instantiate the `TracingEndpointProvider` in its constructor as
 follows
 
-    from charms.tempo_k8s.v2.tracing import TracingEndpointProvider
+    from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointProvider
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -97,17 +97,17 @@ from ops.charm import (
 )
 from ops.framework import EventSource, Object
 from ops.model import ModelError, Relation
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 # The unique Charmhub library identifier, never change it
-LIBID = "12977e9aa0b34367903d8afeb8c3d85d"
+LIBID = "d2f02b1f8d1244b5989fd55bc3a28943"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 2
+LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 2
 
 PYDEPS = ["pydantic"]
 
@@ -116,14 +116,13 @@ logger = logging.getLogger(__name__)
 DEFAULT_RELATION_NAME = "tracing"
 RELATION_INTERFACE_NAME = "tracing"
 
+# Supported list rationale https://github.com/canonical/tempo-coordinator-k8s-operator/issues/8
 ReceiverProtocol = Literal[
     "zipkin",
-    "kafka",
-    "opencensus",
-    "tempo_http",
-    "tempo_grpc",
     "otlp_grpc",
     "otlp_http",
+    "jaeger_grpc",
+    "jaeger_thrift_http",
 ]
 
 RawReceiver = Tuple[ReceiverProtocol, str]
@@ -141,14 +140,12 @@ class TransportProtocolType(str, enum.Enum):
     grpc = "grpc"
 
 
-receiver_protocol_to_transport_protocol = {
+receiver_protocol_to_transport_protocol: Dict[ReceiverProtocol, TransportProtocolType] = {
     "zipkin": TransportProtocolType.http,
-    "kafka": TransportProtocolType.http,
-    "opencensus": TransportProtocolType.http,
-    "tempo_http": TransportProtocolType.http,
-    "tempo_grpc": TransportProtocolType.grpc,
     "otlp_grpc": TransportProtocolType.grpc,
     "otlp_http": TransportProtocolType.http,
+    "jaeger_thrift_http": TransportProtocolType.http,
+    "jaeger_grpc": TransportProtocolType.grpc,
 }
 """A mapping between telemetry protocols and their corresponding transport protocol.
 """
@@ -341,7 +338,7 @@ else:
     class ProtocolType(BaseModel):
         """Protocol Type."""
 
-        model_config = ConfigDict(
+        model_config = ConfigDict(  # type: ignore
             # Allow serializing enum values.
             use_enum_values=True
         )
@@ -905,7 +902,16 @@ class TracingEndpointRequirer(Object):
     def get_endpoint(
         self, protocol: ReceiverProtocol, relation: Optional[Relation] = None
     ) -> Optional[str]:
-        """Receiver endpoint for the given protocol."""
+        """Receiver endpoint for the given protocol.
+
+        It could happen that this function gets called before the provider publishes the endpoints.
+        In such a scenario, if a non-leader unit calls this function, a permission denied exception will be raised due to
+        restricted access. To prevent this, this function needs to be guarded by the `is_ready` check.
+
+        Raises:
+        ProtocolNotRequestedError:
+            If the charm unit is the leader unit and attempts to obtain an endpoint for a protocol it did not request.
+        """
         endpoint = self._get_endpoint(relation or self._relation, protocol=protocol)
         if not endpoint:
             requested_protocols = set()
@@ -928,7 +934,7 @@ class TracingEndpointRequirer(Object):
 def charm_tracing_config(
     endpoint_requirer: TracingEndpointRequirer, cert_path: Optional[Union[Path, str]]
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Utility function to determine the charm_tracing config you will likely want.
+    """Return the charm_tracing config you likely want.
 
     If no endpoint is provided:
      disable charm tracing.
@@ -941,8 +947,8 @@ def charm_tracing_config(
 
     Usage:
       If you are using charm_tracing >= v1.9:
-    >>> from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
-    >>> from lib.charms.tempo_k8s.v2.tracing import charm_tracing_config
+    >>> from lib.charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
+    >>> from lib.charms.tempo_coordinator_k8s.v0.tracing import charm_tracing_config
     >>> @trace_charm(tracing_endpoint="my_endpoint", cert_path="cert_path")
     >>> class MyCharm(...):
     >>>     _cert_path = "/path/to/cert/on/charm/container.crt"
@@ -952,8 +958,8 @@ def charm_tracing_config(
     ...             self.tracing, self._cert_path)
 
       If you are using charm_tracing < v1.9:
-    >>> from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
-    >>> from lib.charms.tempo_k8s.v2.tracing import charm_tracing_config
+    >>> from lib.charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
+    >>> from lib.charms.tempo_coordinator_k8s.v0.tracing import charm_tracing_config
     >>> @trace_charm(tracing_endpoint="my_endpoint", cert_path="cert_path")
     >>> class MyCharm(...):
     >>>     _cert_path = "/path/to/cert/on/charm/container.crt"
@@ -979,11 +985,16 @@ def charm_tracing_config(
     is_https = endpoint.startswith("https://")
 
     if is_https:
-        if cert_path is None:
-            raise TracingError("Cannot send traces to an https endpoint without a certificate.")
-        elif not Path(cert_path).exists():
-            # if endpoint is https BUT we don't have a server_cert yet:
-            # disable charm tracing until we do to prevent tls errors
+        if cert_path is None or not Path(cert_path).exists():
+            # disable charm tracing until we obtain a cert to prevent tls errors
+            logger.error(
+                "Tracing endpoint is https, but no server_cert has been passed."
+                "Please point @trace_charm to a `server_cert` attr. "
+                "This might also mean that the tracing provider is related to a "
+                "certificates provider, but this application is not (yet). "
+                "In that case, you might just have to wait a bit for the certificates "
+                "integration to settle. "
+            )
             return None, None
         return endpoint, str(cert_path)
     else:
