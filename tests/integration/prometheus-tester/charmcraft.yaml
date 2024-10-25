@@ -8,5 +8,7 @@ bases:
       channel: "20.04"
 parts:
   charm:
+    charm-binary-python-packages:
+      - pydantic
     build-packages:
     - git

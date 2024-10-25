@@ -26,12 +26,13 @@ You can then observe the library's custom event and make use of the key and cert
 self.framework.observe(self.cert_handler.on.cert_changed, self._on_server_cert_changed)
 
 container.push(keypath, self.cert_handler.private_key)
-container.push(certpath, self.cert_handler.servert_cert)
+container.push(certpath, self.cert_handler.server_cert)
 ```
 
 Since this library uses [Juju Secrets](https://juju.is/docs/juju/secret) it requires Juju >= 3.0.3.
 """
 import abc
+import hashlib
 import ipaddress
 import json
 import socket
@@ -59,7 +60,7 @@ except ImportError as e:
 import logging
 
 from ops.charm import CharmBase
-from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents, StoredState
 from ops.jujuversion import JujuVersion
 from ops.model import Relation, Secret, SecretNotFoundError
 
@@ -67,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 LIBID = "b5cd5cd580f3428fa5f59a8876dcbe6a"
 LIBAPI = 1
-LIBPATCH = 11
+LIBPATCH = 14
 
 VAULT_SECRET_LABEL = "cert-handler-private-vault"
 
@@ -273,6 +274,7 @@ class CertHandler(Object):
     """A wrapper for the requirer side of the TLS Certificates charm library."""
 
     on = CertHandlerEvents()  # pyright: ignore
+    _stored = StoredState()
 
     def __init__(
         self,
@@ -283,6 +285,7 @@ class CertHandler(Object):
         peer_relation_name: str = "peers",
         cert_subject: Optional[str] = None,
         sans: Optional[List[str]] = None,
+        refresh_events: Optional[List[BoundEvent]] = None,
     ):
         """CertHandler is used to wrap TLS Certificates management operations for charms.
 
@@ -299,8 +302,14 @@ class CertHandler(Object):
                 Must match metadata.yaml.
             cert_subject: Custom subject. Name collisions are under the caller's responsibility.
             sans: DNS names. If none are given, use FQDN.
+            refresh_events: [DEPRECATED].
         """
         super().__init__(charm, key)
+        # use StoredState to store the hash of the CSR
+        # to potentially trigger a CSR renewal
+        self._stored.set_default(
+            csr_hash=None,
+        )
         self.charm = charm
 
         # We need to sanitize the unit name, otherwise route53 complains:
@@ -309,8 +318,9 @@ class CertHandler(Object):
 
         # Use fqdn only if no SANs were given, and drop empty/duplicate SANs
         sans = list(set(filter(None, (sans or [socket.getfqdn()]))))
-        self.sans_ip = list(filter(is_ip_address, sans))
-        self.sans_dns = list(filterfalse(is_ip_address, sans))
+        # sort SANS lists to avoid unnecessary csr renewals during reconciliation
+        self.sans_ip = sorted(filter(is_ip_address, sans))
+        self.sans_dns = sorted(filterfalse(is_ip_address, sans))
 
         if self._check_juju_supports_secrets():
             vault_backend = _SecretVaultBackend(charm, secret_label=VAULT_SECRET_LABEL)
@@ -355,6 +365,17 @@ class CertHandler(Object):
             self._on_upgrade_charm,
         )
 
+        if refresh_events:
+            logger.warn(
+                "DEPRECATION WARNING. `refresh_events` is now deprecated. CertHandler will automatically refresh the CSR when necessary."
+            )
+
+        self._reconcile()
+
+    def _reconcile(self):
+        """Run all logic that is independent of what event we're processing."""
+        self._refresh_csr_if_needed()
+
     def _on_upgrade_charm(self, _):
         has_privkey = self.vault.get_value("private-key")
 
@@ -366,6 +387,11 @@ class CertHandler(Object):
         if not has_privkey and self._csr:
             logger.debug("CSR and privkey out of sync after charm upgrade. Renewing CSR.")
             # this will call `self.private_key` which will generate a new privkey.
+            self._generate_csr(renew=True)
+
+    def _refresh_csr_if_needed(self):
+        """Refresh the current CSR with a new one if there are any SANs changes."""
+        if self._stored.csr_hash is not None and self._stored.csr_hash != self._csr_hash:
             self._generate_csr(renew=True)
 
     def _migrate_vault(self):
@@ -418,6 +444,24 @@ class CertHandler(Object):
             return False
 
         return True
+
+    @property
+    def _csr_hash(self) -> str:
+        """A hash of the config that constructs the CSR.
+
+        Only include here the config options that, should they change, should trigger a renewal of
+        the CSR.
+        """
+
+        def _stable_hash(data):
+            return hashlib.sha256(str(data).encode()).hexdigest()
+
+        return _stable_hash(
+            (
+                tuple(self.sans_dns),
+                tuple(self.sans_ip),
+            )
+        )
 
     @property
     def available(self) -> bool:
@@ -484,6 +528,8 @@ class CertHandler(Object):
                 )
                 self.certificates.request_certificate_creation(certificate_signing_request=csr)
 
+            self._stored.csr_hash = self._csr_hash
+
         if clear_cert:
             self.vault.clear()
 
@@ -548,9 +594,19 @@ class CertHandler(Object):
 
     @property
     def chain(self) -> Optional[str]:
-        """Return the ca chain bundled as a single PEM string."""
+        """Return the entire chain bundled as a single PEM string. This includes, if available, the certificate, intermediate CAs, and the root CA.
+
+        If the server certificate is not set in the chain by the provider, we'll add it
+        to the top of the chain so that it could be used by a server.
+        """
         cert = self.get_cert()
-        return cert.chain_as_pem() if cert else None
+        if not cert:
+            return None
+        chain = cert.chain_as_pem()
+        if cert.certificate not in chain:
+            # add server cert to chain
+            chain = cert.certificate + "\n\n" + chain
+        return chain
 
     def _on_certificate_expiring(
         self, event: Union[CertificateExpiringEvent, CertificateInvalidatedEvent]
