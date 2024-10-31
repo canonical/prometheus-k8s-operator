@@ -56,7 +56,6 @@ async def get_head_stats(ops_test: OpsTest, app_name: str, unit_num: int) -> dic
     """Get prometheus head stats.
 
     Args:
-        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
@@ -72,7 +71,6 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     """Fetch Prometheus configuration.
 
     Args:
-        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
@@ -122,7 +120,7 @@ async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_n
     return result
 
 
-def get_prometheus_rules(app_name: str, unit_num: int) -> list:
+async def get_prometheus_rules(app_name: str, unit_num: int) -> list:
     """Fetch all Prometheus rules.
 
     Args:
