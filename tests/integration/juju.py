@@ -6,7 +6,7 @@
 import json
 import subprocess
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 class Juju:
@@ -25,8 +25,8 @@ class Juju:
         cls,
         charm: str,
         *,
-        alias: str | None = None,
-        channel: str | None = None,
+        alias: Optional[str] = None,
+        channel: Optional[str] = None,
         config: Dict[str, str] = {},
         resources: Dict[str, str] = {},
         trust: bool = False,
