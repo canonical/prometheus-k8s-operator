@@ -29,16 +29,16 @@ initial_rules = None
 
 @pytest.mark.abort_on_fail
 def test_prometheus_scrape_relation_with_prometheus_tester(
-    ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
+    prometheus_charm, prometheus_tester_charm
 ):
-    """Test basic functionality of prometheus_scrape relation interface."""
+    """Test basic funcapp_namestionality of prometheus_scrape relation interface."""
 
     Juju.deploy(prometheus_charm, alias=PROM, resources={"prometheus-image": prometheus_oci_image})
     Juju.deploy(prometheus_tester_charm, alias=PROM_TESTER, resources={"prometheus-tester-image": prometheus_tester_oci_image})
     Juju.wait_for_idle([PROM, PROM_TESTER], timeout=1000)
 
     assert initial_workload_is_ready(app_names)
-    assert check_prometheus_is_ready(prometheus_app_name, 0)
+    assert check_prometheus_is_ready(PROM, 0)
 
     global initial_config, initial_rules
     initial_config, initial_rules = asyncio.gather(
@@ -46,16 +46,16 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
         get_prometheus_rules(prometheus_app_name, 0),
     )
 
-    ops_test.model.add_relation(
+    Juju.integrate(
         f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
     )
-    ops_test.model.wait_for_idle(apps=app_names, status="active")
+    Juju.wait_for_idle(app_names, timeout=1000)
 
-    config_with_relation = get_prometheus_config(ops_test, prometheus_app_name, 0)
+    config_with_relation = get_prometheus_config(prometheus_app_name, 0)
     tester_job = get_job_config_for(tester_app_name, config_with_relation)
     assert tester_job != {}
 
-    rules_with_relation = get_prometheus_rules(ops_test, prometheus_app_name, 0)
+    rules_with_relation = get_prometheus_rules(prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
     assert len(tester_rules) == 1
 
