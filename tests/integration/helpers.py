@@ -41,7 +41,6 @@ def check_prometheus_is_ready(app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
-        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
@@ -70,11 +69,10 @@ async def get_head_stats(ops_test: OpsTest, app_name: str, unit_num: int) -> dic
     return prometheus.tsdb_head_stats()
 
 
-async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
+def get_prometheus_config(app_name: str, unit_num: int) -> str:
     """Fetch Prometheus configuration.
 
     Args:
-        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
@@ -224,7 +222,7 @@ def uk8s_group() -> str:
     return uk8s_group
 
 
-def initial_workload_is_ready(ops_test, app_names) -> bool:
+def initial_workload_is_ready(app_names) -> bool:
     """Checks that the initial workload (ie. x/0) is ready.
 
     Args:

@@ -16,6 +16,7 @@ from helpers import (
     oci_image,
 )
 from pytest_operator.plugin import OpsTest
+from .juju import Juju
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +42,8 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     assert check_prometheus_is_ready(prometheus_app_name, 0)
 
     global initial_config, initial_rules
-    initial_config, initial_rules = asyncio.gather(
-        get_prometheus_config(prometheus_app_name, 0),
-        get_prometheus_rules(prometheus_app_name, 0),
-    )
+    initial_config = get_prometheus_config(prometheus_app_name, 0)
+    initial_rules = get_prometheus_rules(prometheus_app_name, 0)
 
     Juju.integrate(
         f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
