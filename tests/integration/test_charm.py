@@ -32,7 +32,6 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     prometheus_charm, prometheus_tester_charm
 ):
     """Test basic funcapp_namestionality of prometheus_scrape relation interface."""
-
     Juju.deploy(prometheus_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image}, trust=True)
     Juju.deploy(prometheus_tester_charm, alias=tester_app_name, resources={"prometheus-tester-image": prometheus_tester_oci_image})
     Juju.wait_for_idle(app_names, timeout=1000)

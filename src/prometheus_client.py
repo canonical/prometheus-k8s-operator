@@ -99,6 +99,7 @@ class Prometheus:
         return response.status_code == 200
 
     def config(self) -> str:
+        """Prometheus config."""
         url = f"{self.base_url}/api/v1/status/config"
         # Response looks like this:
         # {
@@ -279,6 +280,7 @@ class Prometheus:
         return result["data"]["headStats"] if result["status"] == "success" else {}
 
     def run_promql(self, query: str, disable_ssl: bool = True) -> list:
+        """Run PromQL query."""
         url = f"{self.base_url}/api/v1/query"
         response = requests.get(url, timeout=self.api_timeout, verify=False, params={"query": query})
         result = response.json()

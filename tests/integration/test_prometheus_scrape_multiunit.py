@@ -72,10 +72,10 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     Juju.deploy("ch:grafana-agent-k8s", alias=remote_write_tester, channel="edge", num_units=num_units, trust=True)
     Juju.wait_for_idle(app_names, timeout=600)
 
-   
+
     for u in range(num_units):
         check_prometheus_is_ready(prometheus_app_name, u)
-    
+
 
     # WHEN prometheus is not related to anything
     # THEN all prometheus units should have only one scrape target (self-scraping)
@@ -90,7 +90,7 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     Juju.integrate(f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint")
     Juju.integrate(f"{prometheus_app_name}:receive-remote-write",
             f"{remote_write_tester}:send-remote-write",)
-   
+
     Juju.wait_for_idle(app_names)
 
     # THEN all prometheus units should have all scrape units as targets (as well as self-scraping)
@@ -99,7 +99,7 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
             get_prometheus_active_targets( prometheus_app_name, u)
             for u in range(num_units)
         ]
-    
+
     assert all(len(targets) == num_units + 1 for targets in targets_by_unit)
 
     # AND all prometheus units have the exact same targets
@@ -112,9 +112,9 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
 
     # AND all prometheus units have the exact same config
-    config_by_unit = 
+    config_by_unit =
         [get_prometheus_config(prometheus_app_name, u) for u in range(num_units)]
-    
+
     # Convert the yaml strings into dicts
     config_by_unit = list(map(yaml.safe_load, config_by_unit))
 
@@ -133,7 +133,7 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
     # AND all prometheus units have the exact same rules
     rules_by_unit =
         [get_prometheus_rules( prometheus_app_name, u) for u in range(num_units)]
-    
+
     for u in range(1, len(rules_by_unit)):
         # Some fields will most likely differ, such as "evaluationTime" and "lastEvaluation".
         # Also excluding the following, which occasionally fails CI:
@@ -158,9 +158,9 @@ def test_upgrade_prometheus(prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
     query = 'count_over_time(up{host="localhost",job="prometheus"}[1y])'
-    up_before = 
+    up_before =
         [run_promql( query, prometheus_app_name, u) for u in range(num_units)]
-    
+
     # Each response looks like this:
     # [
     #     {

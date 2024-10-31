@@ -6,6 +6,7 @@ import logging
 
 import pytest
 import yaml
+
 from .helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
