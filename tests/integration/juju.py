@@ -31,6 +31,7 @@ class Juju:
         resources: Dict[str, str] = {},
         trust: bool = False,
         num_units: int = 1,
+        base: str = None,
     ):
         args = ["deploy", charm]
 
@@ -50,6 +51,9 @@ class Juju:
 
         if trust:
             args = [*args, "--trust"]
+
+        if base:
+            args = [*args, "--base", base]
 
         return cls.cli(*args)
 
