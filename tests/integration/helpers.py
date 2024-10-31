@@ -12,9 +12,8 @@ import yaml
 from lightkube import Client
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
-from workload import Prometheus
-
-from .juju import Juju
+from src.prometheus_client import Prometheus
+from juju import Juju
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +25,7 @@ def unit_address(app_name: str, unit_num: int) -> str:
     """Find unit address for any application.
 
     Args:
+        ops_test: pytest-operator plugin
         app_name: string name of application
         unit_num: integer number of a juju unit
 
@@ -36,10 +36,11 @@ def unit_address(app_name: str, unit_num: int) -> str:
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(app_name: str, unit_num: int) -> bool:
+async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
+        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
@@ -47,8 +48,8 @@ async def check_prometheus_is_ready(app_name: str, unit_num: int) -> bool:
         True if Prometheus is responsive else False
     """
     host = unit_address(app_name, unit_num)
-    prometheus = Prometheus(host=host)
-    is_ready = await prometheus.is_ready()
+    prometheus = Prometheus(host)
+    is_ready = prometheus.is_ready()
     return is_ready
 
 
@@ -63,9 +64,9 @@ async def get_head_stats(ops_test: OpsTest, app_name: str, unit_num: int) -> dic
     Returns:
         A dict of headStats.
     """
-    host = await unit_address(app_name, unit_num)
-    prometheus = Prometheus(host=host)
-    return await prometheus.tsdb_head_stats()
+    host = unit_address(app_name, unit_num)
+    prometheus = Prometheus(host)
+    return prometheus.tsdb_head_stats()
 
 
 async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
@@ -79,9 +80,9 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     Returns:
         Prometheus YAML configuration in string format.
     """
-    host = await unit_address(app_name, unit_num)
-    prometheus = Prometheus(host=host)
-    config = await prometheus.config()
+    host = unit_address(app_name, unit_num)
+    prometheus = Prometheus(host)
+    config = prometheus.config()
     return config
 
 
@@ -114,9 +115,9 @@ async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_n
     Returns:
         Result of the query
     """
-    host = await unit_address(app_name, unit_num)
-    prometheus = Prometheus(host=host)
-    result = await prometheus.run_promql(promql_query)
+    host = unit_address(app_name, unit_num)
+    prometheus = Prometheus(ost)
+    result = prometheus.run_promql(promql_query)
     return result
 
 
@@ -131,8 +132,8 @@ def get_prometheus_rules(app_name: str, unit_num: int) -> list:
         a list of rule groups.
     """
     host = unit_address(app_name, unit_num)
-    prometheus = Prometheus(host=host)
-    rules = await prometheus.rules()
+    prometheus = Prometheus(host)
+    rules = prometheus.rules()
     return rules
 
 

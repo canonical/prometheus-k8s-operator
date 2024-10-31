@@ -2,6 +2,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import asyncio
 import logging
 
 import pytest
@@ -14,8 +15,9 @@ from helpers import (
     oci_image,
     run_promql,
 )
+from juju import Juju
 
-from .juju import Juju
+from src.prometheus_client import Prometheus
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +40,9 @@ async def test_deploy_charm(prometheus_tester_charm, prometheus_charm, prometheu
 
     Assert on the unit status before any relations/configurations take place.
     """
-    Juju.deploy(prometheus_charm, alias=prometheus_app_name, resources=prometheus_resources)
+    Juju.deploy(prometheus_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image})
     Juju.deploy(prometheus_tester_charm, alias=tester_app_name, resources=tester_resources)
-    Juju.integrate(
-        f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
-    )
+    Juju.integrate(f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint")
     Juju.wait_for_idle(app_names, timeout=300)
 
     # Check only one alert rule exists
