@@ -4,7 +4,7 @@
 """Helper for interacting with Prometheus throughout the charm's lifecycle."""
 
 import logging
-from typing import Union
+from typing import Union, Literal, List
 
 import requests
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
@@ -87,3 +87,199 @@ class Prometheus:
         """
         info = self._build_info()
         return info.get("version", "")
+
+    def is_ready(self) -> bool:
+        """Send a GET request to check readiness.
+
+        Returns:
+          True if Prometheus is ready (returned 200 OK); False otherwise.
+        """
+        url = f"{self.base_url}/-/ready"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        return response.status_code == 200
+
+    def config(self) -> str:
+        url = f"{self.base_url}/api/v1/status/config"
+        # Response looks like this:
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "yaml": "global:\n
+        #       scrape_interval: 1m\n
+        #       scrape_timeout: 10s\n
+        #       evaluation_interval: 1m\n
+        #       rule_files:\n
+        #       - /etc/prometheus/rules/juju_*.rules\n
+        #       scrape_configs:\n
+        #       - job_name: prometheus\n
+        #       honor_timestamps: true\n
+        #       scrape_interval: 5s\n
+        #       scrape_timeout: 5s\n
+        #       metrics_path: /metrics\n
+        #       scheme: http\n
+        #       static_configs:\n
+        #       - targets:\n
+        #       - localhost:9090\n"
+        #   }
+        # }
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+        return result["data"]["yaml"] if result["status"] == "success" else ""
+
+    def rules(self, rules_type: Literal["alert", "record"] = None) -> list:
+        """Send a GET request to get Prometheus rules.
+
+        Args:
+          rules_type: the type of rules to fetch, or all types if not provided.
+
+        Returns:
+          Rule Groups list or empty list
+        """
+        url = f"{self.base_url}/api/v1/rules{'?type=' + rules_type if rules_type else ''}"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+        # response looks like this:
+        # {"status":"success","data":{"groups":[]}
+        return result["data"]["groups"] if result["status"] == "success" else []
+
+    def labels(self) -> List[str]:
+        """Send a GET request to get labels.
+
+        Returns:
+          List of labels
+        """
+        url = f"{self.base_url}/api/v1/labels"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+
+        # response looks like this:
+        # {
+        #   "status": "success",
+        #   "data": [
+        #     "__name__",
+        #     "alertname",
+        #     "alertstate",
+        #     ...
+        #     "juju_application",
+        #     "juju_charm",
+        #     "juju_model",
+        #     "juju_model_uuid",
+        #     ...
+        #     "version"
+        #   ]
+        # }
+        return result["data"] if result["status"] == "success" else []
+
+    def alerts(self) -> List[dict]:
+        """Send a GET request to get alerts.
+
+        Returns:
+          List of alerts
+        """
+        url = f"{self.base_url}/api/v1/alerts"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+
+        # response looks like this:
+        #
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "alerts": [
+        #       {
+        #         "labels": {
+        #           "alertname": "AlwaysFiring",
+        #           "job": "non_existing_job",
+        #           "juju_application": "avalanche-k8s",
+        #           "juju_charm": "avalanche-k8s",
+        #           "juju_model": "remotewrite",
+        #           "juju_model_uuid": "5d2582f6-f8c9-4496-835b-675431d1fafe",
+        #           "severity": "High"
+        #         },
+        #         "annotations": {
+        #           "description": " of job non_existing_job is firing the dummy alarm.",
+        #           "summary": "Instance  dummy alarm (always firing)"
+        #         },
+        #         "state": "firing",
+        #         "activeAt": "2022-01-13T18:53:12.808550042Z",
+        #         "value": "1e+00"
+        #       }
+        #     ]
+        #   }
+        # }
+        return result["data"]["alerts"] if result["status"] == "success" else []
+
+    def active_targets(self) -> List[dict]:
+        """Send a GET request to get active scrape targets.
+
+        Returns:
+          A lists of targets.
+        """
+        url = f"{self.base_url}/api/v1/targets"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+
+        # response looks like this:
+        #
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "activeTargets": [
+        #       {
+        #         "discoveredLabels": {
+        #           "__address__": "localhost:9090",
+        #           "__metrics_path__": "/metrics",
+        #           "__scheme__": "http",
+        #           "job": "prometheus"
+        #         },
+        #         "labels": {
+        #           "instance": "localhost:9090",
+        #           "job": "prometheus"
+        #         },
+        #         "scrapePool": "prometheus",
+        #         "scrapeUrl": "http://localhost:9090/metrics",
+        #         "globalUrl": "http://prom-0....local:9090/metrics",
+        #         "lastError": "",
+        #         "lastScrape": "2022-05-12T16:54:19.019386006Z",
+        #         "lastScrapeDuration": 0.003985463,
+        #         "health": "up"
+        #       }
+        #     ],
+        #     "droppedTargets": []
+        #   }
+        # }
+        return result["data"]["activeTargets"] if result["status"] == "success" else []
+
+    def tsdb_head_stats(self) -> dict:
+        """Send a GET request to get the TSDB headStats.
+
+        Returns:
+          The headStats dict.
+        """
+        url = f"{self.base_url}/api/v1/status/tsdb"
+        response = requests.get(url, timeout=self.api_timeout, verify=False)
+        result = response.json()
+
+        # response looks like this:
+        #
+        # {
+        #   "status": "success",
+        #   "data": {
+        #     "headStats": {
+        #       "numSeries": 610,
+        #       "numLabelPairs": 367,
+        #       "chunkCount": 5702,
+        #       "minTime": 1652720232481,
+        #       "maxTime": 1652724527481
+        #     },
+        #     "seriesCountByMetricName": [ ... ]
+        #     ...
+        #   }
+        # }
+        return result["data"]["headStats"] if result["status"] == "success" else {}
+
+    def run_promql(self, query: str, disable_ssl: bool = True) -> list:
+        url = f"{self.base_url}/api/v1/query"
+        response = requests.get(url, timeout=self.api_timeout, verify=False, params={"query": query})
+        result = response.json()
+        return result
