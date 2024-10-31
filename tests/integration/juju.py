@@ -82,13 +82,15 @@ class Juju:
 
 
     @classmethod
-    def refresh(cls, app:str, path: str="", resources:  Dict[str, str] = {}):
+    def refresh(cls, app:str, path: str="", resources:  Dict[str, str] = {}, channel: str=""):
         args = ["refresh", app]
         if path:
             args = [*args, "--path", path]
         if resources:
             for k, v in resources.items():
                 args = [*args, "--resource", f"{k}={v}"]
+        if channel:
+            args = [*args, "--channel", channel]
         return cls.cli(*args)
 
     @classmethod

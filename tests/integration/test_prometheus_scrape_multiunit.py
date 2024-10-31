@@ -314,15 +314,12 @@ def test_upgrade_prometheus_while_rescaling_testers( prometheus_charm):
 
 @pytest.mark.skip(reason="xfail")
 async def test_rescale_prometheus_while_upgrading_testers(
-    ops_test: OpsTest, prometheus_tester_charm
+    prometheus_tester_charm
 ):
     # WHEN prometheus is scaled up at the same time the testers are upgraded
     num_additional_units = 1
-    await asyncio.gather(
-        ops_test.model.applications[scrape_tester].refresh(
-            path=prometheus_tester_charm, resources=scrape_tester_resources
-        ),
-        # ops_test.model.applications[remote_write_tester].refresh(channel="edge"),
+    Juju.refresh(scrape_tester, path=prometheus_tester_charm, resources=scrape_tester_resources)
+    # Juju.refresh(remote_write_tester, channel="edge")
         ops_test.model.applications[prometheus_app_name].scale(scale_change=num_additional_units),
     )
     new_num_units = num_units + num_additional_units
