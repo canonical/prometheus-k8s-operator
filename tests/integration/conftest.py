@@ -9,7 +9,6 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from pytest import fixture
 
 import pytest
 import yaml
@@ -72,8 +71,7 @@ def remove_leftover_alert_rules(ops_test):
             f.unlink()
 
 
-@pytest.fixture(scope="module")
-@timed_memoizer
+@pytest.fixture(scope="session")
 def prometheus_charm(request):
     """Prometheus charm used for integration testing."""
     charm_file = request.config.getoption("--charm-path")
@@ -91,20 +89,19 @@ def prometheus_charm(request):
     return next(Path.glob(Path("."), "prometheus-k8s*.charm")).absolute()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def prometheus_oci_image():
     meta = yaml.safe_load(Path("./metadata.yaml").read_text())
     return meta["resources"]["prometheus-image"]["upstream-source"]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def prometheus_tester_oci_image():
     meta = yaml.safe_load(Path("./tests/integration/prometheus-tester/metadata.yaml").read_text())
     return meta["resources"]["prometheus-tester-image"]["upstream-source"]
 
 
-@pytest.fixture(scope="module")
-@timed_memoizer
+@pytest.fixture(scope="session")
 def prometheus_tester_charm(request):
     """Prometheus charm used for integration testing."""
     charm_file = request.config.getoption("--charm-path")
@@ -114,8 +111,8 @@ def prometheus_tester_charm(request):
     subprocess.run(
         [
             "/snap/bin/charmcraft",
-            "--project-dir=tests/integration/prometheus-tester",
             "pack",
+            "--project-dir=tests/integration/prometheus-tester",
             "--verbose",
         ],
         check=True,

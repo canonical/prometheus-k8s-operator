@@ -90,7 +90,6 @@ class Juju:
             for k, v in resources.items():
                 args = [*args, "--resource", f"{k}={v}"]
         return cls.cli(*args)
-        
 
     @classmethod
     def wait_for_idle(cls, applications: List[str], timeout: int):
