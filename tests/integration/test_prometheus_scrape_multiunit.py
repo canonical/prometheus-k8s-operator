@@ -267,53 +267,40 @@ def test_upgrade_prometheus_while_rescaling_testers( prometheus_charm):
 
     # AND tester becomes active/idle after scale-up
     logger.info("Waiting for testers to become active/idle...")
-    await ops_test.model.wait_for_idle(
-        apps=[scrape_tester, remote_write_tester],
-        status="active",
-        timeout=300,
-        wait_for_exact_units=new_num_units,
-    )
+    # TODO: add wait_for_exact_units
+    Juju.wait_for_idle([scrape_tester, remote_write_tester], timeout=300)
 
     # AND all apps become idle after prometheus upgrade
     logger.info("Waiting for all apps to become active/idle...")
-    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=600)
+    Juju.wait_for_idle([scrape_tester, remote_write_tester, prometheus_app_name], timeout=600)
 
     # THEN nothing breaks
-    await asyncio.gather(
-        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
-    )
-
+    for u in range(num_units):
+        check_prometheus_is_ready(prometheus_app_name, u)
+ 
     # WHEN prometheus is upgraded at the same time that the testers are scaled back down
     logger.info("Upgrading prometheus and scaling-down testers at the same time...")
-    await asyncio.gather(
-        ops_test.model.applications[prometheus_app_name].refresh(
-            path=prometheus_charm, resources=prometheus_resources
-        ),
-        ops_test.model.applications[scrape_tester].scale(scale_change=-num_additional_units),
-        ops_test.model.applications[remote_write_tester].scale(scale_change=-num_additional_units),
-    )
+    Juju.refresh(prometheus_app_name, path=prometheus_charm, resources=prometheus_resources)
+    Juju.remove_units(scrape_tester, num_additional_units)
+    Juju.remove_units(remote_write_tester, num_additional_units)
+
 
     # AND tester becomes active/idle after scale-down
     logger.info("Waiting for testers to become active/idle...")
-    await ops_test.model.wait_for_idle(
-        apps=[scrape_tester, remote_write_tester],
-        status="active",
-        timeout=300,
-        wait_for_exact_units=num_units,
-    )
+    # TODO: add wait_for_exact_units
+    Juju.wait_for_idle([scrape_tester, remote_write_tester], timeout=300)
 
     # AND all apps become idle after prometheus upgrade
     logger.info("Waiting for all apps to become active/idle...")
-    await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=300)
+    Juju.wait_for_idle([scrape_tester, remote_write_tester, prometheus_app_name], timeout=300)
 
     # THEN nothing breaks
-    await asyncio.gather(
-        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
-    )
-
+    for u in range(num_units):
+        check_prometheus_is_ready(prometheus_app_name, u)
+ 
 
 @pytest.mark.skip(reason="xfail")
-async def test_rescale_prometheus_while_upgrading_testers(
+def test_rescale_prometheus_while_upgrading_testers(
     prometheus_tester_charm
 ):
     # WHEN prometheus is scaled up at the same time the testers are upgraded
