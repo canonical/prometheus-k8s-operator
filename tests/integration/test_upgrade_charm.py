@@ -15,6 +15,8 @@ from helpers import (
     oci_image,
     run_promql,
 )
+from .juju import Juju
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,8 @@ async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm)
 
     Assert on the unit status before any relations/configurations take place.
     """
+    Juju.deploy(zinc_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image})
+
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,

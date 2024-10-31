@@ -86,3 +86,27 @@ async def prometheus_tester_charm(ops_test):
     await ops_test.run(*clean_cmd)
     charm = await ops_test.build_charm(charm_path)
     return charm
+
+
+@fixture(scope="module")
+def prometheus_charm(request):
+    """Zinc charm used for integration testing."""
+    charm_file = request.config.getoption("--charm-path")
+    if charm_file:
+        return charm_file
+
+    subprocess.run(
+        ["/snap/bin/charmcraft", "pack", "--verbose"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    return next(Path.glob(Path("."), "*.charm")).absolute()
+
+
+@fixture(scope="module")
+def prometheus_oci_image():
+    meta = yaml.safe_load(Path("./metadata.yaml").read_text())
+    return meta["resources"]["prometheus-image"]["upstream-source"]
