@@ -111,8 +111,8 @@ def prometheus_tester_charm(request):
     subprocess.run(
         [
             "/snap/bin/charmcraft",
-            "--project-dir=tests/integration/prometheus-tester",
             "pack",
+            "--project-dir=tests/integration/prometheus-tester",
             "--verbose",
         ],
         check=True,
