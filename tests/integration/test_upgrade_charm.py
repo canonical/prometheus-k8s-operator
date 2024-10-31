@@ -34,7 +34,7 @@ app_names = [prometheus_app_name, tester_app_name]
 
 
 @pytest.mark.abort_on_fail
-async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm):
+async def test_deploy_charm(prometheus_tester_charm, prometheus_charm, prometheus_oci_image):
     """Build the charm-under-test and deploy it together with related charms.
 
     Assert on the unit status before any relations/configurations take place.
