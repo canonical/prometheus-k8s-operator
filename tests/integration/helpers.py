@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import List
 
 import yaml
+from juju import Juju
 from lightkube import Client
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
+
 from src.prometheus_client import Prometheus
-from juju import Juju
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_n
         Result of the query
     """
     host = unit_address(app_name, unit_num)
-    prometheus = Prometheus(ost)
+    prometheus = Prometheus(host)
     result = prometheus.run_promql(promql_query)
     return result
 

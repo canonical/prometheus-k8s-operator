@@ -2,7 +2,6 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import asyncio
 import logging
 
 import pytest
@@ -16,8 +15,6 @@ from helpers import (
     run_promql,
 )
 from juju import Juju
-
-from src.prometheus_client import Prometheus
 
 logger = logging.getLogger(__name__)
 

@@ -9,6 +9,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from pytest import fixture
 
 import pytest
 import yaml
