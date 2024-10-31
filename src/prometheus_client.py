@@ -4,7 +4,7 @@
 """Helper for interacting with Prometheus throughout the charm's lifecycle."""
 
 import logging
-from typing import Union, Literal, List
+from typing import List, Literal, Union
 
 import requests
 from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
