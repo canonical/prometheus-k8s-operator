@@ -39,29 +39,13 @@ async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm)
 
     Assert on the unit status before any relations/configurations take place.
     """
-    Juju.deploy(zinc_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image})
+    Juju.deploy(prometheus_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image})
+    Juju.deploy(prometheus_tester_charm, alias=tester_app_name, resources=tester_resources)
+    Juju.integrate(f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint")
+    Juju.wait_for_idle(app_names, timeout=300)
 
-    await asyncio.gather(
-        ops_test.model.deploy(
-            prometheus_charm,
-            resources=prometheus_resources,
-            application_name=prometheus_app_name,
-            trust=True,
-        ),
-        ops_test.model.deploy(
-            prometheus_tester_charm, resources=tester_resources, application_name=tester_app_name
-        ),
-    )
-    await ops_test.model.wait_for_idle(
-        apps=app_names, status="active", timeout=300, raise_on_error=False
-    )
-
-    await ops_test.model.add_relation(
-        f"{prometheus_app_name}:metrics-endpoint", f"{tester_app_name}:metrics-endpoint"
-    )
-    await ops_test.model.wait_for_idle(apps=app_names, status="active")
     # Check only one alert rule exists
-    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
+    rules_with_relation = get_prometheus_rules(prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
 
     assert len(tester_rules) == 1

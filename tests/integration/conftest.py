@@ -8,7 +8,7 @@ import shutil
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-
+import os
 import pytest
 
 logger = logging.getLogger(__name__)
@@ -69,26 +69,8 @@ def remove_leftover_alert_rules(ops_test):
             f.unlink()
 
 
-@pytest.fixture(scope="module")
-@timed_memoizer
-async def prometheus_charm(ops_test):
-    """Prometheus charm used for integration testing."""
-    charm = await ops_test.build_charm(".")
-    return charm
-
-
-@pytest.fixture(scope="module")
-@timed_memoizer
-async def prometheus_tester_charm(ops_test):
-    """A charm to integration test the Prometheus charm."""
-    charm_path = "tests/integration/prometheus-tester"
-    clean_cmd = ["charmcraft", "clean", "-p", charm_path]
-    await ops_test.run(*clean_cmd)
-    charm = await ops_test.build_charm(charm_path)
-    return charm
-
-
 @fixture(scope="module")
+@timed_memoizer
 def prometheus_charm(request):
     """Zinc charm used for integration testing."""
     charm_file = request.config.getoption("--charm-path")
@@ -103,10 +85,29 @@ def prometheus_charm(request):
         text=True,
     )
 
-    return next(Path.glob(Path("."), "*.charm")).absolute()
+    return next(Path.glob(Path("."), "prometheus-k8s*.charm")).absolute()
 
 
 @fixture(scope="module")
 def prometheus_oci_image():
     meta = yaml.safe_load(Path("./metadata.yaml").read_text())
     return meta["resources"]["prometheus-image"]["upstream-source"]
+
+
+@fixture(scope="module")
+@timed_memoizer
+def prometheus_tester_charm(request):
+    """Zinc charm used for integration testing."""
+    charm_file = request.config.getoption("--charm-path")
+    if charm_file:
+        return charm_file
+
+    subprocess.run(
+        ["/snap/bin/charmcraft", "--project-dir=tests/integration/prometheus-tester", "pack", "--verbose"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    return next(Path.glob(Path("."), "prometheus-tester*.charm")).absolute()

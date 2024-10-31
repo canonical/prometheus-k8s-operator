@@ -13,6 +13,7 @@ from lightkube import Client
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 from workload import Prometheus
+from .juju import Juju
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 TESTER_ALERT_RULES_PATH = "tests/integration/prometheus-tester/src/prometheus_alert_rules"
 
 
-async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
+def unit_address(app_name: str, unit_num: int) -> str:
     """Find unit address for any application.
 
     Args:
@@ -31,7 +32,7 @@ async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     Returns:
         unit address as a string
     """
-    status = await ops_test.model.get_status()
+    status = juju.status()
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
@@ -122,18 +123,17 @@ async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_n
     return result
 
 
-async def get_prometheus_rules(ops_test: OpsTest, app_name: str, unit_num: int) -> list:
+def get_prometheus_rules(app_name: str, unit_num: int) -> list:
     """Fetch all Prometheus rules.
 
     Args:
-        ops_test: pytest-operator plugin
         app_name: string name of Prometheus application
         unit_num: integer number of a Prometheus juju unit
 
     Returns:
         a list of rule groups.
     """
-    host = await unit_address(ops_test, app_name, unit_num)
+    host = unit_address(app_name, unit_num)
     prometheus = Prometheus(host=host)
     rules = await prometheus.rules()
     return rules
