@@ -81,7 +81,7 @@ class Juju:
         return cls.cli(*args)
 
     @classmethod
-    def wait_for_idle(cls, applications: List[str], timeout: int):
+    def wait_for_idle(cls, applications: List[str], timeout: int = 300):
         start = time.time()
         while time.time() - start < timeout:
             try:
