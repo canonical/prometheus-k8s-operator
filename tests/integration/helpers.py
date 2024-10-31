@@ -236,7 +236,7 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
         whether the workloads are active or not
     """
     return all(
-        ops_test.model.applications[name].units[0].workload_status == "active"
+        Juju._unit_statuses(name)[0].workload_status == "active"
         for name in app_names
     )
 

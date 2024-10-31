@@ -93,6 +93,10 @@ def prometheus_oci_image():
     meta = yaml.safe_load(Path("./metadata.yaml").read_text())
     return meta["resources"]["prometheus-image"]["upstream-source"]
 
+@fixture(scope="module")
+def prometheus_tester_oci_image():
+    meta = yaml.safe_load(Path("./tests/integration/prometheus-tester/metadata.yaml").read_text())
+    return meta["resources"]["prometheus-tester-image"]["upstream-source"]
 
 @fixture(scope="module")
 @timed_memoizer
