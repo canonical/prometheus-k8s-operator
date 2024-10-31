@@ -82,10 +82,8 @@ async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm)
         },
     )
 
-    await ops_test.model.wait_for_idle(
-        apps=[prometheus_app_name, tester_app_name], status="active", idle_period=60
-    )
+    Juju.wait_for_idle(app_names, timeout=1000)
 
-    rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
+    rules_with_relation = await get_prometheus_rules(prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
     assert len(tester_rules) == 2
