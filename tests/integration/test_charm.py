@@ -33,12 +33,12 @@ def test_prometheus_scrape_relation_with_prometheus_tester(
 ):
     """Test basic funcapp_namestionality of prometheus_scrape relation interface."""
 
-    Juju.deploy(prometheus_charm, alias=PROM, resources={"prometheus-image": prometheus_oci_image})
-    Juju.deploy(prometheus_tester_charm, alias=PROM_TESTER, resources={"prometheus-tester-image": prometheus_tester_oci_image})
-    Juju.wait_for_idle([PROM, PROM_TESTER], timeout=1000)
+    Juju.deploy(prometheus_charm, alias=prometheus_app_name, resources={"prometheus-image": prometheus_oci_image})
+    Juju.deploy(prometheus_tester_charm, alias=tester_app_name, resources={"prometheus-tester-image": prometheus_tester_oci_image})
+    Juju.wait_for_idle(app_names, timeout=1000)
 
     assert initial_workload_is_ready(app_names)
-    assert check_prometheus_is_ready(PROM, 0)
+    assert check_prometheus_is_ready(prometheus_app_name, 0)
 
     global initial_config, initial_rules
     initial_config, initial_rules = asyncio.gather(
