@@ -75,7 +75,7 @@ def remove_leftover_alert_rules(ops_test):
 @pytest.fixture(scope="module")
 @timed_memoizer
 def prometheus_charm(request):
-    """Zinc charm used for integration testing."""
+    """Prometheus charm used for integration testing."""
     charm_file = request.config.getoption("--charm-path")
     if charm_file:
         return charm_file
@@ -106,7 +106,7 @@ def prometheus_tester_oci_image():
 @pytest.fixture(scope="module")
 @timed_memoizer
 def prometheus_tester_charm(request):
-    """Zinc charm used for integration testing."""
+    """Prometheus charm used for integration testing."""
     charm_file = request.config.getoption("--charm-path")
     if charm_file:
         return charm_file
