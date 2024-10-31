@@ -65,6 +65,11 @@ class Juju:
         return result[unit]["results"]
 
     @classmethod
+    def config(cls, app: str, options: List[str]):
+        args = ["config", app, *options]
+        return cls.cli(*args)
+
+    @classmethod
     def wait_for_idle(cls, applications: List[str], timeout: int):
         start = time.time()
         while time.time() - start < timeout:

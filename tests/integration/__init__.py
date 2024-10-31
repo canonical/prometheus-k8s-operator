@@ -1,5 +1,8 @@
-# Copyright 2024 Jon Seager (@jnsgruk)
+#!/usr/bin/env python3
+# Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""TODO: add docstring."""
+
 import functools
 import logging
 import time
@@ -9,6 +12,7 @@ PROM_TESTER = "prometheus-tester"
 
 
 def retry(retry_num, retry_sleep_sec):
+
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):

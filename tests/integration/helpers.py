@@ -85,9 +85,7 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     return config
 
 
-async def get_prometheus_active_targets(
-    ops_test: OpsTest, app_name: str, unit_num: int = 0
-) -> List[dict]:
+async def get_prometheus_active_targets(app_name: str, unit_num: int = 0) -> List[dict]:
     """Fetch Prometheus active scrape targets.
 
     Args:
@@ -98,7 +96,7 @@ async def get_prometheus_active_targets(
     Returns:
         Prometheus YAML configuration in string format.
     """
-    host = await unit_address(app_name, unit_num)
+    host = unit_address(app_name, unit_num)
     prometheus = Prometheus(host=host)
     targets = await prometheus.active_targets()
     return targets
@@ -234,10 +232,7 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
     Returns:
         whether the workloads are active or not
     """
-    return all(
-        Juju._unit_statuses(name)[0].workload_status == "active"
-        for name in app_names
-    )
+    return all(Juju._unit_statuses(name)[0].workload_status == "active" for name in app_names)
 
 
 def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
