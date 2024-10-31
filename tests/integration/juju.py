@@ -71,6 +71,17 @@ class Juju:
         return cls.cli(*args)
 
     @classmethod
+    def add_units(cls, app: str, units: int = 1):
+        args = ["add-unit", app, "--num-units", units]
+        return cls.cli(*args)
+
+    @classmethod
+    def remove_units(cls, app: str, units: int = 1):
+        args = ["remove-unit", app, "--num-units", units]
+        return cls.cli(*args)
+
+
+    @classmethod
     def refresh(cls, app:str, path: str="", resources:  Dict[str, str] = {}):
         args = ["refresh", app]
         if path:
@@ -83,6 +94,7 @@ class Juju:
 
     @classmethod
     def wait_for_idle(cls, applications: List[str], timeout: int):
+        # TODO: accomodate for the case when units are being removed/added(i.e: wait_for_exact_units)
         start = time.time()
         while time.time() - start < timeout:
             try:
