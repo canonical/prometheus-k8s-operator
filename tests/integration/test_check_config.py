@@ -2,12 +2,12 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import asyncio
 import logging
-import subprocess
 
 import pytest
 from helpers import check_prometheus_is_ready, oci_image
+
+from .juju import Juju
 
 logger = logging.getLogger(__name__)
 
@@ -24,42 +24,27 @@ scrape_tester_resources = {
 scrape_shim = "prometheus-scrape-config"
 
 
-async def test_setup_env(ops_test):
-    await ops_test.model.set_config({"logging-config": "<root>=WARNING; unit=DEBUG"})
+def test_setup_env():
+    Juju.cli(["model-config", "logging-config=<root>=WARNING; unit=DEBUG"])
 
 
 @pytest.mark.abort_on_fail
-async def test_good_config_validates_successfully(
-    ops_test, prometheus_charm, prometheus_tester_charm
-):
+def test_good_config_validates_successfully(prometheus_charm, prometheus_tester_charm):
     """Deploy Prometheus and a single client with a good configuration."""
-    await asyncio.gather(
-        ops_test.model.deploy(
-            prometheus_charm,
-            resources=prometheus_resources,
-            application_name=prometheus_app_name,
-            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
-        ),
-        ops_test.model.deploy(
-            prometheus_tester_charm,
-            resources=scrape_tester_resources,
-            application_name=scrape_tester,
-        ),
+    Juju.deploy(
+        prometheus_charm,
+        alias=prometheus_app_name,
+        resources=prometheus_resources,
+        trust=True,
     )
-    await ops_test.model.wait_for_idle(apps=[prometheus_app_name, scrape_tester], status="active")
-    await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
+    Juju.deploy(prometheus_tester_charm, resources=scrape_tester_resources, alias=scrape_tester)
+    Juju.wait_for_idle([prometheus_app_name, scrape_tester])
+    await check_prometheus_is_ready(prometheus_app_name, 0)
 
-    await ops_test.model.add_relation(
-        f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint"
-    )
+    Juju.integrate(f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint")
 
     # set some custom configs to later check they persisted across the test
-    action = (
-        await ops_test.model.applications[prometheus_app_name]
-        .units[0]
-        .run_action("validate-configuration")
-    )
-    res = (await action.wait()).results
+    res = Juju.run(f"{prometheus_app_name}/0", "validate-configuration")
 
     assert res["valid"] == "True"
     assert res["error-message"] == ""
@@ -67,17 +52,13 @@ async def test_good_config_validates_successfully(
 
 
 @pytest.mark.abort_on_fail
-async def test_bad_config_sets_action_results(ops_test, prometheus_charm, prometheus_tester_charm):
+async def test_bad_config_sets_action_results(prometheus_charm, prometheus_tester_charm):
     """Deploy Prometheus and a single client with a good configuration."""
-    await ops_test.model.wait_for_idle(apps=[prometheus_app_name])
+    Juju.wait_for_idle([prometheus_app_name])
 
-    # There seems to be no way to do this through libjuju
-    subprocess.check_call(
+    Juju.cli(
         [
-            "juju",
             "ssh",
-            "--model",
-            ops_test.model_full_name,
             "--container",
             "prometheus",
             f"{prometheus_app_name}/0",
@@ -86,12 +67,7 @@ async def test_bad_config_sets_action_results(ops_test, prometheus_charm, promet
     )
 
     # set some custom configs to later check they persisted across the test
-    action = (
-        await ops_test.model.applications[prometheus_app_name]
-        .units[0]
-        .run_action("validate-configuration")
-    )
-    res = (await action.wait()).results
+    res = Juju.run(f"{prometheus_app_name}/0", "validate-configuration")
 
     assert res["valid"] == "False"
     assert "FAILED" in res["error-message"]  # NOTE: this is coming from promtool so may change

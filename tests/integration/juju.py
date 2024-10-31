@@ -74,15 +74,14 @@ class Juju:
                     results.extend(cls._unit_statuses(a))
                 if set(results) != {"active/idle"}:
                     raise Exception
-                else:
-                    break
+                break
             except Exception:
                 time.sleep(1)
 
     @classmethod
     def cli(cls, *args):
         proc = subprocess.run(
-            ["/snap/bin/juju", *args],
+            ["/snap/bin/juju", "--model", cls.model_name, *args],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

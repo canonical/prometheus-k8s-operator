@@ -13,6 +13,7 @@ from lightkube import Client
 from lightkube.resources.core_v1 import Pod
 from pytest_operator.plugin import OpsTest
 from workload import Prometheus
+
 from .juju import Juju
 
 log = logging.getLogger(__name__)
@@ -32,11 +33,11 @@ def unit_address(app_name: str, unit_num: int) -> str:
     Returns:
         unit address as a string
     """
-    status = juju.status()
+    status = Juju.status()
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
+async def check_prometheus_is_ready(app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
@@ -47,7 +48,7 @@ async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: 
     Returns:
         True if Prometheus is responsive else False
     """
-    host = await unit_address(ops_test, app_name, unit_num)
+    host = unit_address(app_name, unit_num)
     prometheus = Prometheus(host=host)
     is_ready = await prometheus.is_ready()
     return is_ready

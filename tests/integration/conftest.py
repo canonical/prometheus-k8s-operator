@@ -5,11 +5,13 @@
 import functools
 import logging
 import shutil
+import subprocess
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-import os
+
 import pytest
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +71,7 @@ def remove_leftover_alert_rules(ops_test):
             f.unlink()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 @timed_memoizer
 def prometheus_charm(request):
     """Zinc charm used for integration testing."""
@@ -88,13 +90,13 @@ def prometheus_charm(request):
     return next(Path.glob(Path("."), "prometheus-k8s*.charm")).absolute()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def prometheus_oci_image():
     meta = yaml.safe_load(Path("./metadata.yaml").read_text())
     return meta["resources"]["prometheus-image"]["upstream-source"]
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 @timed_memoizer
 def prometheus_tester_charm(request):
     """Zinc charm used for integration testing."""
@@ -103,7 +105,12 @@ def prometheus_tester_charm(request):
         return charm_file
 
     subprocess.run(
-        ["/snap/bin/charmcraft", "--project-dir=tests/integration/prometheus-tester", "pack", "--verbose"],
+        [
+            "/snap/bin/charmcraft",
+            "--project-dir=tests/integration/prometheus-tester",
+            "pack",
+            "--verbose",
+        ],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
