@@ -99,7 +99,7 @@ class Juju:
 
     @classmethod
     def wait_for_idle(cls, applications: List[str], timeout: int):
-        # TODO: accomodate for the case when units are being removed/added(i.e: wait_for_exact_units)
+        # TODO: accommodate for the case when units are being removed/added(i.e: wait_for_exact_units)
         start = time.time()
         while time.time() - start < timeout:
             try:
