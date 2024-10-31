@@ -6,7 +6,7 @@ import logging
 
 import pytest
 import yaml
-from helpers import (
+from .helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
     get_rules_for,
@@ -14,7 +14,7 @@ from helpers import (
     oci_image,
     run_promql,
 )
-from juju import Juju
+from .juju import Juju
 
 logger = logging.getLogger(__name__)
 
