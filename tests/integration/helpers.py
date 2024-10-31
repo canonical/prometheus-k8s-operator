@@ -37,7 +37,7 @@ def unit_address(app_name: str, unit_num: int) -> str:
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
-async def check_prometheus_is_ready(ops_test: OpsTest, app_name: str, unit_num: int) -> bool:
+def check_prometheus_is_ready(app_name: str, unit_num: int) -> bool:
     """Check if Prometheus server responds to HTTP API requests.
 
     Args:
@@ -87,7 +87,7 @@ async def get_prometheus_config(ops_test: OpsTest, app_name: str, unit_num: int)
     return config
 
 
-async def get_prometheus_active_targets(app_name: str, unit_num: int = 0) -> List[dict]:
+def get_prometheus_active_targets(app_name: str, unit_num: int = 0) -> List[dict]:
     """Fetch Prometheus active scrape targets.
 
     Args:
@@ -100,11 +100,11 @@ async def get_prometheus_active_targets(app_name: str, unit_num: int = 0) -> Lis
     """
     host = unit_address(app_name, unit_num)
     prometheus = Prometheus(host=host)
-    targets = await prometheus.active_targets()
+    targets = prometheus.active_targets()
     return targets
 
 
-async def run_promql(ops_test: OpsTest, promql_query: str, app_name: str, unit_num: int = 0):
+def run_promql( promql_query: str, app_name: str, unit_num: int = 0):
     """Run a PromQL query in Prometheus.
 
     Args:
@@ -246,7 +246,7 @@ def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
 
 async def has_metric(ops_test, query: str, app_name: str) -> bool:
     """Returns True if the query returns any time series; False otherwise."""
-    for timeseries in await run_promql(ops_test, query, app_name):
+    for timeseries in run_promql( query, app_name):
         if timeseries.get("metric"):
             return True
 

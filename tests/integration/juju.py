@@ -30,6 +30,7 @@ class Juju:
         config: Dict[str, str] = {},
         resources: Dict[str, str] = {},
         trust: bool = False,
+        num_units: int = 1,
     ):
         args = ["deploy", charm]
 
@@ -70,6 +71,17 @@ class Juju:
         return cls.cli(*args)
 
     @classmethod
+    def refresh(cls, app:str, path: str="", resources:  Dict[str, str] = {}):
+        args = ["refresh", app]
+        if path:
+            args = [*args, "--path", path]
+        if resources:
+            for k, v in resources.items():
+                args = [*args, "--resource", f"{k}={v}"]
+        return cls.cli(*args)
+        
+
+    @classmethod
     def wait_for_idle(cls, applications: List[str], timeout: int):
         start = time.time()
         while time.time() - start < timeout:
@@ -102,3 +114,4 @@ class Juju:
             f"{units[u]['workload-status']['current']}/{units[u]['juju-status']['current']}"
             for u in units
         ]
+

@@ -25,7 +25,7 @@ scrape_shim = "prometheus-scrape-config"
 
 
 def test_setup_env():
-    Juju.cli(["model-config", "logging-config=<root>=WARNING; unit=DEBUG"])
+    Juju.cli(["model-config", 'logging-config="<root>=WARNING; unit=DEBUG"'])
 
 
 @pytest.mark.abort_on_fail

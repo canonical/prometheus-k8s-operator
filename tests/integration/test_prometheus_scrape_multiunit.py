@@ -27,7 +27,7 @@ from helpers import (
     oci_image,
     run_promql,
 )
-from pytest_operator.plugin import OpsTest
+from .juju import Juju
 
 logger = logging.getLogger(__name__)
 
@@ -49,15 +49,14 @@ idle_period = 90
 
 
 @pytest.mark.skip(reason="xfail")
-async def test_setup_env(ops_test: OpsTest):
-    await ops_test.model.set_config(
-        {"logging-config": "<root>=WARNING; unit=DEBUG", "update-status-hook-interval": "60m"}
-    )
+def test_setup_env():
+    Juju.cli(["model-config", 'logging-config="<root>=WARNING; unit=DEBUG"', "update-status-hook-interval=60m"])
+
 
 
 @pytest.mark.skip(reason="xfail")
-async def test_prometheus_scrape_relation_with_prometheus_tester(
-    ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
+def test_prometheus_scrape_relation_with_prometheus_tester(
+    prometheus_charm, prometheus_tester_charm
 ):
     """Relate several units of prometheus and several units of the tester charm.
 
@@ -68,65 +67,39 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
     # GIVEN prometheus and the tester charm are deployed with two units each
 
-    await asyncio.gather(
-        ops_test.model.deploy(
-            prometheus_charm,
-            resources=prometheus_resources,
-            application_name=prometheus_app_name,
-            num_units=num_units,
-            trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
-        ),
-        ops_test.model.deploy(
-            prometheus_tester_charm,
-            resources=scrape_tester_resources,
-            application_name=scrape_tester,
-            num_units=num_units,
-        ),
-        ops_test.model.deploy(
-            "ch:grafana-agent-k8s",
-            application_name=remote_write_tester,
-            channel="edge",
-            num_units=num_units,
-            trust=True,
-        ),
-    )
+    Juju.deploy(prometheus_charm, resources=prometheus_resources, alias=prometheus_app_name, num_units=num_units, trust=True)
+    Juju.deploy(prometheus_tester_charm, resources=scrape_tester_resources, alias=scrape_tester, num_units=num_units )
+    Juju.deploy("ch:grafana-agent-k8s", alias=remote_write_tester, channel="edge", num_units=num_units, trust=True)
+    Juju.wait_for_idle(app_names, timeout=600)
 
-    await ops_test.model.wait_for_idle(
-        apps=app_names, status="active", wait_for_units=num_units, timeout=600
-    )
-    await asyncio.gather(
-        *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]
-    )
+   
+    for u in range(num_units):
+        check_prometheus_is_ready(prometheus_app_name, u)
+    
 
     # WHEN prometheus is not related to anything
     # THEN all prometheus units should have only one scrape target (self-scraping)
     for unit_num in range(num_units):
-        targets = await get_prometheus_active_targets(ops_test, prometheus_app_name, unit_num)
+        targets = get_prometheus_active_targets( prometheus_app_name, unit_num)
         assert len(targets) == 1
         self_scrape = next(iter(targets))
         assert self_scrape["labels"]["job"] == "prometheus"
         assert self_scrape["labels"]["host"] == "localhost"
 
     # WHEN prometheus is related to the testers
-    await asyncio.gather(
-        ops_test.model.add_relation(
-            f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint"
-        ),
-        ops_test.model.add_relation(
-            f"{prometheus_app_name}:receive-remote-write",
-            f"{remote_write_tester}:send-remote-write",
-        ),
-    )
-    await ops_test.model.wait_for_idle(apps=app_names, status="active")
+    Juju.integrate(f"{prometheus_app_name}:metrics-endpoint", f"{scrape_tester}:metrics-endpoint")
+    Juju.integrate(f"{prometheus_app_name}:receive-remote-write",
+            f"{remote_write_tester}:send-remote-write",)
+   
+    Juju.wait_for_idle(app_names)
 
     # THEN all prometheus units should have all scrape units as targets (as well as self-scraping)
     # `targets_by_unit` is a List[List[dict]]: every unit has a List[dict] targets.
-    targets_by_unit = await asyncio.gather(
-        *[
-            get_prometheus_active_targets(ops_test, prometheus_app_name, u)
+    targets_by_unit = [
+            get_prometheus_active_targets( prometheus_app_name, u)
             for u in range(num_units)
         ]
-    )
+    
     assert all(len(targets) == num_units + 1 for targets in targets_by_unit)
 
     # AND all prometheus units have the exact same targets
@@ -139,9 +112,9 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     # assert len(set(map(lambda x: json.dumps(x, sort_keys=True), targets_by_unit))) == 1
 
     # AND all prometheus units have the exact same config
-    config_by_unit = await asyncio.gather(
-        *[get_prometheus_config(ops_test, prometheus_app_name, u) for u in range(num_units)]
-    )
+    config_by_unit = 
+        [get_prometheus_config(prometheus_app_name, u) for u in range(num_units)]
+    
     # Convert the yaml strings into dicts
     config_by_unit = list(map(yaml.safe_load, config_by_unit))
 
@@ -158,9 +131,9 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         )
 
     # AND all prometheus units have the exact same rules
-    rules_by_unit = await asyncio.gather(
-        *[get_prometheus_rules(ops_test, prometheus_app_name, u) for u in range(num_units)]
-    )
+    rules_by_unit =
+        [get_prometheus_rules( prometheus_app_name, u) for u in range(num_units)]
+    
     for u in range(1, len(rules_by_unit)):
         # Some fields will most likely differ, such as "evaluationTime" and "lastEvaluation".
         # Also excluding the following, which occasionally fails CI:
@@ -181,13 +154,13 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
 
 @pytest.mark.skip(reason="xfail")
-async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
+def test_upgrade_prometheus(prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     # GIVEN an existing "up" timeseries
     query = 'count_over_time(up{host="localhost",job="prometheus"}[1y])'
-    up_before = await asyncio.gather(
-        *[run_promql(ops_test, query, prometheus_app_name, u) for u in range(num_units)]
-    )
+    up_before = 
+        [run_promql( query, prometheus_app_name, u) for u in range(num_units)]
+    
     # Each response looks like this:
     # [
     #     {
@@ -202,11 +175,10 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     assert all(up_before)
 
     # WHEN prometheus is upgraded
-    await ops_test.model.applications[prometheus_app_name].refresh(
-        path=prometheus_charm, resources=prometheus_resources
-    )
+    Juju.refresh(prometheus_app_name, path=prometheus_charm, resources=prometheus_resources)
 
     # THEN nothing breaks
+    Juju.wait_for_idle([prometheus_app_name, scrape_tester, remote_write_tester], timeout=600)
     await ops_test.model.wait_for_idle(status="active", idle_period=idle_period, timeout=600)
     await asyncio.gather(
         *[check_prometheus_is_ready(ops_test, prometheus_app_name, u) for u in range(num_units)]

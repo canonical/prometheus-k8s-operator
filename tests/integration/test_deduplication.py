@@ -51,7 +51,7 @@ def test_multiple_scrape_jobs_in_constructor(prometheus_charm, prometheus_tester
     )
     Juju.wait_for_idle([prometheus_app_name, tester_app_name])
 
-    targets = await get_prometheus_active_targets(prometheus_app_name)
+    targets = get_prometheus_active_targets(prometheus_app_name)
     # Two unique jobs above plus an additional an additional job for self scraping.
     assert len(targets) == 3
 
