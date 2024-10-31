@@ -3,11 +3,67 @@
 [project]
 name = "prometheus-k8s"
 version = "0.1" # not relevant
+requires-python = "~=3.8"
+
+dependencies = [
+  cosl
+  cryptography
+  jsonschema
+  # pinned to 2.15 as 2.16 breaks our scenario tests and 2.17 breaks our unittests
+  ops == 2.15
+  pyaml
+  requests
+  lightkube >= 0.11
+  lightkube-models >= 1.22.0.4
+  # From PYDEPS
+  importlib-metadata~=6.0.0
+  opentelemetry-exporter-otlp-proto-http
+]
 
 [project.optional-dependencies]
-lib_pydeps = [
-  "opentelemetry-exporter-otlp-proto-http",
-  "pydantic>=2"
+lint = [
+    black
+    ruff
+    codespell
+]
+
+unit = [
+    cosl
+    coverage[toml]
+    deepdiff
+    fs
+    httpcore==0.14.7
+    # deepdiff 8.0 requires numpy, see https://github.com/seperman/deepdiff/issues/478
+    numpy
+    ops-scenario >=5.1,<6.0
+    pyright
+    pytest
+    pytest-asyncio
+    responses==0.20.0
+]
+
+integration = [
+    aiohttp
+    deepdiff
+    # deepdiff 8.0 requires numpy, see https://github.com/seperman/deepdiff/issues/478
+    numpy
+    .[lib_pydeps]
+    # Libjuju needs to track the juju version
+    juju ~= 3.1.0
+    lightkube >= 0.11
+    lightkube-models >= 1.22.0.4
+    pytest
+    pytest-operator
+    prometheus-api-client
+    tenacity
+]
+
+integration-lma = [
+    # deps from lma-bundle - these are needed here because will be running pytest on lma-bundle
+    jinja2
+    juju
+    pytest
+    pytest-operator
 ]
 
 # Testing tools configuration
