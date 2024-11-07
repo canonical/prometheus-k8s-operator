@@ -61,9 +61,16 @@ requires:
       - (client) scraping targets for self-monitoring
       - (client) posting alerts to alertmanager server
       - (server) serving data to grafana
-  tracing:
+  charm-tracing:
     interface: tracing
     limit: 1
+    description: |
+      Used for passing charm traces from Prometheus charm to the tracing backend.
+  workload-tracing:
+    interface: tracing
+    limit: 1
+    description: |
+      Used for passing workload traces (internal Prometheus traces) to the tracing backend.
 
 peers:
   prometheus-peers:

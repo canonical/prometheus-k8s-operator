@@ -36,7 +36,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
 from charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
-from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
+from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer, charm_tracing_config
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -60,7 +60,6 @@ from ops.model import (
 )
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
-
 from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
@@ -120,8 +119,8 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
 
 
 @trace_charm(
-    tracing_endpoint="tracing_endpoint",
-    server_cert="server_ca_cert_path",
+    tracing_endpoint="charm_tracing_endpoint",
+    server_cert="server_cert",
     extra_types=[
         KubernetesComputeResourcesPatch,
         CertHandler,
@@ -222,7 +221,12 @@ class PrometheusCharm(CharmBase):
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
-        self.tracing = TracingEndpointRequirer(self, protocols=["otlp_http"])
+        self.charm_tracing = TracingEndpointRequirer(self, relation_name="charm-tracing", protocols=["otlp_http"])
+        self.workload_tracing = TracingEndpointRequirer(self, relation_name="workload-tracing", protocols=["otlp_grpc"])
+
+        self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
+            self.charm_tracing, self._ca_cert_path
+        )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -947,6 +951,20 @@ class PrometheusCharm(CharmBase):
         )
         return alerting_config
 
+    def _tracing_config(self) -> dict:
+        config = {"endpoint": self.workload_tracing.get_endpoint("otlp_grpc"), "sampling_fraction": 1}
+        if self.server_cert:
+            config["insecure"] = False
+            config["tls_config"] = {
+                "ca_file": self.server_cert,
+                "cert_file": CERT_PATH,
+                "key_file": KEY_PATH,
+            }
+        else:
+            config["insecure"] = True
+        return config
+
+
     def _generate_prometheus_config(self) -> bool:
         """Construct Prometheus configuration and write to filesystem.
 
@@ -973,6 +991,9 @@ class PrometheusCharm(CharmBase):
             prometheus_config["scrape_configs"].append(processed_job)  # type: ignore
 
         web_config = self._web_config()
+
+        if self.workload_tracing_endpoint:
+            prometheus_config["tracing"] = self._tracing_config()
 
         # Check if config changed, using its hash
         config_hash = sha256(
@@ -1072,10 +1093,10 @@ class PrometheusCharm(CharmBase):
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
 
     @property
-    def tracing_endpoint(self) -> Optional[str]:
-        """Tempo endpoint for charm tracing."""
-        if self.tracing.is_ready():
-            return self.tracing.get_endpoint("otlp_http")
+    def workload_tracing_endpoint(self) -> Optional[str]:
+        """Tempo endpoint for workload tracing."""
+        if self.workload_tracing.is_ready():
+            return self.workload_tracing.get_endpoint("otlp_grpc")
         return None
 
     @property
