@@ -115,7 +115,7 @@ class Juju:
     @classmethod
     def cli(cls, *args):
         proc = subprocess.run(
-            ["/snap/bin/juju", "--model", cls.model_name, *args],
+            ["/snap/bin/juju", "--model", cls.model_name, *map(str, args)],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
