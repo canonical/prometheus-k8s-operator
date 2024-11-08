@@ -221,8 +221,12 @@ class PrometheusCharm(CharmBase):
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
-        self.charm_tracing = TracingEndpointRequirer(self, relation_name="charm-tracing", protocols=["otlp_http"])
-        self.workload_tracing = TracingEndpointRequirer(self, relation_name="workload-tracing", protocols=["otlp_grpc"])
+        self.charm_tracing = TracingEndpointRequirer(
+            self, relation_name="charm-tracing", protocols=["otlp_http"]
+        )
+        self.workload_tracing = TracingEndpointRequirer(
+            self, relation_name="workload-tracing", protocols=["otlp_grpc"]
+        )
 
         self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
             self.charm_tracing, self._ca_cert_path
@@ -952,7 +956,10 @@ class PrometheusCharm(CharmBase):
         return alerting_config
 
     def _tracing_config(self) -> dict:
-        config = {"endpoint": self.workload_tracing.get_endpoint("otlp_grpc"), "sampling_fraction": 1}
+        config = {
+            "endpoint": self.workload_tracing.get_endpoint("otlp_grpc"),
+            "sampling_fraction": 1
+        }
         if self.server_cert:
             config["insecure"] = False
             config["tls_config"] = {
