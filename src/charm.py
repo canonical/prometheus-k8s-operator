@@ -423,7 +423,7 @@ class PrometheusCharm(CharmBase):
                     "command": self._generate_command(),
                     "startup": "enabled",
                     "environment": {
-                        "OTEL_RESOURCE_ATTRIBUTES": f"juju_application={self._topology.application},juju_model={self._topology.model},juju_model_uuid={self._topology.model_uuid},juju_unit={self._topology.unit}"
+                        "OTEL_RESOURCE_ATTRIBUTES": f"juju_application={self._topology.application},juju_model={self._topology.model},juju_model_uuid={self._topology.model_uuid},juju_unit={self._topology.unit},juju_charm={self._topology.charm_name}"
                     },
                 }
             },
