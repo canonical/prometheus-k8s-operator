@@ -14,4 +14,4 @@ settings:
   sync_comments: false
 
   label_mapping:
-    enhancement: Story
+    "Type: Enhancement": Story
