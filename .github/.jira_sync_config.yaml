@@ -1,0 +1,17 @@
+settings:
+  jira_project_key: "OPENG"
+  status_mapping:
+    opened: Untriaged
+    closed: done
+    not_planned: rejected
+    
+  components:
+    - prometheus
+    - team-core
+      
+  add_gh_comment: false
+  sync_description: false
+  sync_comments: false
+
+  label_mapping:
+    enhancement: Story
