@@ -413,6 +413,12 @@ class PrometheusCharm(CharmBase):
             a Pebble layer specification for the Prometheus workload container.
         """
         logger.debug("Building pebble layer")
+        environment = {}
+        if self.workload_tracing.is_ready():
+            # tracing is ready to serve traffic, so we can add the topology.
+            environment["OTEL_RESOURCE_ATTRIBUTES"] = (
+                f"juju_application={self._topology.application},juju_model={self._topology.model},juju_model_uuid={self._topology.model_uuid},juju_unit={self._topology.unit},juju_charm={self._topology.charm_name}"
+            )
         layer_config = {
             "summary": "Prometheus layer",
             "description": "Pebble layer configuration for Prometheus",
@@ -422,9 +428,7 @@ class PrometheusCharm(CharmBase):
                     "summary": "prometheus daemon",
                     "command": self._generate_command(),
                     "startup": "enabled",
-                    "environment": {
-                        "OTEL_RESOURCE_ATTRIBUTES": f"juju_application={self._topology.application},juju_model={self._topology.model},juju_model_uuid={self._topology.model_uuid},juju_unit={self._topology.unit},juju_charm={self._topology.charm_name}"
-                    },
+                    "environment": environment,
                 }
             },
         }
