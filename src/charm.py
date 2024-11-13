@@ -414,7 +414,7 @@ class PrometheusCharm(CharmBase):
         """
         logger.debug("Building pebble layer")
         environment = {}
-        if self.workload_tracing.is_ready():
+        if self.workload_tracing_endpoint:
             # tracing is ready to serve traffic, so we can add the topology.
             environment["OTEL_RESOURCE_ATTRIBUTES"] = (
                 f"juju_application={self._topology.application},juju_model={self._topology.model},juju_model_uuid={self._topology.model_uuid},juju_unit={self._topology.unit},juju_charm={self._topology.charm_name}"
