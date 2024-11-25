@@ -219,7 +219,7 @@ class PrometheusCharm(CharmBase):
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
             server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
             endpoint_path="/api/v1/write",
-            datasource_uids=self.grafana_source_provider.get_source_uids()
+            datasource_uids=self.grafana_source_provider.get_source_uids(),
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)

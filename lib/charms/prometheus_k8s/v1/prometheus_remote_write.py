@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 PYDEPS = ["cosl"]
 
@@ -600,7 +600,7 @@ class PrometheusRemoteWriteProvider(Object):
         *,
         server_url_func: Callable[[], str] = lambda: f"http://{socket.getfqdn()}:9090",
         endpoint_path: str = "/api/v1/write",
-        datasource_uids: Optional[Dict[str,Dict[str, str]]] = None
+        datasource_uids: Optional[Dict[str, Dict[str, str]]] = None,
     ):
         """API to manage a provided relation with the `prometheus_remote_write` interface.
 
@@ -682,8 +682,8 @@ class PrometheusRemoteWriteProvider(Object):
         for relation in relations:
             self._set_endpoint_on_relation(relation)
 
-        if self._charm.unit.is_leader() and self._datasource_uids:
-            self._set_datasource_ids_on_relation(relation)
+            if self._datasource_uids:
+                self._set_datasource_ids_on_relation(relation)
 
     def _set_datasource_ids_on_relation(self, relation: Relation) -> None:
         """Set the remote_write endpoint on relations.
@@ -691,6 +691,8 @@ class PrometheusRemoteWriteProvider(Object):
         Args:
             relation: The relation whose data to update.
         """
+        if not self._charm.unit.is_leader():
+            return
         relation.data[self._charm.app]["datasource_uids"] = json.dumps(self._datasource_uids)
 
     def _set_endpoint_on_relation(self, relation: Relation) -> None:
