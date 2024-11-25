@@ -201,13 +201,6 @@ class PrometheusCharm(CharmBase):
         )
         self._prometheus_client = Prometheus(self.internal_url)
 
-        self.remote_write_provider = PrometheusRemoteWriteProvider(
-            charm=self,
-            relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-            server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
-            endpoint_path="/api/v1/write",
-        )
-
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
@@ -219,6 +212,14 @@ class PrometheusCharm(CharmBase):
                 self.cert_handler.on.cert_changed,
             ],
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
+        )
+
+        self.remote_write_provider = PrometheusRemoteWriteProvider(
+            charm=self,
+            relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
+            server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
+            endpoint_path="/api/v1/write",
+            datasource_uids=self.grafana_source_provider.get_source_uids()
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
@@ -237,6 +238,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
+        self.framework.observe(self.on.grafana_source_relation_changed, self._configure)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self.cert_handler.on.cert_changed, self._on_server_cert_changed)

@@ -600,6 +600,7 @@ class PrometheusRemoteWriteProvider(Object):
         *,
         server_url_func: Callable[[], str] = lambda: f"http://{socket.getfqdn()}:9090",
         endpoint_path: str = "/api/v1/write",
+        datasource_uids: Optional[Dict[str,Dict[str, str]]] = None
     ):
         """API to manage a provided relation with the `prometheus_remote_write` interface.
 
@@ -609,6 +610,9 @@ class PrometheusRemoteWriteProvider(Object):
                 defined in metadata.yaml.
             server_url_func: A callable returning the URL for your prometheus server.
             endpoint_path: The path of the server's remote_write endpoint.
+            datasource_uids: The uids of the grafana datasources provisioned for these
+                prometheus units. A mapping from grafana applications to
+                local unit IDs to datasource UIDs (str).
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -630,6 +634,11 @@ class PrometheusRemoteWriteProvider(Object):
         self._relation_name = relation_name
         self._get_server_url = server_url_func
         self._endpoint_path = endpoint_path
+
+        # we might have datasource relations with multiple grafana's.
+        # for each one of them, our datasource UID might be different
+        # (although, with the current implementation, it isn't).
+        self._datasource_uids = datasource_uids
 
         on_relation = self._charm.on[self._relation_name]
         self.framework.observe(
@@ -672,6 +681,17 @@ class PrometheusRemoteWriteProvider(Object):
 
         for relation in relations:
             self._set_endpoint_on_relation(relation)
+
+        if self._charm.unit.is_leader() and self._datasource_uids:
+            self._set_datasource_ids_on_relation(relation)
+
+    def _set_datasource_ids_on_relation(self, relation: Relation) -> None:
+        """Set the remote_write endpoint on relations.
+
+        Args:
+            relation: The relation whose data to update.
+        """
+        relation.data[self._charm.app]["datasource_uids"] = json.dumps(self._datasource_uids)
 
     def _set_endpoint_on_relation(self, relation: Relation) -> None:
         """Set the remote_write endpoint on relations.
