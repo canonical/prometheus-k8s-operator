@@ -28,6 +28,12 @@ def prometheus_charm():
         yield PrometheusCharm
 
 
+@pytest.fixture(autouse=True)
+def disable_charm_tracing_buffer():
+    with patch("charms.tempo_coordinator_k8s.v0.charm_tracing._Buffer.save", lambda *_: None):
+        yield
+
+
 @pytest.fixture(scope="function")
 def context(prometheus_charm):
     return Context(charm_type=prometheus_charm, juju_version="3.0.3")
