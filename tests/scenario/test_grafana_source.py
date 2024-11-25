@@ -4,7 +4,9 @@
 import json
 
 import pytest
-from scenario import Container, ExecOutput, Relation, State
+from charms.prometheus_k8s.v1.prometheus_remote_write import PrometheusRemoteWriteConsumer
+from ops import CharmBase, Framework
+from scenario import Container, Context, ExecOutput, Relation, State
 
 
 @pytest.mark.parametrize("this_app", ("prometheus", "prom"))
@@ -33,7 +35,7 @@ def test_remote_write_dashboard_uid_propagation(context, this_app, this_unit_id)
                 {
                     f"{this_app}/{this_unit_id}": f"juju_foo_bar_{this_app}_{this_unit_id}",
                     # some peer unit
-                    f"{this_app}/{this_unit_id+1}": f"juju_foo_bar_{this_app}_{this_unit_id+1}",
+                    f"{this_app}/{this_unit_id + 1}": f"juju_foo_bar_{this_app}_{this_unit_id + 1}",
                 }
             )
         },
@@ -54,4 +56,48 @@ def test_remote_write_dashboard_uid_propagation(context, this_app, this_unit_id)
 
     remote_write_out = state_out.get_relations("receive-remote-write")[0]
     shared_ds_uids = remote_write_out.local_app_data.get("datasource_uids")
-    assert shared_ds_uids
+    assert shared_ds_uids == json.dumps(
+        {
+            "grafana": {
+                f"{this_app}/{this_unit_id}": f"juju_foo_bar_{this_app}_{this_unit_id}",
+                f"{this_app}/{this_unit_id+1}": f"juju_foo_bar_{this_app}_{this_unit_id+1}",
+            }
+        }
+    )
+
+
+def test_remote_write_dashboard_uid_consumer():
+    # GIVEN a remote-write relation
+    # the datasources provisioned by grafana for the remote prometheus
+    datasource_uids = {
+        "prometheus/0": "juju_foo_bar_prometheus_0",
+        "prometheus/1": "juju_foo_bar_prometheus_1",
+    }
+
+    remote_write_relation = Relation(
+        endpoint="send-remote-write",
+        remote_app_data={"datasource_uids": json.dumps({"grafana": datasource_uids})},
+    )
+
+    state = State(
+        leader=True,
+        relations=[remote_write_relation],
+    )
+
+    class MyProviderCharm(CharmBase):
+        META = {
+            "name": "allan",
+            "requires": {"send-remote-write": {"interface": "prometheus_remote_write"}},
+        }
+
+        def __init__(self, framework: Framework):
+            super().__init__(framework)
+            self.remote_write = PrometheusRemoteWriteConsumer(self)
+
+    ctx = Context(MyProviderCharm, MyProviderCharm.META)
+    with ctx.manager(remote_write_relation.changed_event, state) as mgr:
+        charm = mgr.charm
+        # THEN we can access prometheus' datasource uids
+        assert charm.remote_write.get_grafana_datasource_uids() == {
+            "remote": {"grafana": datasource_uids}
+        }

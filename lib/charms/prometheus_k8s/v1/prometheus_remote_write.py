@@ -524,6 +524,23 @@ class PrometheusRemoteWriteConsumer(Object):
 
         return endpoints
 
+    def get_grafana_datasource_uids(self) -> Optional[Dict[str, Dict[str, Dict[str, str]]]]:
+        """Retrieve the grafana datasource UIDs assigned by grafana to the remote application.
+
+        Returns a mapping from remote application names (prometheus applications)
+        to remote grafana application names to datasource UIDs.
+        This amount of fanning out is unavoidable as each prometheus might be sourced by multiple
+        grafanas, and each remote-write consumer might be remote-writing to multiple prometheai.
+        Technically it won't matter much which datasource uid is chosen, as all data
+        should be copied to all instances.
+        """
+        ds_uids = {}
+        for relation in self.model.relations[self._relation_name]:
+            ds_uids_raw = relation.data[relation.app].get("datasource_uids")
+            if ds_uids_raw:
+                ds_uids[relation.app.name] = json.loads(ds_uids_raw)
+        return ds_uids
+
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
     """Event emitted when Prometheus remote_write alerts change."""
