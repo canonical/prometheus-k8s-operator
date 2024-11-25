@@ -4,7 +4,6 @@
 import json
 
 import pytest
-import yaml
 from scenario import Container, ExecOutput, Relation, State
 
 
