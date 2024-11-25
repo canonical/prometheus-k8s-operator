@@ -432,7 +432,8 @@ class GrafanaSourceProvider(Object):
     def get_source_uids(self) -> Dict[str, Dict[str, str]]:
         """Get the datasource UID(s) assigned by the remote end(s) to this datasource.
 
-        Returns a mapping from remote application names to unit names to datasource uids."""
+        Returns a mapping from remote application names to unit names to datasource uids.
+        """
         uids = {}
         for rel in self._charm.model.relations.get(self._relation_name, []):
             if not rel:
