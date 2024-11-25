@@ -75,6 +75,7 @@ def test_remote_write_dashboard_uid_consumer():
     }
 
     remote_write_relation = Relation(
+        remote_app_name="prometheus",
         endpoint="send-remote-write",
         remote_app_data={"datasource_uids": json.dumps({"grafana": datasource_uids})},
     )
@@ -99,5 +100,5 @@ def test_remote_write_dashboard_uid_consumer():
         charm = mgr.charm
         # THEN we can access prometheus' datasource uids
         assert charm.remote_write.get_grafana_datasource_uids() == {
-            "remote": {"grafana": datasource_uids}
+            "prometheus": {"grafana": datasource_uids}
         }
