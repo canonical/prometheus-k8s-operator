@@ -8,6 +8,9 @@ settings:
   components:
     - prometheus
     - team-core
+
+  labels:
+    - 25.04
       
   add_gh_comment: false
   sync_description: false
