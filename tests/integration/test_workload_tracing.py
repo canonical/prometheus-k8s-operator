@@ -33,7 +33,15 @@ async def test_workload_traces(ops_test, prometheus_charm):
 
     # integrate workload-tracing only to not affect search results with charm traces
     await ops_test.model.integrate(f"{APP_NAME}:workload-tracing", f"{TEMPO_APP_NAME}:tracing")
-    await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=300)
+
+    # stimulate prometheus to generate traces
+    await ops_test.model.integrate(
+        f"{APP_NAME}:receive-remote-write", f"{TEMPO_APP_NAME}:send-remote-write"
+    )
+
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME], status="active", timeout=300
+    )
 
     # verify workload traces are ingested into Tempo
     assert await get_traces_patiently(
@@ -48,9 +56,9 @@ async def test_workload_traces_tls(ops_test):
 
     # integrate with a TLS Provider
     await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME)
-    await asyncio.gather(
-        ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates"),
-        ops_test.model.integrate(SSC_APP_NAME + ":certificates", TEMPO_APP_NAME + ":certificates"),
+    await ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates")
+    await ops_test.model.integrate(
+        SSC_APP_NAME + ":certificates", TEMPO_APP_NAME + ":certificates"
     )
 
     # wait for workloads to settle down
