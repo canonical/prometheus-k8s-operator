@@ -18,7 +18,6 @@ from helpers import (
     UNITTEST_DIR,
     k8s_resource_multipatch,
     patch_cos_tool_path,
-    patch_network_get,
     prom_multipatch,
 )
 from ops import framework
@@ -231,7 +230,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
-    @patch_network_get()
     def test_port_is_set(self, *unused):
         self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
@@ -248,7 +246,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch_network_get()
     def test_alert_rules(self, *unused):
         self.harness.begin_with_initial_hooks()
 
@@ -269,7 +266,6 @@ class TestRemoteWriteProvider(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
-    @patch_network_get()
     def test_address_is_updated_on_upgrade(self, *unused):
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         self.harness.add_relation_unit(rel_id, "consumer/0")

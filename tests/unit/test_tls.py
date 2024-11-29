@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 from helpers import (
     k8s_resource_multipatch,
-    patch_network_get,
     prom_multipatch,
 )
 from ops.testing import Harness
@@ -32,7 +31,6 @@ class TestTls(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
-    @patch_network_get()
     def test_tls_relation_without_certs(self, *unused):
         self.harness.begin_with_initial_hooks()
 
@@ -48,7 +46,6 @@ class TestTls(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.object(Prometheus, "reload_configuration", new=lambda _: True)
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
-    @patch_network_get()
     @patch.multiple(
         "charm.PrometheusCharm",
         _is_tls_ready=lambda *_: True,
