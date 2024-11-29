@@ -162,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 21
+LIBPATCH = 22
 
 logger = logging.getLogger(__name__)
 
@@ -429,6 +429,18 @@ class GrafanaSourceProvider(Object):
                 continue
             self._set_sources(rel)
 
+    def get_source_uids(self) -> Dict[str, Dict[str, str]]:
+        """Get the datasource UID(s) assigned by the remote end(s) to this datasource.
+
+        Returns a mapping from remote application names to unit names to datasource uids.
+        """
+        uids = {}
+        for rel in self._charm.model.relations.get(self._relation_name, []):
+            if not rel:
+                continue
+            uids[rel.app.name] = json.loads(rel.data[rel.app]["datasource_uids"])
+        return uids
+
     def _set_sources_from_event(self, event: RelationJoinedEvent) -> None:
         """Get a `Relation` object from the event to pass on."""
         self._set_sources(event.relation)
@@ -551,6 +563,13 @@ class GrafanaSourceConsumer(Object):
         self.on.sources_changed.emit()  # pyright: ignore
         self.on.sources_to_delete_changed.emit()  # pyright: ignore
 
+    def _publish_source_uids(self, rel: Relation, uids: Dict[str, str]):
+        """Share the datasource UIDs back to the datasources.
+
+        Assumes only leader unit will call this method
+        """
+        rel.data[self._charm.app]["datasource_uids"] = json.dumps(uids)
+
     def _get_source_config(self, rel: Relation):
         """Generate configuration from data stored in relation data by providers."""
         source_data = json.loads(rel.data[rel.app].get("grafana_source_data", "{}"))  # type: ignore
@@ -588,6 +607,10 @@ class GrafanaSourceConsumer(Object):
                 sources_to_delete.remove(host_data["source_name"])
 
             data.append(host_data)
+
+        # share the unique source names back to the datasource units
+        self._publish_source_uids(rel, {ds["unit"]: ds["source_name"] for ds in data})
+
         self.set_peer_data("sources_to_delete", list(sources_to_delete))
         return data
 
@@ -653,6 +676,12 @@ class GrafanaSourceConsumer(Object):
                     self._remove_source(host["source_name"])
 
             self.set_peer_data("sources", stored_sources)
+
+            # update this relation's shared datasource names after removing this unit/source
+            self._publish_source_uids(
+                event.relation, {ds["unit"]: ds["source_name"] for ds in removed_source}
+            )
+
             return True
         return False
 
