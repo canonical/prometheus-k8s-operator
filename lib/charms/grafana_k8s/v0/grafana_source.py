@@ -154,6 +154,8 @@ from ops.framework import (
 )
 from ops.model import Relation
 
+from charms.observability_libs.v0.juju_topology import JujuTopology
+
 # The unique Charmhub library identifier, never change it
 LIBID = "974705adb86f40228298156e34b460dc"
 
@@ -162,7 +164,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 23
 
 logger = logging.getLogger(__name__)
 
@@ -432,13 +434,22 @@ class GrafanaSourceProvider(Object):
     def get_source_uids(self) -> Dict[str, Dict[str, str]]:
         """Get the datasource UID(s) assigned by the remote end(s) to this datasource.
 
-        Returns a mapping from remote application names to unit names to datasource uids.
+        Returns a mapping from remote application UIDs to unit names to datasource uids.
         """
         uids = {}
         for rel in self._charm.model.relations.get(self._relation_name, []):
             if not rel:
                 continue
-            uids[rel.app.name] = json.loads(rel.data[rel.app]["datasource_uids"])
+            app_databag = rel.data[rel.app]
+            grafana_uid = app_databag.get("grafana_uid")
+            if not grafana_uid:
+                logger.warning(
+                    "remote end is using an old grafana_datasource interface: "
+                    "`grafana_uid` field not found."
+                )
+                continue
+
+            uids[grafana_uid] = json.loads(app_databag.get("datasource_uids", "{}"))
         return uids
 
     def _set_sources_from_event(self, event: RelationJoinedEvent) -> None:
@@ -568,6 +579,15 @@ class GrafanaSourceConsumer(Object):
 
         Assumes only leader unit will call this method
         """
+        juju_topology = JujuTopology.from_charm(self._charm)
+        unique_grafana_name = "juju_{}_{}_{}_{}".format(
+            juju_topology.model,
+            juju_topology.model_uuid,
+            juju_topology.application,
+            juju_topology.unit.split("/")[1],
+        )
+
+        rel.data[self._charm.app]["grafana_uid"] = unique_grafana_name
         rel.data[self._charm.app]["datasource_uids"] = json.dumps(uids)
 
     def _get_source_config(self, rel: Relation):
