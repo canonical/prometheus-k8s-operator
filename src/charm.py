@@ -10,7 +10,7 @@ import re
 import socket
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional, Tuple, TypedDict, cast
+from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -43,6 +43,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRevokedForUnitEvent,
 )
 from cosl import JujuTopology
+from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
@@ -232,6 +233,11 @@ class PrometheusCharm(CharmBase):
         self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
             self.charm_tracing, self._ca_cert_path
         )
+        self.datasource_exchange = DatasourceExchange(
+            self,
+            provider_endpoint="send-datasource",
+            requirer_endpoint=None,
+        )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -246,6 +252,10 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(self.on.send_datasource_relation_changed, self._configure)
+        self.framework.observe(self.on.send_datasource_relation_departed, self._configure)
+        self.framework.observe(self.on.grafana_source_relation_changed, self._configure)
+        self.framework.observe(self.on.grafana_source_relation_departed, self._configure)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
@@ -576,6 +586,7 @@ class PrometheusCharm(CharmBase):
         )
         self.remote_write_provider.update_endpoint()
         self.catalogue.update_item(item=self._catalogue_item)
+        self._update_datasource_exchange()
 
         try:
             # Need to reload if config or alerts changed.
@@ -1105,6 +1116,18 @@ class PrometheusCharm(CharmBase):
     def _push(self, path, contents):
         """Push file to container, creating subdirs as necessary."""
         self.container.push(path, contents, make_dirs=True, encoding="utf-8")
+
+    def _update_datasource_exchange(self) -> None:
+        """Update the grafana-datasource-exchange relations."""
+        grafana_uids_to_units_to_uids = self.grafana_source_provider.get_source_uids()
+        raw_datasources: List[DatasourceDict] = []
+
+        for grafana_uid, ds_uids in grafana_uids_to_units_to_uids.items():
+            for _unit_name, ds_uid in ds_uids.items():
+                raw_datasources.append(
+                    {"type": "prometheus", "uid": ds_uid, "grafana_uid": grafana_uid}
+                )
+        self.datasource_exchange.publish(datasources=raw_datasources)
 
     @property
     def workload_tracing_endpoint(self) -> Optional[str]:

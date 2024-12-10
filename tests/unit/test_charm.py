@@ -582,7 +582,7 @@ class TestPebblePlan(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.multiple(
-        "ops.testing._TestingPebbleClient",
+        "ops._private.harness._TestingPebbleClient",
         start_services=raise_if_called,
         stop_services=raise_if_called,
         restart_services=raise_if_called,
@@ -617,7 +617,7 @@ class TestPebblePlan(unittest.TestCase):
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch.multiple(
-        "ops.testing._TestingPebbleClient",
+        "ops._private.harness._TestingPebbleClient",
         start_services=raise_if_called,
         stop_services=raise_if_called,
         restart_services=raise_if_called,

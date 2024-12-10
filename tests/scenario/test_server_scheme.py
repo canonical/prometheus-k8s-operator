@@ -34,9 +34,9 @@ class TestServerScheme:
 
             # Add relations
             rels = [
-                Relation("self-metrics-endpoint", relation_id=10),  # external self-monitoring
-                Relation("grafana-source", relation_id=11),  # grafana
-                Relation("receive-remote-write", relation_id=12),  # grafana-agent
+                Relation("self-metrics-endpoint", id=10),  # external self-monitoring
+                Relation("grafana-source", id=11),  # grafana
+                Relation("receive-remote-write", id=12),  # grafana-agent
             ]
             for rel in rels:
                 state = add_relation_sequence(context, state, rel)
@@ -56,7 +56,7 @@ class TestServerScheme:
         # WHEN a tls_certificates relation joins
         ca = Relation(
             "certificates",
-            relation_id=100,
+            id=100,
             remote_app_data={
                 "certificates": json.dumps(
                     [

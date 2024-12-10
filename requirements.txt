@@ -1,8 +1,7 @@
-cosl
+cosl>=0.0.46
 cryptography
 jsonschema
-# pinned to 2.15 as 2.16 breaks our scenario tests and 2.17 breaks our unittests
-ops == 2.15
+ops
 pyaml
 requests
 lightkube >= 0.11

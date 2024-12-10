@@ -4,7 +4,8 @@
 from unittest.mock import patch
 
 import pytest
-from scenario import Context
+from charms.tempo_coordinator_k8s.v0.charm_tracing import charm_tracing_disabled
+from scenario import Container, Context, Exec
 
 from charm import PrometheusCharm
 
@@ -25,9 +26,19 @@ def prometheus_charm():
         _promtool_check_config=lambda *_: ("stdout", ""),
         _prometheus_version="0.1.0",
     ):
-        yield PrometheusCharm
+        with charm_tracing_disabled():
+            yield PrometheusCharm
 
 
 @pytest.fixture(scope="function")
 def context(prometheus_charm):
     return Context(charm_type=prometheus_charm, juju_version="3.0.3")
+
+
+@pytest.fixture(scope="function")
+def prometheus_container():
+    return Container(
+        "prometheus",
+        can_connect=True,
+        execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
+    )

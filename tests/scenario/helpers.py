@@ -1,37 +1,39 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from scenario import Container, Context, ExecOutput, Network, PeerRelation, Relation, State
+import dataclasses
+
+from scenario import Container, Context, Exec, PeerRelation, Relation, State
 
 
 def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) -> State:
     container = Container(
         "prometheus",
         can_connect=False,
-        exec_mock={("update-ca-certificates", "--fresh"): ExecOutput(return_code=0, stdout="")},
+        execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
     state = State(containers=[container])
     peer_rel = PeerRelation("prometheus-peers")
 
-    state = context.run("install", state)
+    state = context.run(context.on.install(), state)
 
-    state = state.replace(relations=[peer_rel])
-    state = context.run(peer_rel.created_event, state)
+    state = dataclasses.replace(state, relations=[peer_rel])
+    state = context.run(context.on.relation_created(peer_rel), state)
 
     if leader:
-        state = state.replace(leader=True)
-        state = context.run("leader-elected", state)
+        state = dataclasses.replace(state, leader=True)
+        state = context.run(context.on.leader_elected(), state)
     else:
-        state = state.replace(leader=False)
-        state = context.run("leader-settings-changed", state)
+        state = dataclasses.replace(state, leader=False)
+        state = context.run(context.on.leader_elected(), state)
 
-    state = context.run("config-changed", state)
+    state = context.run(context.on.config_changed(), state)
 
-    container = container.replace(can_connect=True)
-    state = state.replace(containers=[container])
-    state = context.run(container.pebble_ready_event, state)
+    container = dataclasses.replace(container, can_connect=True)
+    state = dataclasses.replace(state, containers=[container])
+    state = context.run(context.on.pebble_ready(container), state)
 
-    state = context.run("start", state)
+    state = context.run(context.on.start(), state)
 
     return state
 
@@ -39,20 +41,22 @@ def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) 
 def add_relation_sequence(context: Context, state: State, relation: Relation):
     """Helper to simulate a relation-added sequence."""
     # TODO consider adding to scenario.sequences
-    state_with_relation = state.replace(
-        relations=state.relations + [relation],
-        networks=state.networks + [Network.default(relation.endpoint)],
+    state_with_relation = dataclasses.replace(
+        state,
+        relations=state.relations.union([relation]),
     )
-    state_after_relation_created = context.run(relation.created_event, state_with_relation)
+    state_after_relation_created = context.run(
+        context.on.relation_created(relation), state_with_relation
+    )
 
     # relation is not mutated!
     relation_1 = state_after_relation_created.get_relations(relation.endpoint)[0]
     state_after_relation_joined = context.run(
-        relation_1.joined_event, state_after_relation_created
+        context.on.relation_joined(relation_1), state_after_relation_created
     )
 
     relation_2 = state_after_relation_joined.get_relations(relation.endpoint)[0]
     state_after_relation_changed = context.run(
-        relation_2.changed_event, state_after_relation_joined
+        context.on.relation_changed(relation_2), state_after_relation_joined
     )
     return state_after_relation_changed
