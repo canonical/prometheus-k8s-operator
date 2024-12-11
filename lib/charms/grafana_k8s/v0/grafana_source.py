@@ -154,8 +154,6 @@ from ops.framework import (
 )
 from ops.model import Relation
 
-from charms.observability_libs.v0.juju_topology import JujuTopology
-
 # The unique Charmhub library identifier, never change it
 LIBID = "974705adb86f40228298156e34b460dc"
 
@@ -164,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 logger = logging.getLogger(__name__)
 
@@ -579,12 +577,11 @@ class GrafanaSourceConsumer(Object):
 
         Assumes only leader unit will call this method
         """
-        juju_topology = JujuTopology.from_charm(self._charm)
         unique_grafana_name = "juju_{}_{}_{}_{}".format(
-            juju_topology.model,
-            juju_topology.model_uuid,
-            juju_topology.application,
-            juju_topology.unit.split("/")[1],
+            self._charm.model.name,
+            self._charm.model.uuid,
+            self._charm.model.app.name,
+            self._charm.model.unit.name.split("/")[1],  # type: ignore
         )
 
         rel.data[self._charm.app]["grafana_uid"] = unique_grafana_name
