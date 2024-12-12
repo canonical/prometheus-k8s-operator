@@ -252,11 +252,22 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
-        self.framework.observe(self.on.send_datasource_relation_changed, self._configure)
-        self.framework.observe(self.on.send_datasource_relation_departed, self._configure)
-        self.framework.observe(self.on.grafana_source_relation_changed, self._configure)
-        self.framework.observe(self.on.grafana_source_relation_departed, self._configure)
+        self.framework.observe(
+            self.on.send_datasource_relation_changed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.send_datasource_relation_departed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_changed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_departed, self._on_grafana_source_changed
+        )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
+
+    def _on_grafana_source_changed(self, _):
+        self._update_datasource_exchange()
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
@@ -586,7 +597,6 @@ class PrometheusCharm(CharmBase):
         )
         self.remote_write_provider.update_endpoint()
         self.catalogue.update_item(item=self._catalogue_item)
-        self._update_datasource_exchange()
 
         try:
             # Need to reload if config or alerts changed.
@@ -1122,6 +1132,10 @@ class PrometheusCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
+        # we might have multiple grafana-source relations, this method collects them all and returns a mapping from
+        # the `grafana_uid` to the contents of the `datasource_uids` field
+        # for simplicity, we assume that we're sending the same data to different grafanas.
+        # read more in https://discourse.charmhub.io/t/tempo-ha-docs-correlating-traces-metrics-logs/16116
         grafana_uids_to_units_to_uids = self.grafana_source_provider.get_source_uids()
         raw_datasources: List[DatasourceDict] = []
 
