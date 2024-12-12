@@ -1140,7 +1140,7 @@ class PrometheusCharm(CharmBase):
         raw_datasources: List[DatasourceDict] = []
 
         for grafana_uid, ds_uids in grafana_uids_to_units_to_uids.items():
-            for _unit_name, ds_uid in ds_uids.items():
+            for _, ds_uid in ds_uids.items():
                 raw_datasources.append(
                     {"type": "prometheus", "uid": ds_uid, "grafana_uid": grafana_uid}
                 )
