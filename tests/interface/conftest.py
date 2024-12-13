@@ -2,11 +2,13 @@
 # # See LICENSE file for licensing details.
 # from unittest.mock import patch
 
+import json
 from unittest.mock import patch
 
 import pytest
+from charms.tempo_coordinator_k8s.v0.charm_tracing import charm_tracing_disabled
 from interface_tester import InterfaceTester
-from scenario import Container, ExecOutput, State
+from scenario import Container, Exec, Relation, State
 
 from charm import PrometheusCharm
 
@@ -27,16 +29,34 @@ def prometheus_charm():
         _promtool_check_config=lambda *_: ("stdout", ""),
         _prometheus_version="0.1.0",
     ):
-        yield PrometheusCharm
+        with charm_tracing_disabled():
+            yield PrometheusCharm
+
+
+prometheus_container = Container(
+    name="prometheus",
+    can_connect=True,
+    execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
+)
+
+grafana_source_relation = Relation(
+    "grafana-source",
+    remote_app_data={
+        "datasource_uids": json.dumps({"prometheus/0": "01234"}),
+        "grafana_uid": "5678",
+    },
+)
+
+grafana_datasource_exchange_relation = Relation(
+    "send-datasource",
+    remote_app_data={
+        "datasources": json.dumps([{"type": "prometheus", "uid": "01234", "grafana_uid": "5678"}])
+    },
+)
 
 
 def begin_with_initial_hooks_isolated() -> State:
-    container = Container(
-        "prometheus",
-        can_connect=True,
-        exec_mock={("update-ca-certificates", "--fresh"): ExecOutput(return_code=0, stdout="")},
-    )
-    state = State(containers=[container], leader=True)
+    state = State(containers=[prometheus_container], leader=True)
     return state
 
 
@@ -45,5 +65,18 @@ def interface_tester(interface_tester: InterfaceTester, prometheus_charm):
     interface_tester.configure(
         charm_type=prometheus_charm,
         state_template=begin_with_initial_hooks_isolated(),
+    )
+    yield interface_tester
+
+
+@pytest.fixture
+def grafana_datasource_exchange_tester(interface_tester: InterfaceTester, prometheus_charm):
+    interface_tester.configure(
+        charm_type=prometheus_charm,
+        state_template=State(
+            leader=True,
+            containers=[prometheus_container],
+            relations=[grafana_source_relation, grafana_datasource_exchange_relation],
+        ),
     )
     yield interface_tester

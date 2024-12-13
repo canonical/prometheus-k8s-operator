@@ -4,7 +4,7 @@
 import json
 
 import yaml
-from scenario import Container, ExecOutput, Relation, State
+from scenario import Container, Exec, Relation, State
 
 
 def test_alert_expression_labels(context):
@@ -42,10 +42,10 @@ def test_alert_expression_labels(context):
     container = Container(
         name="prometheus",
         can_connect=True,
-        exec_mock={("update-ca-certificates", "--fresh"): ExecOutput(return_code=0, stdout="")},
+        execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
     state = State(containers=[container], relations=[remote_write_relation])
-    context.run(event=remote_write_relation.changed_event, state=state)
+    context.run(context.on.relation_changed(remote_write_relation), state=state)
     rules_file = (
         container.get_filesystem(context)
         / "etc/prometheus/rules/juju_foobar-model_d07df316_remote-app.rules"

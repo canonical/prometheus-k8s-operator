@@ -292,7 +292,9 @@ async def deploy_and_configure_minio(ops_test: OpsTest) -> None:
         "secret-key": "secretkey",
     }
     await ops_test.model.deploy("minio", channel="edge", trust=True, config=config)
-    await ops_test.model.wait_for_idle(apps=["minio"], status="active", timeout=2000)
+    await ops_test.model.wait_for_idle(
+        apps=["minio"], status="active", timeout=2000, idle_period=45
+    )
     minio_addr = await unit_address(ops_test, "minio", 0)
 
     mc_client = Minio(
@@ -350,6 +352,8 @@ async def deploy_tempo_cluster(ops_test: OpsTest):
             status="active",
             timeout=2000,
             idle_period=30,
+            # TODO: remove when https://github.com/canonical/tempo-coordinator-k8s-operator/issues/90 is fixed
+            raise_on_error=False,
         )
 
 

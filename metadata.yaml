@@ -41,7 +41,11 @@ provides:
     interface: grafana_dashboard
   receive-remote-write:
     interface: prometheus_remote_write
-
+  send-datasource:
+    interface: grafana_datasource_exchange
+    description: |
+      Integration to share with other COS components this charm's grafana datasources, and receive theirs.
+      
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
