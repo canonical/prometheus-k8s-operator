@@ -1,5 +1,5 @@
 settings:
-  jira_project_key: "OPENG"
+  jira_project_key: "OBC"
   status_mapping:
     opened: Untriaged
     closed: done
@@ -7,7 +7,6 @@ settings:
     
   components:
     - prometheus
-    - team-core
       
   add_gh_comment: false
   sync_description: false
