@@ -110,7 +110,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 PYDEPS = ["pydantic"]
 
@@ -891,13 +891,15 @@ class TracingEndpointRequirer(Object):
             filter(lambda i: i.protocol.name == protocol, app_data.receivers)
         )
         if not receivers:
-            logger.error(f"no receiver found with protocol={protocol!r}")
+            # it can happen if the charm requests tracing protocols, but the relay (such as grafana-agent) isn't yet
+            # connected to the tracing backend. In this case, it's not an error the charm author can do anything about
+            logger.warning(f"no receiver found with protocol={protocol!r}.")
             return
         if len(receivers) > 1:
-            logger.error(
+            # if we have more than 1 receiver that matches, it shouldn't matter which receiver we'll be using.
+            logger.warning(
                 f"too many receivers with protocol={protocol!r}; using first one. Found: {receivers}"
             )
-            return
 
         receiver = receivers[0]
         return receiver.url
