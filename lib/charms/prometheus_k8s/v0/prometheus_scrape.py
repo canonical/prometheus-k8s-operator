@@ -333,6 +333,7 @@ import re
 import socket
 import subprocess
 import tempfile
+import textwrap
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -362,12 +363,12 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 47
+LIBPATCH = 48
 
-PYDEPS = ["cosl"]
+# TODO This is pinned to a branch so we cannot test (i.e. Jhack sync) fast without pushing each time
+PYDEPS = ["git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl"]
 
 logger = logging.getLogger(__name__)
-
 
 ALLOWED_KEYS = {
     "job_name",
@@ -398,6 +399,39 @@ DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
+    textwrap.dedent(
+        """
+        groups:
+          - name: HostHealth
+            rules:
+            - alert: HostDown
+              expr: up < 1
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: Host '{{ $labels.instance }}' is down.
+                description: >-
+                  Host '{{ $labels.instance }}' is down.
+                    VALUE = {{ $value }}
+                    LABELS = {{ $labels }}
+            - alert: HostUnavailable
+              # This alert is applicable only when the provider is linked via an aggregator (such as grafana agent)
+              expr: absent(up)
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: Metrics not received from host '{{ $labels.instance }}'.
+                description: >-
+                  Metrics not received from host '{{ $labels.instance }}'.
+                    VALUE = {{ $value }}
+                    LABELS = {{ $labels }}
+        """
+    )
+)
 
 
 class PrometheusConfig:
@@ -541,7 +575,7 @@ class PrometheusConfig:
                         job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
                         modified_job["job_name"] = job_name
                         modified_job["metrics_path"] = unit_path + (
-                            job.get("metrics_path") or "/metrics"
+                                job.get("metrics_path") or "/metrics"
                         )
 
                         if topology:
@@ -1531,6 +1565,7 @@ class MetricsEndpointProvider(Object):
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         alert_rules.add_path(self._alert_rules_path, recursive=True)
+        alert_rules.add(GENERIC_ALERT_RULES_GROUP, group_name_prefix=self.topology.identifier)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:

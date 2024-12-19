@@ -21,6 +21,7 @@ import re
 import socket
 import subprocess
 import tempfile
+import textwrap
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -48,7 +49,7 @@ LIBAPI = 1
 # to 0 if you are raising the major API version
 LIBPATCH = 4
 
-PYDEPS = ["cosl"]
+PYDEPS = ["git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl"]
 
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
+# TODO Come up with a name that will not collide when Gagent is in model AggregatorHostHealth
+GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
+    textwrap.dedent(
+        """
+        groups:
+          - name: AggregatorHostHealth
+            rules:
+            - alert: HostUnavailable
+              expr: absent(up)
+              for: 5m
+              labels:
+                severity: critical
+              annotations:
+                summary: Metrics not received from host '{{ $labels.instance }}'.
+                description: >-
+                  Metrics not received from host '{{ $labels.instance }}'.
+                    VALUE = {{ $value }}
+                    LABELS = {{ $labels }}
+        """
+    )
+)
 
 class RelationNotFoundError(Exception):
     """Raised if there is no relation with the given name."""
@@ -485,6 +507,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         alert_rules.add_path(self._alert_rules_path)
+        alert_rules.add(GENERIC_ALERT_RULES_GROUP, group_name_prefix=self.topology.identifier)
 
         alert_rules_as_dict = alert_rules.as_dict()
 
