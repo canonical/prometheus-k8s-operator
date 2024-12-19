@@ -61,7 +61,6 @@ RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
-# TODO Come up with a name that will not collide when Gagent is in model AggregatorHostHealth
 GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
     textwrap.dedent(
         """

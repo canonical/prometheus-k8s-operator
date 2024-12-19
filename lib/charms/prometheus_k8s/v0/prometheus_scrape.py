@@ -365,7 +365,6 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 48
 
-# TODO This is pinned to a branch so we cannot test (i.e. Jhack sync) fast without pushing each time
 PYDEPS = ["git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl"]
 
 logger = logging.getLogger(__name__)
