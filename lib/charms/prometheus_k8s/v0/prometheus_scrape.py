@@ -574,7 +574,7 @@ class PrometheusConfig:
                         job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
                         modified_job["job_name"] = job_name
                         modified_job["metrics_path"] = unit_path + (
-                                job.get("metrics_path") or "/metrics"
+                            job.get("metrics_path") or "/metrics"
                         )
 
                         if topology:

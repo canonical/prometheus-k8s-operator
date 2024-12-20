@@ -82,6 +82,7 @@ GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
     )
 )
 
+
 class RelationNotFoundError(Exception):
     """Raised if there is no relation with the given name."""
 

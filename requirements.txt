@@ -1,4 +1,4 @@
-cosl>=0.0.46
+git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl
 cryptography
 jsonschema
 ops
