@@ -21,7 +21,6 @@ import re
 import socket
 import subprocess
 import tempfile
-import textwrap
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -47,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 PYDEPS = ["git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl"]
 
@@ -61,26 +60,27 @@ RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
-GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
-    textwrap.dedent(
-        """
-        groups:
-          - name: AggregatorHostHealth
-            rules:
-            - alert: HostMetricsMissing
-              expr: absent(up)
-              for: 5m
-              labels:
-                severity: critical
-              annotations:
-                summary: Metrics not received from host '{{ $labels.instance }}', failed to remote write.
-                description: >-
-                  Metrics not received from host '{{ $labels.instance }}', failed to remote write.
-                    VALUE = {{ $value }}
-                    LABELS = {{ $labels }}
-        """
-    )
-)
+GENERIC_ALERT_RULES_GROUP = {
+    "groups": [
+        {
+            "name": "AggregatorHostHealth",
+            "rules": [
+                {
+                    "alert": "HostMetricsMissing",
+                    "expr": "absent(up)",
+                    "for": "5m",
+                    "labels": {"severity": "critical"},
+                    "annotations": {
+                        "summary": "Metrics not received from host '{{ $labels.instance }}', failed to remote write.",
+                        "description": """Metrics not received from host '{{ $labels.instance }}', failed to remote write.
+                            VALUE = {{ $value }}
+                            LABELS = {{ $labels }}""",
+                    },
+                }
+            ],
+        }
+    ]
+}
 
 
 class RelationNotFoundError(Exception):
