@@ -413,19 +413,19 @@ GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
               annotations:
                 summary: Host '{{ $labels.instance }}' is down.
                 description: >-
-                  Host '{{ $labels.instance }}' is down.
+                  Host '{{ $labels.instance }}' is down, failed to scrape.
                     VALUE = {{ $value }}
                     LABELS = {{ $labels }}
-            - alert: HostUnavailable
+            - alert: HostMetricsMissing
               # This alert is applicable only when the provider is linked via an aggregator (such as grafana agent)
               expr: absent(up)
               for: 5m
               labels:
                 severity: critical
               annotations:
-                summary: Metrics not received from host '{{ $labels.instance }}'.
+                summary: Metrics not received from host '{{ $labels.instance }}', failed to remote write.
                 description: >-
-                  Metrics not received from host '{{ $labels.instance }}'.
+                  Metrics not received from host '{{ $labels.instance }}', failed to remote write.
                     VALUE = {{ $value }}
                     LABELS = {{ $labels }}
         """

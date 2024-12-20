@@ -67,15 +67,15 @@ GENERIC_ALERT_RULES_GROUP = yaml.safe_load(
         groups:
           - name: AggregatorHostHealth
             rules:
-            - alert: HostUnavailable
+            - alert: HostMetricsMissing
               expr: absent(up)
               for: 5m
               labels:
                 severity: critical
               annotations:
-                summary: Metrics not received from host '{{ $labels.instance }}'.
+                summary: Metrics not received from host '{{ $labels.instance }}', failed to remote write.
                 description: >-
-                  Metrics not received from host '{{ $labels.instance }}'.
+                  Metrics not received from host '{{ $labels.instance }}', failed to remote write.
                     VALUE = {{ $value }}
                     LABELS = {{ $labels }}
         """
