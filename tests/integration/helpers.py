@@ -183,7 +183,8 @@ def get_rules_for(app_name: str, rule_groups: list) -> list:
     """
     groups = []
     for group in rule_groups:
-        if app_name in group["name"]:
+        # Replace "-" with "_" since the cosl Rules class sanitises metric names
+        if app_name.replace("-", "_") in group["name"]:
             groups.append(group)
     return groups
 

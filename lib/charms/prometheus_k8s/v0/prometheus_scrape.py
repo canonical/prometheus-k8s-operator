@@ -364,7 +364,7 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 48
 
-PYDEPS = ["git+https://github.com/canonical/cos-lib.git@feature/generic-alerts#egg=cosl"]
+PYDEPS = ["cosl"]
 
 logger = logging.getLogger(__name__)
 
