@@ -128,7 +128,6 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
     print(await ops_test.run("groups"))
     print(await ops_test.run("id"))
     print("-----END-----")
-    
     cmd = ["microk8s.kubectl", "delete", "pod", "-n", ops_test.model_name, pod_name]
 
     logger.debug(
