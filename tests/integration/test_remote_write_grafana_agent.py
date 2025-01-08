@@ -123,7 +123,11 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
     # the timestamp and the value itself.
     num_head_chunks_before = int(total0[0]["value"][1])
     assert num_head_chunks_before > 0
-
+    print("-----DEBUG-----")
+    print(uk8s_group())
+    print(await ops_test.run("groups"))
+    print(await ops_test.run("id"))
+    print("-----END-----")
     cmd = [
         "sg",
         uk8s_group(),
