@@ -128,12 +128,7 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
     print(await ops_test.run("groups"))
     print(await ops_test.run("id"))
     print("-----END-----")
-    cmd = [
-        "sg",
-        uk8s_group(),
-        "-c",
-        " ".join(["microk8s.kubectl", "delete", "pod", "-n", ops_test.model_name, pod_name]),
-    ]
+    cmd = ["microk8s.kubectl", "delete", "pod", "-n", ops_test.model_name, pod_name]
 
     logger.debug(
         "Removing pod '%s' from model '%s' with cmd: %s", pod_name, ops_test.model_name, cmd
