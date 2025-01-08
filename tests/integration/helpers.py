@@ -225,10 +225,10 @@ def oci_image(metadata_file: str, image_name: str) -> str:
 def uk8s_group() -> str:
     try:
         # Classically confined microk8s
-        uk8s_group = grp.getgrnam("snap_microk8s").gr_name
+        uk8s_group = grp.getgrnam("microk8s").gr_name
     except KeyError:
         # Strictly confined microk8s
-        uk8s_group = "microk8s"
+        uk8s_group = "snap_microk8s"
     return uk8s_group
 
 
