@@ -51,7 +51,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_units=1)
+    await ops_test.model.wait_for_idle(apps=app_names, status="active", wait_for_exact_units=1)
 
     assert initial_workload_is_ready(ops_test, app_names)
     assert await check_prometheus_is_ready(ops_test, prometheus_app_name, 0)
@@ -73,7 +73,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
-    assert len(tester_rules) == 1
+    assert len(tester_rules) == 2
 
 
 async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm):
@@ -105,4 +105,4 @@ async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm)
 
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
-    assert len(tester_rules) == 2
+    assert len(tester_rules) == 3

@@ -55,7 +55,7 @@ async def test_remote_write_with_grafana_agent(
         ),
     )
 
-    await ops_test.model.wait_for_idle(apps=apps, wait_for_units=1)
+    await ops_test.model.wait_for_idle(apps=apps, wait_for_exact_units=1)
     assert await check_prometheus_is_ready(ops_test, prometheus_name, 0)
 
     await asyncio.gather(
@@ -109,7 +109,7 @@ async def test_remote_write_alerts_deduplicate(ops_test):
     # Make sure only one copy of the alerts is present
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_name, 0)
     tester_rules = get_rules_for(tester_name, rules_with_relation)[0]["rules"]
-    assert len(tester_rules) == 1
+    assert len(tester_rules) == 2
 
 
 @pytest.mark.abort_on_fail

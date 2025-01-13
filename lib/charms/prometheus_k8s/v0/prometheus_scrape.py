@@ -362,12 +362,11 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 47
+LIBPATCH = 48
 
 PYDEPS = ["cosl"]
 
 logger = logging.getLogger(__name__)
-
 
 ALLOWED_KEYS = {
     "job_name",
@@ -398,6 +397,43 @@ DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+# For changes to GENERIC_ALERT_RULES_GROUP, check replicated locations:
+# - prometheus-k8s-operator/lib/charms/prometheus_k8s/v1/prometheus_remote_write.py
+# - grafana-agent-operator/lib/charms/grafana_agent/v0/cos_agent.py
+GENERIC_ALERT_RULES_GROUP = {
+    "groups": [
+        {
+            "name": "HostHealth",
+            "rules": [
+                {
+                    "alert": "HostDown",
+                    "expr": "up < 1",
+                    "for": "5m",
+                    "labels": {"severity": "critical"},
+                    "annotations": {
+                        "summary": "Host '{{ $labels.instance }}' is down.",
+                        "description": """Host '{{ $labels.instance }}' is down, failed to scrape.
+                            VALUE = {{ $value }}
+                            LABELS = {{ $labels }}""",
+                    },
+                },
+                {
+                    "alert": "HostMetricsMissing",
+                    "expr": "absent(up)",
+                    "for": "5m",
+                    "labels": {"severity": "critical"},
+                    "annotations": {
+                        "summary": "Metrics not received from host '{{ $labels.instance }}', failed to remote write.",
+                        "description": """Metrics not received from host '{{ $labels.instance }}', failed to remote write.
+                            VALUE = {{ $value }}
+                            LABELS = {{ $labels }}""",
+                    },
+                },
+            ],
+        }
+    ]
+}
 
 
 class PrometheusConfig:
@@ -1531,6 +1567,7 @@ class MetricsEndpointProvider(Object):
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         alert_rules.add_path(self._alert_rules_path, recursive=True)
+        alert_rules.add(GENERIC_ALERT_RULES_GROUP, group_name_prefix=self.topology.identifier)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:

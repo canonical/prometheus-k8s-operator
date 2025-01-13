@@ -324,7 +324,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 6)
+        self.assertEqual(len(alerts["groups"]), 7)
         for group in alerts["groups"]:
             for rule in group["rules"]:
                 if "and_unit" not in group["name"]:
@@ -360,7 +360,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 6)
+        self.assertEqual(len(alerts["groups"]), 7)
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)
@@ -755,8 +755,11 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
         alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
         for group in alert_rules["groups"]:
             for rule in group["rules"]:
-                self.assertIn("juju_unit", rule["labels"])
-                self.assertIn("juju_unit=", rule["expr"])
+                if (
+                    "_HostHealth_alerts" not in group["name"]
+                ):  # _HostHealth_alerts are injected alerts without juju_unit labels
+                    self.assertIn("juju_unit", rule["labels"])
+                    self.assertIn("juju_unit=", rule["expr"])
 
 
 class TestNoLeader(unittest.TestCase):
