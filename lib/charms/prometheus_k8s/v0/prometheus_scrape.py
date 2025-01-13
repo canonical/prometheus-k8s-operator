@@ -398,6 +398,9 @@ RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
 
+# For changes to GENERIC_ALERT_RULES_GROUP, check replicated locations:
+# - prometheus-k8s-operator/lib/charms/prometheus_k8s/v1/prometheus_remote_write.py
+# - grafana-agent-operator/lib/charms/grafana_agent/v0/cos_agent.py
 GENERIC_ALERT_RULES_GROUP = {
     "groups": [
         {
