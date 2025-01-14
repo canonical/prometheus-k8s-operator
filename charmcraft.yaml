@@ -32,4 +32,4 @@ parts:
       - curl
     override-pull: |
       curl -L -O https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_TARGET_ARCH}
-      chmod +x cos-tool-*
+      chmod 775 cos-tool-*
