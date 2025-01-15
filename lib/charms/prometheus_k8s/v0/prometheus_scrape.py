@@ -2365,10 +2365,7 @@ class CosTool:
         res = "cos-tool-{}".format(arch)
         try:
             path = Path(res).resolve()
-            path.chmod(0o775)
             return path
-        except NotImplementedError:
-            logger.debug("System lacks support for chmod")
         except FileNotFoundError:
             logger.debug('Could not locate cos-tool at: "{}"'.format(res))
         return None
