@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
-from cosl.rules import AlertRules
+from cosl.rules import AlertRules, generic_alert_groups
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -59,31 +59,6 @@ DEFAULT_CONSUMER_NAME = "send-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
-
-# For changes to GENERIC_ALERT_RULES_GROUP, check replicated locations:
-# - prometheus-k8s-operator/lib/charms/prometheus_k8s/v0/prometheus_scrape.py
-# - grafana-agent-operator/lib/charms/grafana_agent/v0/cos_agent.py
-GENERIC_ALERT_RULES_GROUP = {
-    "groups": [
-        {
-            "name": "AggregatorHostHealth",
-            "rules": [
-                {
-                    "alert": "HostMetricsMissing",
-                    "expr": "absent(up)",
-                    "for": "5m",
-                    "labels": {"severity": "critical"},
-                    "annotations": {
-                        "summary": "Metrics not received from host '{{ $labels.instance }}', failed to remote write.",
-                        "description": """Metrics not received from host '{{ $labels.instance }}', failed to remote write.
-                            VALUE = {{ $value }}
-                            LABELS = {{ $labels }}""",
-                    },
-                }
-            ],
-        }
-    ]
-}
 
 
 class RelationNotFoundError(Exception):
@@ -510,7 +485,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         alert_rules.add_path(self._alert_rules_path)
-        alert_rules.add(GENERIC_ALERT_RULES_GROUP, group_name_prefix=self.topology.identifier)
+        alert_rules.add(generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier)
 
         alert_rules_as_dict = alert_rules.as_dict()
 
