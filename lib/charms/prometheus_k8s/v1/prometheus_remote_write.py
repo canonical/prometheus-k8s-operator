@@ -485,7 +485,9 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         alert_rules.add_path(self._alert_rules_path)
-        alert_rules.add(generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier)
+        alert_rules.add(
+            generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
+        )
 
         alert_rules_as_dict = alert_rules.as_dict()
 

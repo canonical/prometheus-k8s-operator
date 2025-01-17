@@ -2301,7 +2301,6 @@ class MetricsEndpointAggregator(Object):
                 rule["labels"].update(matchers.items())
 
             if not (group["name"].startswith("juju_") and group["name"].endswith("_alert_rules")):
-                # TODO Update the group_name method so its not only for units but existing group names as well
                 group["name"] = self.group_name(group["name"])
 
         return groups
