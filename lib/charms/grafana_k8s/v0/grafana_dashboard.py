@@ -186,7 +186,7 @@ import subprocess
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import yaml
 from ops.charm import (
@@ -208,7 +208,7 @@ from ops.framework import (
     StoredState,
 )
 from ops.model import Relation
-from cosl import LZMABase64
+from cosl import LZMABase64, DashboardPath40UID
 
 # The unique Charmhub library identifier, never change it
 LIBID = "c49eb9c7dfef40c7b6235ebd67010a3f"
@@ -219,7 +219,9 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 37
+LIBPATCH = 38
+
+PYDEPS = ["cosl >= 0.0.50"]
 
 logger = logging.getLogger(__name__)
 
@@ -890,6 +892,129 @@ class CharmedDashboard:
         panel["targets"] = targets
         return panel
 
+    @classmethod
+    def _content_to_dashboard_object(
+        cls,
+        *,
+        charm_name,
+        content: str,
+        juju_topology: dict,
+        inject_dropdowns: bool = True,
+        dashboard_alt_uid: Optional[str] = None,
+    ) -> Dict:
+        """Helper method for keeping a consistent stored state schema for the dashboard and some metadata.
+
+        Args:
+            charm_name: Charm name (although the aggregator passes the app name).
+            content: The compressed dashboard.
+            juju_topology: This is not actually used in the dashboards, but is present to provide a secondary
+              salt to ensure uniqueness in the dict keys in case individual charm units provide dashboards.
+            inject_dropdowns: Whether to auto-render topology dropdowns.
+            dashboard_alt_uid: Alternative uid used for dashboards added programmatically.
+        """
+        ret = {
+            "charm": charm_name,
+            "content": content,
+            "juju_topology": juju_topology if inject_dropdowns else {},
+            "inject_dropdowns": inject_dropdowns,
+        }
+
+        if dashboard_alt_uid is not None:
+            ret["dashboard_alt_uid"] = dashboard_alt_uid
+
+        return ret
+
+    @classmethod
+    def _generate_alt_uid(cls, charm_name: str, key: str) -> str:
+        """Generate alternative uid for dashboards.
+
+        Args:
+            charm_name: The name of the charm (not app; from metadata).
+            key: A string used (along with charm.meta.name) to build the hash uid.
+
+        Returns: A hash string.
+        """
+        raw_dashboard_alt_uid = "{}-{}".format(charm_name, key)
+        return hashlib.shake_256(raw_dashboard_alt_uid.encode("utf-8")).hexdigest(8)
+
+    @classmethod
+    def _replace_uid(
+        cls, *, dashboard_dict: dict, dashboard_path: Path, charm_dir: Path, charm_name: str
+    ):
+        # If we're running this from within an aggregator (such as grafana agent), then the uid was
+        # already rendered there, so we do not want to overwrite it with a uid generated from aggregator's info.
+        # We overwrite the uid only if it's not a valid "Path40" uid.
+        if not DashboardPath40UID.is_valid(original_uid := dashboard_dict.get("uid", "")):
+            rel_path = str(
+                dashboard_path.relative_to(charm_dir)
+                if dashboard_path.is_absolute()
+                else dashboard_path
+            )
+            dashboard_dict["uid"] = DashboardPath40UID.generate(charm_name, rel_path)
+            logger.debug(
+                "Processed dashboard '%s': replaced original uid '%s' with '%s'",
+                dashboard_path,
+                original_uid,
+                dashboard_dict["uid"],
+            )
+        else:
+            logger.debug(
+                "Processed dashboard '%s': kept original uid '%s'", dashboard_path, original_uid
+            )
+
+    @classmethod
+    def load_dashboards_from_dir(
+        cls,
+        *,
+        dashboards_path: Path,
+        charm_name: str,
+        charm_dir: Path,
+        inject_dropdowns: bool,
+        juju_topology: dict,
+        path_filter: Callable[[Path], bool] = lambda p: True,
+    ) -> dict:
+        """Load dashboards files from directory into a mapping from "dashboard id" to a so-called "dashboard object"."""
+
+        # Path.glob uses fnmatch on the backend, which is pretty limited, so use a
+        # custom function for the filter
+        def _is_dashboard(p: Path) -> bool:
+            return (
+                p.is_file()
+                and p.name.endswith((".json", ".json.tmpl", ".tmpl"))
+                and path_filter(p)
+            )
+
+        dashboard_templates = {}
+
+        for path in filter(_is_dashboard, Path(dashboards_path).glob("*")):
+            try:
+                dashboard_dict = json.loads(path.read_bytes())
+            except json.JSONDecodeError as e:
+                logger.error("Failed to load dashboard '%s': %s", path, e)
+                continue
+            if type(dashboard_dict) is not dict:
+                logger.error(
+                    "Invalid dashboard '%s': expected dict, got %s", path, type(dashboard_dict)
+                )
+
+            cls._replace_uid(
+                dashboard_dict=dashboard_dict,
+                dashboard_path=path,
+                charm_dir=charm_dir,
+                charm_name=charm_name,
+            )
+
+            id = "file:{}".format(path.stem)
+            dashboard_templates[id] = cls._content_to_dashboard_object(
+                charm_name=charm_name,
+                content=LZMABase64.compress(json.dumps(dashboard_dict)),
+                dashboard_alt_uid=cls._generate_alt_uid(charm_name, id),
+                inject_dropdowns=inject_dropdowns,
+                juju_topology=juju_topology,
+            )
+
+        return dashboard_templates
+
 
 def _type_convert_stored(obj):
     """Convert Stored* to their appropriate types, recursively."""
@@ -1075,10 +1200,13 @@ class GrafanaDashboardProvider(Object):
         # it is predictable across units.
         id = "prog:{}".format(encoded_dashboard[-24:-16])
 
-        stored_dashboard_templates[id] = self._content_to_dashboard_object(
-            encoded_dashboard, inject_dropdowns
+        stored_dashboard_templates[id] = CharmedDashboard._content_to_dashboard_object(
+            charm_name=self._charm.meta.name,
+            content=encoded_dashboard,
+            dashboard_alt_uid=CharmedDashboard._generate_alt_uid(self._charm.meta.name, id),
+            inject_dropdowns=inject_dropdowns,
+            juju_topology=self._juju_topology,
         )
-        stored_dashboard_templates[id]["dashboard_alt_uid"] = self._generate_alt_uid(id)
 
         if self._charm.unit.is_leader():
             for dashboard_relation in self._charm.model.relations[self._relation_name]:
@@ -1121,38 +1249,22 @@ class GrafanaDashboardProvider(Object):
                 if dashboard_id.startswith("file:"):
                     del stored_dashboard_templates[dashboard_id]
 
-            # Path.glob uses fnmatch on the backend, which is pretty limited, so use a
-            # custom function for the filter
-            def _is_dashboard(p: Path) -> bool:
-                return p.is_file() and p.name.endswith((".json", ".json.tmpl", ".tmpl"))
-
-            for path in filter(_is_dashboard, Path(self._dashboards_path).glob("*")):
-                # path = Path(path)
-                id = "file:{}".format(path.stem)
-                stored_dashboard_templates[id] = self._content_to_dashboard_object(
-                    LZMABase64.compress(path.read_bytes()), inject_dropdowns
+            stored_dashboard_templates.update(
+                CharmedDashboard.load_dashboards_from_dir(
+                    dashboards_path=Path(self._dashboards_path),
+                    charm_name=self._charm.meta.name,
+                    charm_dir=self._charm.charm_dir,
+                    inject_dropdowns=inject_dropdowns,
+                    juju_topology=self._juju_topology,
                 )
-                stored_dashboard_templates[id]["dashboard_alt_uid"] = self._generate_alt_uid(id)
-
-            self._stored.dashboard_templates = stored_dashboard_templates
+            )
 
             if self._charm.unit.is_leader():
                 for dashboard_relation in self._charm.model.relations[self._relation_name]:
                     self._upset_dashboards_on_relation(dashboard_relation)
 
-    def _generate_alt_uid(self, key: str) -> str:
-        """Generate alternative uid for dashboards.
-
-        Args:
-            key: A string used (along with charm.meta.name) to build the hash uid.
-
-        Returns: A hash string.
-        """
-        raw_dashboard_alt_uid = "{}-{}".format(self._charm.meta.name, key)
-        return hashlib.shake_256(raw_dashboard_alt_uid.encode("utf-8")).hexdigest(8)
-
     def _reinitialize_dashboard_data(self, inject_dropdowns: bool = True) -> None:
-        """Triggers a reload of dashboard outside of an eventing workflow.
+        """Triggers a reload of dashboard outside an eventing workflow.
 
         Args:
             inject_dropdowns: a :bool: used to indicate whether topology dropdowns should be added
@@ -1225,17 +1337,6 @@ class GrafanaDashboardProvider(Object):
 
         relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
 
-    def _content_to_dashboard_object(self, content: str, inject_dropdowns: bool = True) -> Dict:
-        return {
-            "charm": self._charm.meta.name,
-            "content": content,
-            "juju_topology": self._juju_topology if inject_dropdowns else {},
-            "inject_dropdowns": inject_dropdowns,
-        }
-
-    # This is not actually used in the dashboards, but is present to provide a secondary
-    # salt to ensure uniqueness in the dict keys in case individual charm units provide
-    # dashboards
     @property
     def _juju_topology(self) -> Dict:
         return {
@@ -1300,7 +1401,7 @@ class GrafanaDashboardConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._tranformer = CosTool(self._charm)
+        self._transformer = CosTool(self._charm)
 
         self._stored.set_default(dashboards={})  # type: ignore
 
@@ -1436,7 +1537,7 @@ class GrafanaDashboardConsumer(Object):
                 content = CharmedDashboard._convert_dashboard_fields(content, inject_dropdowns)
 
                 if topology:
-                    content = CharmedDashboard._inject_labels(content, topology, self._tranformer)
+                    content = CharmedDashboard._inject_labels(content, topology, self._transformer)
 
                 content = LZMABase64.compress(content)
             except lzma.LZMAError as e:
@@ -1444,7 +1545,7 @@ class GrafanaDashboardConsumer(Object):
                 relation_has_invalid_dashboards = True
             except json.JSONDecodeError as e:
                 error = str(e.msg)
-                logger.warning("Invalid JSON in Grafana dashboard: {}".format(fname))
+                logger.warning("Invalid JSON in Grafana dashboard '{}': {}".format(fname, error))
                 continue
 
             # Prepend the relation name and ID to the dashboard ID to avoid clashes with
@@ -1656,8 +1757,11 @@ class GrafanaDashboardAggregator(Object):
             return
 
         for id in dashboards:
-            self._stored.dashboard_templates[id] = self._content_to_dashboard_object(  # type: ignore
-                dashboards[id], event
+            self._stored.dashboard_templates[id] = CharmedDashboard._content_to_dashboard_object(  # type: ignore
+                charm_name=event.app.name,
+                content=dashboards[id],
+                inject_dropdowns=True,
+                juju_topology=self._hybrid_topology(event),
             )
 
         self._stored.id_mappings[event.app.name] = dashboards  # type: ignore
@@ -1849,32 +1953,20 @@ class GrafanaDashboardAggregator(Object):
             )
 
         if dashboards_path:
-
-            def is_dashboard(p: Path) -> bool:
-                return p.is_file() and p.name.endswith((".json", ".json.tmpl", ".tmpl"))
-
-            for path in filter(is_dashboard, Path(dashboards_path).glob("*")):
-                # path = Path(path)
-                if event.app.name in path.name:  # type: ignore
-                    id = "file:{}".format(path.stem)
-                    builtins[id] = self._content_to_dashboard_object(
-                        LZMABase64.compress(path.read_bytes()), event
-                    )
+            builtins.update(
+                CharmedDashboard.load_dashboards_from_dir(
+                    dashboards_path=Path(dashboards_path),
+                    charm_name=event.app.name,
+                    charm_dir=self._charm.charm_dir,
+                    inject_dropdowns=True,
+                    juju_topology=self._hybrid_topology(event),
+                    path_filter=lambda path: event.app.name in path.name,
+                )
+            )
 
         return builtins
 
-    def _content_to_dashboard_object(self, content: str, event: RelationEvent) -> Dict:
-        return {
-            "charm": event.app.name,  # type: ignore
-            "content": content,
-            "juju_topology": self._juju_topology(event),
-            "inject_dropdowns": True,
-        }
-
-    # This is not actually used in the dashboards, but is present to provide a secondary
-    # salt to ensure uniqueness in the dict keys in case individual charm units provide
-    # dashboards
-    def _juju_topology(self, event: RelationEvent) -> Dict:
+    def _hybrid_topology(self, event: RelationEvent) -> Dict:
         return {
             "model": self._charm.model.name,
             "model_uuid": self._charm.model.uuid,
@@ -1993,12 +2085,9 @@ class CosTool:
         arch = "amd64" if arch == "x86_64" else arch
         res = "cos-tool-{}".format(arch)
         try:
-            path = Path(res).resolve()
-            path.chmod(0o777)
+            path = Path(res).resolve(strict=True)
             return path
-        except NotImplementedError:
-            logger.debug("System lacks support for chmod")
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError):
             logger.debug('Could not locate cos-tool at: "{}"'.format(res))
         return None
 
