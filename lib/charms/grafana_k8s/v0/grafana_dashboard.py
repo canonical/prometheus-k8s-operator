@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 38
+LIBPATCH = 39
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -1665,8 +1665,10 @@ class GrafanaDashboardConsumer(Object):
 
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
-        data = self._charm.peers.data[self._charm.app].get(key, "")  # type: ignore[attr-defined]
-        return json.loads(data) if data else {}
+        if rel := self._charm.peers:  # type: ignore[attr-defined]
+            data = rel.data[self._charm.app].get(key, "")
+            return json.loads(data) if data else {}
+        return {}
 
 
 class GrafanaDashboardAggregator(Object):
