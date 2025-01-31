@@ -1689,6 +1689,7 @@ class PrometheusRulesProvider(Object):
                 sort_keys=True,  # sort, to prevent unnecessary relation_changed events
             )
 
+
 class MetricsEndpointAggregator(Object):
     """Aggregate metrics from multiple scrape targets.
 
@@ -1873,7 +1874,9 @@ class MetricsEndpointAggregator(Object):
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         if self.path_to_own_alert_rules:
             alert_rules.add_path(self.path_to_own_alert_rules, recursive=True)
-        alert_rules.add(generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier)
+        alert_rules.add(
+            generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
+        )
         groups.extend(alert_rules.as_dict()["groups"])
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
@@ -2269,6 +2272,7 @@ class MetricsEndpointAggregator(Object):
                 labeled_rules.append(rule)
 
         return labeled_rules
+
 
 class CosTool:
     """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
