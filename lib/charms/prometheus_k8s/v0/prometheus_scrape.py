@@ -1798,6 +1798,7 @@ class MetricsEndpointAggregator(Object):
             resolve_addresses: A boolean flag indiccating if the aggregator
                 should attempt to perform DNS lookups of targets and append
                 a `dns_name` label
+            path_to_own_alert_rules: Optionally supply a path for alert rule files
         """
         self._charm = charm
 
