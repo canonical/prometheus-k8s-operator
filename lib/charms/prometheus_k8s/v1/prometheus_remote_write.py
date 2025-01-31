@@ -46,9 +46,9 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
-PYDEPS = ["cosl"]
+PYDEPS = ["git+https://github.com/canonical/cos-lib@main#egg=cosl"]
 
 
 logger = logging.getLogger(__name__)
