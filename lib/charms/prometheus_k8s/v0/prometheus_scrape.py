@@ -362,11 +362,12 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 48
+LIBPATCH = 49
 
-PYDEPS = ["cosl"]
+PYDEPS = ["git+https://github.com/canonical/cos-lib@main#egg=cosl"]
 
 logger = logging.getLogger(__name__)
+
 
 ALLOWED_KEYS = {
     "job_name",
@@ -1688,7 +1689,6 @@ class PrometheusRulesProvider(Object):
                 sort_keys=True,  # sort, to prevent unnecessary relation_changed events
             )
 
-
 class MetricsEndpointAggregator(Object):
     """Aggregate metrics from multiple scrape targets.
 
@@ -1778,6 +1778,7 @@ class MetricsEndpointAggregator(Object):
         relation_names: Optional[dict] = None,
         relabel_instance=True,
         resolve_addresses=False,
+        path_to_own_alert_rules: Optional[str] = None,
     ):
         """Construct a `MetricsEndpointAggregator`.
 
@@ -1809,6 +1810,8 @@ class MetricsEndpointAggregator(Object):
         self._alert_rules_relation = relation_names.get("alert_rules", "prometheus-rules")
 
         super().__init__(charm, self._prometheus_relation)
+        self.topology = JujuTopology.from_charm(charm)
+
         self._stored.set_default(jobs=[], alert_rules=[])
 
         self._relabel_instance = relabel_instance
@@ -1817,6 +1820,8 @@ class MetricsEndpointAggregator(Object):
         # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
         self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
+
+        self.path_to_own_alert_rules = path_to_own_alert_rules
 
         # manage list of Prometheus scrape jobs from related scrape targets
         target_events = self._charm.on[self._target_relation]
@@ -1860,6 +1865,15 @@ class MetricsEndpointAggregator(Object):
                 groups.append(group)
 
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
+        # TODO
+        # 1. [x] Get the contents of Aggregator from main and overwrite this code
+        # 2. [x] Create self.topology from charm
+        # 3. [x] merge the contents into groups
+        alert_rules = AlertRules(query_type="promql", topology=self.topology)
+        if self.path_to_own_alert_rules:
+            alert_rules.add_path(self.path_to_own_alert_rules, recursive=True)
+        alert_rules.add(generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier)
+        groups.extend(alert_rules.as_dict()["groups"])
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
     def _on_prometheus_targets_changed(self, event):
@@ -2113,11 +2127,6 @@ class MetricsEndpointAggregator(Object):
         """
         if not self._charm.unit.is_leader():
             return
-        # TODO Make sure to update the Prom prometheus_scrape lib, not the cos-proxy one!
-        # Inject the generic alert rules here since relabelling with JujuTopology occurs later in the code path
-        # 0. The code changes exist here since _prometheus_relation(downstream-prometheus-scrape) is the relation.
-        # 2. In MetricsEndpointProvider we inject on the provider side. With the changes below
-        #   we are now adding it on the requirer side. Consider adding it on the get_alert_rules method
 
         if label_rules:
             rules = self._label_alert_rules(unit_rules, name)
@@ -2125,31 +2134,17 @@ class MetricsEndpointAggregator(Object):
             rules = [unit_rules]
         updated_group = {"name": self.group_name(name), "rules": rules}
 
-        # TODO If merged the _format_generic_alert_groups and _label_alert_rules functionality, then move this above to only relabel once!
-        app_name = unit_rules["labels"]["juju_application"]
-        formatted_generic_groups = self._format_generic_alert_groups(
-            generic_alert_groups.application_rules["groups"], app_name
-        )
-
         for relation in self.model.relations[self._prometheus_relation]:
             alert_rules = json.loads(relation.data[self._charm.app].get("alert_rules", "{}"))
             groups = alert_rules.get("groups", [])
             # list of alert rule groups that have not changed
-            # Case 1 - Combine the new unit-rules with app-data rules within the same group name
             for group in groups:
                 if group["name"] == updated_group["name"]:
                     group["rules"] = [r for r in group["rules"] if r not in updated_group["rules"]]
                     group["rules"].extend(updated_group["rules"])
 
-            # Case 2 - Add the new unit-rules since group name is unique
             if updated_group["name"] not in [g["name"] for g in groups]:
                 groups.append(updated_group)
-
-            # Add the generic-rules group if it does not already exist in the app-data rules group
-            for generic_group in formatted_generic_groups:
-                if generic_group["name"] not in [g["name"] for g in groups]:
-                    groups.append(generic_group)
-
             relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
@@ -2231,7 +2226,7 @@ class MetricsEndpointAggregator(Object):
 
         return rules
 
-    def group_name(self, identifier: str) -> str:
+    def group_name(self, unit_name: str) -> str:
         """Construct name for an alert rule group.
 
         Each unit in a relation may define its own alert rules. All
@@ -2239,13 +2234,13 @@ class MetricsEndpointAggregator(Object):
         given a single alert rule group name.
 
         Args:
-            identifier: string name of a related application or an unformatted group name.
+            unit_name: string name of a related application.
 
         Returns:
             a string Prometheus alert rules group name for the unit.
         """
-        identifier = re.sub(r"/", "_", identifier)
-        return "juju_{}_{}_{}_alert_rules".format(self.model.name, self.model.uuid[:7], identifier)
+        unit_name = re.sub(r"/", "_", unit_name)
+        return "juju_{}_{}_{}_alert_rules".format(self.model.name, self.model.uuid[:7], unit_name)
 
     def _label_alert_rules(self, unit_rules, app_name: str) -> list:
         """Apply juju topology labels to alert rules.
@@ -2273,38 +2268,6 @@ class MetricsEndpointAggregator(Object):
                 labeled_rules.append(rule)
 
         return labeled_rules
-
-    def _format_generic_alert_groups(self, groups: list, app_name: str) -> list:
-        """Apply juju topology labels to alert rule groups and update group name format.
-
-        Args:
-            groups: a list of alert groups, where each group is in
-                dictionary format.
-            app_name: a string name of the application to which the
-                alert rules belong.
-
-        Returns:
-            a list of alert rules with Juju topology labels.
-        """
-        for group in groups:
-            for rule in group["rules"]:
-                # the new JujuTopology removed this, so build it up by hand
-                matchers = {
-                    "juju_{}".format(k): v
-                    # TODO Consider adding unit_name to topology
-                    for k, v in JujuTopology(
-                        self.model.name, self.model.uuid, application=app_name
-                    )
-                    .as_dict(excluded_keys=["charm_name"])
-                    .items()
-                }
-                rule["labels"].update(matchers.items())
-
-            if not (group["name"].startswith("juju_") and group["name"].endswith("_alert_rules")):
-                group["name"] = self.group_name(group["name"])
-
-        return groups
-
 
 class CosTool:
     """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
