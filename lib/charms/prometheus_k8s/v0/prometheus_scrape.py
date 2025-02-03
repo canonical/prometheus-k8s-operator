@@ -364,7 +364,7 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 50
 
-PYDEPS = ["git+https://github.com/canonical/cos-lib@main#egg=cosl"]
+PYDEPS = ["cosl"]
 
 logger = logging.getLogger(__name__)
 
@@ -1847,6 +1847,7 @@ class MetricsEndpointAggregator(Object):
         if not self._charm.unit.is_leader():
             return
 
+        # Gather the scrape jobs
         jobs = [] + _type_convert_stored(
             self._stored.jobs  # pyright: ignore
         )  # list of scrape jobs, one per relation
@@ -1855,6 +1856,7 @@ class MetricsEndpointAggregator(Object):
             if targets and relation.app:
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
+        # Gather the alert rules
         groups = [] + _type_convert_stored(
             self._stored.alert_rules  # pyright: ignore
         )  # list of alert rule groups
@@ -1865,19 +1867,18 @@ class MetricsEndpointAggregator(Object):
                 rules = self._label_alert_rules(unit_rules, appname)
                 group = {"name": self.group_name(appname), "rules": rules}
                 groups.append(group)
-
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
-        # TODO
-        # 1. [x] Get the contents of Aggregator from main and overwrite this code
-        # 2. [x] Create self.topology from charm
-        # 3. [x] merge the contents into groups
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
+        # Add alert rules from file
         if self.path_to_own_alert_rules:
             alert_rules.add_path(self.path_to_own_alert_rules, recursive=True)
+        # Add generic alert rules
         alert_rules.add(
             generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
         )
         groups.extend(alert_rules.as_dict()["groups"])
+
+        # Set scrape jobs and alert rules in relation data
+        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 
     def _on_prometheus_targets_changed(self, event):

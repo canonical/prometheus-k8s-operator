@@ -1,5 +1,4 @@
-# cosl>=0.0.52
-git+https://github.com/canonical/cos-lib@main#egg=cosl
+cosl>=0.0.54
 cryptography
 jsonschema
 ops
