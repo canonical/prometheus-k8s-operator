@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 import pytest
+from cosl.rules import generic_alert_groups
 from helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
@@ -109,7 +110,7 @@ async def test_remote_write_alerts_deduplicate(ops_test):
     # Make sure only one copy of the alerts is present
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_name, 0)
     tester_rules = get_rules_for(tester_name, rules_with_relation)[0]["rules"]
-    assert len(tester_rules) == 2
+    assert len(tester_rules) == 1 + len(generic_alert_groups.aggregator_rules)
 
 
 @pytest.mark.abort_on_fail

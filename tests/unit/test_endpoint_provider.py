@@ -18,7 +18,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     RelationRoleMismatchError,
 )
 from cosl import JujuTopology
-from cosl.rules import AlertRules
+from cosl.rules import AlertRules, generic_alert_groups
 from deepdiff import DeepDiff
 from fs.tempfs import TempFS
 from helpers import PROJECT_DIR, UNITTEST_DIR
@@ -324,7 +324,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 7)
+        self.assertEqual(len(alerts["groups"]), 6 + len(generic_alert_groups.application_rules))
         for group in alerts["groups"]:
             for rule in group["rules"]:
                 if "and_unit" not in group["name"]:
@@ -360,7 +360,7 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("alert_rules", data)
         alerts = json.loads(data["alert_rules"])
         self.assertIn("groups", alerts)
-        self.assertEqual(len(alerts["groups"]), 7)
+        self.assertEqual(len(alerts["groups"]), 6 + len(generic_alert_groups.application_rules))
         group = alerts["groups"][0]
         for rule in group["rules"]:
             self.assertIn("expr", rule)

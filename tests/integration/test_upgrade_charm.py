@@ -7,6 +7,7 @@ import logging
 
 import pytest
 import yaml
+from cosl.rules import generic_alert_groups
 from helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
@@ -60,7 +61,7 @@ async def test_deploy_charm(ops_test, prometheus_tester_charm, prometheus_charm)
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
 
-    assert len(tester_rules) == 2
+    assert len(tester_rules) == 1 + len(generic_alert_groups.application_rules)
 
 
 @pytest.mark.abort_on_fail
@@ -91,7 +92,7 @@ async def test_files_are_retained_after_refresh(ops_test, prometheus_charm):
     # Check only one alert rule exists
     rules_with_relation = await get_prometheus_rules(ops_test, prometheus_app_name, 0)
     tester_rules = get_rules_for(tester_app_name, rules_with_relation)
-    assert len(tester_rules) == 2
+    assert len(tester_rules) == 1 + len(generic_alert_groups.application_rules)
 
 
 @pytest.mark.abort_on_fail
