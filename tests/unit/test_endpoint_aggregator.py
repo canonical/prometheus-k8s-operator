@@ -62,6 +62,24 @@ ALERT_RULE_2 = """- alert: DiskFull
       Host {{ $labels.host}} {{ $labels.path }} is full
       summary: Host {{ $labels.host }} {{ $labels.path}} is full
 """
+LABELED_ALERT_RULE_1 = {
+    "alert": "CPU_Usage",
+    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
+    "for": "5m",
+    "labels": {
+        "override_group_by": "host",
+        "severity": "page",
+        "cloud": "juju",
+        "juju_model": "testmodel",
+        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+        "juju_application": "rules-app",
+        "juju_unit": "rules-app/0",
+    },
+    "annotations": {
+        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
+        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
+    },
+}
 
 
 class EndpointAggregatorCharm(CharmBase):
@@ -161,26 +179,7 @@ class TestEndpointAggregator(unittest.TestCase):
 
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app",
-                        "juju_unit": "rules-app/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [LABELED_ALERT_RULE_1],
         }
         self.maxDiff = None
         self.assertIn(expected_group, groups)
@@ -506,28 +505,12 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = LABELED_ALERT_RULE_1
+        labeled_rule["labels"]["juju_application"] = "rules-app-1"
+        labeled_rule["labels"]["juju_unit"] = "rules-app-1/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app-1",
-                        "juju_unit": "rules-app-1/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [labeled_rule],
         }
 
         self.assertIn(expected_group, groups)

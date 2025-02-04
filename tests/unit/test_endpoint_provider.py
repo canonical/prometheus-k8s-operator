@@ -757,7 +757,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
             for rule in group["rules"]:
                 if (
                     "_HostHealth_alerts" not in group["name"]
-                ):  # _HostHealth_alerts are injected alerts without juju_unit labels
+                ):  # _HostHealth_alerts are injected alerts without juju_unit labels, ignore them
                     self.assertIn("juju_unit", rule["labels"])
                     self.assertIn("juju_unit=", rule["expr"])
 
