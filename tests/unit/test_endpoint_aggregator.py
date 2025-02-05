@@ -3,6 +3,7 @@
 
 import json
 import unittest
+from copy import deepcopy
 from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
@@ -72,12 +73,31 @@ LABELED_ALERT_RULE_1 = {
         "cloud": "juju",
         "juju_model": "testmodel",
         "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-        "juju_application": "rules-app",
-        "juju_unit": "rules-app/0",
+        "juju_application": "rules-app-1",
+        "juju_unit": "rules-app-1/0",
     },
     "annotations": {
         "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
         "summary": "Host {{ $labels.host }} CPU free is less than 10%",
+    },
+}
+LABELED_ALERT_RULE_2 = {
+    "alert": "DiskFull",
+    "annotations": {
+        "description": "Host {{ $labels.host}} {{ "
+        "$labels.path }} is full\n"
+        "summary: Host {{ $labels.host }} "
+        "{{ $labels.path}} is full\n"
+    },
+    "expr": 'disk_free{is_container!="True", fstype!~".*tmpfs|squashfs|overlay"}  <1024',
+    "for": "5m",
+    "labels": {
+        "juju_application": "rules-app-2",
+        "juju_model": "testmodel",
+        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+        "juju_unit": "rules-app-2/0",
+        "override_group_by": "host",
+        "severity": "page",
     },
 }
 
@@ -177,9 +197,12 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [LABELED_ALERT_RULE_1],
+            "rules": [labeled_rule],
         }
         self.maxDiff = None
         self.assertIn(expected_group, groups)
@@ -244,28 +267,12 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app",
-                        "juju_unit": "rules-app/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [labeled_rule],
         }
 
         self.assertIn(expected_group, groups)
@@ -366,50 +373,15 @@ class TestEndpointAggregator(unittest.TestCase):
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 2 + len(generic_alert_groups.application_rules))
+
         expected_groups = [
             {
                 "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
-                "rules": [
-                    {
-                        "alert": "CPU_Usage",
-                        "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "cloud": "juju",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app-1",
-                            "juju_unit": "rules-app-1/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                            "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                        },
-                    }
-                ],
+                "rules": [LABELED_ALERT_RULE_1],
             },
             {
                 "name": "juju_testmodel_12de4fa_rules-app-2_alert_rules",
-                "rules": [
-                    {
-                        "alert": "DiskFull",
-                        "expr": 'disk_free{is_container!="True", fstype!~".*tmpfs|squashfs|overlay"}  <1024',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app-2",
-                            "juju_unit": "rules-app-2/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host}} {{ $labels.path }} is full\nsummary: Host {{ $labels.host }} {{ $labels.path}} is full\n"
-                        },
-                    }
-                ],
+                "rules": [LABELED_ALERT_RULE_2],
             },
         ]
 
@@ -505,12 +477,9 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
-        labeled_rule = LABELED_ALERT_RULE_1
-        labeled_rule["labels"]["juju_application"] = "rules-app-1"
-        labeled_rule["labels"]["juju_unit"] = "rules-app-1/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
-            "rules": [labeled_rule],
+            "rules": [LABELED_ALERT_RULE_1],
         }
 
         self.assertIn(expected_group, groups)
@@ -607,28 +576,12 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app",
-                        "juju_unit": "rules-app/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [labeled_rule],
         }
 
         self.assertIn(expected_group, groups)
