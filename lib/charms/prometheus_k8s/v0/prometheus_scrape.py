@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 48
+LIBPATCH = 49
 
 PYDEPS = ["cosl"]
 
@@ -1306,6 +1306,7 @@ class MetricsEndpointProvider(Object):
         relation_name: str = DEFAULT_RELATION_NAME,
         jobs=None,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+        disable_forwarding_alert_rules: bool = False,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
         lookaside_jobs_callable: Optional[Callable] = None,
@@ -1411,6 +1412,8 @@ class MetricsEndpointProvider(Object):
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved relative to the directory hosting the charm entry file.
                 The alert rules are automatically updated on charm upgrade.
+            disable_forwarding_alert_rules: a boolean flag to toggle forwarding
+                alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
             external_url: an optional argument that represents an external url that
@@ -1449,6 +1452,7 @@ class MetricsEndpointProvider(Object):
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
+        self._disable_alerts = disable_forwarding_alert_rules
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
@@ -1530,7 +1534,8 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        alert_rules.add_path(self._alert_rules_path, recursive=True)
+        if not self._disable_alerts:
+            alert_rules.add_path(self._alert_rules_path, recursive=True)
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:

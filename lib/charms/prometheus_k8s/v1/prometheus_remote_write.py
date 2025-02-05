@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["cosl"]
 
@@ -401,6 +401,7 @@ class PrometheusRemoteWriteConsumer(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
+        disable_forwarding_alert_rules: bool = False,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -409,6 +410,7 @@ class PrometheusRemoteWriteConsumer(Object):
             relation_name: Name of the relation with the `prometheus_remote_write` interface as
                 defined in metadata.yaml.
             alert_rules_path: Path of the directory containing the alert rules.
+            disable_forwarding_alert_rules: Flag to toggle alert rule forwarding.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -437,6 +439,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
+        self._disable_alerts = disable_forwarding_alert_rules
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -484,7 +487,8 @@ class PrometheusRemoteWriteConsumer(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        alert_rules.add_path(self._alert_rules_path)
+        if not self._disable_alerts:
+            alert_rules.add_path(self._alert_rules_path)
 
         alert_rules_as_dict = alert_rules.as_dict()
 
