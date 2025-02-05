@@ -3,9 +3,11 @@
 
 import json
 import unittest
+from copy import deepcopy
 from unittest.mock import patch
 
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
+from cosl.rules import generic_alert_groups
 from ops.charm import CharmBase
 from ops.testing import Harness
 
@@ -61,6 +63,43 @@ ALERT_RULE_2 = """- alert: DiskFull
       Host {{ $labels.host}} {{ $labels.path }} is full
       summary: Host {{ $labels.host }} {{ $labels.path}} is full
 """
+LABELED_ALERT_RULE_1 = {
+    "alert": "CPU_Usage",
+    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
+    "for": "5m",
+    "labels": {
+        "override_group_by": "host",
+        "severity": "page",
+        "cloud": "juju",
+        "juju_model": "testmodel",
+        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+        "juju_application": "rules-app-1",
+        "juju_unit": "rules-app-1/0",
+    },
+    "annotations": {
+        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
+        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
+    },
+}
+LABELED_ALERT_RULE_2 = {
+    "alert": "DiskFull",
+    "annotations": {
+        "description": "Host {{ $labels.host}} {{ "
+        "$labels.path }} is full\n"
+        "summary: Host {{ $labels.host }} "
+        "{{ $labels.path}} is full\n"
+    },
+    "expr": 'disk_free{is_container!="True", fstype!~".*tmpfs|squashfs|overlay"}  <1024',
+    "for": "5m",
+    "labels": {
+        "juju_application": "rules-app-2",
+        "juju_model": "testmodel",
+        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
+        "juju_unit": "rules-app-2/0",
+        "override_group_by": "host",
+        "severity": "page",
+    },
+}
 
 
 class EndpointAggregatorCharm(CharmBase):
@@ -156,34 +195,17 @@ class TestEndpointAggregator(unittest.TestCase):
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 1)
-        group = groups[0]
+        self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app",
-                        "juju_unit": "rules-app/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [labeled_rule],
         }
         self.maxDiff = None
-        self.assertDictEqual(group, expected_group)
+        self.assertIn(expected_group, groups)
 
     def test_adding_target_then_prometheus_forwards_a_labeled_scrape_job(self):
         target_rel_id = self.harness.add_relation(SCRAPE_TARGET_RELATION, "target-app")
@@ -243,33 +265,17 @@ class TestEndpointAggregator(unittest.TestCase):
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 1)
-        group = groups[0]
+        self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
         expected_group = {
             "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-            "rules": [
-                {
-                    "alert": "CPU_Usage",
-                    "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                    "for": "5m",
-                    "labels": {
-                        "override_group_by": "host",
-                        "severity": "page",
-                        "cloud": "juju",
-                        "juju_model": "testmodel",
-                        "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                        "juju_application": "rules-app",
-                        "juju_unit": "rules-app/0",
-                    },
-                    "annotations": {
-                        "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                        "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                    },
-                }
-            ],
+            "rules": [labeled_rule],
         }
-        self.assertDictEqual(group, expected_group)
+
+        self.assertIn(expected_group, groups)
 
     def test_scrape_jobs_from_multiple_target_applications_are_forwarded(self):
         prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
@@ -366,54 +372,21 @@ class TestEndpointAggregator(unittest.TestCase):
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 2)
+        self.assertEqual(len(groups), 2 + len(generic_alert_groups.application_rules))
+
         expected_groups = [
             {
                 "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
-                "rules": [
-                    {
-                        "alert": "CPU_Usage",
-                        "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "cloud": "juju",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app-1",
-                            "juju_unit": "rules-app-1/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                            "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                        },
-                    }
-                ],
+                "rules": [LABELED_ALERT_RULE_1],
             },
             {
                 "name": "juju_testmodel_12de4fa_rules-app-2_alert_rules",
-                "rules": [
-                    {
-                        "alert": "DiskFull",
-                        "expr": 'disk_free{is_container!="True", fstype!~".*tmpfs|squashfs|overlay"}  <1024',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app-2",
-                            "juju_unit": "rules-app-2/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host}} {{ $labels.path }} is full\nsummary: Host {{ $labels.host }} {{ $labels.path}} is full\n"
-                        },
-                    }
-                ],
+                "rules": [LABELED_ALERT_RULE_2],
             },
         ]
-        self.assertListEqual(groups, expected_groups)
+
+        for expected in expected_groups:
+            self.assertIn(expected, groups)
 
     def test_scrape_job_removal_differentiates_between_applications(self):
         prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
@@ -497,40 +470,19 @@ class TestEndpointAggregator(unittest.TestCase):
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 2)
+        self.assertEqual(len(groups), 2 + len(generic_alert_groups.application_rules))
 
         self.harness.remove_relation_unit(alert_rules_rel_id_2, "rules-app-2/0")
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
-        expected_groups = [
-            {
-                "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
-                "rules": [
-                    {
-                        "alert": "CPU_Usage",
-                        "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "cloud": "juju",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app-1",
-                            "juju_unit": "rules-app-1/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                            "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                        },
-                    }
-                ],
-            },
-        ]
+        expected_group = {
+            "name": "juju_testmodel_12de4fa_rules-app-1_alert_rules",
+            "rules": [LABELED_ALERT_RULE_1],
+        }
 
-        self.assertListEqual(groups, expected_groups)
+        self.assertIn(expected_group, groups)
 
     def test_removing_scrape_jobs_differentiates_between_units(self):
         prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
@@ -616,40 +568,39 @@ class TestEndpointAggregator(unittest.TestCase):
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
         self.harness.remove_relation_unit(alert_rules_rel_id, "rules-app/1")
 
         alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
         groups = alert_rules.get("groups", [])
-        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups), 1 + len(generic_alert_groups.application_rules))
 
-        expected_groups = [
-            {
-                "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
-                "rules": [
-                    {
-                        "alert": "CPU_Usage",
-                        "expr": 'cpu_usage_idle{is_container!="True", group="promoagents-juju"} < 10',
-                        "for": "5m",
-                        "labels": {
-                            "override_group_by": "host",
-                            "severity": "page",
-                            "cloud": "juju",
-                            "juju_model": "testmodel",
-                            "juju_model_uuid": "12de4fae-06cc-4ceb-9089-567be09fec78",
-                            "juju_application": "rules-app",
-                            "juju_unit": "rules-app/0",
-                        },
-                        "annotations": {
-                            "description": "Host {{ $labels.host }} has had <  10% idle cpu for the last 5m\n",
-                            "summary": "Host {{ $labels.host }} CPU free is less than 10%",
-                        },
-                    }
-                ],
-            },
-        ]
-        self.assertListEqual(groups, expected_groups)
+        labeled_rule = deepcopy(LABELED_ALERT_RULE_1)
+        labeled_rule["labels"]["juju_application"] = "rules-app"
+        labeled_rule["labels"]["juju_unit"] = "rules-app/0"
+        expected_group = {
+            "name": "juju_testmodel_12de4fa_rules-app_alert_rules",
+            "rules": [labeled_rule],
+        }
+
+        self.assertIn(expected_group, groups)
+
+    def test_alert_rules_only_generic(self):
+        # GIVEN a prometheus relation
+        prometheus_rel_id = self.harness.add_relation(PROMETHEUS_RELATION, "prometheus")
+        self.harness.add_relation_unit(prometheus_rel_id, "prometheus/0")
+
+        # WHEN there is no charm related, providing no alert rules
+        prometheus_rel_data = self.harness.get_relation_data(
+            prometheus_rel_id, self.harness.model.app.name
+        )
+
+        alert_rules = json.loads(prometheus_rel_data.get("alert_rules", "{}"))
+        groups = alert_rules.get("groups", [])
+        # THEN the relation data contains only the generic alerts
+        self.assertEqual(len(groups), len(generic_alert_groups.application_rules))
+        self.assertListEqual(groups, generic_alert_groups.application_rules["groups"])
 
 
 class TestEndpointAggregatorWithRelabeling(unittest.TestCase):

@@ -1,4 +1,4 @@
-cosl>=0.0.46
+cosl
 cryptography
 jsonschema
 ops
