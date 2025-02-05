@@ -456,6 +456,9 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(
             self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
         )
+        self.framework.observe(
+            self._charm.on.config_changed, self._push_alerts_to_all_relation_databags
+        )
 
     def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
@@ -492,7 +495,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if alert_rules_as_dict:
+        if alert_rules_as_dict or self._disable_alerts:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:

@@ -1537,6 +1537,7 @@ class MetricsEndpointProvider(Object):
         if not self._disable_alerts:
             alert_rules.add_path(self._alert_rules_path, recursive=True)
         alert_rules_as_dict = alert_rules.as_dict()
+        logger.info(f"+++ alert_rules_as_dict: {alert_rules_as_dict}")  # TODO: remove, debug
 
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app]["scrape_metadata"] = json.dumps(self._scrape_metadata)
