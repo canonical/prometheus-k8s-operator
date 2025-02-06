@@ -1452,7 +1452,7 @@ class MetricsEndpointProvider(Object):
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
-        self._disable_alerts = forward_alert_rules
+        self._enable_alerts = forward_alert_rules
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
@@ -1534,7 +1534,7 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        if not self._disable_alerts:
+        if self._enable_alerts:
             alert_rules.add_path(self._alert_rules_path, recursive=True)
             alert_rules.add(
                 generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier

@@ -442,7 +442,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self._disable_alerts = forward_alert_rules
+        self._enable_alerts = forward_alert_rules
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -493,7 +493,7 @@ class PrometheusRemoteWriteConsumer(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        if not self._disable_alerts:
+        if self._enable_alerts:
             alert_rules.add_path(self._alert_rules_path)
             alert_rules.add(
                 generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
@@ -501,7 +501,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if alert_rules_as_dict or self._disable_alerts:
+        if alert_rules_as_dict or not self._enable_alerts:
             relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
