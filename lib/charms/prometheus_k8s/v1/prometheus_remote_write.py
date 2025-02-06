@@ -35,7 +35,7 @@ from ops.charm import (
     RelationMeta,
     RelationRole,
 )
-from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation
 
 # The unique Charmhub library identifier, never change it
@@ -401,7 +401,8 @@ class PrometheusRemoteWriteConsumer(Object):
         charm: CharmBase,
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
-        disable_forwarding_alert_rules: bool = False,
+        refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
+        forward_alert_rules: bool = True,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -410,7 +411,9 @@ class PrometheusRemoteWriteConsumer(Object):
             relation_name: Name of the relation with the `prometheus_remote_write` interface as
                 defined in metadata.yaml.
             alert_rules_path: Path of the directory containing the alert rules.
-            disable_forwarding_alert_rules: Flag to toggle alert rule forwarding.
+            refresh_event: an optional bound event or list of bound events which
+                will be observed to re-set alerts data.
+            forward_alert_rules: Flag to toggle alert rule forwarding.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -439,7 +442,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self._disable_alerts = disable_forwarding_alert_rules
+        self._disable_alerts = forward_alert_rules
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -456,9 +459,9 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(
             self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
         )
-        self.framework.observe(
-            self._charm.on.config_changed, self._push_alerts_to_all_relation_databags
-        )
+        if refresh_event:
+            for ev in refresh_event:
+                self.framework.observe(ev, self._push_alerts_to_all_relation_databags)
 
     def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
