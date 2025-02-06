@@ -1785,6 +1785,8 @@ class MetricsEndpointAggregator(Object):
         relabel_instance=True,
         resolve_addresses=False,
         path_to_own_alert_rules: Optional[str] = None,
+        *,
+        forward_alert_rules: bool = True,
     ):
         """Construct a `MetricsEndpointAggregator`.
 
@@ -1805,6 +1807,7 @@ class MetricsEndpointAggregator(Object):
                 should attempt to perform DNS lookups of targets and append
                 a `dns_name` label
             path_to_own_alert_rules: Optionally supply a path for alert rule files
+            forward_alert_rules: a boolean flag to toggle forwarding of charmed alert rules
         """
         self._charm = charm
 
@@ -1823,6 +1826,8 @@ class MetricsEndpointAggregator(Object):
 
         self._relabel_instance = relabel_instance
         self._resolve_addresses = resolve_addresses
+
+        self._forward_alert_rules = forward_alert_rules
 
         # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
@@ -1884,7 +1889,9 @@ class MetricsEndpointAggregator(Object):
 
         # Set scrape jobs and alert rules in relation data
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
-        event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+        event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
+            {"groups": groups if self._forward_alert_rules else []}
+        )
 
     def _on_prometheus_targets_changed(self, event):
         """Update scrape jobs in response to scrape target changes.
@@ -2155,7 +2162,9 @@ class MetricsEndpointAggregator(Object):
 
             if updated_group["name"] not in [g["name"] for g in groups]:
                 groups.append(updated_group)
-            relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                {"groups": groups if self._forward_alert_rules else []}
+            )
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
@@ -2203,8 +2212,8 @@ class MetricsEndpointAggregator(Object):
                 changed_group["rules"] = rules_kept  # type: ignore
                 groups.append(changed_group)
 
-            relation.data[self._charm.app]["alert_rules"] = (
-                json.dumps({"groups": groups}) if groups else "{}"
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                {"groups": groups if self._forward_alert_rules else []}
             )
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
