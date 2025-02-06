@@ -460,6 +460,8 @@ class PrometheusRemoteWriteConsumer(Object):
             self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
         )
         if refresh_event:
+            if not isinstance(refresh_event, list):
+                refresh_event = [refresh_event]
             for ev in refresh_event:
                 self.framework.observe(ev, self._push_alerts_to_all_relation_databags)
 
