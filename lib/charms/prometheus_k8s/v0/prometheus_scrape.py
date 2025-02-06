@@ -340,7 +340,7 @@ from urllib.parse import urlparse
 
 import yaml
 from cosl import JujuTopology
-from cosl.rules import AlertRules
+from cosl.rules import AlertRules, generic_alert_groups
 from ops.charm import CharmBase, RelationRole
 from ops.framework import (
     BoundEvent,
@@ -1536,6 +1536,9 @@ class MetricsEndpointProvider(Object):
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         if not self._disable_alerts:
             alert_rules.add_path(self._alert_rules_path, recursive=True)
+            alert_rules.add(
+                generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
+            )
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
@@ -1781,6 +1784,7 @@ class MetricsEndpointAggregator(Object):
         relation_names: Optional[dict] = None,
         relabel_instance=True,
         resolve_addresses=False,
+        path_to_own_alert_rules: Optional[str] = None,
     ):
         """Construct a `MetricsEndpointAggregator`.
 
@@ -1800,6 +1804,7 @@ class MetricsEndpointAggregator(Object):
             resolve_addresses: A boolean flag indiccating if the aggregator
                 should attempt to perform DNS lookups of targets and append
                 a `dns_name` label
+            path_to_own_alert_rules: Optionally supply a path for alert rule files
         """
         self._charm = charm
 
@@ -1812,6 +1817,8 @@ class MetricsEndpointAggregator(Object):
         self._alert_rules_relation = relation_names.get("alert_rules", "prometheus-rules")
 
         super().__init__(charm, self._prometheus_relation)
+        self.topology = JujuTopology.from_charm(charm)
+
         self._stored.set_default(jobs=[], alert_rules=[])
 
         self._relabel_instance = relabel_instance
@@ -1820,6 +1827,8 @@ class MetricsEndpointAggregator(Object):
         # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
         self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
+
+        self.path_to_own_alert_rules = path_to_own_alert_rules
 
         # manage list of Prometheus scrape jobs from related scrape targets
         target_events = self._charm.on[self._target_relation]
@@ -1843,6 +1852,7 @@ class MetricsEndpointAggregator(Object):
         if not self._charm.unit.is_leader():
             return
 
+        # Gather the scrape jobs
         jobs = [] + _type_convert_stored(
             self._stored.jobs  # pyright: ignore
         )  # list of scrape jobs, one per relation
@@ -1851,6 +1861,7 @@ class MetricsEndpointAggregator(Object):
             if targets and relation.app:
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
+        # Gather the alert rules
         groups = [] + _type_convert_stored(
             self._stored.alert_rules  # pyright: ignore
         )  # list of alert rule groups
@@ -1861,7 +1872,17 @@ class MetricsEndpointAggregator(Object):
                 rules = self._label_alert_rules(unit_rules, appname)
                 group = {"name": self.group_name(appname), "rules": rules}
                 groups.append(group)
+        alert_rules = AlertRules(query_type="promql", topology=self.topology)
+        # Add alert rules from file
+        if self.path_to_own_alert_rules:
+            alert_rules.add_path(self.path_to_own_alert_rules, recursive=True)
+        # Add generic alert rules
+        alert_rules.add(
+            generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
+        )
+        groups.extend(alert_rules.as_dict()["groups"])
 
+        # Set scrape jobs and alert rules in relation data
         event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
         event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
 

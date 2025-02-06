@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
-from cosl.rules import AlertRules
+from cosl.rules import AlertRules, generic_alert_groups
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -495,6 +495,9 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         if not self._disable_alerts:
             alert_rules.add_path(self._alert_rules_path)
+            alert_rules.add(
+                generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
+            )
 
         alert_rules_as_dict = alert_rules.as_dict()
 
