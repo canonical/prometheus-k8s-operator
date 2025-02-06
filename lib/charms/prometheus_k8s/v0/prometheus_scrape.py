@@ -1413,7 +1413,7 @@ class MetricsEndpointProvider(Object):
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved relative to the directory hosting the charm entry file.
                 The alert rules are automatically updated on charm upgrade.
-            forward_alert_rules: a boolean flag to toggle forwarding alert rules.
+            forward_alert_rules: a boolean flag to toggle forwarding of charmed alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
             external_url: an optional argument that represents an external url that
@@ -1452,7 +1452,7 @@ class MetricsEndpointProvider(Object):
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
-        self._enable_alerts = forward_alert_rules
+        self._forward_alert_rules = forward_alert_rules
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
@@ -1534,7 +1534,7 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        if self._enable_alerts:
+        if self._forward_alert_rules:
             alert_rules.add_path(self._alert_rules_path, recursive=True)
             alert_rules.add(
                 generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier

@@ -402,6 +402,7 @@ class PrometheusRemoteWriteConsumer(Object):
         relation_name: str = DEFAULT_CONSUMER_NAME,
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
+        *,
         forward_alert_rules: bool = True,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
@@ -413,7 +414,7 @@ class PrometheusRemoteWriteConsumer(Object):
             alert_rules_path: Path of the directory containing the alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set alerts data.
-            forward_alert_rules: Flag to toggle alert rule forwarding.
+            forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -442,7 +443,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._charm = charm
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
-        self._enable_alerts = forward_alert_rules
+        self._forward_alert_rules = forward_alert_rules
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -495,7 +496,7 @@ class PrometheusRemoteWriteConsumer(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        if self._enable_alerts:
+        if self._forward_alert_rules:
             alert_rules.add_path(self._alert_rules_path)
             alert_rules.add(
                 generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
@@ -503,8 +504,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules_as_dict = alert_rules.as_dict()
 
-        if alert_rules_as_dict or not self._enable_alerts:
-            relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+        relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
