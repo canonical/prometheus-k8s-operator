@@ -341,7 +341,7 @@ from urllib.parse import urlparse
 import yaml
 from cosl import JujuTopology
 from cosl.rules import AlertRules, generic_alert_groups
-from ops.charm import CharmBase, RelationRole
+from ops.charm import CharmBase, RelationJoinedEvent, RelationRole
 from ops.framework import (
     BoundEvent,
     EventBase,
@@ -1847,41 +1847,7 @@ class MetricsEndpointAggregator(Object):
         self.framework.observe(alert_rule_events.relation_changed, self._on_alert_rules_changed)
         self.framework.observe(alert_rule_events.relation_departed, self._on_alert_rules_departed)
 
-    def reset_prometheus_alerts(self):
-        """Re-set Prometheus alert rules."""
-        if not self._charm.unit.is_leader():
-            return
-
-        for prometheus_relation in self.model.relations[self._prometheus_relation]:
-            # Gather the alert rules
-            groups = []
-            if self._stored.alert_rules:
-                groups += _type_convert_stored(
-                    self._stored.alert_rules  # pyright: ignore
-                )  # list of alert rule groups
-            for relation in self.model.relations[self._alert_rules_relation]:
-                unit_rules = self._get_alert_rules(relation)
-                if unit_rules and relation.app:
-                    appname = relation.app.name
-                    rules = self._label_alert_rules(unit_rules, appname)
-                    group = {"name": self.group_name(appname), "rules": rules}
-                    groups.append(group)
-            alert_rules = AlertRules(query_type="promql", topology=self.topology)
-            # Add alert rules from file
-            if self.path_to_own_alert_rules:
-                alert_rules.add_path(self.path_to_own_alert_rules, recursive=True)
-            # Add generic alert rules
-            alert_rules.add(
-                generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
-            )
-            groups.extend(alert_rules.as_dict()["groups"])
-
-            # Set scrape jobs and alert rules in relation data
-            prometheus_relation.data[self._charm.app]["alert_rules"] = json.dumps(
-                {"groups": groups if self._forward_alert_rules else []}
-            )
-
-    def _set_prometheus_data(self, event):
+    def _set_prometheus_data(self, event: Optional[RelationJoinedEvent] = None):
         """Ensure every new Prometheus instances is updated.
 
         Any time a new Prometheus unit joins the relation with
@@ -1922,10 +1888,12 @@ class MetricsEndpointAggregator(Object):
         groups.extend(alert_rules.as_dict()["groups"])
 
         # Set scrape jobs and alert rules in relation data
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
-        event.relation.data[self._charm.app]["alert_rules"] = json.dumps(
-            {"groups": groups if self._forward_alert_rules else []}
-        )
+        relations = [event.relation] if event else self.model.relations[self._prometheus_relation]
+        for rel in relations:
+            rel.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)  # type: ignore
+            rel.data[self._charm.app]["alert_rules"] = json.dumps(  # type: ignore
+                {"groups": groups if self._forward_alert_rules else []}
+            )
 
     def _on_prometheus_targets_changed(self, event):
         """Update scrape jobs in response to scrape target changes.
