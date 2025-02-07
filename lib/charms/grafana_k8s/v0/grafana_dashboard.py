@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 39
+LIBPATCH = 41
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -417,8 +417,7 @@ class RelationInterfaceMismatchError(Exception):
         self.expected_relation_interface = expected_relation_interface
         self.actual_relation_interface = actual_relation_interface
         self.message = (
-            "The '{}' relation has '{}' as "
-            "interface rather than the expected '{}'".format(
+            "The '{}' relation has '{}' as " "interface rather than the expected '{}'".format(
                 relation_name, actual_relation_interface, expected_relation_interface
             )
         )
@@ -634,7 +633,10 @@ class CharmedDashboard:
         deletions = []
         for tmpl in dict_content["templating"]["list"]:
             if tmpl["name"] and tmpl["name"] in used_replacements:
-                deletions.append(tmpl)
+                # it might happen that existing template var name is the same as the one we insert (i.e prometheusds or lokids)
+                # in that case, we want to pop the existing one only.
+                if tmpl not in DATASOURCE_TEMPLATE_DROPDOWNS:
+                    deletions.append(tmpl)
 
         for d in deletions:
             dict_content["templating"]["list"].remove(d)
@@ -1601,7 +1603,7 @@ class GrafanaDashboardConsumer(Object):
 
         if not coerced_data == stored_data:
             stored_dashboards = self.get_peer_data("dashboards")
-            stored_dashboards[relation.id] = stored_data
+            stored_dashboards[str(relation.id)] = stored_data
             self.set_peer_data("dashboards", stored_dashboards)
             return True
         return None  # type: ignore
