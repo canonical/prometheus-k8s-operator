@@ -1847,6 +1847,9 @@ class MetricsEndpointAggregator(Object):
         self.framework.observe(alert_rule_events.relation_changed, self._on_alert_rules_changed)
         self.framework.observe(alert_rule_events.relation_departed, self._on_alert_rules_departed)
 
+        # refresh alert rules on config-changed
+        self.framework.observe(self._charm.on.config_changed, self._on_alert_rules_changed)
+
     def _set_prometheus_data(self, event):
         """Ensure every new Prometheus instances is updated.
 
