@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 41
+LIBPATCH = 42
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -965,6 +965,13 @@ class CharmedDashboard:
             )
 
     @classmethod
+    def _add_tags(cls, dashboard_dict: dict, charm_name: str):
+        tags: List[str] = dashboard_dict.get("tags", [])
+        if not any(tag.startswith("charm: ") for tag in tags):
+            tags.append(f"charm: {charm_name}")
+        dashboard_dict["tags"] = tags
+
+    @classmethod
     def load_dashboards_from_dir(
         cls,
         *,
@@ -1005,6 +1012,8 @@ class CharmedDashboard:
                 charm_dir=charm_dir,
                 charm_name=charm_name,
             )
+
+            cls._add_tags(dashboard_dict=dashboard_dict, charm_name=charm_name)
 
             id = "file:{}".format(path.stem)
             dashboard_templates[id] = cls._content_to_dashboard_object(
