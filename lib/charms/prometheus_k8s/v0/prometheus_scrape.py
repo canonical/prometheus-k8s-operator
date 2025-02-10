@@ -341,7 +341,7 @@ from urllib.parse import urlparse
 import yaml
 from cosl import JujuTopology
 from cosl.rules import AlertRules, generic_alert_groups
-from ops.charm import CharmBase, RelationRole
+from ops.charm import CharmBase, RelationJoinedEvent, RelationRole
 from ops.framework import (
     BoundEvent,
     EventBase,
@@ -1309,6 +1309,8 @@ class MetricsEndpointProvider(Object):
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         external_url: str = "",
         lookaside_jobs_callable: Optional[Callable] = None,
+        *,
+        forward_alert_rules: bool = True,
     ):
         """Construct a metrics provider for a Prometheus charm.
 
@@ -1411,6 +1413,7 @@ class MetricsEndpointProvider(Object):
                 files.  Defaults to "./prometheus_alert_rules",
                 resolved relative to the directory hosting the charm entry file.
                 The alert rules are automatically updated on charm upgrade.
+            forward_alert_rules: a boolean flag to toggle forwarding of charmed alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
             external_url: an optional argument that represents an external url that
@@ -1449,6 +1452,7 @@ class MetricsEndpointProvider(Object):
 
         self._charm = charm
         self._alert_rules_path = alert_rules_path
+        self._forward_alert_rules = forward_alert_rules
         self._relation_name = relation_name
         # sanitize job configurations to the supported subset of parameters
         jobs = [] if jobs is None else jobs
@@ -1530,10 +1534,11 @@ class MetricsEndpointProvider(Object):
             return
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
-        alert_rules.add_path(self._alert_rules_path, recursive=True)
-        alert_rules.add(
-            generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
-        )
+        if self._forward_alert_rules:
+            alert_rules.add_path(self._alert_rules_path, recursive=True)
+            alert_rules.add(
+                generic_alert_groups.application_rules, group_name_prefix=self.topology.identifier
+            )
         alert_rules_as_dict = alert_rules.as_dict()
 
         for relation in self._charm.model.relations[self._relation_name]:
@@ -1780,6 +1785,8 @@ class MetricsEndpointAggregator(Object):
         relabel_instance=True,
         resolve_addresses=False,
         path_to_own_alert_rules: Optional[str] = None,
+        *,
+        forward_alert_rules: bool = True,
     ):
         """Construct a `MetricsEndpointAggregator`.
 
@@ -1800,6 +1807,7 @@ class MetricsEndpointAggregator(Object):
                 should attempt to perform DNS lookups of targets and append
                 a `dns_name` label
             path_to_own_alert_rules: Optionally supply a path for alert rule files
+            forward_alert_rules: a boolean flag to toggle forwarding of charmed alert rules
         """
         self._charm = charm
 
@@ -1819,6 +1827,8 @@ class MetricsEndpointAggregator(Object):
         self._relabel_instance = relabel_instance
         self._resolve_addresses = resolve_addresses
 
+        self._forward_alert_rules = forward_alert_rules
+
         # manage Prometheus charm relation events
         prometheus_events = self._charm.on[self._prometheus_relation]
         self.framework.observe(prometheus_events.relation_joined, self._set_prometheus_data)
@@ -1837,7 +1847,7 @@ class MetricsEndpointAggregator(Object):
         self.framework.observe(alert_rule_events.relation_changed, self._on_alert_rules_changed)
         self.framework.observe(alert_rule_events.relation_departed, self._on_alert_rules_departed)
 
-    def _set_prometheus_data(self, event):
+    def _set_prometheus_data(self, event: Optional[RelationJoinedEvent] = None):
         """Ensure every new Prometheus instances is updated.
 
         Any time a new Prometheus unit joins the relation with
@@ -1878,8 +1888,12 @@ class MetricsEndpointAggregator(Object):
         groups.extend(alert_rules.as_dict()["groups"])
 
         # Set scrape jobs and alert rules in relation data
-        event.relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
-        event.relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+        relations = [event.relation] if event else self.model.relations[self._prometheus_relation]
+        for rel in relations:
+            rel.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)  # type: ignore
+            rel.data[self._charm.app]["alert_rules"] = json.dumps(  # type: ignore
+                {"groups": groups if self._forward_alert_rules else []}
+            )
 
     def _on_prometheus_targets_changed(self, event):
         """Update scrape jobs in response to scrape target changes.
@@ -2150,7 +2164,9 @@ class MetricsEndpointAggregator(Object):
 
             if updated_group["name"] not in [g["name"] for g in groups]:
                 groups.append(updated_group)
-            relation.data[self._charm.app]["alert_rules"] = json.dumps({"groups": groups})
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                {"groups": groups if self._forward_alert_rules else []}
+            )
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
@@ -2198,8 +2214,8 @@ class MetricsEndpointAggregator(Object):
                 changed_group["rules"] = rules_kept  # type: ignore
                 groups.append(changed_group)
 
-            relation.data[self._charm.app]["alert_rules"] = (
-                json.dumps({"groups": groups}) if groups else "{}"
+            relation.data[self._charm.app]["alert_rules"] = json.dumps(
+                {"groups": groups if self._forward_alert_rules else []}
             )
 
             if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
