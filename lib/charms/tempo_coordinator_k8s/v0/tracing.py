@@ -110,7 +110,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["pydantic"]
 
@@ -129,9 +129,9 @@ ReceiverProtocol = Literal[
 ]
 
 RawReceiver = Tuple[ReceiverProtocol, str]
-"""Helper type. A raw receiver is defined as a tuple consisting of the protocol name, and the (external, if available),
-(secured, if available) resolvable server url.
-"""
+# Helper type. A raw receiver is defined as a tuple consisting of the protocol name, and the (external, if available),
+# (secured, if available) resolvable server url.
+
 
 BUILTIN_JUJU_KEYS = {"ingress-address", "private-address", "egress-subnets"}
 
@@ -150,8 +150,7 @@ receiver_protocol_to_transport_protocol: Dict[ReceiverProtocol, TransportProtoco
     "jaeger_thrift_http": TransportProtocolType.http,
     "jaeger_grpc": TransportProtocolType.grpc,
 }
-"""A mapping between telemetry protocols and their corresponding transport protocol.
-"""
+# A mapping between telemetry protocols and their corresponding transport protocol.
 
 
 class TracingError(Exception):
