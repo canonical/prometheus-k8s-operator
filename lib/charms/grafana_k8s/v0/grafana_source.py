@@ -162,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 24
+LIBPATCH = 25
 
 logger = logging.getLogger(__name__)
 
@@ -504,6 +504,7 @@ class GrafanaSourceConsumer(Object):
     def __init__(
         self,
         charm: CharmBase,
+        grafana_uid: str,
         relation_name: str = DEFAULT_RELATION_NAME,
     ) -> None:
         """A Grafana based Monitoring service consumer, i.e., the charm that uses a datasource.
@@ -511,6 +512,7 @@ class GrafanaSourceConsumer(Object):
         Args:
             charm: a :class:`CharmBase` instance that manages this
                 instance of the Grafana source service.
+            grafana_uid: an unique identifier for this grafana-k8s application.
             relation_name: string name of the relation that is provides the
                 Grafana source service. It is strongly advised not to change
                 the default, so that people deploying your charm will have a
@@ -524,6 +526,7 @@ class GrafanaSourceConsumer(Object):
         super().__init__(charm, relation_name)
         self._relation_name = relation_name
         self._charm = charm
+        self._grafana_uid = grafana_uid
         events = self._charm.on[relation_name]
 
         # We're stuck with this forever now so upgrades work, or until such point as we can
@@ -577,14 +580,7 @@ class GrafanaSourceConsumer(Object):
 
         Assumes only leader unit will call this method
         """
-        unique_grafana_name = "juju_{}_{}_{}_{}".format(
-            self._charm.model.name,
-            self._charm.model.uuid,
-            self._charm.model.app.name,
-            self._charm.model.unit.name.split("/")[1],  # type: ignore
-        )
-
-        rel.data[self._charm.app]["grafana_uid"] = unique_grafana_name
+        rel.data[self._charm.app]["grafana_uid"] = self._grafana_uid
         rel.data[self._charm.app]["datasource_uids"] = json.dumps(uids)
 
     def _get_source_config(self, rel: Relation):
