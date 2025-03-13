@@ -364,7 +364,8 @@ LIBAPI = 0
 # to 0 if you are raising the major API version
 LIBPATCH = 50
 
-PYDEPS = ["cosl"]
+# Version 0.0.53 needed for cosl.rules.generic_alert_groups
+PYDEPS = ["cosl>=0.0.53"]
 
 logger = logging.getLogger(__name__)
 
