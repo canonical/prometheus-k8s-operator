@@ -131,6 +131,7 @@ import json
 import logging
 import re
 import socket
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 from ops.charm import (
@@ -162,13 +163,29 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 25
+LIBPATCH = 26
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_RELATION_NAME = "grafana-source"
 DEFAULT_PEER_NAME = "grafana"
 RELATION_INTERFACE_NAME = "grafana_datasource"
+
+
+@dataclass
+class GrafanaSourceData:
+    """This class represents the data Grafana provides others about itself."""
+
+    datasource_uids: Dict[str, str]
+    external_url: Optional[str]
+
+    def get_unit_uid(self, unit: str):
+        """Return the UID for a given unit."""
+        if unit in self.datasource_uids:
+            datasource_uid = self.datasource_uids[unit]
+        else:
+            datasource_uid = ""
+        return datasource_uid
 
 
 def _type_convert_stored(obj) -> Union[dict, list]:
@@ -206,8 +223,7 @@ class RelationInterfaceMismatchError(Exception):
         self.expected_relation_interface = expected_relation_interface
         self.actual_relation_interface = actual_relation_interface
         self.message = (
-            "The '{}' relation has '{}' as "
-            "interface rather than the expected '{}'".format(
+            "The '{}' relation has '{}' as interface rather than the expected '{}'".format(
                 relation_name, actual_relation_interface, expected_relation_interface
             )
         )
@@ -429,12 +445,12 @@ class GrafanaSourceProvider(Object):
                 continue
             self._set_sources(rel)
 
-    def get_source_uids(self) -> Dict[str, Dict[str, str]]:
-        """Get the datasource UID(s) assigned by the remote end(s) to this datasource.
+    def get_source_data(self) -> Dict[str, GrafanaSourceData]:
+        """Get the Grafana data assigned by the remote end(s) to this datasource.
 
-        Returns a mapping from remote application UIDs to unit names to datasource uids.
+        Returns a mapping from remote application UIDs to GrafanaSourceData.
         """
-        uids = {}
+        data = {}
         for rel in self._charm.model.relations.get(self._relation_name, []):
             if not rel:
                 continue
@@ -446,9 +462,21 @@ class GrafanaSourceProvider(Object):
                     "`grafana_uid` field not found."
                 )
                 continue
+            grafana_data = GrafanaSourceData(
+                datasource_uids=json.loads(app_databag.get("datasource_uids", "{}")),
+                external_url=app_databag.get("grafana_base_url"),
+            )
+            data[grafana_uid] = grafana_data
+        return data
 
-            uids[grafana_uid] = json.loads(app_databag.get("datasource_uids", "{}"))
-        return uids
+    def get_source_uids(self) -> Dict[str, Dict[str, str]]:
+        """Get the datasource UID(s) assigned by the remote end(s) to this datasource.
+
+        DEPRECATED: This method is deprecated. Use the `get_source_data` instead.
+        Returns a mapping from remote application UIDs to unit names to datasource uids.
+        """
+        data = self.get_source_data()
+        return {grafana_uid: data[grafana_uid].datasource_uids for grafana_uid in data}
 
     def _set_sources_from_event(self, event: RelationJoinedEvent) -> None:
         """Get a `Relation` object from the event to pass on."""
@@ -505,6 +533,7 @@ class GrafanaSourceConsumer(Object):
         self,
         charm: CharmBase,
         grafana_uid: str,
+        grafana_base_url: str,
         relation_name: str = DEFAULT_RELATION_NAME,
     ) -> None:
         """A Grafana based Monitoring service consumer, i.e., the charm that uses a datasource.
@@ -513,6 +542,7 @@ class GrafanaSourceConsumer(Object):
             charm: a :class:`CharmBase` instance that manages this
                 instance of the Grafana source service.
             grafana_uid: an unique identifier for this grafana-k8s application.
+            grafana_base_url: the base URL (potentially ingressed) for this grafana-k8s application.
             relation_name: string name of the relation that is provides the
                 Grafana source service. It is strongly advised not to change
                 the default, so that people deploying your charm will have a
@@ -527,6 +557,7 @@ class GrafanaSourceConsumer(Object):
         self._relation_name = relation_name
         self._charm = charm
         self._grafana_uid = grafana_uid
+        self._grafana_base_url = grafana_base_url
         events = self._charm.on[relation_name]
 
         # We're stuck with this forever now so upgrades work, or until such point as we can
@@ -582,6 +613,7 @@ class GrafanaSourceConsumer(Object):
         """
         rel.data[self._charm.app]["grafana_uid"] = self._grafana_uid
         rel.data[self._charm.app]["datasource_uids"] = json.dumps(uids)
+        rel.data[self._charm.app]["grafana_base_url"] = self._grafana_base_url
 
     def _get_source_config(self, rel: Relation):
         """Generate configuration from data stored in relation data by providers."""
@@ -733,9 +765,7 @@ class GrafanaSourceConsumer(Object):
             )
             self._stored.sources_to_delete = set()
             peer_sources_to_delete = set(self.get_peer_data("sources_to_delete"))
-            sources_to_delete = set.union(
-                old_sources_to_delete, peer_sources_to_delete  # pyright: ignore
-            )
+            sources_to_delete = set.union(old_sources_to_delete, peer_sources_to_delete)  # pyright: ignore
             self.set_peer_data("sources_to_delete", sources_to_delete)
 
     def update_sources(self, relation: Optional[Relation] = None) -> None:
