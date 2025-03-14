@@ -192,7 +192,7 @@ class PrometheusCharm(CharmBase):
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
-            external_url=self.external_url,
+            external_url=self.most_external_url,
             refresh_event=[  # needed for ingress
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
@@ -205,14 +205,14 @@ class PrometheusCharm(CharmBase):
         self.remote_write_provider = PrometheusRemoteWriteProvider(
             charm=self,
             relation_name=DEFAULT_REMOTE_WRITE_RELATION_NAME,
-            server_url_func=lambda: PrometheusCharm.external_url.fget(self),  # type: ignore
+            server_url_func=lambda: PrometheusCharm.most_external_url.fget(self),  # type: ignore
             endpoint_path="/api/v1/write",
         )
 
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.external_url,
+            source_url=self.most_external_url,
             refresh_event=[
                 self.ingress.on.ready_for_unit,
                 self.ingress.on.revoked_for_unit,
@@ -300,7 +300,7 @@ class PrometheusCharm(CharmBase):
         return CatalogueItem(
             name="Prometheus",
             icon="chart-line-variant",
-            url=self.external_url,
+            url=self.most_external_url,
             description=(
                 "Prometheus collects, stores and serves metrics as time series data, "
                 "alongside optional key-value pairs called labels."
@@ -314,7 +314,7 @@ class PrometheusCharm(CharmBase):
         This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
         Not to be confused with `self._default_config()`.
         """
-        port = urlparse(self.external_url).port
+        port = urlparse(self.most_external_url).port
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
         # to specify it here.
         if self._is_tls_ready():
@@ -409,21 +409,27 @@ class PrometheusCharm(CharmBase):
         return f"{scheme}://{socket.getfqdn()}:{self._port}"
 
     @property
-    def external_url(self) -> str:
-        """Return the external hostname to be passed to ingress via the relation.
-
-        If we do not have an ingress, then use the pod ip as hostname.
-        The reason to prefer this over the pod name (which is the actual
-        hostname visible from the pod) or a K8s service, is that those
-        are routable virtually exclusively inside the cluster (as they rely)
-        on the cluster's DNS service, while the ip address is _sometimes_
-        routable from the outside, e.g., when deploying on MicroK8s on Linux.
-        """
+    def external_url(self) -> Optional[str]:
+        """Return the external hostname received from an ingress relation, if it exists."""
         try:
             if ingress_url := self.ingress.url:
                 return ingress_url
         except ModelError as e:
             logger.error("Failed obtaining external url: %s. Shutting down?", e)
+        return None
+
+    @property
+    def most_external_url(self) -> str:
+        """Return the most external url known about by this charm.
+
+        This will return the first of:
+        - the external URL, if the ingress is configured and ready
+        - the internal URL
+        """
+        external_url = self.external_url
+        if external_url:
+            return external_url
+
         return self.internal_url
 
     @property
@@ -763,7 +769,7 @@ class PrometheusCharm(CharmBase):
         # For stripPrefix middleware to work correctly, we need to set web.external-url and
         # web.route-prefix in a particular way.
         # https://github.com/prometheus/prometheus/issues/1191
-        external_url = self.external_url.rstrip("/")
+        external_url = self.most_external_url.rstrip("/")
         args.append(f"--web.external-url={external_url}")
         args.append("--web.route-prefix=/")
 
