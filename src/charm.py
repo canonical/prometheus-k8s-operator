@@ -18,6 +18,10 @@ from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsume
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.mimir_coordinator_k8s.v0.prometheus_api import (
+    DEFAULT_RELATION_NAME as PROMETHEUS_API_RELATION_NAME,
+)
+from charms.mimir_coordinator_k8s.v0.prometheus_api import PrometheusApiProvider
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
@@ -265,6 +269,10 @@ class PrometheusCharm(CharmBase):
             self.on.grafana_source_relation_departed, self._on_grafana_source_changed
         )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
+        self.framework.observe(
+            self.on[PROMETHEUS_API_RELATION_NAME].relation_joined,
+            self._on_prometheus_api_relation_changed,
+        )
 
     def _on_grafana_source_changed(self, _):
         self._update_datasource_exchange()
@@ -603,6 +611,8 @@ class PrometheusCharm(CharmBase):
         )
         self.remote_write_provider.update_endpoint()
         self.catalogue.update_item(item=self._catalogue_item)
+
+        self._update_prometheus_api()
 
         try:
             # Need to reload if config or alerts changed.
@@ -1163,6 +1173,24 @@ class PrometheusCharm(CharmBase):
     def server_ca_cert_path(self) -> Optional[str]:
         """Server CA certificate path for TLS tracing."""
         return self._ca_cert_path if self.cert_handler.enabled else None
+
+    def _on_prometheus_api_relation_changed(self, _):
+        self._update_prometheus_api()
+
+    def _update_prometheus_api(self) -> None:
+        """Update all applications related to us via the prometheus-api relation."""
+        if not self.unit.is_leader():
+            return
+
+        prometheus_api = PrometheusApiProvider(
+            relation_mapping=self.model.relations,
+            app=self.app,
+            relation_name=PROMETHEUS_API_RELATION_NAME,
+        )
+        prometheus_api.publish(
+            direct_url=self.internal_url,
+            ingress_url=self.external_url,
+        )
 
 
 if __name__ == "__main__":
