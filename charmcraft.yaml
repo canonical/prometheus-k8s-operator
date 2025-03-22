@@ -28,7 +28,7 @@ links:
   documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
 
 platforms:
-  ubuntu@20:04:amd64:
+  ubuntu@20.04:amd64:
 
 parts:
   charm:
