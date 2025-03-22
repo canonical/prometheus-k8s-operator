@@ -44,7 +44,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             prometheus_tester_charm,
             resources={
                 "prometheus-tester-image": oci_image(
-                    "./tests/integration/prometheus-tester/charmcraft.yaml",
+                    "./tests/integration/prometheus-tester/metadata.yaml",
                     "prometheus-tester-image",
                 )
             },
@@ -94,7 +94,7 @@ async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm)
         path=prometheus_tester_charm,
         resources={
             "prometheus-tester-image": oci_image(
-                "./tests/integration/prometheus-tester/charmcraft.yaml",
+                "./tests/integration/prometheus-tester/metadata.yaml",
                 "prometheus-tester-image",
             )
         },
