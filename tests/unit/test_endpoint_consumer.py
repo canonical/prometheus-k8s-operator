@@ -15,8 +15,6 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
 
-from tests.unit.helpers import PROJECT_DIR
-
 logger = logging.getLogger(__name__)
 
 RELATION_NAME = "metrics-endpoint"
