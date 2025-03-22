@@ -163,7 +163,7 @@ class EndpointConsumerCharm(CharmBase):
 
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        metadata_file = open(PROJECT_DIR / "metadata.yaml")
+        metadata_file = open(PROJECT_DIR / "charmcraft.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.addCleanup(self.harness.cleanup)
@@ -645,7 +645,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         )
 
     def setUp(self):
-        metadata_file = open("metadata.yaml")
+        metadata_file = open("charmcraft.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
@@ -656,7 +656,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         self.harness.begin()
 
     def test_bare_job(self):
-        # WHEN the the provider forwards a nice and simple scrape job
+        # WHEN the provider forwards a nice and simple scrape job
         self.set_relation_data(metrics_path=None, external_url_path=None)
 
         # THEN the consumer side sees two jobs

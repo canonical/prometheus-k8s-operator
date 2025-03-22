@@ -9,7 +9,7 @@ from helpers import get_prometheus_active_targets, oci_image
 from pytest_operator.plugin import OpsTest
 
 prometheus_app_name = "prometheus"
-prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+prometheus_resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 tester_app_name = "tester"
 tester_resources = {
     "prometheus-tester-image": oci_image(
