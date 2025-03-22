@@ -15,6 +15,8 @@ from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
 
+from tests.unit.helpers import PROJECT_DIR
+
 logger = logging.getLogger(__name__)
 
 RELATION_NAME = "metrics-endpoint"
@@ -161,9 +163,8 @@ class EndpointConsumerCharm(CharmBase):
 
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        # metadata_file = open(PROJECT_DIR / "metadata.yaml")
-        # self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
-        self.harness = Harness(EndpointConsumerCharm)
+        metadata_file = open(PROJECT_DIR / "charmcraft.yaml")
+        self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
@@ -644,9 +645,8 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         )
 
     def setUp(self):
-        # metadata_file = open("metadata.yaml")
-        # self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
-        self.harness = Harness(EndpointConsumerCharm)
+        metadata_file = open("charmcraft.yaml")
+        self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
         self.harness.add_relation_unit(self.rel_id, "remote-app/0")
