@@ -1,13 +1,35 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
+
+name: prometheus-k8s
 type: charm
-bases:
-  - build-on:
-      - name: "ubuntu"
-        channel: "20.04"
-    run-on:
-      - name: "ubuntu"
-        channel: "20.04"
+assumes:
+  - k8s-api
+  # Juju 3.0.3+ needed for secrets and open-port
+  - juju >= 3.0.3
+
+summary: Prometheus for Kubernetes clusters
+
+description: |
+  Prometheus is an open source monitoring solution. Prometheus
+  supports aggregating high dimensional data and exposes a powerful
+  query language PromQL. This charm deploys and operates Prometheus on
+  Kubernetes clusters. Prometheus can raise alerts through a relation
+  with the Alertmanager charm. Alerting rules for Prometheus need to
+  be provided through a relation with the application that requires
+  alerting. Prometheus provides its own dashboard for data
+  visualization but a richer visualization interface may be obtained
+  through a relation with the Grafana charm.
+
+links:
+  website: https://charmhub.io/prometheus-k8s
+  source: https://github.com/canonical/prometheus-k8s-operator
+  issues: https://github.com/canonical/prometheus-k8s-operator/issues
+  documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+
+platforms:
+  ubuntu@20:04:amd64:
+
 parts:
   charm:
     build-packages:
@@ -33,3 +55,156 @@ parts:
     override-pull: |
       curl -L -O https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_TARGET_ARCH}
       chmod 775 cos-tool-*
+
+containers:
+  prometheus:
+    resource: prometheus-image
+    mounts:
+      - storage: database
+        location: /var/lib/prometheus
+
+provides:
+  self-metrics-endpoint:
+    interface: prometheus_scrape
+  grafana-source:
+    interface: grafana_datasource
+  grafana-dashboard:
+    interface: grafana_dashboard
+  receive-remote-write:
+    interface: prometheus_remote_write
+  send-datasource:
+    interface: grafana_datasource_exchange
+    description: |
+      Integration to share with other COS components this charm's grafana datasources, and receive theirs.
+  prometheus-api:
+    interface: prometheus_api
+    description: |
+      The integration point for other charms to consume Prometheus's API, for example so they can query the database. 
+
+requires:
+  metrics-endpoint:
+    interface: prometheus_scrape
+  alertmanager:
+    interface: alertmanager_dispatch
+  ingress:
+    interface: ingress_per_unit
+    limit: 1
+  catalogue:
+    interface: catalogue
+  certificates:
+    interface: tls-certificates
+    limit: 1
+    description: |
+      Obtain a CA and a server certificate for Prometheus to use for TLS.
+      The same CA cert is used for all in-cluster requests, e.g.:
+      - (client) scraping targets for self-monitoring
+      - (client) posting alerts to alertmanager server
+      - (server) serving data to grafana
+  charm-tracing:
+    interface: tracing
+    limit: 1
+    description: |
+      Enables sending charm traces to a distributed tracing backend such as Tempo.
+  workload-tracing:
+    interface: tracing
+    limit: 1
+    description: |
+      Enables sending workload traces (internal Prometheus traces) to a distributed tracing backend such as Tempo.
+
+peers:
+  prometheus-peers:
+    interface: prometheus_peers
+
+storage:
+  database:
+    type: filesystem
+
+resources:
+  prometheus-image:
+    type: oci-image
+    description: Container image for Prometheus
+    # Use ghcr image until the missing udpate-ca-certificates issue is resolved.
+    # https://github.com/canonical/prometheus-rock/issues/33
+    #upstream-source: ghcr.io/canonical/prometheus:dev
+    upstream-source: ubuntu/prometheus:2-22.04
+
+config:
+  options:
+    log_level:
+      description: |
+        Prometheus server log level (only log messages with the given severity
+        or above). Must be one of: [debug, info, warn, error, fatal].
+        If not set, the Prometheus default one (info) will be used.
+      type: string
+      default: info
+    web_external_url:
+      description: |
+        DEPRECATED. This config option is no longer used, in favor of "skipPrefix".
+
+        The URL under which Prometheus is externally reachable (for example,
+        if Prometheus is served via a reverse proxy).
+        Used for generating relative and absolute links back to
+        Prometheus itself. If the URL has a path portion, it will be used to
+        prefix all HTTP endpoints served by Prometheus.
+
+        The URL provided must point to the root of the Prometheus web application,
+        e.g.:
+
+        http://foo.bar/
+
+        Note, do *not* set this configuration to a specific to an API path, e.g.,
+
+        http://foo.bar//api/v1/write  # DO NOT TRY THIS AT HOME
+
+        This configuration option takes precedence over the URL provided over
+        the "ingress" relation.
+      type: string
+      default: ""
+    metrics_retention_time:
+      description: |
+        How long to retain samples in the storage.
+        Units Supported: y, w, d, h, m, s
+      type: string
+      default: 15d
+    maximum_retention_size:
+      description: |
+        The maximum storage to retain, expressed as a percentage (0-100) of the PVC capacity (e.g.
+        "80%").
+        The percentage value is then converted to bytes and passed to prometheus with the
+        `--storage.tsdb.retention.size` argument.
+        Default is 80%.
+      type: string
+      default: "80%"
+    metrics_wal_compression:
+      description: |
+        This flag enables compression of the write-ahead log (WAL).
+        Depending on your data, you can expect the WAL size to be
+        halved with little extra cpu load.
+      type: boolean
+      default: false
+    evaluation_interval:
+      description: |
+        How frequently rules will be evaluated.
+      type: string
+      default: 1m
+    cpu:
+      description: |
+        K8s cpu resource limit, e.g. "1" or "500m". Default is unset (no limit). This value is used
+        for the "limits" portion of the resource requirements (the "requests" portion is
+        automatically deduced from it).
+        See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+      type: string
+    memory:
+      description: |
+        K8s memory resource limit, e.g. "1Gi". Default is unset (no limit). This value is used
+        for the "limits" portion of the resource requirements (the "requests" portion is
+        automatically deduced from it).
+        See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+      type: string
+
+actions:
+  validate-configuration:
+    description: |
+      Run `promtool` inside the workload to validate the Prometheus configuration file, and
+      return the resulting output. This can be used to troubleshoot a Prometheus instance
+      which will not start, or misbehaves, due to a bad configuration.
