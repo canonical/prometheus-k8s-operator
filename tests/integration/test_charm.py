@@ -36,7 +36,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
-            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            resources={"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")},
             application_name=prometheus_app_name,
             trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
@@ -44,7 +44,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             prometheus_tester_charm,
             resources={
                 "prometheus-tester-image": oci_image(
-                    "./tests/integration/prometheus-tester/metadata.yaml",
+                    "./tests/integration/prometheus-tester/charmcraft.yaml",
                     "prometheus-tester-image",
                 )
             },
@@ -94,7 +94,7 @@ async def test_alert_rule_path_can_be_changed(ops_test, prometheus_tester_charm)
         path=prometheus_tester_charm,
         resources={
             "prometheus-tester-image": oci_image(
-                "./tests/integration/prometheus-tester/metadata.yaml",
+                "./tests/integration/prometheus-tester/charmcraft.yaml",
                 "prometheus-tester-image",
             )
         },

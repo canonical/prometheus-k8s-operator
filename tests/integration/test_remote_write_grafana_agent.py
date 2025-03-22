@@ -18,7 +18,7 @@ from helpers import (
 )
 
 logger = logging.getLogger(__name__)
-prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+prometheus_resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 
 
 @pytest.mark.abort_on_fail
@@ -34,7 +34,7 @@ async def test_remote_write_with_grafana_agent(
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
-            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            resources={"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")},
             application_name=prometheus_name,
             trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),

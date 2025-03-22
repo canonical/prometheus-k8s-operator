@@ -15,9 +15,9 @@ from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 
-METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
+METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
 app_name = METADATA["name"]
-resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 
 # GitHub runner is 2cpu7gb and occasionally times out when using 300 sec.
 deploy_timeout = 600
