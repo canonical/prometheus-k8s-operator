@@ -23,7 +23,6 @@ resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-imag
 deploy_timeout = 600
 resched_timeout = 600
 
-CONFIG = yaml.safe_load(Path("./config.yaml").read_text())
 default_limits = None
 default_requests = {"cpu": "0.25", "memory": "200Mi"}
 
