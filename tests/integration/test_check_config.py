@@ -17,7 +17,7 @@ scrape_tester = "tester"
 bad_scrape_tester = "invalid-tester"
 scrape_tester_resources = {
     "prometheus-tester-image": oci_image(
-        "./tests/integration/prometheus-tester/charmcraft.yaml",
+        "./tests/integration/prometheus-tester/metadata.yaml",
         "prometheus-tester-image",
     )
 }
