@@ -1,14 +1,12 @@
 name: Tiobe TiCS Analysis
 
 on:
-    # TODO remove on pull_request before merging 
-    pull_request:
+    workflow_dispatch:
     schedule:
     - cron: "0 0 * * 1"  # Runs at midnight UTC every Monday
 
 jobs:
     tics:
         name: TiCs
-        # TODO: remove branch
-        uses: canonical/observability/.github/workflows/tiobe-scan.yaml@TAP-340
+        uses: canonical/observability/.github/workflows/charm-tiobe-scan.yaml
         secrets: inherit
