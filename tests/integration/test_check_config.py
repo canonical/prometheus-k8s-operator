@@ -12,7 +12,7 @@ from helpers import check_prometheus_is_ready, oci_image
 logger = logging.getLogger(__name__)
 
 prometheus_app_name = "prometheus"
-prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+prometheus_resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 scrape_tester = "tester"
 bad_scrape_tester = "invalid-tester"
 scrape_tester_resources = {
