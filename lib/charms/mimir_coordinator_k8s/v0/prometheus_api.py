@@ -88,7 +88,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 PYDEPS = ["pydantic>=2"]
 
@@ -147,7 +147,7 @@ class PrometheusApiRequirer:
         """Return the relation instances for applications related to us on the monitored relation."""
         return self._charm_relation_mapping.get(self._relation_name, [])
 
-    def get_data(self) -> Optional[BaseModel]:
+    def get_data(self) -> Optional[PrometheusApiAppData]:
         """Return data for at most one related application, raising if more than one is available.
 
         Useful for charms that always expect exactly one related application.  It is recommended that those charms also

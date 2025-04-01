@@ -110,7 +110,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 PYDEPS = ["pydantic"]
 
@@ -780,7 +780,16 @@ class TracingEndpointRequirer(Object):
         self.framework.observe(events.relation_broken, self._on_tracing_relation_broken)
 
         if protocols:
-            self.request_protocols(protocols)
+            # we can't be sure that the current event context supports read/writing relation data for this relation,
+            # so we catch ModelErrors. This is because we're doing this in init.
+            try:
+                self.request_protocols(protocols)
+            except ModelError as e:
+                logger.error(
+                    f"encountered error {e} while attempting to request_protocols."
+                    f"The relation must be gone."
+                )
+                pass
 
     def request_protocols(
         self, protocols: Sequence[ReceiverProtocol], relation: Optional[Relation] = None
@@ -795,26 +804,11 @@ class TracingEndpointRequirer(Object):
                 "You need to pass a nonempty sequence of protocols to `request_protocols`."
             )
 
-        try:
-            if self._charm.unit.is_leader():
-                for relation in relations:
-                    TracingRequirerAppData(
-                        receivers=list(protocols),
-                    ).dump(relation.data[self._charm.app])
-
-        except ModelError as e:
-            # args are bytes
-            msg = e.args[0]
-            if isinstance(msg, bytes):
-                if msg.startswith(
-                    b"ERROR cannot read relation application settings: permission denied"
-                ):
-                    logger.error(
-                        f"encountered error {e} while attempting to request_protocols."
-                        f"The relation must be gone."
-                    )
-                    return
-            raise
+        if self._charm.unit.is_leader():
+            for relation in relations:
+                TracingRequirerAppData(
+                    receivers=list(protocols),
+                ).dump(relation.data[self._charm.app])
 
     @property
     def relations(self) -> List[Relation]:
