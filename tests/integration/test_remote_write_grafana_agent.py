@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 import pytest
+import sh
 from cosl.rules import generic_alert_groups
 from helpers import (
     check_prometheus_is_ready,
@@ -14,7 +15,6 @@ from helpers import (
     has_metric,
     oci_image,
     run_promql,
-    uk8s_group,
 )
 
 logger = logging.getLogger(__name__)
@@ -125,20 +125,7 @@ async def test_check_data_persist_on_kubectl_delete_pod(ops_test, prometheus_cha
     num_head_chunks_before = int(total0[0]["value"][1])
     assert num_head_chunks_before > 0
 
-    cmd = [
-        "sg",
-        uk8s_group(),
-        "-c",
-        " ".join(["microk8s.kubectl", "delete", "pod", "-n", ops_test.model_name, pod_name]),
-    ]
-
-    logger.debug(
-        "Removing pod '%s' from model '%s' with cmd: %s", pod_name, ops_test.model_name, cmd
-    )
-
-    retcode, stdout, stderr = await ops_test.run(*cmd)
-    assert retcode == 0, f"kubectl failed: {(stderr or stdout).strip()}"
-    logger.debug(stdout)
+    sh.kubectl.delete.pod(pod_name, namespace=ops_test.model_name)  # pyright: ignore
 
     await ops_test.model.block_until(
         lambda: len(ops_test.model.applications[prometheus_app_name].units) > 0

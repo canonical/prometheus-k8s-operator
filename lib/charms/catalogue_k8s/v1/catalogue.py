@@ -13,7 +13,7 @@ from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 1
-LIBPATCH = 0
+LIBPATCH = 1
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -76,7 +76,7 @@ class CatalogueConsumer(Object):
         self._update_relation_data()
 
     def unit_address(self, relation):
-        """The unit address of the consumer, on which it is reachable.
+        """Return the unit address of the consumer, on which it is reachable.
 
         Requires ingress to be connected for it to be routable.
         """
@@ -97,6 +97,7 @@ class CatalogueConsumer(Object):
 
         Args:
             address: a string representing a unit address
+
         """
         try:
             _ = ipaddress.ip_address(address)

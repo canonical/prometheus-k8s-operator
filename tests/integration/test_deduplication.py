@@ -23,6 +23,7 @@ async def test_multiple_scrape_jobs_in_constructor(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
     """Test that job names are properly deduped when in the same consumer unit."""
+    assert ops_test.model
     jobs = [
         {
             "scrape_interval": "10s",
@@ -65,6 +66,7 @@ async def test_same_app_related_two_ways(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
     """Test that the deduplication works when the same app is related twice."""
+    assert ops_test.model
     await asyncio.gather(
         ops_test.model.applications[tester_app_name].reset_config(["scrape_jobs"]),
         ops_test.model.deploy(

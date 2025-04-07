@@ -3,7 +3,7 @@
 # See LICENSE file for licensing details.
 
 import logging
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 import aiohttp
 from prometheus_api_client import PrometheusConnect
@@ -73,7 +73,7 @@ class Prometheus:
                 result = await response.json()
                 return result["data"]["yaml"] if result["status"] == "success" else ""
 
-    async def rules(self, rules_type: Literal["alert", "record"] = None) -> list:
+    async def rules(self, rules_type: Optional[Literal["alert", "record"]] = None) -> list:
         """Send a GET request to get Prometheus rules.
 
         Args:
