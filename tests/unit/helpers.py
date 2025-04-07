@@ -124,7 +124,7 @@ def add_relation_sequence(context: Context, state: State, relation: Relation):
     # TODO consider adding to scenario.sequences
     state_with_relation = dataclasses.replace(
         state,
-        relations=state.relations.union([relation]),
+        relations=state.relations.union([relation]),  # pyright:  ignore
     )
     state_after_relation_created = context.run(
         context.on.relation_created(relation), state_with_relation
