@@ -32,9 +32,9 @@ dev = [
   "coverage[toml]",
   "ops[testing]",
   "pytest-asyncio",
-  "responses==0.20.0",
+  "responses",
   "deepdiff",
-  "httpcore==0.14.7",
+  "httpcore",
   "fs",
   # Interface
   "pytest-interface-tester>2.0.0",
@@ -44,7 +44,6 @@ dev = [
   "prometheus-client",
   "prometheus-api-client",
   "tenacity",
-  "websockets<14.0",  # https://github.com/juju/python-libjuju/issues/1184
   "pytest-httpserver",
   "aiohttp",
   "minio",
