@@ -1,15 +1,8 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
-
 name: prometheus-k8s
 type: charm
-assumes:
-  - k8s-api
-  # Juju 3.0.3+ needed for secrets and open-port
-  - juju >= 3.0.3
-
 summary: Prometheus for Kubernetes clusters
-
 description: |
   Prometheus is an open source monitoring solution. Prometheus
   supports aggregating high dimensional data and exposes a powerful
@@ -22,31 +15,28 @@ description: |
   through a relation with the Grafana charm.
 
 links:
+  documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
   website: https://charmhub.io/prometheus-k8s
   source: https://github.com/canonical/prometheus-k8s-operator
   issues: https://github.com/canonical/prometheus-k8s-operator/issues
-  documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+
+assumes:
+  - k8s-api
+  - juju >= 3.0.3  # Juju 3.0.3+ needed for secrets and open-port
 
 platforms:
   ubuntu@20.04:amd64:
+  ubuntu@24.04:amd64:
 
 parts:
   charm:
-    build-packages:
-      - git
-      - rustc
-      - cargo
-    charm-binary-python-packages:
-      - pip>=24
-      - jsonschema
-      - cryptography
-      - pyyaml
-      - requests
-      - ops
-      - wheel==0.37.1
-      - setuptools==45.2.0
-      - pydantic
-      - pydantic-core
+    source: .
+    plugin: uv
+    build-packages: [git]
+    build-snaps: [astral-uv]
+    override-build: |
+      craftctl default
+      git describe --always > $CRAFT_PART_INSTALL/version
   cos-tool:
     plugin: dump
     source: https://github.com/canonical/cos-tool/releases/latest/download/cos-tool-${CRAFT_ARCH_BUILD_FOR}
@@ -62,36 +52,74 @@ containers:
       - storage: database
         location: /var/lib/prometheus
 
+resources:
+  prometheus-image:
+    type: oci-image
+    description: Container image for Prometheus
+    upstream-source: ubuntu/prometheus:2-22.04
+
+storage:
+  database:
+    type: filesystem
+
 provides:
   self-metrics-endpoint:
     interface: prometheus_scrape
+    optional: true
+    description: |
+      Expose Prometheus' internal metrics for self-monitoring purposes.
   grafana-source:
     interface: grafana_datasource
+    optional: true
+    description: |
+      Integrate Prometheus in Grafana as a datasource.
   grafana-dashboard:
     interface: grafana_dashboard
+    optional: true
+    description: |
+      Forwards the built-in Grafana dashboard(s) for monitoring Prometheus.
   receive-remote-write:
     interface: prometheus_remote_write
+    optional: true
+    description: |
+      Expose a Prometheus-remote-write-compatible endpoint to receive metrics.
   send-datasource:
     interface: grafana_datasource_exchange
+    optional: true
     description: |
       Integration to share with other COS components this charm's grafana datasources, and receive theirs.
   prometheus-api:
     interface: prometheus_api
+    optional: true
     description: |
       The integration point for other charms to consume Prometheus's API, for example so they can query the database. 
 
 requires:
   metrics-endpoint:
     interface: prometheus_scrape
+    optional: true
+    description: |
+      Integration to scrape the metrics and required endpoints of another charm.
   alertmanager:
     interface: alertmanager_dispatch
+    optional: true
+    description: |
+      Configure Prometheus to utilize an external Alertmanager to notify the user when an alert is triggered.
   ingress:
     interface: ingress_per_unit
+    optional: true
     limit: 1
+    description: |
+      Integration to obtain an ingressed address to access Prometheus from outside the model.
   catalogue:
     interface: catalogue
+    optional: true
+    limit: 1
+    description: |
+      Integration to help users discover Mimir's deployment.
   certificates:
     interface: tls-certificates
+    optional: true
     limit: 1
     description: |
       Obtain a CA and a server certificate for Prometheus to use for TLS.
@@ -101,11 +129,13 @@ requires:
       - (server) serving data to grafana
   charm-tracing:
     interface: tracing
+    optional: true
     limit: 1
     description: |
       Enables sending charm traces to a distributed tracing backend such as Tempo.
   workload-tracing:
     interface: tracing
+    optional: true
     limit: 1
     description: |
       Enables sending workload traces (internal Prometheus traces) to a distributed tracing backend such as Tempo.
@@ -113,19 +143,6 @@ requires:
 peers:
   prometheus-peers:
     interface: prometheus_peers
-
-storage:
-  database:
-    type: filesystem
-
-resources:
-  prometheus-image:
-    type: oci-image
-    description: Container image for Prometheus
-    # Use ghcr image until the missing udpate-ca-certificates issue is resolved.
-    # https://github.com/canonical/prometheus-rock/issues/33
-    #upstream-source: ghcr.io/canonical/prometheus:dev
-    upstream-source: ubuntu/prometheus:2-22.04
 
 config:
   options:

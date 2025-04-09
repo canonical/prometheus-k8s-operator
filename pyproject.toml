@@ -2,12 +2,54 @@
 # See LICENSE file for licensing details.
 [project]
 name = "prometheus-k8s"
-version = "0.1" # not relevant
+version = "0.0"
+requires-python = "~=3.8"
+
+dependencies = [
+  "ops",
+  "pyyaml",
+  "cosl",
+  "lightkube>=0.11",
+  "lightkube-models>=1.22.0.4",
+  "httpx==0.24.1",
+  "httpcore==0.17.3",
+  "cryptography",
+  "jsonschema",
+  "requests",
+  # from PYDEPS
+  "importlib-metadata~=6.0.0",
+  "opentelemetry-exporter-otlp-proto-http",
+  "pydantic>=2",
+]
 
 [project.optional-dependencies]
-lib_pydeps = [
-  "opentelemetry-exporter-otlp-proto-http",
-  "pydantic>=2"
+dev = [
+  # Linting
+  "ruff",
+  "codespell",
+  # Static
+  "pyright",
+  # Unit
+  "pytest",
+  "coverage[toml]",
+  "ops[testing]",
+  "pytest-asyncio",
+  "responses",
+  "deepdiff",
+  "httpcore",
+  "fs",
+  # Interface
+  "pytest-interface-tester>2.0.0",
+  # Integration
+  "juju",
+  "pytest-operator",
+  "prometheus-client",
+  "prometheus-api-client",
+  "tenacity",
+  "pytest-httpserver",
+  "aiohttp",
+  "minio",
+  "sh",
 ]
 
 # Testing tools configuration
@@ -16,11 +58,6 @@ branch = true
 
 [tool.coverage.report]
 show_missing = true
-
-# Formatting tools configuration
-[tool.black]
-line-length = 99
-target-version = ["py38"]
 
 # Linting tools configuration
 [tool.ruff]
@@ -39,12 +76,16 @@ per-file-ignores = {"tests/*" = ["D100","D101","D102","D103"]}
 convention = "google"
 
 [tool.pyright]
-extraPaths = ["lib"]
+extraPaths = ["src", "lib"]
 pythonVersion = "3.8"
 pythonPlatform = "All"
+exclude = ["tests/integration/prometheus-tester/**"]
 
 [tool.pytest.ini_options]
+minversion = "6.0"
+log_cli_level = "INFO"
 asyncio_mode = "auto"
+addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 
 [tool.codespell]
 skip = ".git,.tox,build,venv*"

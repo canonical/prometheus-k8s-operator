@@ -752,7 +752,8 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
 
         # check unit topology is present in labels and in alert rule expression
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
+        assert relation
+        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules", ""))
         for group in alert_rules["groups"]:
             for rule in group["rules"]:
                 if (

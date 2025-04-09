@@ -4,6 +4,7 @@
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
+
 import hashlib
 import logging
 import re
@@ -257,10 +258,22 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
         self.framework.observe(
+            self.on.send_datasource_relation_joined, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.send_datasource_relation_created, self._on_grafana_source_changed
+        )
+        self.framework.observe(
             self.on.send_datasource_relation_changed, self._on_grafana_source_changed
         )
         self.framework.observe(
             self.on.send_datasource_relation_departed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_created, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_joined, self._on_grafana_source_changed
         )
         self.framework.observe(
             self.on.grafana_source_relation_changed, self._on_grafana_source_changed

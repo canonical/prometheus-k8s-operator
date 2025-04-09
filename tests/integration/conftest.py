@@ -4,6 +4,7 @@
 
 import functools
 import logging
+import os
 import shutil
 from collections import defaultdict
 from datetime import datetime
@@ -73,6 +74,9 @@ def remove_leftover_alert_rules(ops_test):
 @timed_memoizer
 async def prometheus_charm(ops_test):
     """Prometheus charm used for integration testing."""
+    if charm_file := os.environ.get("CHARM_PATH"):
+        return Path(charm_file)
+
     charm = await ops_test.build_charm(".")
     return charm
 

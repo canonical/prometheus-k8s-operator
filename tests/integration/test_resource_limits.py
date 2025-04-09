@@ -28,12 +28,14 @@ default_requests = {"cpu": "0.25", "memory": "200Mi"}
 
 
 async def test_setup_env(ops_test: OpsTest):
+    assert ops_test.model
     await ops_test.model.set_config({"logging-config": "<root>=WARNING; unit=DEBUG"})
 
 
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
     """Build the charm-under-test and deploy it."""
+    assert ops_test.model
     await ops_test.model.deploy(
         prometheus_charm,
         resources=resources,
@@ -50,6 +52,7 @@ async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied(ops_test: OpsTest):
     podspec = get_podspec(ops_test, app_name, "prometheus")
+    assert podspec.resources
     assert equals_canonically(podspec.resources.limits, default_limits)
     assert equals_canonically(podspec.resources.requests, default_requests)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
@@ -58,6 +61,7 @@ async def test_default_resource_limits_applied(ops_test: OpsTest):
 @pytest.mark.abort_on_fail
 @pytest.mark.parametrize("cpu,memory", [("500m", "0.5Gi"), ("0.30000000000000004", "0.5G")])
 async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
+    assert ops_test.model
     custom_limits = {"cpu": cpu, "memory": memory}
     await ops_test.model.applications[app_name].set_config(custom_limits)
     await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
@@ -78,6 +82,7 @@ async def test_resource_limits_match_config(ops_test: OpsTest, cpu, memory):
     "cpu,memory", [("-1", "0.1Gi"), ("1", "-0.1Gi"), ("4x", "1Gi"), ("1", "1Gx")]
 )
 async def test_invalid_resource_limits_put_charm_in_blocked_status(ops_test: OpsTest, cpu, memory):
+    assert ops_test.model
     custom_limits = {"cpu": cpu, "memory": memory}
     await ops_test.model.applications[app_name].set_config(custom_limits)
     await ops_test.model.wait_for_idle(status="blocked", timeout=resched_timeout)
@@ -86,6 +91,7 @@ async def test_invalid_resource_limits_put_charm_in_blocked_status(ops_test: Ops
 
 @pytest.mark.abort_on_fail
 async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
+    assert ops_test.model
     custom_limits = {"cpu": "500m", "memory": "0.5Gi"}
     await ops_test.model.applications[app_name].set_config(custom_limits)
     await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
@@ -95,6 +101,7 @@ async def test_charm_recovers_from_invalid_resource_limits(ops_test: OpsTest):
 @pytest.mark.abort_on_fail
 async def test_upgrade(ops_test: OpsTest, prometheus_charm):
     """Make sure the app is able to upgrade when resource limits are set."""
+    assert ops_test.model
     await ops_test.model.applications[app_name].refresh(path=prometheus_charm, resources=resources)
     await ops_test.model.wait_for_idle(status="active", timeout=300, idle_period=60)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)
@@ -102,10 +109,12 @@ async def test_upgrade(ops_test: OpsTest, prometheus_charm):
 
 @pytest.mark.abort_on_fail
 async def test_default_resource_limits_applied_after_resetting_config(ops_test: OpsTest):
+    assert ops_test.model
     await ops_test.model.applications[app_name].reset_config(["cpu", "memory"])
     await ops_test.model.wait_for_idle(status="active", timeout=resched_timeout)
 
     podspec = get_podspec(ops_test, app_name, "prometheus")
+    assert podspec.resources
     assert equals_canonically(podspec.resources.limits, default_limits)
     assert equals_canonically(podspec.resources.requests, default_requests)
     assert await check_prometheus_is_ready(ops_test, app_name, 0)

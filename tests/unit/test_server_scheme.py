@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 from helpers import add_relation_sequence, begin_with_initial_hooks_isolated
-from scenario import Relation, State
+from scenario import Relation
 
 
 @pytest.mark.parametrize("fqdn", ["localhost", "am-0.endpoints.cluster.local"])
@@ -24,7 +24,7 @@ class TestServerScheme:
     """Scenario: The workload is deployed to operate in HTTP mode, then switched to HTTPS."""
 
     @pytest.fixture
-    def initial_state(self, context, fqdn, leader) -> State:
+    def initial_state(self, context, fqdn, leader):
         """This is the initial state for this test class."""
         # GIVEN an isolated charm after the startup sequence is complete
 

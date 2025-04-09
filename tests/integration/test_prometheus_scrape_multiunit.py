@@ -50,6 +50,7 @@ idle_period = 90
 
 @pytest.mark.skip(reason="xfail")
 async def test_setup_env(ops_test: OpsTest):
+    assert ops_test.model
     await ops_test.model.set_config(
         {"logging-config": "<root>=WARNING; unit=DEBUG", "update-status-hook-interval": "60m"}
     )
@@ -64,6 +65,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     - Deploy several units of prometheus and several units of a "provider" charm, and relate them.
     - Confirm all units of prometheus have the correct and same targets and rules.
     """
+    assert ops_test.model
     app_names = [prometheus_app_name, scrape_tester, remote_write_tester]
 
     # GIVEN prometheus and the tester charm are deployed with two units each
@@ -183,6 +185,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
 @pytest.mark.skip(reason="xfail")
 async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
+    assert ops_test.model
     # GIVEN an existing "up" timeseries
     query = 'count_over_time(up{host="localhost",job="prometheus"}[1y])'
     up_before = await asyncio.gather(
@@ -224,6 +227,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
 
 @pytest.mark.skip(reason="xfail")
 async def test_rescale_prometheus(ops_test: OpsTest):
+    assert ops_test.model
     # GitHub runner doesn't have enough resources to deploy 3 unit with the default "requests", and
     # the unit fails to schedule. Setting a low limit, so it is able to schedule.
     await ops_test.model.applications[prometheus_app_name].set_config(
@@ -268,6 +272,7 @@ async def test_rescale_prometheus(ops_test: OpsTest):
 
 @pytest.mark.skip(reason="xfail")
 async def test_rescale_tester(ops_test: OpsTest):
+    assert ops_test.model
     # WHEN testers are scaled up
     num_additional_units = 1
     await asyncio.gather(
@@ -310,6 +315,7 @@ async def test_rescale_tester(ops_test: OpsTest):
 @pytest.mark.skip(reason="xfail")
 async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and rescale testers at the same time (without waiting for idle)."""
+    assert ops_test.model
     # WHEN prometheus is upgraded at the same time that the testers are scaled up
     num_additional_units = 1
 
@@ -374,6 +380,7 @@ async def test_upgrade_prometheus_while_rescaling_testers(ops_test: OpsTest, pro
 async def test_rescale_prometheus_while_upgrading_testers(
     ops_test: OpsTest, prometheus_tester_charm
 ):
+    assert ops_test.model
     # WHEN prometheus is scaled up at the same time the testers are upgraded
     num_additional_units = 1
     await asyncio.gather(

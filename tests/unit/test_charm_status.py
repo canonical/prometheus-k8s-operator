@@ -15,7 +15,7 @@ from ops.testing import Harness
 
 from charm import PrometheusCharm
 
-ops.testing.SIMULATE_CAN_CONNECT = True
+ops.testing.SIMULATE_CAN_CONNECT = True  # pyright: ignore
 logger = logging.getLogger(__name__)
 
 
