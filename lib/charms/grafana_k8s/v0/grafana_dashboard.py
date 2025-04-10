@@ -219,7 +219,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 42
+LIBPATCH = 43
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -1243,6 +1243,10 @@ class GrafanaDashboardProvider(Object):
         if self._charm.unit.is_leader():
             for dashboard_relation in self._charm.model.relations[self._relation_name]:
                 self._upset_dashboards_on_relation(dashboard_relation)
+
+    def reload_dashboards(self, inject_dropdowns: bool = True) -> None:
+        """Reloads dashboards and updates all relations."""
+        self._update_all_dashboards_from_dir(inject_dropdowns=inject_dropdowns)
 
     def _update_all_dashboards_from_dir(
         self, _: Optional[HookEvent] = None, inject_dropdowns: bool = True
