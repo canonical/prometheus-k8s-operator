@@ -56,6 +56,7 @@ class TestReloadAlertRules(unittest.TestCase):
         """Scenario: The reload method is called when the alerts dir is still empty."""
         # GIVEN relation data contains no alerts
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
         # WHEN no rule files are present
@@ -65,12 +66,14 @@ class TestReloadAlertRules(unittest.TestCase):
 
         # THEN relation data is unchanged
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
     def test_reload_after_dir_is_populated_updates_relation_data(self):
         """Scenario: The reload method is called after some alert files are added."""
         # GIVEN relation data contains no alerts
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
         # WHEN some rule files are added to the alerts dir
@@ -81,6 +84,7 @@ class TestReloadAlertRules(unittest.TestCase):
 
         # THEN relation data is updated
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertNotEqual(
             relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
         )
@@ -91,6 +95,7 @@ class TestReloadAlertRules(unittest.TestCase):
         self.sandbox.writetext("alert.rule", self.ALERT)
         self.harness.charm.rules_provider._reinitialize_alert_rules()
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertNotEqual(
             relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
         )
@@ -103,6 +108,7 @@ class TestReloadAlertRules(unittest.TestCase):
 
         # THEN relation data is empty again
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
     def test_only_files_with_rule_or_rules_suffixes_are_loaded(self):
@@ -128,7 +134,8 @@ class TestReloadAlertRules(unittest.TestCase):
 
         # THEN only the *.rule and *.rules files are loaded
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules"))
+        assert relation
+        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules", ""))
         alert_names = [groups["rules"][0]["alert"] for groups in alert_rules["groups"]]
         self.assertEqual(
             set(alert_names), {"alert.rule", "alert.rules", "alert.yml", "alert.yaml"}
@@ -138,6 +145,7 @@ class TestReloadAlertRules(unittest.TestCase):
         """Scenario: The reload method is called with a zero-size alert file."""
         # GIVEN relation data contains no alerts
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
 
         # WHEN an empty rules file is written
@@ -148,4 +156,5 @@ class TestReloadAlertRules(unittest.TestCase):
 
         # THEN relation data is not updated
         relation = self.harness.charm.model.get_relation("metrics-endpoint")
+        assert relation
         self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)

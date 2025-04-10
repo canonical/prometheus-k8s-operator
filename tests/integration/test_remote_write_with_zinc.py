@@ -26,7 +26,7 @@ async def test_remote_write_with_zinc(ops_test, prometheus_charm):
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
-            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            resources={"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")},
             application_name=prometheus_name,
             trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),

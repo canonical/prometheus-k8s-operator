@@ -37,6 +37,7 @@ async def unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
     Returns:
         unit address as a string
     """
+    assert ops_test.model
     status = await ops_test.model.get_status()
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
@@ -248,8 +249,10 @@ def initial_workload_is_ready(ops_test, app_names) -> bool:
 
 
 def get_podspec(ops_test: OpsTest, app_name: str, container_name: str):
+    assert ops_test.model_name
     client = Client()
     pod = client.get(Pod, name=f"{app_name}-0", namespace=ops_test.model_name)
+    assert pod.spec
     podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))
     return podspec
 
@@ -287,6 +290,7 @@ def get_workload_file(
 
 async def deploy_and_configure_minio(ops_test: OpsTest) -> None:
     """Deploy and set up minio and s3-integrator needed for s3-like storage backend in the HA charms."""
+    assert ops_test.model
     config = {
         "access-key": "accesskey",
         "secret-key": "secretkey",
@@ -327,6 +331,7 @@ async def deploy_and_configure_minio(ops_test: OpsTest) -> None:
 
 async def deploy_tempo_cluster(ops_test: OpsTest):
     """Deploys tempo in its HA version together with minio and s3-integrator."""
+    assert ops_test.model
     tempo_app = "tempo"
     worker_app = "tempo-worker"
     tempo_worker_charm_url, worker_channel = "tempo-worker-k8s", "edge"
@@ -383,6 +388,7 @@ async def get_traces_patiently(tempo_host, service_name="tracegen-otlp_http", tl
 
 async def get_application_ip(ops_test: OpsTest, app_name: str) -> str:
     """Get the application IP address."""
+    assert ops_test.model
     status = await ops_test.model.get_status()
     app = status["applications"][app_name]
     return app.public_address

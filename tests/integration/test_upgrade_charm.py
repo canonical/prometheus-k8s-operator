@@ -20,7 +20,7 @@ from helpers import (
 logger = logging.getLogger(__name__)
 
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
-prometheus_resources = {"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")}
+prometheus_resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 tester_resources = {
     "prometheus-tester-image": oci_image(
         "./tests/integration/prometheus-tester/metadata.yaml", "prometheus-tester-image"

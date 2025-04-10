@@ -6,16 +6,16 @@ import logging
 import unittest
 import uuid
 from string import Template
+from typing import Optional
 
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     ALLOWED_KEYS,
     MetricsEndpointConsumer,
 )
+from helpers import PROJECT_DIR
 from ops.charm import CharmBase
 from ops.framework import StoredState
 from ops.testing import Harness
-
-from tests.unit.helpers import PROJECT_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ class EndpointConsumerCharm(CharmBase):
 
 class TestEndpointConsumer(unittest.TestCase):
     def setUp(self):
-        metadata_file = open(PROJECT_DIR / "metadata.yaml")
+        metadata_file = open(PROJECT_DIR / "charmcraft.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.addCleanup(self.harness.cleanup)
@@ -338,6 +338,7 @@ class TestEndpointConsumer(unittest.TestCase):
         ports = wildcard_target_ports(SCRAPE_JOBS)
         targets = wildcard_targets(jobs, ports)
         consumers = self.harness.charm.model.get_relation(RELATION_NAME, rel_id)
+        assert consumers
         self.assertEqual(len(targets), len(ports) * len(consumers.units))
 
     def test_consumer_handles_default_scrape_job(self):
@@ -372,7 +373,7 @@ class TestEndpointConsumer(unittest.TestCase):
 
         rel_id = self.harness.add_relation(RELATION_NAME, "consumer")
         jobs = DEFAULT_JOBS.copy()
-        jobs[0]["static_configs"] = [
+        jobs[0]["static_configs"] = [  # pyright: ignore
             {
                 "targets": ["*"],
             }
@@ -599,7 +600,9 @@ def wildcard_targets(jobs, wildcard_ports):
 class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
     """Test how scrape jobs of multiunit providers with wildcard-hosts get rendered to disk."""
 
-    def set_relation_data(self, metrics_path: str = None, external_url_path: Template = None):
+    def set_relation_data(
+        self, metrics_path: Optional[str] = None, external_url_path: Optional[Template] = None
+    ):
         job = {
             "job_name": "job",
             "static_configs": [{"targets": ["*:1234"]}],
@@ -645,7 +648,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         )
 
     def setUp(self):
-        metadata_file = open("metadata.yaml")
+        metadata_file = open("charmcraft.yaml")
         self.harness = Harness(EndpointConsumerCharm, meta=metadata_file)
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
@@ -656,7 +659,7 @@ class TestWildcardTargetsWithMutliunitProvider(unittest.TestCase):
         self.harness.begin()
 
     def test_bare_job(self):
-        # WHEN the the provider forwards a nice and simple scrape job
+        # WHEN the provider forwards a nice and simple scrape job
         self.set_relation_data(metrics_path=None, external_url_path=None)
 
         # THEN the consumer side sees two jobs

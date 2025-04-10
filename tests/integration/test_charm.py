@@ -33,10 +33,11 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     ops_test: OpsTest, prometheus_charm, prometheus_tester_charm
 ):
     """Test basic functionality of prometheus_scrape relation interface."""
+    assert ops_test.model
     await asyncio.gather(
         ops_test.model.deploy(
             prometheus_charm,
-            resources={"prometheus-image": oci_image("./metadata.yaml", "prometheus-image")},
+            resources={"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")},
             application_name=prometheus_app_name,
             trust=True,  # otherwise errors on ghwf (persistentvolumeclaims ... is forbidden)
         ),
