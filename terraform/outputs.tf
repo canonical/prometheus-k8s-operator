@@ -6,13 +6,13 @@ output "endpoints" {
   value = {
     # Requires
 
-    metrics_endpoint      = "metrics-endpoint"
-    alertmanager          = "alertmanager"
-    ingress               = "ingress"
-    catalogue             = "catalogue"
-    certificates          = "certificates"
-    charm_tracing         = "charm-tracing"
-    workload_tracing      = "workload-tracing"
+    metrics_endpoint = "metrics-endpoint"
+    alertmanager     = "alertmanager"
+    ingress          = "ingress"
+    catalogue        = "catalogue"
+    certificates     = "certificates"
+    charm_tracing    = "charm-tracing"
+    workload_tracing = "workload-tracing"
 
     # Provides
 
