@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - main
-
+  push:
+    branches:
+      - test-tempo-error
 jobs:
   pull-request:
     name: PR
-    uses: canonical/observability/.github/workflows/charm-pull-request.yaml@v1
+    uses: canonical/observability/.github/workflows/charm-pull-request.yaml@enable-debug
     secrets: inherit
