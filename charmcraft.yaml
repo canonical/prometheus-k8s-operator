@@ -22,10 +22,10 @@ links:
 
 assumes:
   - k8s-api
-  - juju >= 3.0.3  # Juju 3.0.3+ needed for secrets and open-port
+  - juju >= 3.6 
 
 platforms:
-  ubuntu@20.04:amd64:
+  ubuntu@24.04:amd64:
 
 parts:
   charm:
