@@ -600,13 +600,13 @@ class TestEndpointAggregator(unittest.TestCase):
         groups = alert_rules.get("groups", [])
         # THEN the relation data contains only the generic alerts
         self.assertEqual(len(groups), len(generic_alert_groups.application_rules))
-        alert_rules_generic = [r["alert"] for g in groups for r in g["rules"]]
-        alert_rules_labeled = [
+        relation_rule_names = [r["alert"] for g in groups for r in g["rules"]]
+        generic_rule_names = [
             r["alert"]
             for g in generic_alert_groups.application_rules["groups"]
             for r in g["rules"]
         ]
-        self.assertEqual(alert_rules_generic, alert_rules_labeled)
+        self.assertEqual(relation_rule_names, generic_rule_names)
 
 
 class TestEndpointAggregatorWithRelabeling(unittest.TestCase):
