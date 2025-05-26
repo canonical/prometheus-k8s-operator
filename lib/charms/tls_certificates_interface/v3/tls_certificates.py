@@ -287,6 +287,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional, Union
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtensionOID
@@ -318,7 +319,7 @@ LIBAPI = 3
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 25
+LIBPATCH = 26
 
 PYDEPS = ["cryptography", "jsonschema"]
 
@@ -458,9 +459,21 @@ class ProviderCertificate:
     expiry_time: datetime
     expiry_notification_time: Optional[datetime] = None
 
-    def chain_as_pem(self) -> str:
+    def chain_as_pem(self, reverse: bool = True) -> str:
+        """Return full certificate chain as a PEM string.
+
+        The function is deprecated, please use chain_as_pem_string instead.
+
+        Args:
+            reverse (bool): By default this function will reverse the order of the chain from relation data.
+                To disable that, set reverse to False.
+        """
+        logger.warning("This function is deprecated, please use chain_as_pem_string instead")
+        return "\n\n".join(reversed(self.chain)) if reverse else "\n\n".join(self.chain)
+
+    def chain_as_pem_string(self) -> str:
         """Return full certificate chain as a PEM string."""
-        return "\n\n".join(reversed(self.chain))
+        return "\n\n".join(self.chain)
 
     def to_json(self) -> str:
         """Return the object as a JSON string.
@@ -518,9 +531,21 @@ class CertificateAvailableEvent(EventBase):
         self.ca = snapshot["ca"]
         self.chain = snapshot["chain"]
 
-    def chain_as_pem(self) -> str:
+    def chain_as_pem(self, reverse: bool = True) -> str:
+        """Return full certificate chain as a PEM string.
+
+        The function is deprecated, please use chain_as_pem_string instead.
+
+        Args:
+            reverse (bool): By default this function will reverse the order of the chain from relation data.
+                To disable that, set reverse to False.
+        """
+        logger.warning("This function is deprecated, please use chain_as_pem_string instead")
+        return "\n\n".join(reversed(self.chain)) if reverse else "\n\n".join(self.chain)
+
+    def chain_as_pem_string(self) -> str:
         """Return full certificate chain as a PEM string."""
-        return "\n\n".join(reversed(self.chain))
+        return "\n\n".join(self.chain)
 
 
 class CertificateExpiringEvent(EventBase):
@@ -664,6 +689,32 @@ class CertificateRevocationRequestEvent(EventBase):
         self.certificate_signing_request = snapshot["certificate_signing_request"]
         self.ca = snapshot["ca"]
         self.chain = snapshot["chain"]
+
+
+def chain_has_valid_order(chain: List[str]) -> bool:
+    """Check if the chain has a valid order.
+
+    Validates that each certificate in the chain is properly signed by the next certificate.
+    The chain should be ordered from leaf to root, where each certificate is signed by
+    the next one in the chain.
+
+    Args:
+        chain (List[str]): List of certificates in PEM format, ordered from leaf to root
+
+    Returns:
+        bool: True if the chain has a valid order, False otherwise.
+    """
+    if len(chain) < 2:
+        return True
+
+    try:
+        for i in range(len(chain) - 1):
+            cert = x509.load_pem_x509_certificate(chain[i].encode())
+            issuer = x509.load_pem_x509_certificate(chain[i + 1].encode())
+            cert.verify_directly_issued_by(issuer)
+        return True
+    except (ValueError, TypeError, InvalidSignature):
+        return False
 
 
 def _load_relation_data(relation_data_content: RelationDataContent) -> dict:
@@ -1234,6 +1285,15 @@ class TLSCertificatesProvidesV3(Object):
         if new_certificate in certificates:
             logger.info("Certificate already in relation data - Doing nothing")
             return
+        if not chain[0] != certificate:
+            logger.warning(
+                "The order of the chain from the TLS Certificates Provider is incorrect. "
+                "The leaf certificate should be the first element of the chain."
+            )
+        elif not chain_has_valid_order(chain):
+            logger.warning(
+                "The order of the chain from the TLS Certificates Provider is partially incorrect."
+            )
         certificates.append(new_certificate)
         relation.data[self.model.app]["certificates"] = json.dumps(certificates)
 
