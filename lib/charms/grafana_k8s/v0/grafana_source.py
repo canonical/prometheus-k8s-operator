@@ -163,7 +163,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 26
+LIBPATCH = 27
 
 logger = logging.getLogger(__name__)
 
@@ -807,7 +807,7 @@ class GrafanaSourceConsumer(Object):
     def set_peer_data(self, key: str, data: Any) -> None:
         """Put information into the peer data bucket instead of `StoredState`."""
         peers = self._charm.peers  # type: ignore[attr-defined]
-        if not peers:
+        if not peers or not peers.data:
             # https://bugs.launchpad.net/juju/+bug/1998282
             logger.info("set_peer_data: no peer relation. Is the charm being installed/removed?")
             return
@@ -817,12 +817,11 @@ class GrafanaSourceConsumer(Object):
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
         peers = self._charm.peers  # type: ignore[attr-defined]
-        if not peers:
+        if not peers or not peers.data:
             # https://bugs.launchpad.net/juju/+bug/1998282
             logger.warning(
                 "get_peer_data: no peer relation. Is the charm being installed/removed?"
             )
             return {}
-
-        data = self._charm.peers.data[self._charm.app].get(key, "")  # type: ignore[attr-defined]
+        data = peers.data[self._charm.app].get(key, "")  # type: ignore[attr-defined]
         return json.loads(data) if data else {}
