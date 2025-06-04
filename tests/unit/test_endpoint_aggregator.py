@@ -6,7 +6,7 @@ import unittest
 from copy import deepcopy
 from unittest.mock import patch
 
-from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointAggregator, _dedupe_list
 from cosl.rules import generic_alert_groups
 from ops.charm import CharmBase
 from ops.testing import Harness
@@ -609,7 +609,7 @@ class TestEndpointAggregator(unittest.TestCase):
         self.assertEqual(alert_names_from_reldata, alert_names_expected)
 
     def test_deduplication(self):
-        # GIVEN a prometheus relation
+        # GIVEN unique scrape jobs and alert rule groups
         unique = [
             {
                 "job_name": "juju_random_model__scrape_job_1",
@@ -624,8 +624,10 @@ class TestEndpointAggregator(unittest.TestCase):
             {"name": "juju_random_model__alert_rules_1", "rules": [...]},
             {"name": "juju_random_model__alert_rules_2", "rules": [...]},
         ]
+        # WHEN there are duplicates
         duplicates = unique + unique
-        assert unique == MetricsEndpointAggregator._dedupe_list(duplicates)
+        # THEN they are deduplicated
+        assert unique == _dedupe_list(duplicates)
 
 
 class TestEndpointAggregatorWithRelabeling(unittest.TestCase):

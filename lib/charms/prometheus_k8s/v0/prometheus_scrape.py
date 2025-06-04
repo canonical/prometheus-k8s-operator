@@ -1265,6 +1265,15 @@ def _dedupe_job_names(jobs: List[dict]):
     return deduped_jobs
 
 
+def _dedupe_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate items in the list via object identity."""
+    unique_items = []
+    for item in items:
+        if item not in unique_items:
+            unique_items.append(item)
+    return unique_items
+
+
 def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
     """Resolve the provided path items against the directory of the main file.
 
@@ -1889,8 +1898,8 @@ class MetricsEndpointAggregator(Object):
         )
         groups.extend(alert_rules.as_dict()["groups"])
 
-        groups = self._dedupe_list(groups)
-        jobs = self._dedupe_list(jobs)
+        groups = _dedupe_list(groups)
+        jobs = _dedupe_list(jobs)
 
         # Set scrape jobs and alert rules in relation data
         relations = [event.relation] if event else self.model.relations[self._prometheus_relation]
@@ -2172,7 +2181,7 @@ class MetricsEndpointAggregator(Object):
             if updated_group["name"] not in [g["name"] for g in groups]:
                 groups.append(updated_group)
 
-            groups = self._dedupe_list(groups)
+            groups = _dedupe_list(groups)
 
             relation.data[self._charm.app]["alert_rules"] = json.dumps(
                 {"groups": groups if self._forward_alert_rules else []}
@@ -2224,7 +2233,7 @@ class MetricsEndpointAggregator(Object):
                 changed_group["rules"] = rules_kept  # type: ignore
                 groups.append(changed_group)
 
-            groups = self._dedupe_list(groups)
+            groups = _dedupe_list(groups)
 
             relation.data[self._charm.app]["alert_rules"] = json.dumps(
                 {"groups": groups if self._forward_alert_rules else []}
@@ -2301,15 +2310,6 @@ class MetricsEndpointAggregator(Object):
                 labeled_rules.append(rule)
 
         return labeled_rules
-
-    @staticmethod
-    def _dedupe_list(groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Deduplicate items in the list via object identity."""
-        unique_items = []
-        for item in groups:
-            if item not in unique_items:
-                unique_items.append(item)
-        return unique_items
 
 
 class CosTool:
