@@ -2302,7 +2302,8 @@ class MetricsEndpointAggregator(Object):
 
         return labeled_rules
 
-    def _dedupe_list(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _dedupe_list(groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Deduplicate items in the list via object identity."""
         unique_items = []
         for item in groups:

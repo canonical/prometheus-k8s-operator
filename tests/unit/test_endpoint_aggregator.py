@@ -608,6 +608,25 @@ class TestEndpointAggregator(unittest.TestCase):
         ]
         self.assertEqual(alert_names_from_reldata, alert_names_expected)
 
+    def test_deduplication(self):
+        # GIVEN a prometheus relation
+        unique = [
+            {
+                "job_name": "juju_random_model__scrape_job_1",
+                "static_configs": [...],
+                "relabel_configs": [...],
+            },
+            {
+                "job_name": "juju_random_model__scrape_job_2",
+                "static_configs": [...],
+                "relabel_configs": [...],
+            },
+            {"name": "juju_random_model__alert_rules_1", "rules": [...]},
+            {"name": "juju_random_model__alert_rules_2", "rules": [...]},
+        ]
+        duplicates = unique + unique
+        assert unique == MetricsEndpointAggregator._dedupe_list(duplicates)
+
 
 class TestEndpointAggregatorWithRelabeling(unittest.TestCase):
     def setUp(self):
