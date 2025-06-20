@@ -510,19 +510,6 @@ class PrometheusRemoteWriteConsumer(Object):
         """Reload alert rules from disk and push to relation data."""
         self._push_alerts_to_all_relation_databags(None)
 
-    def _deduplicate_endpoints(self, endpoints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Deduplicate remote-write endpoints based on their URL."""
-        seen_urls = set()
-        deduped = []
-
-        for endpoint in endpoints:
-            url = endpoint.get("url")
-            if url and url not in seen_urls:
-                seen_urls.add(url)
-                deduped.append(endpoint)
-
-        return deduped
-
     @property
     def endpoints(self) -> List[Dict[str, str]]:
         """A config object ready to be dropped into a prometheus config file.
@@ -552,7 +539,10 @@ class PrometheusRemoteWriteConsumer(Object):
                         }
                     )
 
-        deduplicated_endpoints = self._deduplicate_endpoints(endpoints)
+        # deduplicate the endpoints by converting each dict to a tuple of
+        # dict.items(), throwing them into a set, and then converting them
+        # back to dictionaries
+        deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
         return deduplicated_endpoints
 
 
