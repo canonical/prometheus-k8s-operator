@@ -539,8 +539,9 @@ class PrometheusRemoteWriteConsumer(Object):
                         }
                     )
 
-        # When multiple units are behind an ingress (e.g. mimir), relation
-        # data would end up with the same ingress url for all units.
+        # When multiple units of the remote-write server are behind an ingress
+        # (e.g. mimir), relation data would end up with the same ingress url
+        # for all units.
         # Deduplicate the endpoints by converting each dict to a tuple of
         # dict.items(), throwing them into a set, and then converting them
         # back to dictionaries
