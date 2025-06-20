@@ -539,7 +539,9 @@ class PrometheusRemoteWriteConsumer(Object):
                         }
                     )
 
-        # deduplicate the endpoints by converting each dict to a tuple of
+        # When multiple units are behind an ingress (e.g. mimir), relation
+        # data would end up with the same ingress url for all units.
+        # Deduplicate the endpoints by converting each dict to a tuple of
         # dict.items(), throwing them into a set, and then converting them
         # back to dictionaries
         deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
