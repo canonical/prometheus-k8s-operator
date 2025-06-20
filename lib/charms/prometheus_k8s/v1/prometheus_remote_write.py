@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 PYDEPS = ["cosl"]
 
@@ -510,9 +510,24 @@ class PrometheusRemoteWriteConsumer(Object):
         """Reload alert rules from disk and push to relation data."""
         self._push_alerts_to_all_relation_databags(None)
 
+    def _deduplicate_endpoints(self, endpoints: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicate remote-write endpoints based on their URL."""
+        seen_urls = set()
+        deduped = []
+
+        for endpoint in endpoints:
+            url = endpoint.get("url")
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                deduped.append(endpoint)
+
+        return deduped
+
     @property
     def endpoints(self) -> List[Dict[str, str]]:
         """A config object ready to be dropped into a prometheus config file.
+
+        The endpoints are deduplicated.
 
         The format of the dict is specified in the official prometheus docs:
         https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write
@@ -537,7 +552,8 @@ class PrometheusRemoteWriteConsumer(Object):
                         }
                     )
 
-        return endpoints
+        deduplicated_endpoints = self._deduplicate_endpoints(endpoints)
+        return deduplicated_endpoints
 
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
