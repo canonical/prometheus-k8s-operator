@@ -442,7 +442,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         with self.assertLogs(level="WARNING") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts
-            messages = logger.output
+            messages = logger.output  # type: ignore
             self.assertEqual(len(messages), 1)
             self.assertIn(
                 "Alert rules were found but no usable group or identifier was present", messages[0]
@@ -463,7 +463,7 @@ class TestEndpointConsumer(unittest.TestCase):
         self.assertEqual(self.harness.charm._stored.num_events, 1)
         with self.assertLogs(level="DEBUG") as logger:
             _ = self.harness.charm.prometheus_consumer.alerts
-            messages = logger.output
+            messages = logger.output  # type: ignore
 
             searched_message = (
                 "No labeled alert rules were found, and no 'scrape_metadata' "

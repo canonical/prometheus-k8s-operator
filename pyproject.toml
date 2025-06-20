@@ -50,6 +50,7 @@ dev = [
   "aiohttp",
   "minio",
   "sh",
+  "jubilant",
 ]
 
 # Testing tools configuration

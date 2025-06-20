@@ -41,8 +41,7 @@ async def test_remote_write_with_grafana_agent(
         ops_test.model.deploy(
             "grafana-agent-k8s",
             application_name=agent_name,
-            channel="edge",
-            series="jammy",
+            channel="2/edge",
         ),
         ops_test.model.deploy(
             prometheus_tester_charm,

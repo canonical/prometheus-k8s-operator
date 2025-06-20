@@ -70,7 +70,7 @@ async def test_same_app_related_two_ways(
     await asyncio.gather(
         ops_test.model.applications[tester_app_name].reset_config(["scrape_jobs"]),
         ops_test.model.deploy(
-            "prometheus-scrape-config-k8s", channel="edge", application_name="scrape-config"
+            "prometheus-scrape-config-k8s", channel="2/edge", application_name="scrape-config"
         ),
     )
     await asyncio.gather(

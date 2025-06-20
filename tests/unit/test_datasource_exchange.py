@@ -23,11 +23,11 @@ ds_loki = [
 
 loki_dsx = Relation(
     "send-datasource",
-    remote_app_data=dict(DSExchangeAppData(datasources=json.dumps(ds_loki)).dump()),
+    remote_app_data=dict(DSExchangeAppData(datasources=json.dumps(ds_loki)).dump()),  # type: ignore
 )
 tempo_dsx = Relation(
     "send-datasource",
-    remote_app_data=dict(DSExchangeAppData(datasources=json.dumps(ds_tempo)).dump()),
+    remote_app_data=dict(DSExchangeAppData(datasources=json.dumps(ds_tempo)).dump()),  # type: ignore
 )
 
 ds = Relation(
