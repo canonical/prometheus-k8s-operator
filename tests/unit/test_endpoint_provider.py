@@ -408,7 +408,7 @@ class TestNonStandardProviders(unittest.TestCase):
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
 
-            messages = sorted(logger.output)
+            messages = sorted(logger.output)  # type: ignore
             self.assertEqual(len(messages), 1)
             self.assertIn("Invalid rules file: missing_expr.rule", messages[0])
 
@@ -419,7 +419,7 @@ class TestNonStandardProviders(unittest.TestCase):
             rel_id = self.harness.add_relation(RELATION_NAME, "provider")
             self.harness.add_relation_unit(rel_id, "provider/0")
 
-            messages = sorted(logger.output)
+            messages = sorted(logger.output)  # type: ignore
             self.assertEqual(len(messages), 1)
             self.assertIn("Failed to read rules from bad_yaml.rule", messages[0])
 

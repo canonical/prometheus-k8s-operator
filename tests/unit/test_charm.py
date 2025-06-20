@@ -70,7 +70,7 @@ class TestCharm(unittest.TestCase):
                 "debug/info/warn/error/fatal allowed. "
                 "defaulting to DEBUG loglevel."
             }
-            self.assertGreaterEqual(set(logger.output), expected_logs)
+            self.assertGreaterEqual(set(logger.output), expected_logs)  # type: ignore
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(cli_arg(plan, "--log.level"), "debug")
