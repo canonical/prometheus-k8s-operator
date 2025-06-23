@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 8
 
 PYDEPS = ["cosl"]
 
@@ -514,6 +514,8 @@ class PrometheusRemoteWriteConsumer(Object):
     def endpoints(self) -> List[Dict[str, str]]:
         """A config object ready to be dropped into a prometheus config file.
 
+        The endpoints are deduplicated.
+
         The format of the dict is specified in the official prometheus docs:
         https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write
 
@@ -537,7 +539,14 @@ class PrometheusRemoteWriteConsumer(Object):
                         }
                     )
 
-        return endpoints
+        # When multiple units of the remote-write server are behind an ingress
+        # (e.g. mimir), relation data would end up with the same ingress url
+        # for all units.
+        # Deduplicate the endpoints by converting each dict to a tuple of
+        # dict.items(), throwing them into a set, and then converting them
+        # back to dictionaries
+        deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
+        return deduplicated_endpoints
 
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):

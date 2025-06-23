@@ -130,6 +130,22 @@ class TestRemoteWriteConsumer(unittest.TestCase):
         assert list(self.harness.charm.remote_write_consumer.endpoints) == [
             {"url": "http://1.1.1.1:9090/api/v1/write"}
         ]
+        # Test the endpoint deduplication
+        self.harness.add_relation_unit(rel_id, "provider/1")
+        self.harness.add_relation_unit(rel_id, "provider/2")
+        self.harness.update_relation_data(
+            rel_id,
+            "provider/1",
+            {"remote_write": json.dumps({"url": "http://1.1.1.1:9090/api/v1/write"})},
+        )
+        self.harness.update_relation_data(
+            rel_id,
+            "provider/2",
+            {"remote_write": json.dumps({"url": "http://1.1.1.1:9090/api/v1/write"})},
+        )
+        assert list(self.harness.charm.remote_write_consumer.endpoints) == [
+            {"url": "http://1.1.1.1:9090/api/v1/write"}
+        ]
 
     @patch.object(RemoteWriteConsumerCharm, "_handle_endpoints_changed")
     def test_config_is_set(self, mock_handle_endpoints_changed):

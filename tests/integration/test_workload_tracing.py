@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
-import asyncio
 import logging
 from pathlib import Path
 
+import jubilant
 import pytest
 import yaml
-from helpers import deploy_tempo_cluster, get_application_ip, get_traces_patiently, oci_image
+from helpers import get_application_ip, get_traces_patiently, oci_image
+from minio import Minio
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +23,40 @@ SSC_APP_NAME = "ssc"
 
 @pytest.mark.abort_on_fail
 async def test_workload_traces(ops_test, prometheus_charm):
-
-    # deploy Tempo and Prometheus
-    await asyncio.gather(
-        deploy_tempo_cluster(ops_test),
-        ops_test.model.deploy(
-            prometheus_charm, resources=PROMETHEUS_RESOURCES, application_name=APP_NAME, trust=True
-        ),
+    minio_user = "accesskey"
+    minio_pass = "secretkey"
+    minio_bucket = "tempo"
+    # Set up minio and s3-integrator
+    juju = jubilant.Juju(model=ops_test.model.name)
+    juju.deploy(charm="tempo-coordinator-k8s", app="tempo", channel="2/edge", trust=True)
+    juju.deploy(charm="tempo-worker-k8s", app="tempo-worker", channel="2/edge", trust=True)
+    juju.deploy(
+        charm="minio",
+        app="minio-tempo",
+        trust=True,
+        config={"access-key": minio_user, "secret-key": minio_pass},
     )
+    juju.deploy(charm="s3-integrator", app="s3-tempo", channel="edge")
+    juju.wait(lambda status: jubilant.all_active(status, "minio-tempo"), delay=5)
+    minio_address = juju.status().apps["minio-tempo"].units["minio-tempo/0"].address
+    minio_client: Minio = Minio(
+        f"{minio_address}:9000",
+        access_key=minio_user,
+        secret_key=minio_pass,
+        secure=False,
+    )
+    if not minio_client.bucket_exists(minio_bucket):
+        minio_client.make_bucket(minio_bucket)
+    juju.config("s3-tempo", {"endpoint": f"{minio_address}:9000", "bucket": minio_bucket})
+    juju.run(
+        unit="s3-tempo/0",
+        action="sync-s3-credentials",
+        params={"access-key": minio_user, "secret-key": minio_pass},
+    )
+    juju.integrate("tempo:s3", "s3-tempo")
+    juju.integrate("tempo:tempo-cluster", "tempo-worker")
+    # Deploy Prometheus
+    juju.deploy(prometheus_charm, app=APP_NAME, resources=PROMETHEUS_RESOURCES, trust=True)
 
     # integrate workload-tracing only to not affect search results with charm traces
     await ops_test.model.integrate(f"{APP_NAME}:workload-tracing", f"{TEMPO_APP_NAME}:tracing")
@@ -53,7 +80,6 @@ async def test_workload_traces(ops_test, prometheus_charm):
 
 @pytest.mark.abort_on_fail
 async def test_workload_traces_tls(ops_test):
-
     # integrate with a TLS Provider
     await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME)
     await ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates")
