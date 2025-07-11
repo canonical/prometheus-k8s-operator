@@ -20,7 +20,7 @@ The module offers the following configurable inputs:
 | `channel`     | string   | Channel that the charm is deployed from         | latest/edge |
 | `config`      | map(any) | Map of the charm configuration options          | {}          |
 | `constraints` | string   | Constraints for the Juju deployment             | ""          |
-| `model_name`  | string   | Name of the model that the charm is deployed on |             |
+| `model`  | string   | Name of the model that the charm is deployed on |             |
 | `revision`    | number   | Revision number of the charm name               | null        |
 | `units`       | number   | Number of units to deploy                       | 1           |
 
@@ -37,4 +37,4 @@ Upon applied, the module exports the following outputs:
 
 Users should ensure that Terraform is aware of the `juju_model` dependency of the charm module.
 
-To deploy this module with its needed dependency, you can run `terraform apply -var="model_name=<MODEL_NAME>"`
+To deploy this module with its needed dependency, you can run `terraform apply -var="model=<MODEL_NAME>"`
