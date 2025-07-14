@@ -81,7 +81,7 @@ async def test_workload_traces(ops_test, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_workload_traces_tls(ops_test):
     # integrate with a TLS Provider
-    await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME)
+    await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME, channel="1/stable")
     await ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates")
     await ops_test.model.integrate(
         SSC_APP_NAME + ":certificates", TEMPO_APP_NAME + ":certificates"
