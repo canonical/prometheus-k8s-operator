@@ -67,7 +67,12 @@ async def test_workload_traces(ops_test, prometheus_charm):
     )
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME], status="active", timeout=300
+        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME],
+        status="active",
+        timeout=300,
+        # wait for an idle period
+        delay=10,
+        successes=3,
     )
 
     # verify workload traces are ingested into Tempo
@@ -89,7 +94,12 @@ async def test_workload_traces_tls(ops_test):
 
     # wait for workloads to settle down
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME], status="active", timeout=300
+        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME],
+        status="active",
+        timeout=300,
+        # wait for an idle period
+        delay=10,
+        successes=3,
     )
 
     # verify workload traces are ingested into Tempo
