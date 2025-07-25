@@ -179,7 +179,10 @@ class PrometheusCharm(CharmBase):
         )
 
         self._csr_attributes = CertificateRequestAttributes(
-            common_name=self._fqdn,
+            # the `common_name` field is required but limited to 64 characters.
+            # since it's overridden by sans, we can use a short,
+            # constrained value like app name.
+            common_name=self.app.name,
             sans_dns=frozenset((self._fqdn,)),
         )
         self._cert_requirer = TLSCertificatesRequiresV4(
