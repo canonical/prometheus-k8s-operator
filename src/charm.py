@@ -1009,12 +1009,12 @@ class PrometheusCharm(CharmBase):
             "endpoint": self.workload_tracing.get_endpoint("otlp_grpc"),
             "sampling_fraction": 1,
         }
-        if self.server_cert:
+        # communicate over TLS if a CA certificate exists.
+        # the assumption is that both charms use the same CA.
+        if self.container.exists(self._ca_cert_path):
             config["insecure"] = False
             config["tls_config"] = {
-                "ca_file": self.server_cert,
-                "cert_file": CERT_PATH,
-                "key_file": KEY_PATH,
+                "ca_file": self._ca_cert_path,
             }
         else:
             config["insecure"] = True
