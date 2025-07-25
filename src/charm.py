@@ -10,6 +10,7 @@ import logging
 import re
 import socket
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
@@ -28,7 +29,6 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
 )
-from charms.observability_libs.v1.cert_handler import CertHandler
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
     MetricsEndpointProvider,
@@ -42,6 +42,10 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
 )
 from charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer, charm_tracing_config
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    CertificateRequestAttributes,
+    TLSCertificatesRequiresV4,
+)
 from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitReadyForUnitEvent,
     IngressPerUnitRequirer,
@@ -52,7 +56,7 @@ from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchan
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops import CollectStatusEvent, StoredState
+from ops import CollectStatusEvent, EventBase, LifecycleEvent, StoredState
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import (
@@ -124,13 +128,20 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
     name, message = tpl
     return StatusBase.from_name(name, message)
 
+@dataclass
+class TLSConfig:
+    """TLS configuration received by the charm over the `certificates` relation."""
+
+    server_cert: str
+    ca_cert: str
+    private_key: str
 
 @trace_charm(
     tracing_endpoint="charm_tracing_endpoint",
     server_cert="server_cert",
     extra_types=[
         KubernetesComputeResourcesPatch,
-        CertHandler,
+        TLSCertificatesRequiresV4,
         MetricsEndpointConsumer,
         MetricsEndpointProvider,
         Prometheus,
@@ -144,6 +155,7 @@ class PrometheusCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self._fqdn = socket.getfqdn()
 
         # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
         # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
@@ -159,7 +171,6 @@ class PrometheusCharm(CharmBase):
         self._port = 9090
         self.container = self.unit.get_container(self._name)
 
-        self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
@@ -167,13 +178,15 @@ class PrometheusCharm(CharmBase):
             resource_reqs_func=self._resource_reqs_from_config,
         )
 
-        self.cert_handler = CertHandler(
-            charm=self,
-            key="prometheus-server-cert",
-            sans=[socket.getfqdn()],
+        self._csr_attributes = CertificateRequestAttributes(
+            common_name=self._fqdn,
+            sans_dns=frozenset((self._fqdn,)),
         )
-        # Update certs here in init to avoid code ordering issues
-        self._update_cert()
+        self._cert_requirer = TLSCertificatesRequiresV4(
+            charm=self,
+            relationship_name="certificates",
+            certificate_requests=[self._csr_attributes],
+        )
 
         self.ingress = IngressPerUnitRequirer(
             self,
@@ -181,7 +194,7 @@ class PrometheusCharm(CharmBase):
             port=self._port,
             strip_prefix=True,
             redirect_https=True,
-            scheme=lambda: "https" if self._is_tls_ready() else "http",
+            scheme=lambda: "https" if self._tls_available else "http",
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -198,12 +211,6 @@ class PrometheusCharm(CharmBase):
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
             external_url=self.most_external_url,
-            refresh_event=[  # needed for ingress
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
-                self.on.update_status,
-                self.cert_handler.on.cert_changed,
-            ],
         )
         self._prometheus_client = Prometheus(self.internal_url)
 
@@ -218,12 +225,6 @@ class PrometheusCharm(CharmBase):
             charm=self,
             source_type="prometheus",
             source_url=self.most_external_url,
-            refresh_event=[
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
-                self.on.update_status,
-                self.cert_handler.on.cert_changed,
-            ],
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
         )
 
@@ -245,16 +246,9 @@ class PrometheusCharm(CharmBase):
         )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(self.on.config_changed, self._configure)
-        self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self.cert_handler.on.cert_changed, self._on_server_cert_changed)
-        self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
-        self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
-        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
-        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
         self.framework.observe(
@@ -287,6 +281,16 @@ class PrometheusCharm(CharmBase):
             self._on_prometheus_api_relation_changed,
         )
 
+        for event in self.on.events().values():
+            # ignore LifecycleEvents: we want to execute the reconciler exactly once per juju hook.
+            if issubclass(event.event_type, LifecycleEvent):
+                continue
+            self.framework.observe(event, self._on_any_event)
+
+    def _on_any_event(self, _: EventBase):
+        """Common entry hook."""
+        self._reconcile()
+
     def _on_grafana_source_changed(self, _):
         self._update_datasource_exchange()
 
@@ -300,7 +304,7 @@ class PrometheusCharm(CharmBase):
         for status in self._stored.status.values():
             event.add_status(to_status(status))
 
-    def set_ports(self):
+    def _set_ports(self):
         """Open necessary (and close no longer needed) workload ports."""
         planned_ports = {
             OpenedPort("tcp", self._port),
@@ -338,11 +342,11 @@ class PrometheusCharm(CharmBase):
         port = urlparse(self.most_external_url).port
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
         # to specify it here.
-        if self._is_tls_ready():
+        if tls_config := self._tls_config:
             config = {
                 "scheme": "https",
                 "tls_config": {
-                    "ca_file": self.cert_handler.ca_cert,
+                    "ca_file": tls_config.ca_cert,
                 },
                 "static_configs": [{"targets": [f"*:{port or 443}"]}],
             }
@@ -385,7 +389,7 @@ class PrometheusCharm(CharmBase):
             "scheme": "http",  # replaced with "https" below if behind TLS
             "static_configs": [
                 {
-                    "targets": [f"{socket.getfqdn()}:{self._port}"],
+                    "targets": [f"{self._fqdn}:{self._port}"],
                     "labels": {
                         "juju_model": self._topology.model,
                         "juju_model_uuid": self._topology.model_uuid,
@@ -411,7 +415,7 @@ class PrometheusCharm(CharmBase):
             ],
         }
 
-        if self._is_tls_ready():
+        if self._tls_available:
             config.update(
                 {
                     "scheme": "https",
@@ -426,8 +430,8 @@ class PrometheusCharm(CharmBase):
     @property
     def internal_url(self) -> str:
         """Returns workload's FQDN. Used for ingress."""
-        scheme = "https" if self._is_tls_ready() else "http"
-        return f"{scheme}://{socket.getfqdn()}:{self._port}"
+        scheme = "https" if self._tls_available else "http"
+        return f"{scheme}://{self._fqdn}:{self._port}"
 
     @property
     def external_url(self) -> Optional[str]:
@@ -502,60 +506,53 @@ class PrometheusCharm(CharmBase):
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self._stored.status["k8s_patch"] = to_tuple(BlockedStatus(cast(str, event.message)))
 
-    def _on_server_cert_changed(self, _):
-        self._update_cert()
-        self._configure(_)
 
-    def _is_cert_available(self) -> bool:
-        return (
-            self.cert_handler.enabled
-            and (self.cert_handler.server_cert is not None)
-            and (self.cert_handler.private_key is not None)
-            and (self.cert_handler.ca_cert is not None)
+    # TLS CONFIG
+    @property
+    def _tls_config(self) -> Optional[TLSConfig]:
+        certificates, key = self._cert_requirer.get_assigned_certificate(
+            certificate_request=self._csr_attributes
         )
 
-    def _is_tls_ready(self) -> bool:
-        return (
-            self.container.can_connect()
-            and self.container.exists(CERT_PATH)
-            and self.container.exists(KEY_PATH)
-            and self.container.exists(CA_CERT_PATH)
-        )
+        if not (key and certificates):
+            return None
+        return TLSConfig(certificates.certificate.raw, certificates.ca.raw, key.raw)
 
-    def _update_cert(self):
-        if not self.container.can_connect():
-            return
+    @property
+    def _tls_available(self) -> bool:
+        return bool(self._tls_config)
 
+    def _reconcile_tls_config(self):
         ca_cert_path = Path(self._ca_cert_path)
-        if self._is_cert_available():
+        if tls_config := self._tls_config:
             # Save the workload certificates
             self.container.push(
                 CERT_PATH,
-                self.cert_handler.server_cert,  # pyright: ignore
+                tls_config.server_cert,
                 make_dirs=True,
             )
             self.container.push(
                 KEY_PATH,
-                self.cert_handler.private_key,  # pyright: ignore
+                tls_config.private_key,
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
             self.container.push(
                 ca_cert_path,
-                self.cert_handler.ca_cert,  # pyright: ignore
+                tls_config.ca_cert,
                 make_dirs=True,
             )
             # FIXME with the update-ca-certificates machinery prometheus shouldn't need
             #  CA_CERT_PATH.
             self.container.push(
                 CA_CERT_PATH,
-                self.cert_handler.ca_cert,  # pyright: ignore
+                tls_config.ca_cert,
                 make_dirs=True,
             )
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(self.cert_handler.ca_cert)  # pyright: ignore
+            ca_cert_path.write_text(tls_config.ca_cert,)  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
@@ -613,12 +610,6 @@ class PrometheusCharm(CharmBase):
             self._stored.status["config"] = to_tuple(MaintenanceStatus("Configuring Prometheus"))
             return
 
-        if self._is_cert_available() and not self._is_tls_ready():
-            self._update_cert()
-
-        # We use the internal url for grafana source due to
-        # https://github.com/canonical/operator/issues/970
-        self.grafana_source_provider.update_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
@@ -988,7 +979,7 @@ class PrometheusCharm(CharmBase):
 
         Ref: https://prometheus.io/docs/prometheus/latest/configuration/https/
         """
-        if self._is_tls_ready():
+        if self._tls_available:
             return {
                 "tls_server_config": {
                     "cert_file": CERT_PATH,
@@ -1090,7 +1081,12 @@ class PrometheusCharm(CharmBase):
 
             # If the scrape job has a TLS section but no "ca_file", then use ours, assuming
             # prometheus and all scrape jobs are signed by the same CA.
-            if ca_file := tls_config.get("ca_file") or self.cert_handler.ca_cert:
+
+            ca_file = tls_config.get("ca_file")
+            if not ca_file and self._tls_config:
+                ca_file = self._tls_config.ca_cert
+
+            if ca_file:
                 # TODO we shouldn't be passing CA certs over relation data, because that
                 #  reduces to self-signed certs. Both parties need to separately trust the CA
                 #  instead.
@@ -1182,11 +1178,6 @@ class PrometheusCharm(CharmBase):
             return self.workload_tracing.get_endpoint("otlp_grpc")
         return None
 
-    @property
-    def server_ca_cert_path(self) -> Optional[str]:
-        """Server CA certificate path for TLS tracing."""
-        return self._ca_cert_path if self.cert_handler.enabled else None
-
     def _on_prometheus_api_relation_changed(self, _):
         self._update_prometheus_api()
 
@@ -1205,6 +1196,23 @@ class PrometheusCharm(CharmBase):
             ingress_url=self.external_url,
         )
 
+    def _reconcile(self):
+        """Unconditional control logic."""
+        self._set_ports()
+        if not self.resources_patch.is_ready():
+            logger.debug("Resource patch not ready yet. Skipping cluster update step.")
+            return
+        if not self.container.can_connect():
+            return
+
+        self._reconcile_tls_config()
+        self._configure(None)
+
+        # reconcile relations
+        self._scraping.set_scrape_job_spec()
+        # We use the internal url for grafana source due to
+        # https://github.com/canonical/operator/issues/970
+        self.grafana_source_provider.update_source(self.internal_url)
 
 if __name__ == "__main__":
     main(PrometheusCharm)
