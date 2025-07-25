@@ -67,10 +67,7 @@ async def test_workload_traces(ops_test, prometheus_charm):
     )
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME],
-        status="active",
-        timeout=300,
-        idle_period=30,
+        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME], status="active", timeout=300
     )
 
     # verify workload traces are ingested into Tempo
@@ -84,7 +81,7 @@ async def test_workload_traces(ops_test, prometheus_charm):
 @pytest.mark.abort_on_fail
 async def test_workload_traces_tls(ops_test):
     # integrate with a TLS Provider
-    await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME, channel="1/edge")
+    await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME, channel="1/stable")
     await ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates")
     await ops_test.model.integrate(
         SSC_APP_NAME + ":certificates", TEMPO_APP_NAME + ":certificates"
@@ -92,10 +89,7 @@ async def test_workload_traces_tls(ops_test):
 
     # wait for workloads to settle down
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME],
-        status="active",
-        timeout=300,
-        idle_period=30,
+        apps=[APP_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME], status="active", timeout=300
     )
 
     # verify workload traces are ingested into Tempo
