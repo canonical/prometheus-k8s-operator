@@ -305,6 +305,8 @@ class PrometheusCharm(CharmBase):
             self._on_prometheus_api_relation_changed,
         )
 
+    def _on_grafana_source_changed(self, _):
+        self._update_datasource_exchange()
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
