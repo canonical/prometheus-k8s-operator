@@ -56,7 +56,7 @@ from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchan
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
-from ops import CollectStatusEvent, EventBase, LifecycleEvent, StoredState
+from ops import CollectStatusEvent, StoredState
 from ops.charm import ActionEvent, CharmBase
 from ops.main import main
 from ops.model import (
@@ -170,7 +170,7 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
         self.container = self.unit.get_container(self._name)
-
+        self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
             self,
@@ -190,6 +190,8 @@ class PrometheusCharm(CharmBase):
             relationship_name="certificates",
             certificate_requests=[self._csr_attributes],
         )
+        # Update certs here in init to avoid code ordering issues
+        self._update_cert()
 
         self.ingress = IngressPerUnitRequirer(
             self,
@@ -214,6 +216,12 @@ class PrometheusCharm(CharmBase):
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
             external_url=self.most_external_url,
+            refresh_event=[  # needed for ingress
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
+                self.on.update_status,
+                self._cert_requirer.on.certificate_available,
+            ],
         )
         self._prometheus_client = Prometheus(self.internal_url)
 
@@ -229,6 +237,12 @@ class PrometheusCharm(CharmBase):
             source_type="prometheus",
             source_url=self.most_external_url,
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
+            refresh_event=[
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
+                self.on.update_status,
+                self._cert_requirer.on.certificate_available,
+            ],
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
@@ -249,53 +263,24 @@ class PrometheusCharm(CharmBase):
         )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.config_changed, self._configure)
+        self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
+        self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
+        self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
+        self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
+        self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
+        self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
-        self.framework.observe(
-            self.on.send_datasource_relation_joined, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.send_datasource_relation_created, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.send_datasource_relation_changed, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.send_datasource_relation_departed, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.grafana_source_relation_created, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.grafana_source_relation_joined, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.grafana_source_relation_changed, self._on_grafana_source_changed
-        )
-        self.framework.observe(
-            self.on.grafana_source_relation_departed, self._on_grafana_source_changed
-        )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
         self.framework.observe(
             self.on[PROMETHEUS_API_RELATION_NAME].relation_joined,
             self._on_prometheus_api_relation_changed,
         )
 
-        for event in self.on.events().values():
-            # ignore LifecycleEvents: we want to execute the reconciler exactly once per juju hook.
-            if issubclass(event.event_type, LifecycleEvent):
-                continue
-            self.framework.observe(event, self._on_any_event)
-
-    def _on_any_event(self, _: EventBase):
-        """Common entry hook."""
-        self._reconcile()
-
-    def _on_grafana_source_changed(self, _):
-        self._update_datasource_exchange()
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
@@ -307,7 +292,7 @@ class PrometheusCharm(CharmBase):
         for status in self._stored.status.values():
             event.add_status(to_status(status))
 
-    def _set_ports(self):
+    def set_ports(self):
         """Open necessary (and close no longer needed) workload ports."""
         planned_ports = {
             OpenedPort("tcp", self._port),
@@ -509,6 +494,9 @@ class PrometheusCharm(CharmBase):
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
         self._stored.status["k8s_patch"] = to_tuple(BlockedStatus(cast(str, event.message)))
 
+    def _on_certificate_available(self, _):
+        self._update_cert()
+        self._configure(_)
 
     # TLS CONFIG
     @property
@@ -525,7 +513,10 @@ class PrometheusCharm(CharmBase):
     def _tls_available(self) -> bool:
         return bool(self._tls_config)
 
-    def _reconcile_tls_config(self):
+    def _update_cert(self):
+        if not self.container.can_connect():
+            return
+
         ca_cert_path = Path(self._ca_cert_path)
         if tls_config := self._tls_config:
             # Save the workload certificates
@@ -613,6 +604,9 @@ class PrometheusCharm(CharmBase):
             self._stored.status["config"] = to_tuple(MaintenanceStatus("Configuring Prometheus"))
             return
 
+        # We use the internal url for grafana source due to
+        # https://github.com/canonical/operator/issues/970
+        self.grafana_source_provider.update_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
@@ -713,6 +707,7 @@ class PrometheusCharm(CharmBase):
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
+        print("CURRENT", current_planned_services)
 
         current_services = self.container.get_services()  # mapping from str to ServiceInfo
         all_svcs_running = all(svc.is_running() for svc in current_services.values())
@@ -1199,23 +1194,6 @@ class PrometheusCharm(CharmBase):
             ingress_url=self.external_url,
         )
 
-    def _reconcile(self):
-        """Unconditional control logic."""
-        self._set_ports()
-        if not self.resources_patch.is_ready():
-            logger.debug("Resource patch not ready yet. Skipping cluster update step.")
-            return
-        if not self.container.can_connect():
-            return
-
-        self._reconcile_tls_config()
-        self._configure(None)
-
-        # reconcile relations
-        self._scraping.set_scrape_job_spec()
-        # We use the internal url for grafana source due to
-        # https://github.com/canonical/operator/issues/970
-        self.grafana_source_provider.update_source(self.internal_url)
 
 if __name__ == "__main__":
     main(PrometheusCharm)
