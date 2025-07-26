@@ -275,6 +275,30 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(
+            self.on.send_datasource_relation_joined, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.send_datasource_relation_created, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.send_datasource_relation_changed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.send_datasource_relation_departed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_created, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_joined, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_changed, self._on_grafana_source_changed
+        )
+        self.framework.observe(
+            self.on.grafana_source_relation_departed, self._on_grafana_source_changed
+        )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_unit_status)
         self.framework.observe(
             self.on[PROMETHEUS_API_RELATION_NAME].relation_joined,
@@ -707,7 +731,6 @@ class PrometheusCharm(CharmBase):
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
-        print("CURRENT", current_planned_services)
 
         current_services = self.container.get_services()  # mapping from str to ServiceInfo
         all_svcs_running = all(svc.is_running() for svc in current_services.values())
