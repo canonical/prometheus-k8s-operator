@@ -52,8 +52,9 @@ class TestActiveStatus(unittest.TestCase):
         """Scenario: Unit is deployed without any user-provided config or regular relations."""
         # GIVEN reload configuration succeeds
         with patch("prometheus_client.Prometheus.reload_configuration", lambda *a, **kw: True):
-            self.harness.begin_with_initial_hooks()
             self.harness.container_pebble_ready("prometheus")
+            self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+            self.harness.begin_with_initial_hooks()
 
             # WHEN no config is provided or relations created
 
@@ -84,8 +85,9 @@ class TestActiveStatus(unittest.TestCase):
             "prometheus_client.Prometheus.reload_configuration", lambda *a, **kw: False
         )
         with replan_patch, reload_patch:
-            self.harness.begin_with_initial_hooks()
             self.harness.container_pebble_ready("prometheus")
+            self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+            self.harness.begin_with_initial_hooks()
 
             # WHEN no config is provided or relations created
 
