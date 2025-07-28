@@ -28,7 +28,6 @@ SCRAPE_METADATA = {
     "charm_name": "provider-charm",
 }
 
-
 @prom_multipatch
 class TestCharm(unittest.TestCase):
     @k8s_resource_multipatch
@@ -43,8 +42,9 @@ class TestCharm(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.harness.set_model_name("prometheus_model")
         self.mock_capacity.return_value = "1Gi"
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
 
     def test_grafana_is_provided_port_and_source(self):
         rel_id = self.harness.add_relation("grafana-source", "grafana")
@@ -295,8 +295,9 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
 
         # AND the maximum_retention_size config is left unspecified (let it keep its default)
         # WHEN the charm starts
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
 
         # THEN the pebble plan has the adjusted capacity of 80%
         plan = self.harness.get_container_pebble_plan("prometheus")
@@ -318,8 +319,9 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
 
         # WHEN the charm starts
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
 
         for set_point, read_back in [("0%", "0GB"), ("50%", "0.5GB"), ("100%", "1GB")]:
             with self.subTest(limit=set_point):
@@ -335,8 +337,9 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     def test_invalid_retention_size_config_option_string(self, *unused):
         # GIVEN a running charm with default values
         self.mock_capacity.return_value = "1Gi"
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
@@ -441,8 +444,9 @@ class TestAlertsFilename(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.harness.set_model_name("prometheus_model")
         self.mock_capacity.return_value = "1Gi"
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
         self.harness.add_relation_unit(self.rel_id, "remote-app/0")
@@ -565,8 +569,9 @@ class TestPebblePlan(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.harness.set_model_name(self.__class__.__name__)
         self.mock_capacity.return_value = "1Gi"
+        self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
         self.harness.begin_with_initial_hooks()
-        # self.harness.container_pebble_ready("prometheus")
 
         self.container_name = self.harness.charm._name
         self.container = self.harness.charm.unit.get_container(self.container_name)
@@ -662,9 +667,9 @@ class TestTlsConfig(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.harness.set_model_name(self.__class__.__name__)
         self.mock_capacity.return_value = "1Gi"
-
-        self.harness.begin_with_initial_hooks()
         self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")

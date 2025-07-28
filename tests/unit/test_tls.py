@@ -48,9 +48,7 @@ class TestTls(unittest.TestCase):
     @patch("socket.getfqdn", new=lambda *args: "fqdn")
     @patch.multiple(
         "charm.PrometheusCharm",
-        _is_tls_ready=lambda *_: True,
-        _is_cert_available=lambda *_: True,
-        _update_cert=lambda *_: None,
+        _tls_available=lambda *_: True,
     )
     def test_tls_relation_with_tls_ready(self, *unused):
         self.harness.begin_with_initial_hooks()
