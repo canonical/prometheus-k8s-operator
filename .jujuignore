@@ -1,3 +1,10 @@
 /venv
 *.py[cod]
 *.charm
+.flake8
+tests
+tox.ini
+CONTRIBUTING.md
+INTEGRATING.md
+RELEASE.md
+cos-tool*
