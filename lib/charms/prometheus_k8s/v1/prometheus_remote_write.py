@@ -46,7 +46,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 9
 
 PYDEPS = ["cosl"]
 
@@ -530,14 +530,16 @@ class PrometheusRemoteWriteConsumer(Object):
                     # This is a peer unit
                     continue
 
-                remote_write = relation.data[unit].get("remote_write")
-                if remote_write:
-                    deserialized_remote_write = json.loads(remote_write)
-                    endpoints.append(
-                        {
-                            "url": deserialized_remote_write["url"],
-                        }
-                    )
+                unit_databag = relation.data.get(unit)
+                if unit_databag:
+                    remote_write = unit_databag.get("remote_write")
+                    if remote_write:
+                        deserialized_remote_write = json.loads(remote_write)
+                        endpoints.append(
+                            {
+                                "url": deserialized_remote_write["url"],
+                            }
+                        )
 
         # When multiple units of the remote-write server are behind an ingress
         # (e.g. mimir), relation data would end up with the same ingress url
