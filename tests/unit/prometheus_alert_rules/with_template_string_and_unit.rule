@@ -1,0 +1,9 @@
+alert: PrometheusTargetMissing
+expr: up{%%juju_topology%%, juju_unit="app/0"} == 0
+for: 0m
+labels:
+  severity: critical
+  juju_unit: app/0
+annotations:
+  summary: Prometheus target missing (instance {{ $labels.instance }})
+  description: "A Prometheus target has disappeared. An exporter might be crashed.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
