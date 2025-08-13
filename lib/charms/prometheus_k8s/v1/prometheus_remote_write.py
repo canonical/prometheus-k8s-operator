@@ -13,6 +13,7 @@ the Prometheus remote_write API, that is, they can receive metrics data over rem
 should use the `PrometheusRemoteWriteProducer`.
 """
 
+import copy
 import json
 import logging
 import os
@@ -46,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 PYDEPS = ["cosl"]
 
@@ -404,6 +405,7 @@ class PrometheusRemoteWriteConsumer(Object):
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         *,
         forward_alert_rules: bool = True,
+        extra_alert_labels: Dict = {},
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -415,6 +417,7 @@ class PrometheusRemoteWriteConsumer(Object):
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set alerts data.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
+            extra_alert_labels: Dict of extra labels to inject alert rules with.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -444,6 +447,7 @@ class PrometheusRemoteWriteConsumer(Object):
         self._relation_name = relation_name
         self._alert_rules_path = alert_rules_path
         self._forward_alert_rules = forward_alert_rules
+        self._extra_alert_labels = extra_alert_labels
 
         self.topology = JujuTopology.from_charm(charm)
 
@@ -504,11 +508,27 @@ class PrometheusRemoteWriteConsumer(Object):
 
         alert_rules_as_dict = alert_rules.as_dict()
 
+        if self._extra_alert_labels:
+            alert_rules_as_dict = (
+                PrometheusRemoteWriteConsumer._inject_extra_labels_to_alert_rules(
+                    alert_rules_as_dict, self._extra_alert_labels
+                )
+            )
+
         relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
         self._push_alerts_to_all_relation_databags(None)
+
+    @staticmethod
+    def _inject_extra_labels_to_alert_rules(rules: Dict, extra_alert_labels: Dict) -> Dict:
+        """Return a copy of the rules dict with extra labels injected."""
+        result = copy.deepcopy(rules)
+        for group in result.get("groups", []):
+            for rule in group.get("rules", []):
+                rule.setdefault("labels", {}).update(extra_alert_labels)
+        return result
 
     @property
     def endpoints(self) -> List[Dict[str, str]]:
