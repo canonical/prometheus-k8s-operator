@@ -110,7 +110,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH =  8
+LIBPATCH =  9
 
 PYDEPS = ["pydantic"]
 
@@ -383,7 +383,7 @@ class Receiver(BaseModel):
     )
 
 
-class TracingProviderAppData(DatabagModel):  # noqa: D101
+class TracingProviderAppData(DatabagModel):  # noqa: D101 # type: ignore
     """Application databag model for the tracing provider."""
 
     receivers: List[Receiver] = Field(
@@ -392,7 +392,7 @@ class TracingProviderAppData(DatabagModel):  # noqa: D101
     )
 
 
-class TracingRequirerAppData(DatabagModel):  # noqa: D101
+class TracingRequirerAppData(DatabagModel):  # noqa: D101 # type: ignore
     """Application databag model for the tracing requirer."""
 
     receivers: List[ReceiverProtocol]

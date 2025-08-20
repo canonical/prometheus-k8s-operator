@@ -1,7 +1,57 @@
 # Copyright 2021 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Charm for providing services catalogues to bundles or sets of charms."""
+"""Charm for providing services catalogues to bundles or sets of charms.
+
+This charm library contains two classes (CatalogueProvider and CatalogueConsumer) that handle
+both sides of the `catalogue` relation interface.
+
+### CatalogueConsumer
+
+The Consumer allows sending catalogue items to a Catalogue charm.
+
+Adding it to your charm is very simple:
+
+    ```
+    from charms.catalogue_k8s.v1.catalogue import (
+        CatalogueConsumer,
+        CatalogueItem,
+    )
+
+    ...
+        self.catalogue = CatalogueConsumer(
+            charm=self,
+            relation_name="catalogue",  # optional
+            item=CatalogueItem(
+                name="myapp",
+                url=myapp_url,
+                icon="rainbow",
+                description="This is a rainbow app!"
+            )
+        )
+    ```
+
+    The relevant events listeners are already registered by the CatalogueConsumer object.
+
+### CatalogueProvider
+
+The Provider helps you receive catalogue items from other charms to display them however you like.
+
+To implement this in your charm:
+
+    ```
+    from charms.catalogue_k8s.v1.catalogue import CatalogueProvider
+
+    ...
+        self.catalogue = CatalogueProvider(
+            charm=self,
+            relation_name="catalogue",  # optional
+        )
+    ```
+
+
+    The relevant events listeners are already registered by the CatalogueProvider object.
+"""
 
 import ipaddress
 import logging
@@ -13,7 +63,7 @@ from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 1
-LIBPATCH = 1
+LIBPATCH = 2
 
 DEFAULT_RELATION_NAME = "catalogue"
 
