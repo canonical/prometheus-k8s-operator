@@ -163,7 +163,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 27
+LIBPATCH = 28
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +343,7 @@ class GrafanaSourceProvider(Object):
         relation_name: str = DEFAULT_RELATION_NAME,
         extra_fields: Optional[dict] = None,
         secure_extra_fields: Optional[dict] = None,
+        is_ingress_per_app: bool = False,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -385,6 +386,9 @@ class GrafanaSourceProvider(Object):
                 for some datasources in the `jsonData` field
             secure_extra_fields: a :dict: which is used for additional information required
                 for some datasources in the `secureJsonData`
+            is_ingress_per_app: whether this application is behind an ingress, specifically ingress-per-app. If set to True, then only
+                the leader unit will be listed as a datasource in grafana. If False, each
+                follower unit will show up as a datasource as well.
         """
         _validate_relation_by_interface_and_direction(
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
@@ -421,9 +425,17 @@ class GrafanaSourceProvider(Object):
             )
 
         self._source_port = source_port
+
+        # If there's no ingress, then each unit is a datasource.
+        # If there is an ingress, then only the leader is a datasource.
+        self._this_unit_is_datasource = (not is_ingress_per_app) or charm.unit.is_leader()
+
         self._source_url = self._sanitize_source_url(source_url)
 
         self.framework.observe(events.relation_joined, self._set_sources_from_event)
+        self.framework.observe(events.relation_changed, self._set_sources_from_event)
+        self.framework.observe(events.relation_departed, self._set_sources_from_event)
+        self.framework.observe(events.relation_broken, self._set_sources_from_event)
         for ev in refresh_event:
             self.framework.observe(ev, self._set_unit_details)
 
@@ -516,11 +528,15 @@ class GrafanaSourceProvider(Object):
         unit relation data for the Prometheus consumer.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            url = self._source_url or "http://{}:{}".format(socket.getfqdn(), self._source_port)
-            if self._source_type == "mimir":
-                url = f"{url}/prometheus"
-
-            relation.data[self._charm.unit]["grafana_source_host"] = url
+            if self._this_unit_is_datasource:
+                url = self._source_url or "http://{}:{}".format(
+                    socket.getfqdn(), self._source_port
+                )
+                if self._source_type == "mimir":
+                    url = f"{url}/prometheus"
+                relation.data[self._charm.unit]["grafana_source_host"] = url
+            else:
+                relation.data[self._charm.unit]["grafana_source_host"] = ""
 
 
 class GrafanaSourceConsumer(Object):
@@ -595,9 +611,40 @@ class GrafanaSourceConsumer(Object):
                 if source:
                     sources[rel.id] = source
 
+            to_delete = self._sources_to_delete(sources)
             self.set_peer_data("sources", sources)
-
+            self.set_peer_data("sources_to_delete", to_delete)
         self.on.sources_changed.emit()  # pyright: ignore
+
+    def _sources_to_delete(self, new_sources: Dict) -> List:
+        """Return a list of sources to delete.
+
+        To ensure the Grafana datastore is updated when stale datasources exist, we compare the old
+        sources to the new ones. Any old sources which do not exist in the new sources are
+        scheduled for deletion in addition to any other sources already scheduled for deletion.
+        """
+        old_sources = self.get_peer_data("sources")
+        old_to_delete = self.get_peer_data("sources_to_delete")
+        new_to_delete = []
+        if old_to_delete:
+            new_to_delete.extend(old_to_delete)
+
+        if not old_sources:
+            return new_to_delete
+
+        for rel_id in new_sources:
+            old_source_names = (
+                [something["source_name"] for something in old_sources[str(rel_id)]]
+                if str(rel_id) in old_sources
+                else []
+            )
+            new_source_names = [something["source_name"] for something in new_sources[rel_id]]
+            new_to_delete_for_rel = [
+                name for name in old_source_names if name not in new_source_names
+            ]
+            new_to_delete.extend(new_to_delete_for_rel)
+
+        return new_to_delete
 
     def _on_grafana_peer_changed(self, _: RelationChangedEvent) -> None:
         """Emit source events on peer events so secondary charm data updates."""
