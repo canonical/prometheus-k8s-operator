@@ -72,6 +72,7 @@ follows
 
 
 """  # noqa: W505
+
 import enum
 import json
 import logging
@@ -110,7 +111,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH =  8
+LIBPATCH = 10
 
 PYDEPS = ["pydantic"]
 
@@ -143,7 +144,9 @@ class TransportProtocolType(str, enum.Enum):
     grpc = "grpc"
 
 
-receiver_protocol_to_transport_protocol: Dict[ReceiverProtocol, TransportProtocolType] = {
+receiver_protocol_to_transport_protocol: Dict[
+    ReceiverProtocol, TransportProtocolType
+] = {
     "zipkin": TransportProtocolType.http,
     "otlp_grpc": TransportProtocolType.grpc,
     "otlp_http": TransportProtocolType.http,
@@ -383,7 +386,7 @@ class Receiver(BaseModel):
     )
 
 
-class TracingProviderAppData(DatabagModel):  # noqa: D101
+class TracingProviderAppData(DatabagModel):  # noqa: D101 # type: ignore
     """Application databag model for the tracing provider."""
 
     receivers: List[Receiver] = Field(
@@ -392,7 +395,7 @@ class TracingProviderAppData(DatabagModel):  # noqa: D101
     )
 
 
-class TracingRequirerAppData(DatabagModel):  # noqa: D101
+class TracingRequirerAppData(DatabagModel):  # noqa: D101 # type: ignore
     """Application databag model for the tracing requirer."""
 
     receivers: List[ReceiverProtocol]
@@ -411,7 +414,9 @@ class _AutoSnapshotEvent(RelationEvent):
         super().__init__(handle, relation)
 
         if not len(self.__args__) == len(args):
-            raise TypeError("expected {} args, got {}".format(len(self.__args__), len(args)))
+            raise TypeError(
+                "expected {} args, got {}".format(len(self.__args__), len(args))
+            )
 
         for attr, obj in zip(self.__args__, args):
             setattr(self, attr, obj)
@@ -461,10 +466,8 @@ class RelationInterfaceMismatchError(Exception):
         self.relation_name = relation_name
         self.expected_relation_interface = expected_relation_interface
         self.actual_relation_interface = actual_relation_interface
-        self.message = (
-            "The '{}' relation has '{}' as interface rather than the expected '{}'".format(
-                relation_name, actual_relation_interface, expected_relation_interface
-            )
+        self.message = "The '{}' relation has '{}' as interface rather than the expected '{}'".format(
+            relation_name, actual_relation_interface, expected_relation_interface
         )
 
         super().__init__(self.message)
@@ -482,8 +485,10 @@ class RelationRoleMismatchError(Exception):
         self.relation_name = relation_name
         self.expected_relation_interface = expected_relation_role
         self.actual_relation_role = actual_relation_role
-        self.message = "The '{}' relation has role '{}' rather than the expected '{}'".format(
-            relation_name, repr(actual_relation_role), repr(expected_relation_role)
+        self.message = (
+            "The '{}' relation has role '{}' rather than the expected '{}'".format(
+                relation_name, repr(actual_relation_role), repr(expected_relation_role)
+            )
         )
 
         super().__init__(self.message)
@@ -544,7 +549,9 @@ def _validate_relation_by_interface_and_direction(
                 relation_name, RelationRole.requires, RelationRole.provides
             )
     else:
-        raise TypeError("Unexpected RelationDirection: {}".format(expected_relation_role))
+        raise TypeError(
+            "Unexpected RelationDirection: {}".format(expected_relation_role)
+        )
 
 
 class RequestEvent(RelationEvent):
@@ -620,7 +627,8 @@ class TracingEndpointProvider(Object):
             self._charm.on[relation_name].relation_changed, self._on_relation_event
         )
         self.framework.observe(
-            self._charm.on[relation_name].relation_broken, self._on_relation_broken_event
+            self._charm.on[relation_name].relation_broken,
+            self._on_relation_broken_event,
         )
 
     def _on_relation_broken_event(self, e: RelationBrokenEvent):
@@ -780,7 +788,9 @@ class TracingEndpointRequirer(Object):
         self._relation_name = relation_name
 
         events = self._charm.on[self._relation_name]
-        self.framework.observe(events.relation_changed, self._on_tracing_relation_changed)
+        self.framework.observe(
+            events.relation_changed, self._on_tracing_relation_changed
+        )
         self.framework.observe(events.relation_broken, self._on_tracing_relation_broken)
 
         if protocols and self._charm.unit.is_leader():
@@ -839,7 +849,7 @@ class TracingEndpointRequirer(Object):
         """Is this endpoint ready?"""
         relation = relation or self._relation
         if not relation:
-            logger.debug(f"no relation on {self._relation_name !r}: tracing not ready")
+            logger.debug(f"no relation on {self._relation_name!r}: tracing not ready")
             return False
         if relation.data is None:
             logger.error(f"relation data is None for {relation}")
@@ -922,7 +932,9 @@ class TracingEndpointRequirer(Object):
             relations = [relation] if relation else self.relations
             for relation in relations:
                 try:
-                    databag = TracingRequirerAppData.load(relation.data[self._charm.app])
+                    databag = TracingRequirerAppData.load(
+                        relation.data[self._charm.app]
+                    )
                 except DataValidationError:
                     continue
 
