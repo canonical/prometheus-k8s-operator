@@ -585,6 +585,15 @@ class PrometheusCharm(CharmBase):
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
         subprocess.run(["update-ca-certificates", "--fresh"])
 
+    def _check_disk_space(self):
+        try:
+            database_storage = self.model.storages.get('database', [])
+            if database_storage and shutil.disk_usage(database_storage[0].location).free < 1e9: # type: ignore
+                self._stored.status["disk_space"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
+        # If this check is done before storage is attached, we don't want the charm to go error state
+        except FileNotFoundError:
+            self.unit.status = BlockedStatus("Storage not available")
+
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
 
@@ -730,7 +739,7 @@ class PrometheusCharm(CharmBase):
             logger.debug(
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
-
+        self._check_disk_space()
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
@@ -750,15 +759,7 @@ class PrometheusCharm(CharmBase):
         # yet ready). Calling `_configure` to recover.
         if self.unit.status != ActiveStatus():
             self._configure(event)
-        try:
-            database_storage = self.model.storages.get('database', [])
-            if database_storage and shutil.disk_usage(database_storage.location).free < 1e9: # type: ignore
-                self._stored.status["config"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
-        # If this check is done before storage is attached, we don't want the charm to go error state
-        except FileNotFoundError:
-            self.unit.status = BlockedStatus("Storage not available")
-
-
+        self._check_disk_space()
 
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
