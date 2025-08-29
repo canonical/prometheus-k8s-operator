@@ -8,6 +8,7 @@
 import hashlib
 import logging
 import re
+import shutil
 import socket
 import subprocess
 from dataclasses import dataclass
@@ -16,7 +17,6 @@ from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
-import shutil
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
@@ -751,14 +751,15 @@ class PrometheusCharm(CharmBase):
         if self.unit.status != ActiveStatus():
             self._configure(event)
         try:
-            if shutil.disk_usage(self.model.storages['database'][0].location).free < 1e9:
+            database_storage = self.model.storages.get('database', [])
+            if database_storage and shutil.disk_usage(database_storage.location).free < 1e9:
                 self._stored.status["config"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
         # If this check is done before storage is attached, we don't want the charm to go error state
         except FileNotFoundError:
             self.unit.status = BlockedStatus("Storage not available")
-        
 
-        
+
+
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
 
