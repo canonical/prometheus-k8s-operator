@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
+import shutil
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
@@ -749,7 +750,15 @@ class PrometheusCharm(CharmBase):
         # yet ready). Calling `_configure` to recover.
         if self.unit.status != ActiveStatus():
             self._configure(event)
+        try:
+            if shutil.disk_usage(self.model.storages['database'][0].location).free < 1e9:
+                self._stored.status["config"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
+        # If this check is done before storage is attached, we don't want the charm to go error state
+        except FileNotFoundError:
+            self.unit.status = BlockedStatus("Storage not available")
+        
 
+        
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
 
