@@ -249,18 +249,14 @@ class TestCharm(unittest.TestCase):
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
 
-    '''def test_blocked_state_when_insufficient_space(self):
+    def test_blocked_state_when_insufficient_space(self):
         # Patch the function used in _check_disk_space
         with patch("shutil.disk_usage") as mock_disk_usage:
-            # Set the return value of the mock to simulate insufficient space
             mock_disk_usage.return_value.free = 1e8
-
-            # Call the method you want to test
             self.harness.charm._check_disk_space()
 
-            # Assert the expected behavior, e.g., check the status
             self.harness.evaluate_status()
-            self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)'''
+            self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
 def alerting_config(config):
     config_yaml = config[1]
