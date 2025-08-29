@@ -111,7 +111,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 PYDEPS = ["pydantic"]
 
@@ -657,7 +657,7 @@ class TracingEndpointProvider(Object):
         try:
             databag = TracingRequirerAppData.load(relation.data[app])
         except (json.JSONDecodeError, pydantic.ValidationError, DataValidationError):
-            logger.info(f"relation {relation} is not ready to talk tracing")
+            logger.info("relation %s is not ready to talk tracing", relation)
             raise NotReadyError()
         return databag.receivers
 
@@ -705,8 +705,9 @@ class TracingEndpointProvider(Object):
                         b"ERROR cannot read relation application settings: permission denied"
                     ):
                         logger.error(
-                            f"encountered error {e} while attempting to update_relation_data."
-                            f"The relation must be gone."
+                            "encountered error %s while attempting to update_relation_data."
+                            "The relation must be gone.",
+                            e,
                         )
                         continue
                 raise
@@ -800,8 +801,9 @@ class TracingEndpointRequirer(Object):
                 self.request_protocols(protocols)
             except ModelError as e:
                 logger.error(
-                    f"encountered error {e} while attempting to request_protocols."
-                    f"The relation must be gone."
+                    "encountered error %s while attempting to request_protocols."
+                    "The relation must be gone.",
+                    e,
                 )
                 pass
 
@@ -849,20 +851,20 @@ class TracingEndpointRequirer(Object):
         """Is this endpoint ready?"""
         relation = relation or self._relation
         if not relation:
-            logger.debug(f"no relation on {self._relation_name!r}: tracing not ready")
+            logger.debug("no relation on %r: tracing not ready", self._relation_name)
             return False
         if relation.data is None:
-            logger.error(f"relation data is None for {relation}")
+            logger.error("relation data is None for %s", relation)
             return False
         if not relation.app:
-            logger.error(f"{relation} event received but there is no relation.app")
+            logger.error("%s event received but there is no relation.app", relation)
             return False
         try:
             databag = dict(relation.data[relation.app])
             TracingProviderAppData.load(databag)
 
         except (json.JSONDecodeError, pydantic.ValidationError, DataValidationError):
-            logger.info(f"failed validating relation data for {relation}")
+            logger.info("failed validating relation data for %s", relation)
             return False
         return True
 
@@ -902,12 +904,14 @@ class TracingEndpointRequirer(Object):
         if not receivers:
             # it can happen if the charm requests tracing protocols, but the relay (such as grafana-agent) isn't yet
             # connected to the tracing backend. In this case, it's not an error the charm author can do anything about
-            logger.warning(f"no receiver found with protocol={protocol!r}.")
+            logger.warning("no receiver found with protocol=%r.", protocol)
             return
         if len(receivers) > 1:
             # if we have more than 1 receiver that matches, it shouldn't matter which receiver we'll be using.
             logger.warning(
-                f"too many receivers with protocol={protocol!r}; using first one. Found: {receivers}"
+                "too many receivers with protocol=%r; using first one. Found: %s",
+                protocol,
+                receivers,
             )
 
         receiver = receivers[0]
