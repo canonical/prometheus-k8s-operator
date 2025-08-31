@@ -590,6 +590,7 @@ class PrometheusCharm(CharmBase):
             database_storage = self.model.storages.get('database', [])
             if database_storage and shutil.disk_usage(database_storage[0].location).free < 1e9: # type: ignore
                 self._stored.status["disk_space"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
+
         # If this check is done before storage is attached, we don't want the charm to go error state
         except FileNotFoundError:
             self.unit.status = BlockedStatus("Storage not available")

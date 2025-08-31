@@ -6,7 +6,7 @@ import logging
 import socket
 import unittest
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import ops
 import yaml
@@ -252,11 +252,17 @@ class TestCharm(unittest.TestCase):
     def test_blocked_state_when_insufficient_space(self):
         # Patch the function used in _check_disk_space
         with patch("shutil.disk_usage") as mock_disk_usage:
+            # GIVEN the container has insufficient space left (less than 1 GiB)
             mock_disk_usage.return_value.free = 1e8
-            self.harness.charm._check_disk_space()
+            mock_storage = MagicMock()
+            mock_storage.location = "/foo/bar"
+            with patch.object(self.harness.model.storages, 'get', return_value=[mock_storage]):
+                # WHEN we check the disk space on pebble_ready or update_status
+                self.harness.charm._check_disk_space()
 
-            self.harness.evaluate_status()
-            self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+                self.harness.evaluate_status()
+                # THEN the charm should be in Blocked state
+                self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
 def alerting_config(config):
     config_yaml = config[1]
