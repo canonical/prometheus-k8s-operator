@@ -249,20 +249,22 @@ class TestCharm(unittest.TestCase):
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
 
-    def test_blocked_state_when_insufficient_space(self):
+    def test_check_disk_space(self):
+        test_cases = [
+            (1e10, ActiveStatus),  
+            (1e8, BlockedStatus),
+        ]
         # Patch the function used in _check_disk_space
-        with patch("shutil.disk_usage") as mock_disk_usage:
-            # GIVEN the container has insufficient space left (less than 1 GiB)
-            mock_disk_usage.return_value.free = 1e8
-            mock_storage = MagicMock()
-            mock_storage.location = "/foo/bar"
-            with patch.object(self.harness.model.storages, 'get', return_value=[mock_storage]):
-                # WHEN we check the disk space on pebble_ready or update_status
-                self.harness.charm._check_disk_space()
+        for disk_space, expected_status in test_cases:
+            with patch("shutil.disk_usage") as mock_disk_usage:
+                mock_disk_usage.return_value.free = disk_space
+                mock_storage = MagicMock()
+                mock_storage.location = "/foo/bar"
+                with patch.object(self.harness.model.storages, 'get', return_value=[mock_storage]):
+                    self.harness.charm._check_disk_space()
 
-                self.harness.evaluate_status()
-                # THEN the charm should be in Blocked state
-                self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+                    self.harness.evaluate_status()
+                    self.assertIsInstance(self.harness.model.unit.status, expected_status)
 
 def alerting_config(config):
     config_yaml = config[1]
