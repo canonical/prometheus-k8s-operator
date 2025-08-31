@@ -251,7 +251,7 @@ class TestCharm(unittest.TestCase):
 
     def test_check_disk_space(self):
         test_cases = [
-            (1e10, ActiveStatus),  
+            (1e10, ActiveStatus),
             (1e8, BlockedStatus),
         ]
         # Patch the function used in _check_disk_space
