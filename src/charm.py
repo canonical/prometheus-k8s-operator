@@ -588,12 +588,13 @@ class PrometheusCharm(CharmBase):
     def _check_disk_space(self):
         try:
             database_storage = self.model.storages.get('database', [])
-            if database_storage and shutil.disk_usage(database_storage[0].location).free < 1e9: # type: ignore
-                self._stored.status["disk_space"] = to_tuple(BlockedStatus("Less than 1 Gi remaining in storage"))
-
+            if database_storage and shutil.disk_usage(database_storage[0].location).free < 1024**3: # type: ignore
+                self._stored.status["disk_space"] = to_tuple(BlockedStatus("<1 GiB disk space remaining"))
+            else:
+                self._stored.status["disk_space"] = to_tuple(ActiveStatus())
         # If this check is done before storage is attached, we don't want the charm to go error state
         except FileNotFoundError:
-            self.unit.status = BlockedStatus("Storage not available")
+            self._stored.status["disk_space"] = MaintenanceStatus("Storage not available")
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.

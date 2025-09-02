@@ -251,20 +251,18 @@ class TestCharm(unittest.TestCase):
 
     def test_check_disk_space(self):
         test_cases = [
-            (1e10, ActiveStatus),
-            (1e8, BlockedStatus),
+            (1024**3, ActiveStatus),
+            (1024**3 - 1, BlockedStatus),
         ]
-        # Patch the function used in _check_disk_space
         for disk_space, expected_status in test_cases:
-            with patch("shutil.disk_usage") as mock_disk_usage:
-                mock_disk_usage.return_value.free = disk_space
-                mock_storage = MagicMock()
-                mock_storage.location = "/foo/bar"
-                with patch.object(self.harness.model.storages, 'get', return_value=[mock_storage]):
-                    self.harness.charm._check_disk_space()
+            with self.subTest(disk_space=disk_space, expected_status=expected_status), \
+                patch("shutil.disk_usage") as mock_disk_usage, \
+                patch.object(self.harness.model.storages, 'get', return_value=[MagicMock(location="/foo/bar")]):
 
-                    self.harness.evaluate_status()
-                    self.assertIsInstance(self.harness.model.unit.status, expected_status)
+                mock_disk_usage.return_value.free = disk_space
+                self.harness.charm._check_disk_space()
+                self.harness.evaluate_status()
+                self.assertIsInstance(self.harness.model.unit.status, expected_status)
 
 def alerting_config(config):
     config_yaml = config[1]
