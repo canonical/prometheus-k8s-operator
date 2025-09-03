@@ -28,6 +28,7 @@ SCRAPE_METADATA = {
     "charm_name": "provider-charm",
 }
 
+
 @prom_multipatch
 class TestCharm(unittest.TestCase):
     @k8s_resource_multipatch
@@ -248,6 +249,7 @@ class TestCharm(unittest.TestCase):
         self.harness.update_config({"evaluation_interval": "1234m"})
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
+
 
 def alerting_config(config):
     config_yaml = config[1]

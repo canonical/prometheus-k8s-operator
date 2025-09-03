@@ -129,6 +129,7 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
     name, message = tpl
     return StatusBase.from_name(name, message)
 
+
 @dataclass
 class TLSConfig:
     """TLS configuration received by the charm over the `certificates` relation."""
@@ -136,6 +137,7 @@ class TLSConfig:
     server_cert: str
     ca_cert: str
     private_key: str
+
 
 @trace_charm(
     tracing_endpoint="charm_tracing_endpoint",
@@ -269,7 +271,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
+        self.framework.observe(
+            self._cert_requirer.on.certificate_available, self._on_certificate_available
+        )
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -573,7 +577,9 @@ class PrometheusCharm(CharmBase):
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(tls_config.ca_cert,)  # pyright: ignore
+            ca_cert_path.write_text(
+                tls_config.ca_cert,
+            )  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
@@ -587,10 +593,12 @@ class PrometheusCharm(CharmBase):
 
     def _check_disk_space(self):
         try:
-            #database_storage = self.model.storages.get('database', []) #self.model.storages["database"]
+            # database_storage = self.model.storages.get('database', []) #self.model.storages["database"]
             database_storage = self.model.storages["database"]
-            if database_storage and shutil.disk_usage(database_storage[0].location).free < 1024**3: # type: ignore
-                self._stored.status["disk_space"] = to_tuple(BlockedStatus("<1 GiB disk space remaining"))
+            if database_storage and shutil.disk_usage(database_storage[0].location).free < 1024**3:  # type: ignore
+                self._stored.status["disk_space"] = to_tuple(
+                    BlockedStatus("<1 GiB disk space remaining")
+                )
             else:
                 self._stored.status["disk_space"] = to_tuple(ActiveStatus())
         # If this check is done before storage is attached, we don't want the charm to go error state
@@ -743,6 +751,7 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
         self._check_disk_space()
+
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
@@ -908,9 +917,9 @@ class PrometheusCharm(CharmBase):
         # Assuming the storage name is "database" (must match metadata.yaml).
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
-        assert (
-            "database" in self.model.storages
-        ), "The 'database' storage is no longer in metadata: must update literals in charm code."
+        assert "database" in self.model.storages, (
+            "The 'database' storage is no longer in metadata: must update literals in charm code."
+        )
 
         # Get PVC capacity from kubernetes
         client = Client()  # pyright: ignore
