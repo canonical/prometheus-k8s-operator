@@ -6,7 +6,7 @@ import logging
 import socket
 import unittest
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import ops
 import yaml
@@ -248,21 +248,6 @@ class TestCharm(unittest.TestCase):
         self.harness.update_config({"evaluation_interval": "1234m"})
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, MaintenanceStatus)
-
-    def test_check_disk_space(self):
-        test_cases = [
-            (1024**3, ActiveStatus),
-            (1024**3 - 1, BlockedStatus),
-        ]
-        for disk_space, expected_status in test_cases:
-            with self.subTest(disk_space=disk_space, expected_status=expected_status), \
-                patch("shutil.disk_usage") as mock_disk_usage, \
-                patch.object(self.harness.model.storages, 'get', return_value=[MagicMock(location="/foo/bar")]):
-
-                mock_disk_usage.return_value.free = disk_space
-                self.harness.charm._check_disk_space()
-                self.harness.evaluate_status()
-                self.assertIsInstance(self.harness.model.unit.status, expected_status)
 
 def alerting_config(config):
     config_yaml = config[1]

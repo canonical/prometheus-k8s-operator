@@ -587,7 +587,8 @@ class PrometheusCharm(CharmBase):
 
     def _check_disk_space(self):
         try:
-            database_storage = self.model.storages.get('database', [])
+            #database_storage = self.model.storages.get('database', []) #self.model.storages["database"]
+            database_storage = self.model.storages["database"]
             if database_storage and shutil.disk_usage(database_storage[0].location).free < 1024**3: # type: ignore
                 self._stored.status["disk_space"] = to_tuple(BlockedStatus("<1 GiB disk space remaining"))
             else:
@@ -904,7 +905,7 @@ class PrometheusCharm(CharmBase):
         This may need to be handled differently once Juju supports multiple storage instances
         for k8s (https://bugs.launchpad.net/juju/+bug/1977775).
         """
-        # Assuming the storage name is "databases" (must match metadata.yaml).
+        # Assuming the storage name is "database" (must match metadata.yaml).
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
         assert (
