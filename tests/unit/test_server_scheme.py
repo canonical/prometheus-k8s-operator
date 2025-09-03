@@ -43,7 +43,7 @@ class TestServerScheme:
 
             yield state  # keep the patch active for so long as this fixture is needed
 
-    def test_initial_state_has_http_scheme_in_pebble_layer(self, context, initial_state, fqdn):
+    def test_initial_state_has_http_scheme_in_pebble_layer(self, initial_state, fqdn):
         # THEN the pebble command has 'http' and the correct hostname in the 'web.external-url' arg
         container = initial_state.get_container("prometheus")
         command = container.layers["prometheus"].services["prometheus"].command

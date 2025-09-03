@@ -46,6 +46,8 @@ class TestActiveStatus(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.addCleanup(patcher.stop)
 
+        self.harness.add_storage("database")
+
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_unit_is_active_if_deployed_without_relations_or_config(self, *unused):
