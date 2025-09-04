@@ -601,8 +601,6 @@ class PrometheusCharm(CharmBase):
         # If this check is done before storage is attached, we don't want the charm to go error state
         except FileNotFoundError:
             self._stored.status["disk_space"] = MaintenanceStatus("Storage not available")
-        except KeyError:
-            self._stored.status["disk_space"] = to_tuple(BlockedStatus("Unable to locate storage"))
         else:
             if free_disk_space < 1024**3:
                 self._stored.status["disk_space"] = to_tuple(
