@@ -8,6 +8,7 @@
 import hashlib
 import logging
 import re
+import shutil
 import socket
 import subprocess
 from dataclasses import dataclass
@@ -128,6 +129,7 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
     name, message = tpl
     return StatusBase.from_name(name, message)
 
+
 @dataclass
 class TLSConfig:
     """TLS configuration received by the charm over the `certificates` relation."""
@@ -135,6 +137,7 @@ class TLSConfig:
     server_cert: str
     ca_cert: str
     private_key: str
+
 
 @trace_charm(
     tracing_endpoint="charm_tracing_endpoint",
@@ -268,7 +271,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
+        self.framework.observe(
+            self._cert_requirer.on.certificate_available, self._on_certificate_available
+        )
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -572,7 +577,9 @@ class PrometheusCharm(CharmBase):
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(tls_config.ca_cert,)  # pyright: ignore
+            ca_cert_path.write_text(
+                tls_config.ca_cert,
+            )  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
@@ -583,6 +590,24 @@ class PrometheusCharm(CharmBase):
 
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
         subprocess.run(["update-ca-certificates", "--fresh"])
+
+    def _check_disk_space(self):
+        try:
+            database_storage = self.model.storages["database"]
+
+            # NOTE: we measure the disk space from the charm container because it shares the same storage as the workload container
+            free_disk_space = shutil.disk_usage(database_storage[0].location).free
+
+        # If this check is done before storage is attached, we don't want the charm to go error state
+        except FileNotFoundError:
+            self._stored.status["disk_space"] = MaintenanceStatus("Storage not available")
+        else:
+            if free_disk_space < 1024**3:
+                self._stored.status["disk_space"] = to_tuple(
+                    BlockedStatus("<1 GiB disk space remaining")
+                )
+            else:
+                self._stored.status["disk_space"] = to_tuple(ActiveStatus())
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -729,6 +754,7 @@ class PrometheusCharm(CharmBase):
             logger.debug(
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
+        self._check_disk_space()
 
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
@@ -749,6 +775,7 @@ class PrometheusCharm(CharmBase):
         # yet ready). Calling `_configure` to recover.
         if self.unit.status != ActiveStatus():
             self._configure(event)
+        self._check_disk_space()
 
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
@@ -891,12 +918,12 @@ class PrometheusCharm(CharmBase):
         This may need to be handled differently once Juju supports multiple storage instances
         for k8s (https://bugs.launchpad.net/juju/+bug/1977775).
         """
-        # Assuming the storage name is "databases" (must match metadata.yaml).
+        # Assuming the storage name is "database" (must match metadata.yaml).
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
-        assert (
-            "database" in self.model.storages
-        ), "The 'database' storage is no longer in metadata: must update literals in charm code."
+        assert "database" in self.model.storages, (
+            "The 'database' storage is no longer in metadata: must update literals in charm code."
+        )
 
         # Get PVC capacity from kubernetes
         client = Client()  # pyright: ignore
