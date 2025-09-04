@@ -45,6 +45,7 @@ class TestCharm(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.harness.container_pebble_ready("prometheus")
         self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.add_storage("database")
         self.harness.begin_with_initial_hooks()
 
     def test_grafana_is_provided_port_and_source(self):
@@ -282,6 +283,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
         self.mock_capacity = patcher.start()
         self.addCleanup(patcher.stop)
+        self.harness.add_storage("database")
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
@@ -456,6 +458,7 @@ class TestAlertsFilename(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.harness.container_pebble_ready("prometheus")
         self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.add_storage("database")
         self.harness.begin_with_initial_hooks()
 
         self.rel_id = self.harness.add_relation(RELATION_NAME, "remote-app")
@@ -581,6 +584,7 @@ class TestPebblePlan(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.harness.container_pebble_ready("prometheus")
         self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.add_storage("database")
         self.harness.begin_with_initial_hooks()
 
         self.container_name = self.harness.charm._name
@@ -679,6 +683,7 @@ class TestTlsConfig(unittest.TestCase):
         self.mock_capacity.return_value = "1Gi"
         self.harness.container_pebble_ready("prometheus")
         self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.add_storage("database")
         self.harness.begin_with_initial_hooks()
 
     @k8s_resource_multipatch
