@@ -352,6 +352,15 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
+        # AND WHEN the config option is set to another invalid string
+        self.harness.update_config({"maximum_retention_size": "4GiB"})
+
+        # THEN cli arg is unspecified and the unit is blocked
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertIsNone(cli_arg(plan, "--storage.tsdb.retention.size"))
+        self.harness.evaluate_status()
+        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+
         # AND WHEN the config option is corrected
         self.harness.update_config({"maximum_retention_size": "42%"})
 

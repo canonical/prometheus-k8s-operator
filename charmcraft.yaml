@@ -22,7 +22,7 @@ links:
 
 assumes:
   - k8s-api
-  - juju >= 3.6 
+  - juju >= 3.6
 
 platforms:
   ubuntu@24.04:amd64:
@@ -91,7 +91,7 @@ provides:
     interface: prometheus_api
     optional: true
     description: |
-      The integration point for other charms to consume Prometheus's API, for example so they can query the database. 
+      The integration point for other charms to consume Prometheus's API, for example so they can query the database.
 
 requires:
   metrics-endpoint:
@@ -187,6 +187,7 @@ config:
         "80%").
         The percentage value is then converted to bytes and passed to prometheus with the
         `--storage.tsdb.retention.size` argument.
+        If this field is set to an invalid value, the `--storage.tsdb.retention.size` argument is dropped. In such cases, retention is only determined by `metrics_retention_time`. 
         Default is 80%.
       type: string
       default: "80%"
