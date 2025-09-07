@@ -830,7 +830,7 @@ class PrometheusCharm(CharmBase):
         except ValueError as e:
             logger.warning(e)
             self._stored.status["retention_size"] = to_tuple(
-                BlockedStatus(f"Invalid retention size: {e}, using metrics_retention_time")
+                BlockedStatus(f"Invalid retention size: {e}, only metrics_retention_time is in effect")
             )
 
         else:
