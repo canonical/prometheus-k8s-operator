@@ -830,7 +830,7 @@ class PrometheusCharm(CharmBase):
         except ValueError as e:
             logger.warning(e)
             self._stored.status["retention_size"] = to_tuple(
-                BlockedStatus(f"Invalid retention size: {e}")
+                BlockedStatus(f"Invalid retention size: {e}, only metrics_retention_time is in effect")
             )
 
         else:
@@ -972,7 +972,7 @@ class PrometheusCharm(CharmBase):
             ValueError, if the percentage string is invalid or not within range.
         """
         if not percentage.endswith("%"):
-            raise ValueError("Percentage string must be a number followed by '%', e.g. '80%'")
+            raise ValueError("Must be a number followed by '%', e.g. '80%'")
         value = float(percentage[:-1]) / 100.0
         if value < 0 or value > 1:
             raise ValueError("Percentage value must be in the range 0-100.")
