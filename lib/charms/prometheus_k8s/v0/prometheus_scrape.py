@@ -2384,7 +2384,7 @@ class CosTool:
                 self._exec(args)
                 return True, ""
             except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
+                logger.debug(b"Validating the rules failed: %s", e.output.decode("utf8"))
                 return False, ", ".join(
                     [
                         line
