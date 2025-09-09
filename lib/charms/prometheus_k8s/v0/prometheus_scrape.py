@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 54
+LIBPATCH = 55
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -2384,7 +2384,7 @@ class CosTool:
                 self._exec(args)
                 return True, ""
             except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
+                logger.debug("Validating the rules failed: %s", e.output.decode("utf8"))
                 return False, ", ".join(
                     [
                         line
