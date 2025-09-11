@@ -82,7 +82,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 20
 
 log = logging.getLogger(__name__)
 
@@ -311,11 +311,16 @@ class IngressDataRemovedEvent(RelationEvent):
     """
 
 
+class IngressEndpointsUpdatedEvent(RelationEvent):
+    """Event triggered when the proxied endpoints change."""
+
+
 class IngressPerUnitProviderEvents(ObjectEvents):
     """Container for events for IngressPerUnit."""
 
     data_provided = EventSource(IngressDataReadyEvent)
     data_removed = EventSource(IngressDataRemovedEvent)
+    endpoints_updated = EventSource(IngressEndpointsUpdatedEvent)
 
 
 class IngressPerUnitProvider(_IngressPerUnitBase):
@@ -328,20 +333,20 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         try:
             self.validate(relation)
         except RelationDataMismatchError as e:
-            self.on.data_removed.emit(relation)  # type: ignore
+            self.on.data_removed.emit(relation=relation, app=relation.app)  # type: ignore
             log.warning(
                 "relation data mismatch: {} " "data_removed ingress for {}.".format(e, relation)
             )
             return
 
         if self.is_ready(relation):
-            self.on.data_provided.emit(relation)  # type: ignore
+            self.on.data_provided.emit(relation=relation, app=relation.app)  # type: ignore
         else:
-            self.on.data_removed.emit(relation)  # type: ignore
+            self.on.data_removed.emit(relation=relation, app=relation.app)  # type: ignore
 
     def _handle_relation_broken(self, event):
         # relation broken -> we revoke in any case
-        self.on.data_removed.emit(event.relation)  # type: ignore
+        self.on.data_removed.emit(relation=event.relation, app=event.relation.app)  # type: ignore
 
     def is_ready(self, relation: Optional[Relation] = None) -> bool:
         """Checks whether the given relation is ready.
@@ -431,6 +436,8 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         _validate_data(ingress, INGRESS_PROVIDES_APP_SCHEMA)
         relation.data[self.app]["ingress"] = yaml.safe_dump(data)
 
+        self.on.endpoints_updated.emit(relation=relation, app=relation.app)
+
     def wipe_ingress_data(self, relation):
         """Remove all published ingress data.
 
@@ -447,6 +454,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
             )
             return
         del relation.data[self.app]["ingress"]
+        self.on.endpoints_updated.emit(relation=relation, app=relation.app)
 
     def _requirer_units_data(self, relation: Relation) -> RequirerUnitData:
         """Fetch and validate the requirer's units databag."""
@@ -566,7 +574,7 @@ class _IPUEvent(RelationEvent):
         return cls.__args__ + tuple(cls.__optional_kwargs__.keys())
 
     def __init__(self, handle, relation, *args, **kwargs):
-        super().__init__(handle, relation)
+        super().__init__(handle, relation, app=relation.app)
 
         if not len(self.__args__) == len(args):
             raise TypeError("expected {} args, got {}".format(len(self.__args__), len(args)))
@@ -752,7 +760,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
                 self.on.ready_for_unit.emit(relation, current_urls[this_unit_name])  # type: ignore
 
             if this_unit_name in removed:
-                self.on.revoked_for_unit.emit(relation)  # type: ignore
+                self.on.revoked_for_unit.emit(relation=relation, app=relation.app)  # type: ignore
 
         if self.listen_to in {"all-units", "both"}:
             for unit_name in changed:
