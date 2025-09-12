@@ -12,7 +12,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import CosTool as _CosTool_scrap
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     CosTool as _CosTool_remote_write,
 )
-from scenario import Container, Context, Exec, PeerRelation, Relation, State
+from scenario import Container, Context, Exec, PeerRelation, Relation, State, Storage
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 UNITTEST_DIR = Path(__file__).resolve().parent
@@ -93,7 +93,9 @@ def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) 
         can_connect=False,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container])
+    storage = Storage(name="database")
+    state = State(containers=[container], storages=[storage])
+
     peer_rel = PeerRelation("prometheus-peers")
 
     state = context.run(context.on.install(), state)

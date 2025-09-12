@@ -202,7 +202,8 @@ class JujuTopology:
 
         if remapped_keys:
             ret = OrderedDict(
-                (remapped_keys.get(k), v) if remapped_keys.get(k) else (k, v) for k, v in ret.items()  # type: ignore
+                (remapped_keys.get(k), v) if remapped_keys.get(k) else (k, v)
+                for k, v in ret.items()  # type: ignore
             )
 
         return ret
