@@ -338,14 +338,14 @@ class PrometheusCharm(CharmBase):
     @property
     def _catalogue_item(self) -> CatalogueItem:
         api_endpoints = {
-    "Instant queries": "/api/v1/query",
-    "Range queries": "/api/v1/query_range",
-    "Finding Series": "/api/v1/series",
-    "Labels": "/api/v1/labels",
-    "Targets": "/api/v1/targets",
-    "Rules": "/api/v1/rules",
-    "Alerts": "/api/v1/alerts"
-}
+            "Instant queries": "/api/v1/query",
+            "Range queries": "/api/v1/query_range",
+            "Finding Series": "/api/v1/series",
+            "Labels": "/api/v1/labels",
+            "Targets": "/api/v1/targets",
+            "Rules": "/api/v1/rules",
+            "Alerts": "/api/v1/alerts"
+        }
         return CatalogueItem(
             name="Prometheus",
             icon="chart-line-variant",
