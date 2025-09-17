@@ -344,6 +344,14 @@ class PrometheusCharm(CharmBase):
                 "Prometheus collects, stores and serves metrics as time series data, "
                 "alongside optional key-value pairs called labels."
             ),
+            api_docs="https://prometheus.io/docs/prometheus/latest/querying/api/",
+            api_endpoints={"Instant queries": f"{self.external_url}/api/v1/query",
+                           "Range queries": f"{self.external_url}/api/v1/query_range",
+                           "Finding Series": f"{self.external_url}/api/v1/series",
+                           "Labels": f"{self.external_url}/api/v1/labels",
+                           "Targets": f"{self.external_url}/api/v1/targets",
+                           "Rules": f"{self.external_url}/api/v1/rules",
+                           "Alerts": f"{self.external_url}/api/v1/alerts"}
         )
 
     @property
