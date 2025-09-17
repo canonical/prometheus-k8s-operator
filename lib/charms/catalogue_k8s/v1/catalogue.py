@@ -54,16 +54,16 @@ To implement this in your charm:
 """
 
 import ipaddress
+import json
 import logging
-import socket
-from typing import Optional
+from typing import Dict, Optional
 
 from ops.charm import CharmBase
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 
 LIBID = "fa28b361293b46668bcd1f209ada6983"
 LIBAPI = 1
-LIBPATCH = 2
+LIBPATCH = 3
 
 DEFAULT_RELATION_NAME = "catalogue"
 
@@ -73,14 +73,23 @@ logger = logging.getLogger(__name__)
 class CatalogueItem:
     """`CatalogueItem` represents an application entry sent to a catalogue.
 
-    The icon is an iconify mdi string; see https://icon-sets.iconify.design/mdi.
+    icon (str): An Iconify Material Design Icon (MDI) string.
+        (See: https://icon-sets.iconify.design/mdi for more details).
+    api_docs (str): A URL to the docs relevant to this item (upstream or otherwise).
+    api_endpoints (dict): A dictionary containing API information, where:
+        - The key is a description or name of the endpoint (e.g., "Alerts").
+        - The value is the actual address of the endpoint (e.g., "'http://1.2.3.4:1234/api/v1/targets/metadata'").
+        - Example for setting the api_endpoints attr:
+            api_endpoints={"Alerts": f"{self.external_url}/api/v1/alerts"}
     """
 
-    def __init__(self, name: str, url: str, icon: str, description: str = ""):
+    def __init__(self, name: str, url: str, icon: str, description: str = "", api_docs: str = "", api_endpoints: Optional[Dict[str,str]] = None):
         self.name = name
         self.url = url
         self.icon = icon
         self.description = description
+        self.api_docs = api_docs
+        self.api_endpoints = api_endpoints
 
 
 class CatalogueConsumer(Object):
@@ -119,6 +128,8 @@ class CatalogueConsumer(Object):
             relation.data[self._charm.model.app]["description"] = self._item.description
             relation.data[self._charm.model.app]["url"] = self.unit_address(relation)
             relation.data[self._charm.model.app]["icon"] = self._item.icon
+            relation.data[self._charm.model.app]["api_docs"] = self._item.api_docs
+            relation.data[self._charm.model.app]["api_endpoints"] = json.dumps(self._item.api_endpoints)
 
     def update_item(self, item: CatalogueItem):
         """Update the catalogue item."""
@@ -132,12 +143,7 @@ class CatalogueConsumer(Object):
         """
         if self._item and self._item.url:
             return self._item.url
-
-        unit_ip = str(self._charm.model.get_binding(relation).network.bind_address)
-        if self._is_valid_unit_address(unit_ip):
-            return unit_ip
-
-        return socket.getfqdn()
+        return ""
 
     def _is_valid_unit_address(self, address: str) -> bool:
         """Validate a unit address.
@@ -209,6 +215,8 @@ class CatalogueProvider(Object):
                 "url": relation.data[relation.app].get("url", ""),
                 "icon": relation.data[relation.app].get("icon", ""),
                 "description": relation.data[relation.app].get("description", ""),
+                "api_docs": relation.data[relation.app].get("api_docs", ""),
+                "api_endpoints": json.loads(relation.data[relation.app].get("api_endpoints", "{}")),
             }
             for relation in self._charm.model.relations[self._relation_name]
             if relation.app and relation.units
