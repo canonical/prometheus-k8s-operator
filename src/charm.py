@@ -147,6 +147,7 @@ class TLSConfig:
         Prometheus,
     ],
 )
+
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -336,6 +337,15 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _catalogue_item(self) -> CatalogueItem:
+        api_endpoints = {
+    "Instant queries": "/api/v1/query",
+    "Range queries": "/api/v1/query_range",
+    "Finding Series": "/api/v1/series",
+    "Labels": "/api/v1/labels",
+    "Targets": "/api/v1/targets",
+    "Rules": "/api/v1/rules",
+    "Alerts": "/api/v1/alerts"
+}
         return CatalogueItem(
             name="Prometheus",
             icon="chart-line-variant",
@@ -345,13 +355,7 @@ class PrometheusCharm(CharmBase):
                 "alongside optional key-value pairs called labels."
             ),
             api_docs="https://prometheus.io/docs/prometheus/latest/querying/api/",
-            api_endpoints={"Instant queries": f"{self.external_url}/api/v1/query",
-                           "Range queries": f"{self.external_url}/api/v1/query_range",
-                           "Finding Series": f"{self.external_url}/api/v1/series",
-                           "Labels": f"{self.external_url}/api/v1/labels",
-                           "Targets": f"{self.external_url}/api/v1/targets",
-                           "Rules": f"{self.external_url}/api/v1/rules",
-                           "Alerts": f"{self.external_url}/api/v1/alerts"}
+            api_endpoints={key: f"{self.external_url}{path}" for key, path in api_endpoints.items()}
         )
 
     @property
