@@ -53,6 +53,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
 )
 from cosl import JujuTopology
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
+from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError as LightkubeApiError
 from lightkube.resources.core_v1 import PersistentVolumeClaim, Pod
@@ -312,7 +313,7 @@ class PrometheusCharm(CharmBase):
     def _on_collect_unit_status(self, event: CollectStatusEvent):
         # "Pull" statuses
         retention_time = self.model.config.get("metrics_retention_time", "")
-        if not self._is_valid_timespec(cast(str, retention_time)):
+        if not is_valid_timespec(cast(str, retention_time)):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
         # "Push" statuses
@@ -829,7 +830,7 @@ class PrometheusCharm(CharmBase):
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
-        if self._is_valid_timespec(
+        if is_valid_timespec(
             retention_time := cast(str, config.get("metrics_retention_time", ""))
         ):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
@@ -955,28 +956,6 @@ class PrometheusCharm(CharmBase):
 
         return capacity
 
-    def _is_valid_timespec(self, timeval: str) -> bool:
-        """Is a time interval unit and value valid.
-
-        If time interval is not valid unit status is set to blocked.
-
-        Args:
-            timeval: a string representing a time specification.
-
-        Returns:
-            True if time specification is valid and False otherwise.
-        """
-        # Prometheus checks here:
-        # https://github.com/prometheus/common/blob/627089d3a7af73be778847aa577192b937b8d89a/model/time.go#L186
-        # Which is where this regex is sourced from. The validation is done
-        # when parsing flags as part of binary invocation here:
-        # https://github.com/prometheus/prometheus/blob/c40e269c3e514953299e9ba1f6265e067ab43e64/cmd/prometheus/main.go#L302
-        timespec_re = re.compile(
-            r"^((([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?|0)$"
-        )
-        matched = timespec_re.search(timeval)
-        return bool(matched)
-
     def _percent_string_to_ratio(self, percentage: str) -> float:
         """Convert a string representation of percentage of 0-100%, to a 0-1 ratio.
 
@@ -1002,7 +981,7 @@ class PrometheusCharm(CharmBase):
             "scrape_timeout": "10s",
         }
 
-        if config.get("evaluation_interval") and self._is_valid_timespec(
+        if config.get("evaluation_interval") and is_valid_timespec(
             cast(str, config["evaluation_interval"])
         ):
             global_config["evaluation_interval"] = cast(str, config["evaluation_interval"])
