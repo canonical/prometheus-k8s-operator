@@ -339,7 +339,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
-from cosl import JujuTopology
+from cosl import JujuTopology, type_convert_stored
 from cosl.rules import AlertRules, generic_alert_groups
 from ops.charm import CharmBase, RelationJoinedEvent, RelationRole
 from ops.framework import (
@@ -348,8 +348,6 @@ from ops.framework import (
     EventSource,
     Object,
     ObjectEvents,
-    StoredDict,
-    StoredList,
     StoredState,
 )
 from ops.model import Relation
@@ -362,7 +360,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 55
+LIBPATCH = 56
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -713,18 +711,6 @@ class MetricsEndpointProviderEvents(ObjectEvents):
 
     alert_rule_status_changed = EventSource(InvalidAlertRuleEvent)
     invalid_scrape_job = EventSource(InvalidScrapeJobEvent)
-
-
-def _type_convert_stored(obj):
-    """Convert Stored* to their appropriate types, recursively."""
-    if isinstance(obj, StoredList):
-        return list(map(_type_convert_stored, obj))
-    if isinstance(obj, StoredDict):
-        rdict = {}  # type: Dict[Any, Any]
-        for k in obj.keys():
-            rdict[k] = _type_convert_stored(obj[k])
-        return rdict
-    return obj
 
 
 def _validate_relation_by_interface_and_direction(
@@ -1875,7 +1861,7 @@ class MetricsEndpointAggregator(Object):
             return
 
         # Gather the scrape jobs
-        jobs = [] + _type_convert_stored(
+        jobs = [] + type_convert_stored(
             self._stored.jobs  # pyright: ignore
         )  # list of scrape jobs, one per relation
         for relation in self.model.relations[self._target_relation]:
@@ -1884,7 +1870,7 @@ class MetricsEndpointAggregator(Object):
                 jobs.append(self._static_scrape_job(targets, relation.app.name))
 
         # Gather the alert rules
-        groups = [] + _type_convert_stored(
+        groups = [] + type_convert_stored(
             self._stored.alert_rules  # pyright: ignore
         )  # list of alert rule groups
         for relation in self.model.relations[self._alert_rules_relation]:
@@ -1956,7 +1942,7 @@ class MetricsEndpointAggregator(Object):
             jobs.append(updated_job)
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
-            if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
+            if not type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
 
     def _on_prometheus_targets_departed(self, event):
@@ -2008,7 +1994,7 @@ class MetricsEndpointAggregator(Object):
 
             relation.data[self._charm.app]["scrape_jobs"] = json.dumps(jobs)
 
-            if not _type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
+            if not type_convert_stored(self._stored.jobs) == jobs:  # pyright: ignore
                 self._stored.jobs = jobs
 
     def _job_name(self, appname) -> str:
@@ -2196,7 +2182,7 @@ class MetricsEndpointAggregator(Object):
                 {"groups": groups if self._forward_alert_rules else []}
             )
 
-            if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
+            if not type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
 
     def _on_alert_rules_departed(self, event):
@@ -2248,7 +2234,7 @@ class MetricsEndpointAggregator(Object):
                 {"groups": groups if self._forward_alert_rules else []}
             )
 
-            if not _type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
+            if not type_convert_stored(self._stored.alert_rules) == groups:  # pyright: ignore
                 self._stored.alert_rules = groups
 
     def _get_alert_rules(self, relation) -> dict:
