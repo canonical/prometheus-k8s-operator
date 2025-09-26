@@ -1,0 +1,6 @@
+alert: InactiveUnit
+expr: up[juju_unit="unit/42"] == 0
+labels:
+  severity: Low
+  juju_unit: unit/42
+ 
