@@ -339,8 +339,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
-from cosl import JujuTopology, type_convert_stored
+from cosl import JujuTopology
 from cosl.rules import AlertRules, generic_alert_groups
+from cosl.types import type_convert_stored
 from ops.charm import CharmBase, RelationJoinedEvent, RelationRole
 from ops.framework import (
     BoundEvent,
@@ -360,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 56
+LIBPATCH = 57
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
