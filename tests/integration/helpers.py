@@ -402,7 +402,7 @@ async def get_application_ip(ops_test: OpsTest, app_name: str) -> str:
 
 
 async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> str:
-    """Push a metric along with a trace ID to an Opentelemetry Collector that is related to Mimir so that the exemplar can be stored in Mimir.
+    """Push a metric along with a trace ID to an Opentelemetry Collector that is related to Prometheus so that the exemplar can be stored in Prometheus.
 
     This block creates an exemplars by attaching a trace ID provided by the Opentelemetry SDK to a metric.
     Please visit https://opentelemetry.io/docs/languages/python/instrumentation/ for more info on how the instrumentation works and/or how to modify it.
