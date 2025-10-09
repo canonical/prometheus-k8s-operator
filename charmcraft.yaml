@@ -217,6 +217,14 @@ config:
         automatically deduced from it).
         See https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
       type: string
+    max_global_exemplars_per_user:
+      default: 0
+      description: |
+       The global limit for the number of exemplars.
+       When unset or set to a non-positive number, exemplar storage is disabled.
+       Otherwise, the value is set to the greater of the setpoint or 100,000.
+       Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
+      type: int
 
 actions:
   validate-configuration:
