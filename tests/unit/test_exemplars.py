@@ -47,8 +47,6 @@ def test_when_exemplars_are_enabled_feature_flag_is_set(context: Context):
     ]
 )
 def test_exemplars_are_set_in_config(context: Context, set_config, expected_exemplars):
-    # config_value: Union[str, int, float, bool] = set_config
-    # config = {"max_global_exemplars_per_user": config_value}
 
     container = Container(
         "prometheus",
