@@ -272,7 +272,7 @@ def scrape_config(config_yaml, job_name):
 
 @prom_multipatch
 class TestConfigMaximumRetentionSize(unittest.TestCase):
-    """Test the config.yaml option 'maximum_retention_size'."""
+    """Test the charmcraft.yaml option 'maximum_retention_size'."""
 
     def setUp(self):
         self.harness = Harness(PrometheusCharm)
@@ -287,7 +287,7 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
     def test_default_maximum_retention_size_is_80_percent(self, *unused):
         """This test is here to guarantee backwards compatibility.
 
-        Since config.yaml provides a default (which forms a contract), we need to prevent changing
+        Since charmcraft.yaml provides a default (which forms a contract), we need to prevent changing
         it unintentionally.
         """
         # GIVEN a capacity limit in binary notation (k8s notation)

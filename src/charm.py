@@ -89,6 +89,11 @@ CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
+# To get the behaviour consistent with mimir that doesn't allow lower values
+# than 100k exemplars, we set the same floor in prometheus. If the user specifies
+# a lower but positive value, we configure Prometheus to store 100k exemplars.
+EXEMPLARS_FLOOR=100000
+
 # To keep a tidy debug-log, we suppress some DEBUG/INFO logs from some imported libs,
 # even when charm logging is set to a lower level.
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -830,6 +835,9 @@ class PrometheusCharm(CharmBase):
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
 
+        if self._exemplars:
+            args.append("--enable-feature=exemplar-storage")
+
         if is_valid_timespec(
             retention_time := cast(str, config.get("metrics_retention_time", ""))
         ):
@@ -1061,6 +1069,13 @@ class PrometheusCharm(CharmBase):
 
         web_config = self._web_config()
 
+        if self._exemplars:
+            prometheus_config["storage"] = {
+                "exemplars": {
+                    "max_exemplars": self._exemplars
+                }
+            }
+
         if self.workload_tracing_endpoint:
             prometheus_config["tracing"] = self._tracing_config()
 
@@ -1149,6 +1164,14 @@ class PrometheusCharm(CharmBase):
         if result is None:
             return result
         return result.group(1)
+
+    @property
+    def _exemplars(self) -> int:
+        exemplars_from_config = cast(int, self.model.config.get("max_global_exemplars_per_user", 0))
+        if exemplars_from_config > 0:
+            return max(exemplars_from_config, EXEMPLARS_FLOOR)
+        return 0
+
 
     def _pull(self, path) -> Optional[str]:
         """Pull file from container (without raising pebble errors).
