@@ -134,6 +134,7 @@ import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
+from cosl.types import type_convert_stored
 from ops.charm import (
     CharmBase,
     CharmEvents,
@@ -149,8 +150,6 @@ from ops.framework import (
     EventSource,
     Object,
     ObjectEvents,
-    StoredDict,
-    StoredList,
     StoredState,
 )
 from ops.model import Relation
@@ -163,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 28
+LIBPATCH = 29
 
 logger = logging.getLogger(__name__)
 
@@ -186,18 +185,6 @@ class GrafanaSourceData:
         else:
             datasource_uid = ""
         return datasource_uid
-
-
-def _type_convert_stored(obj) -> Union[dict, list]:
-    """Convert Stored* to their appropriate types, recursively."""
-    if isinstance(obj, StoredList):
-        return list(map(_type_convert_stored, obj))
-    if isinstance(obj, StoredDict):
-        rdict = {}
-        for k in obj.keys():
-            rdict[k] = _type_convert_stored(obj[k])
-        return rdict
-    return obj
 
 
 class RelationNotFoundError(Exception):
@@ -792,7 +779,7 @@ class GrafanaSourceConsumer(Object):
             return
 
         self._set_default_data()
-        sources: dict = _type_convert_stored(self._stored.sources)  # pyright: ignore
+        sources: dict = type_convert_stored(self._stored.sources)  # pyright: ignore
         for rel_id in sources.keys():
             for i in range(len(sources[rel_id])):
                 sources[rel_id][i].update(
@@ -807,7 +794,7 @@ class GrafanaSourceConsumer(Object):
             self.set_peer_data("sources", sources)
 
         if self._stored.sources_to_delete:  # type: ignore
-            old_sources_to_delete = _type_convert_stored(
+            old_sources_to_delete = type_convert_stored(
                 self._stored.sources_to_delete  # pyright: ignore
             )
             self._stored.sources_to_delete = set()
@@ -835,7 +822,7 @@ class GrafanaSourceConsumer(Object):
         sources = []
         stored_sources = self.get_peer_data("sources")
         for source in stored_sources.values():
-            sources.extend(list(_type_convert_stored(source)))
+            sources.extend(list(type_convert_stored(source)))
 
         return sources
 
