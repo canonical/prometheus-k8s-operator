@@ -1,7 +1,26 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Charm library for managing TLS certificates (V4).
+"""Legacy Charmhub-hosted lib, deprecated in favour of ``charmlibs.interfaces.tls_certificates``.
+
+WARNING: This library is deprecated.
+It will not receive feature updates or bugfixes.
+``charmlibs.interfaces.tls_certificates`` 1.0 is a bug-for-bug compatible migration of this library.
+
+To migrate:
+1. Add 'charmlibs-interfaces-tls-certificates~=1.0' to your charm's dependencies,
+   and remove this Charmhub-hosted library from your charm.
+2. You can also remove any dependencies added to your charm only because of this library.
+3. Replace `from charms.tls_certificates_interface.v4 import tls_certificates`
+   with `from charmlibs.interfaces import tls_certificates`.
+
+Read more:
+- https://documentation.ubuntu.com/charmlibs
+- https://pypi.org/project/charmlibs-interfaces-tls-certificates
+
+---
+
+Charm library for managing TLS certificates (V4).
 
 This library contains the Requires and Provides classes for handling the tls-certificates
 interface.
@@ -46,7 +65,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 23
 
 PYDEPS = [
     "cryptography>=43.0.0",
