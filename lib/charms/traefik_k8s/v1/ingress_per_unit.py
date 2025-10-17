@@ -60,18 +60,12 @@ and observe `self.ingress_per_unit.on.ready` and `self.ingress_per_unit.on.revok
 import logging
 import socket
 import typing
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
+from ops import EventBase
 from ops.charm import CharmBase, RelationEvent
-from ops.framework import (
-    EventSource,
-    Object,
-    ObjectEvents,
-    StoredDict,
-    StoredList,
-    StoredState,
-)
+from ops.framework import EventSource, Object, ObjectEvents, StoredDict, StoredList, StoredState
 from ops.model import Application, ModelError, Relation, Unit
 
 # The unique Charmhub library identifier, never change it
@@ -82,7 +76,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 20
+LIBPATCH = 21
 
 log = logging.getLogger(__name__)
 
@@ -141,7 +135,7 @@ INGRESS_PROVIDES_APP_SCHEMA = {
 try:
     from typing import Literal, TypedDict  # type: ignore
 except ImportError:
-    from typing_extensions import Literal, TypedDict  # py35 compat
+    from typing_extensions import Literal, TypedDict  # type: ignore  # py35 compat
 
 
 # Model of the data a unit implementing the requirer will need to provide.
@@ -166,7 +160,7 @@ KeyValueMapping = Dict[str, str]
 ProviderApplicationData = Dict[str, KeyValueMapping]
 
 
-def _type_convert_stored(obj):
+def _type_convert_stored(obj: Any) -> Any:
     """Convert Stored* to their appropriate types, recursively."""
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
@@ -178,7 +172,7 @@ def _type_convert_stored(obj):
     return obj
 
 
-def _validate_data(data, schema):
+def _validate_data(data: Any, schema: Any) -> None:
     """Checks whether `data` matches `schema`.
 
     Will raise DataValidationError if the data is not valid, else return None.
@@ -205,6 +199,12 @@ class RelationException(RuntimeError):
     """
 
     def __init__(self, relation: Relation, entity: Union[Application, Unit]):
+        """Initialize the relation exception base class.
+
+        Args:
+            relation: Relation instance.
+            entity: Application and Unit.
+        """
         super().__init__(relation)
         self.args = (
             "There is an error with the relation {}:{} with {}".format(
@@ -223,6 +223,13 @@ class RelationPermissionError(RelationException):
     """Ingress is requested to do something for which it lacks permissions."""
 
     def __init__(self, relation: Relation, entity: Union[Application, Unit], message: str):
+        """Initialize the exception.
+
+        Args:
+            relation: Relation instance.
+            entity: Application and Unit.
+            message: Exception message.
+        """
         super(RelationPermissionError, self).__init__(relation, entity)
         self.args = (
             "Unable to write data to relation '{}:{}' with {}: {}".format(
@@ -260,19 +267,19 @@ class _IngressPerUnitBase(Object):
         observe(charm.on.upgrade_charm, self._handle_upgrade_or_leader)  # type: ignore
 
     @property
-    def relations(self):
+    def relations(self) -> List[Relation]:
         """The list of Relation instances associated with this relation_name."""
         return list(self.charm.model.relations[self.relation_name])
 
-    def _handle_relation(self, event):
+    def _handle_relation(self, event: RelationEvent) -> None:
         """Subclasses should implement this method to handle a relation update."""
         pass
 
-    def _handle_relation_broken(self, event):
+    def _handle_relation_broken(self, event: RelationEvent) -> None:
         """Subclasses should implement this method to handle a relation breaking."""
         pass
 
-    def _handle_upgrade_or_leader(self, event):
+    def _handle_upgrade_or_leader(self, event: EventBase) -> None:
         """Subclasses should implement this method to handle upgrades or leadership change."""
         pass
 
@@ -328,14 +335,14 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
     on = IngressPerUnitProviderEvents()  # type: ignore
 
-    def _handle_relation(self, event):
+    def _handle_relation(self, event: RelationEvent) -> None:
         relation = event.relation
         try:
             self.validate(relation)
         except RelationDataMismatchError as e:
             self.on.data_removed.emit(relation=relation, app=relation.app)  # type: ignore
             log.warning(
-                "relation data mismatch: {} " "data_removed ingress for {}.".format(e, relation)
+                "relation data mismatch: {} data_removed ingress for {}.".format(e, relation)
             )
             return
 
@@ -344,7 +351,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         else:
             self.on.data_removed.emit(relation=relation, app=relation.app)  # type: ignore
 
-    def _handle_relation_broken(self, event):
+    def _handle_relation_broken(self, event: RelationEvent) -> None:
         # relation broken -> we revoke in any case
         self.on.data_removed.emit(relation=event.relation, app=event.relation.app)  # type: ignore
 
@@ -368,7 +375,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
         return any(requirer_units_data.values())
 
-    def validate(self, relation: Relation):
+    def validate(self, relation: Relation) -> None:
         """Checks whether the given relation is failed.
 
         Or any relation if not specified.
@@ -392,9 +399,9 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         """Report whether the given unit has shared data in its unit data bag."""
         # sanity check: this should not occur in production, but it may happen
         # during testing: cfr https://github.com/canonical/traefik-k8s-operator/issues/39
-        assert unit in relation.units, (
-            "attempting to get ready state " "for unit that does not belong to relation"
-        )
+        assert (
+            unit in relation.units
+        ), "attempting to get ready state for unit that does not belong to relation"
         try:
             self._get_requirer_unit_data(relation, unit)
         except (KeyError, DataValidationError):
@@ -405,7 +412,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         """Fetch the data shared by the specified unit on the relation (Requirer side)."""
         return self._get_requirer_unit_data(relation, unit)
 
-    def publish_url(self, relation: Relation, unit_name: str, url: str):
+    def publish_url(self, relation: Relation, unit_name: str, url: str) -> None:
         """Place the ingress url in the application data bag for the units on the requirer side.
 
         Assumes that this unit is leader.
@@ -438,7 +445,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
         self.on.endpoints_updated.emit(relation=relation, app=relation.app)
 
-    def wipe_ingress_data(self, relation):
+    def wipe_ingress_data(self, relation: Relation) -> None:
         """Remove all published ingress data.
 
         Assumes that this unit is leader.
@@ -483,7 +490,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
             requirer_units_data[remote_unit] = remote_data
         return requirer_units_data
 
-    def _get_requirer_unit_data(self, relation: Relation, remote_unit: Unit) -> RequirerData:  # type: ignore
+    def _get_requirer_unit_data(self, relation: Relation, remote_unit: Unit) -> RequirerData:  # type: ignore  # noqa
         """Fetch and validate the requirer unit data for this unit.
 
         For convenience, we convert 'port' to integer.
@@ -570,10 +577,10 @@ class _IPUEvent(RelationEvent):
     __optional_kwargs__: Dict[str, Any] = {}
 
     @classmethod
-    def __attrs__(cls):
+    def __attrs__(cls):  # type: ignore
         return cls.__args__ + tuple(cls.__optional_kwargs__.keys())
 
-    def __init__(self, handle, relation, *args, **kwargs):
+    def __init__(self, handle, relation, *args, **kwargs):  # type: ignore
         super().__init__(handle, relation, app=relation.app)
 
         if not len(self.__args__) == len(args):
@@ -585,7 +592,7 @@ class _IPUEvent(RelationEvent):
             obj = kwargs.get(attr, default)
             setattr(self, attr, obj)
 
-    def snapshot(self):
+    def snapshot(self) -> Dict[str, Any]:
         dct = super().snapshot()
         for attr in self.__attrs__():
             obj = getattr(self, attr)
@@ -599,7 +606,7 @@ class _IPUEvent(RelationEvent):
                 ) from e
         return dct
 
-    def restore(self, snapshot) -> None:
+    def restore(self, snapshot: Any) -> None:
         super().restore(snapshot)
         for attr, obj in snapshot.items():
             setattr(self, attr, obj)
@@ -738,7 +745,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
             self.charm.on[self.relation_name].relation_broken, self._handle_relation
         )
 
-    def _handle_relation(self, event: RelationEvent):
+    def _handle_relation(self, event: RelationEvent) -> None:
         # we calculate the diff between the urls we were aware of
         # before and those we know now
         previous_urls = self._stored.current_urls or {}  # type: ignore
@@ -749,7 +756,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         self._stored.current_urls = current_urls  # type: ignore
 
         removed = previous_urls.keys() - current_urls.keys()  # type: ignore
-        changed = {a for a in current_urls if current_urls[a] != previous_urls.get(a)}  # type: ignore
+        changed = {a for a in current_urls if current_urls[a] != previous_urls.get(a)}  # type: ignore  # noqa
 
         this_unit_name = self.unit.name
         # do not use self.relation in this context because if
@@ -771,10 +778,10 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
 
         self._publish_auto_data()
 
-    def _handle_upgrade_or_leader(self, event):
+    def _handle_upgrade_or_leader(self, event: EventBase) -> None:
         self._publish_auto_data()
 
-    def _publish_auto_data(self):
+    def _publish_auto_data(self) -> None:
         if self._port:
             self.provide_ingress_requirements(host=self._host, port=self._port)
 
@@ -783,7 +790,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         """The established Relation instance, or None if still unrelated."""
         return self.relations[0] if self.relations else None
 
-    def is_ready(self) -> bool:
+    def is_ready(self) -> bool:  # type: ignore
         """Checks whether the given relation is ready.
 
         Or any relation if not specified.
@@ -797,7 +804,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
 
     def provide_ingress_requirements(
         self, *, scheme: Optional[str] = None, host: Optional[str] = None, port: int
-    ):
+    ) -> None:
         """Publishes the data that Traefik needs to provide ingress.
 
         Args:
@@ -854,7 +861,7 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
         assert isinstance(relation.app, Application)  # type guard
 
         try:
-            raw = relation.data.get(relation.app, {}).get("ingress")
+            raw = relation.data.get(relation.app, {}).get("ingress")  # type: ignore
         except ModelError as e:
             log.debug(
                 "Error {} attempting to read remote app data; "
