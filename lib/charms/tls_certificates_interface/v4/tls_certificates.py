@@ -41,10 +41,10 @@ import json
 import logging
 import uuid
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import FrozenSet, List, MutableMapping, Optional, Tuple, Union
+from typing import Dict, FrozenSet, List, MutableMapping, Optional, Tuple, Union
 
 import pydantic
 from cryptography import x509
@@ -65,7 +65,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -74,6 +74,48 @@ PYDEPS = [
 IS_PYDANTIC_V1 = int(pydantic.version.VERSION.split(".")[0]) < 2
 
 logger = logging.getLogger(__name__)
+
+NESTED_JSON_KEY = "owasp_event"
+
+
+@dataclass
+class _OWASPLogEvent:
+    """OWASP-compliant log event."""
+
+    datetime: str
+    event: str
+    level: str
+    description: str
+    type: str = "security"
+    labels: Dict[str, str] = field(default_factory=dict)
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    def to_dict(self) -> Dict:
+        log_event = dict(asdict(self), **self.labels)
+        log_event.pop("labels", None)
+        return {k: v for k, v in log_event.items() if v is not None}
+
+
+class _OWASPLogger:
+    """OWASP-compliant logger for security events."""
+
+    def __init__(self, application: Optional[str] = None):
+        self.application = application
+        self._logger = logging.getLogger(__name__)
+
+    def log_event(self, event: str, level: int, description: str, **labels: str):
+        if self.application and "application" not in labels:
+            labels["application"] = self.application
+        log = _OWASPLogEvent(
+            datetime=datetime.now(timezone.utc).astimezone().isoformat(),
+            event=event,
+            level=logging.getLevelName(level),
+            description=description,
+            labels=labels,
+        )
+        self._logger.log(level, log.to_json(), extra={NESTED_JSON_KEY: log.to_dict()})
 
 
 class TLSCertificatesError(Exception):
@@ -745,7 +787,14 @@ def generate_private_key(
         format=serialization.PrivateFormat.TraditionalOpenSSL,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    return PrivateKey.from_string(key_bytes.decode())
+    key = PrivateKey.from_string(key_bytes.decode())
+    _OWASPLogger().log_event(
+        event="private_key_generated",
+        level=logging.INFO,
+        description="Private key generated",
+        key_size=str(key_size),
+    )
+    return key
 
 
 def calculate_relative_datetime(target_time: datetime, fraction: float) -> datetime:
@@ -969,6 +1018,13 @@ def generate_ca(
         builder = builder.add_extension(san_extension, critical=False)
     cert = builder.sign(private_key_object, hashes.SHA256())  # type: ignore[arg-type]
     ca_cert_str = cert.public_bytes(serialization.Encoding.PEM).decode().strip()
+    _OWASPLogger().log_event(
+        event="ca_certificate_generated",
+        level=logging.INFO,
+        description="CA certificate generated",
+        common_name=common_name,
+        validity_days=str(validity.days),
+    )
     return Certificate.from_string(ca_cert_str)
 
 
@@ -1045,6 +1101,14 @@ def generate_certificate(
 
     cert = certificate_builder.sign(private_key, hashes.SHA256())  # type: ignore[arg-type]
     cert_bytes = cert.public_bytes(serialization.Encoding.PEM)
+    _OWASPLogger().log_event(
+        event="certificate_generated",
+        level=logging.INFO,
+        description="Certificate generated from CSR",
+        common_name=csr.common_name,
+        is_ca=str(is_ca),
+        validity_days=str(validity.days),
+    )
     return Certificate.from_string(cert_bytes.decode().strip())
 
 
@@ -1231,7 +1295,7 @@ class TLSCertificatesRequiresV4(Object):
             raise TLSCertificatesError("Invalid private key")
         if renewal_relative_time <= 0.5 or renewal_relative_time > 1.0:
             raise TLSCertificatesError(
-                "Invalid renewal relative time. Must be between 0.0 and 1.0"
+                "Invalid renewal relative time. Must be between 0.5 and 1.0"
             )
         self._private_key = private_key
         self.renewal_relative_time = renewal_relative_time
@@ -1241,6 +1305,7 @@ class TLSCertificatesRequiresV4(Object):
         self.framework.observe(charm.on.secret_remove, self._on_secret_remove)
         for event in refresh_events:
             self.framework.observe(event, self._configure)
+        self._security_logger = _OWASPLogger(application=f"tls-certificates-{charm.app.name}")
 
     def _configure(self, _: Optional[EventBase] = None):
         """Handle TLS Certificates Relation Data.
@@ -1763,6 +1828,7 @@ class TLSCertificatesProvidesV4(Object):
         self.framework.observe(charm.on.update_status, self._configure)
         self.charm = charm
         self.relationship_name = relationship_name
+        self._security_logger = _OWASPLogger(application=f"tls-certificates-{charm.app.name}")
 
     def _configure(self, _: EventBase) -> None:
         """Handle update status and tls relation changed events.
@@ -1908,6 +1974,11 @@ class TLSCertificatesProvidesV4(Object):
             for certificate in provider_certificates:
                 certificate.revoked = True
             self._dump_provider_certificates(relation=relation, certificates=provider_certificates)
+        self._security_logger.log_event(
+            event="all_certificates_revoked",
+            level=logging.WARNING,
+            description="All certificates revoked",
+        )
 
     def set_relation_certificate(
         self,
@@ -1936,6 +2007,13 @@ class TLSCertificatesProvidesV4(Object):
         self._add_provider_certificate(
             relation=certificates_relation,
             provider_certificate=provider_certificate,
+        )
+        self._security_logger.log_event(
+            event="certificate_provided",
+            level=logging.INFO,
+            description="Certificate provided to requirer",
+            relation_id=str(provider_certificate.relation_id),
+            common_name=provider_certificate.certificate.common_name,
         )
 
     def get_issued_certificates(
