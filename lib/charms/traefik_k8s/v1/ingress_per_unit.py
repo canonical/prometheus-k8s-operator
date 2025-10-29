@@ -76,7 +76,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 21
+LIBPATCH = 22
 
 log = logging.getLogger(__name__)
 
@@ -397,7 +397,7 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
 
     def is_unit_ready(self, relation: Relation, unit: Unit) -> bool:
         """Report whether the given unit has shared data in its unit data bag."""
-        # sanity check: this should not occur in production, but it may happen
+        # confidence check: this should not occur in production, but it may happen
         # during testing: cfr https://github.com/canonical/traefik-k8s-operator/issues/39
         assert (
             unit in relation.units
