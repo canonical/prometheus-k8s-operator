@@ -1,0 +1,13 @@
+# Based on https://awesome-prometheus-alerts.grep.to/rules.html#prometheus-self-monitoring-1
+alert: PrometheusRuleEvaluationSlow
+expr: prometheus_rule_group_last_duration_seconds{} > prometheus_rule_group_interval_seconds{}
+for: 5m
+labels:
+  severity: warning
+annotations:
+  summary: Prometheus rule evaluation slow (instance {{ $labels.instance }})
+  description: |
+    Prometheus rule evaluation took more time than the scheduled interval.
+    It indicates a slower storage backend access or too complex query.
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
