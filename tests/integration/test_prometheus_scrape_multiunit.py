@@ -200,7 +200,7 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     # ]
     # Extract the count value and convert it to int
     up_before = [int(next(iter(response))["value"][1]) for response in up_before]
-    # Sanity check: make sure it's not empty
+    # Make sure it's not empty
     assert len(up_before) > 0
     assert all(up_before)
 
