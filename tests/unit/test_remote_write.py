@@ -95,6 +95,7 @@ class RemoteWriteConsumerCharm(CharmBase):
             self,
             RELATION_NAME,
             alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
+            peer_relation_name="peers",
         )
         self.framework.observe(
             self.remote_write_consumer.on.endpoints_changed,
