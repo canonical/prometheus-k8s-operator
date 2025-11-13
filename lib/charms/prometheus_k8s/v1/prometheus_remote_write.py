@@ -404,6 +404,7 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         *,
+        peer_relation_name: str,
         forward_alert_rules: bool = True,
         extra_alert_labels: Dict = {},
     ):
@@ -771,17 +772,14 @@ class PrometheusRemoteWriteProvider(Object):
             if not alert_rules:
                 continue
 
-            alert_rules = self._inject_alert_expr_labels(alert_rules)
+            
+            # We will need to duplicate the HostMetricsMissing alert per each unit of a collector.
+            # Since we already have one instance of the alert, we duplicate it for the remaining units (num of units - 1).
+            alert_rules = self._duplicate_host_metrics_missing_per_unit(
+                alert_rules, relation.units
+            )
 
-            if (
-                self._relation_name == "receive-remote-write"
-                and len(relation.units) > 1
-            ):
-                # We will need to duplicate the HostMetricsMissing alert per each unit.
-                # Since we already have one instance of the alert, we duplicate it for the remaining units (num of units - 1).
-                alert_rules = self._duplicate_host_metrics_missing_per_unit(
-                    alert_rules, relation.units
-                )
+            alert_rules = self._inject_alert_expr_labels(alert_rules)
 
             identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
             if not topology:
@@ -882,6 +880,7 @@ class PrometheusRemoteWriteProvider(Object):
 
                 if labels:
                     try:
+                        
                         topology = JujuTopology(
                             # Don't try to safely get required constructor fields. There's already
                             # a handler for KeyErrors
@@ -892,15 +891,19 @@ class PrometheusRemoteWriteProvider(Object):
                             charm_name=labels.get("juju_charm", ""),
                         )
 
+                        alert_expression_dict = topology.alert_expression_dict
+                        if labels.get("juju_unit"):
+                            alert_expression_dict["juju_unit"] = labels["juju_unit"]
+                            
                         # Inject topology and put it back in the list
                         rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
-                            topology.alert_expression_dict,
+                            alert_expression_dict,
                         )
+                        
                     except KeyError:
                         # Some required JujuTopology key is missing. Just move on.
                         pass
-
                     group["rules"][idx] = rule
 
             modified_groups.append(group)
@@ -920,18 +923,34 @@ class PrometheusRemoteWriteProvider(Object):
         for group in alert_rules["groups"]:
             new_rules = []
             for rule in group.get("rules", []):
-                new_rules.append(rule)
-                # Duplicate only the HostMetricsMissing alert only for the collectors: e.g. for opentelemetry-collector-k8s and grafana-agent-k8s
-                if rule.get("alert") == "HostMetricsMissing" and rule.get("labels", {}).get("juju_charm") in ("opentelemetry-collector-k8s" or "grafana-agent-k8s"):
-                    for unit in range(len(units) - 1):
-                        duplicated = json.loads(json.dumps(rule))
-                        #duplicated.setdefault("labels", {})["juju_unit"] = unit #unit.name
+                if rule.get("alert") == "HostMetricsMissing":
+                    original_rule = json.loads(json.dumps(rule))
+                    # TODO: First instance is not necessarily 0 for machine charms - ideally rely on unit.name to construct the juju_unit label
+                    original_rule["labels"]["juju_unit"] = f"{original_rule['labels']['juju_application']}/0"
+                    new_rules.append(original_rule)
+
+                    for unit in range(1, len(units)):
+                        unit_name = f"{original_rule['labels']['juju_application']}/{unit}"
+                        duplicated = json.loads(json.dumps(original_rule))
+                        duplicated["labels"]["juju_unit"] = unit_name
+                        # Use _tool.inject_label_matchers to inject the correct juju_unit label into the expression (as alternative)
+                        # Replace content with juju_topology so that inject_label_matchers injects the labels including the unit in the expression
+                        duplicated["expr"] = re.sub(
+                            r'\{[^}]*\}', 
+                            '{%%juju_topology%%}',
+                            duplicated["expr"]
+                        )
 
                         new_rules.append(duplicated)
+            
             group["rules"] = new_rules
-
         return alert_rules
-
+    
+    def _complete_alert_expression_dict(self) -> Dict[str, str]:
+        result_dict = self.alert_expression_dict  # Get the existing dict
+        if self.unit:  # Assuming 'self.unit' is where you hold the unit information
+            result_dict["juju_unit"] = self.unit
+        return result_dict
 
 # Copy/pasted from prometheus_scrape.py
 class CosTool:

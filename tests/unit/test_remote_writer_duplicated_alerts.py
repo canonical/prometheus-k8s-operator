@@ -27,10 +27,30 @@ ALERT_RULES = {
                         "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
                     },
                 },
+                
             ],
         }
     ]
 }
+"""
+{
+    "alert": "HostMetricsMissing",
+    "expr": 'absent(up{juju_application="not_collector",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"}) == 0',
+    "for": "0m",
+    "labels": {
+        "severity": "critical",
+        "juju_model": "test-model",
+        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
+        "juju_application": "not_collector",
+        "juju_charm": "non_remote_writer_k8s",
+    },
+    "annotations": {
+        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
+        "description": "A Prometheus target has disappeared."
+        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
+    },
+},
+"""
 
 EXPECTED_ALERTS = {
     "groups": [
@@ -39,7 +59,7 @@ EXPECTED_ALERTS = {
             "rules": [
                 {
                     "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"}) == 0',
+                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/0"}) == 0',
                     "for": "0m",
                     "labels": {
                         "severity": "critical",
@@ -47,6 +67,7 @@ EXPECTED_ALERTS = {
                         "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
                         "juju_application": "remote_writer",
                         "juju_charm": COLLECTOR_CHARM,
+                        "juju_unit": "remote_writer/0",
                     },
                     "annotations": {
                         "summary": "Prometheus target missing (instance {{ $labels.instance }})",
@@ -56,7 +77,7 @@ EXPECTED_ALERTS = {
                 },
                 {
                     "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"}) == 0',
+                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/1"}) == 0',
                     "for": "0m",
                     "labels": {
                         "severity": "critical",
@@ -64,6 +85,7 @@ EXPECTED_ALERTS = {
                         "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
                         "juju_application": "remote_writer",
                         "juju_charm": COLLECTOR_CHARM,
+                        "juju_unit": "remote_writer/1",
                     },
                     "annotations": {
                         "summary": "Prometheus target missing (instance {{ $labels.instance }})",
@@ -73,7 +95,7 @@ EXPECTED_ALERTS = {
                 },
                 {
                     "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"}) == 0',
+                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/2"}) == 0',
                     "for": "0m",
                     "labels": {
                         "severity": "critical",
@@ -81,6 +103,7 @@ EXPECTED_ALERTS = {
                         "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
                         "juju_application": "remote_writer",
                         "juju_charm": COLLECTOR_CHARM,
+                        "juju_unit": "remote_writer/2",
                     },
                     "annotations": {
                         "summary": "Prometheus target missing (instance {{ $labels.instance }})",
