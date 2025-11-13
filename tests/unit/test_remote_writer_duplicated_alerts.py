@@ -27,7 +27,7 @@ ALERT_RULES = {
                         "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
                     },
                 },
-                
+
             ],
         }
     ]

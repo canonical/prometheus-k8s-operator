@@ -404,7 +404,6 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         *,
-        peer_relation_name: str,
         forward_alert_rules: bool = True,
         extra_alert_labels: Dict = {},
     ):
@@ -772,7 +771,7 @@ class PrometheusRemoteWriteProvider(Object):
             if not alert_rules:
                 continue
 
-            
+
             # We will need to duplicate the HostMetricsMissing alert per each unit of a collector.
             # Since we already have one instance of the alert, we duplicate it for the remaining units (num of units - 1).
             alert_rules = self._duplicate_host_metrics_missing_per_unit(
@@ -880,7 +879,7 @@ class PrometheusRemoteWriteProvider(Object):
 
                 if labels:
                     try:
-                        
+
                         topology = JujuTopology(
                             # Don't try to safely get required constructor fields. There's already
                             # a handler for KeyErrors
@@ -894,13 +893,13 @@ class PrometheusRemoteWriteProvider(Object):
                         alert_expression_dict = topology.alert_expression_dict
                         if labels.get("juju_unit"):
                             alert_expression_dict["juju_unit"] = labels["juju_unit"]
-                            
+
                         # Inject topology and put it back in the list
                         rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
                             alert_expression_dict,
                         )
-                        
+
                     except KeyError:
                         # Some required JujuTopology key is missing. Just move on.
                         pass
@@ -936,16 +935,16 @@ class PrometheusRemoteWriteProvider(Object):
                         # Use _tool.inject_label_matchers to inject the correct juju_unit label into the expression (as alternative)
                         # Replace content with juju_topology so that inject_label_matchers injects the labels including the unit in the expression
                         duplicated["expr"] = re.sub(
-                            r'\{[^}]*\}', 
+                            r'\{[^}]*\}',
                             '{%%juju_topology%%}',
                             duplicated["expr"]
                         )
 
                         new_rules.append(duplicated)
-            
+
             group["rules"] = new_rules
         return alert_rules
-    
+
     def _complete_alert_expression_dict(self) -> Dict[str, str]:
         result_dict = self.alert_expression_dict  # Get the existing dict
         if self.unit:  # Assuming 'self.unit' is where you hold the unit information
