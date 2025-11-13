@@ -766,12 +766,22 @@ class PrometheusRemoteWriteProvider(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
-
             alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+
             if not alert_rules:
                 continue
 
             alert_rules = self._inject_alert_expr_labels(alert_rules)
+
+            if (
+                self._relation_name == "receive-remote-write"
+                and len(relation.units) > 1
+            ):
+                # We will need to duplicate the HostMetricsMissing alert per each unit.
+                # Since we already have one instance of the alert, we duplicate it for the remaining units (num of units - 1).
+                alert_rules = self._duplicate_host_metrics_missing_per_unit(
+                    alert_rules, relation.units
+                )
 
             identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
             if not topology:
@@ -897,6 +907,30 @@ class PrometheusRemoteWriteProvider(Object):
 
         rules["groups"] = modified_groups
         return rules
+
+    def _duplicate_host_metrics_missing_per_unit(self, alert_rules: dict, units: set) -> dict:
+        """Duplicate the HostMetricsMissing alert for each unit in the relation.
+
+        This is required in scenarios where we have a scaled up charm (collector) that remotes writes metrics into Prometheus.
+        In such cases, we want the HostMetricsMissing alert to be duplicated per each unit of the the remote-writing collector.
+        """
+        if "groups" not in alert_rules:
+            return alert_rules
+
+        for group in alert_rules["groups"]:
+            new_rules = []
+            for rule in group.get("rules", []):
+                new_rules.append(rule)
+                # Duplicate only the HostMetricsMissing alert only for the collectors: e.g. for opentelemetry-collector-k8s and grafana-agent-k8s
+                if rule.get("alert") == "HostMetricsMissing" and rule.get("labels", {}).get("juju_charm") in ("opentelemetry-collector-k8s" or "grafana-agent-k8s"):
+                    for unit in range(len(units) - 1):
+                        duplicated = json.loads(json.dumps(rule))
+                        #duplicated.setdefault("labels", {})["juju_unit"] = unit #unit.name
+
+                        new_rules.append(duplicated)
+            group["rules"] = new_rules
+
+        return alert_rules
 
 
 # Copy/pasted from prometheus_scrape.py
