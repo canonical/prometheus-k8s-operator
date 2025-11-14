@@ -23,7 +23,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
@@ -36,7 +36,7 @@ from ops.charm import (
     RelationMeta,
     RelationRole,
 )
-from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents 
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
 from ops.model import Relation, Unit
 
 # The unique Charmhub library identifier, never change it

@@ -12,7 +12,6 @@ from ops.charm import CharmBase
 from scenario import Context, PeerRelation, Relation, State
 
 logger = logging.getLogger(__name__)
-COLLECTOR_CHARM = "opentelemetry-collector-k8s"
 
 class RemoteWriteConsumerCharm(CharmBase):
     @patch_cos_tool_path

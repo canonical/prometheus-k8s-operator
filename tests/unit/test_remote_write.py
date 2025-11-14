@@ -37,6 +37,9 @@ requires:
         limit: 1
     receive-remote-write:
         interface: prometheus_remote_write
+peers:
+    peers:
+        interface: some_interface
 """
 
 
