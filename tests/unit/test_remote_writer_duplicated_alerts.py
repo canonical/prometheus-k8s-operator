@@ -41,71 +41,6 @@ ALERT_RULES = {
     ]
 }
 
-EXPECTED_ALERTS = {
-    "groups": [
-        {
-            "name": "test-model_e674af04-0e76-4c11-92a0-f219fa8b4386_remote_writer",
-            "rules": [
-                {
-                    "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/0"}) == 0',
-                    "for": "0m",
-                    "labels": {
-                        "severity": "critical",
-                        "juju_model": "test-model",
-                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
-                        "juju_application": "remote_writer",
-                        "juju_charm": COLLECTOR_CHARM,
-                        "juju_unit": "remote_writer/0",
-                    },
-                    "annotations": {
-                        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
-                        "description": "A Prometheus target has disappeared."
-                        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
-                    },
-                },
-                {
-                    "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/1"}) == 0',
-                    "for": "0m",
-                    "labels": {
-                        "severity": "critical",
-                        "juju_model": "test-model",
-                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
-                        "juju_application": "remote_writer",
-                        "juju_charm": COLLECTOR_CHARM,
-                        "juju_unit": "remote_writer/1",
-                    },
-                    "annotations": {
-                        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
-                        "description": "A Prometheus target has disappeared."
-                        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
-                    },
-                },
-                {
-                    "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386",juju_unit="remote_writer/2"}) == 0',
-                    "for": "0m",
-                    "labels": {
-                        "severity": "critical",
-                        "juju_model": "test-model",
-                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
-                        "juju_application": "remote_writer",
-                        "juju_charm": COLLECTOR_CHARM,
-                        "juju_unit": "remote_writer/2",
-                    },
-                    "annotations": {
-                        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
-                        "description": "A Prometheus target has disappeared."
-                        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
-                    },
-                },
-            ],
-        },
-
-    ]
-}
-
 class RemoteWriteConsumerCharm(CharmBase):
     @patch_cos_tool_path
     def __init__(self, *args, **kwargs):
@@ -144,8 +79,22 @@ def test_remote_write_absent_alert_duplicated_for_units():
     state_out = context.run(context.on.relation_joined(remote_relation), state)
 
     remote_write_relation = next((obj for obj in state_out.relations if obj.endpoint == "send-remote-write"), None)
+    remote_write_relation_json = json.loads(remote_write_relation.local_app_data.get("alert_rules", {}))
+    assert remote_write_relation_json
 
-    assert remote_write_relation
-    logger.info("Remote write relation app data: %s", remote_write_relation.remote_app_data)
-    logger.info("Expected alerts: %s", EXPECTED_ALERTS)
-    assert remote_write_relation.remote_app_data == EXPECTED_ALERTS
+    # Expecting the HostMetricsMissing rule to be duplicated for each unit: we should have three in total.
+    # The expr field and alert labels should include the expected juju_unit value.
+    expected_units = {'test/0', 'test/1', 'test/2'}
+    matching_rules = []
+    for group in remote_write_relation_json.get('groups', []):
+        for rule in group.get('rules', []):
+            if rule.get('alert') == 'HostMetricsMissing':
+                labels = rule.get('labels', {})
+                unit = labels.get('juju_unit')
+                expr = rule.get('expr', '')
+                if unit in expected_units and unit in expr:
+                    matching_rules.append((unit, rule))
+
+    # Here we assert that we have found exactly three matching rules for the three units.
+    assert len(matching_rules) == 3, f"Expected 3 rules, found {len(matching_rules)}"
+    assert {unit for unit, _ in matching_rules} == expected_units, "Missing some expected units"

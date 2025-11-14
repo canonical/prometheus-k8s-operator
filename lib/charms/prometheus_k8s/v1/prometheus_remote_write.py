@@ -503,6 +503,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         peer_relations = self._charm.model.get_relation(self._peer_relation_name)
         peer_relation_units = peer_relations.units if peer_relations else []
+
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
         if self._forward_alert_rules:
             alert_rules.add_path(self._alert_rules_path)
@@ -510,26 +511,33 @@ class PrometheusRemoteWriteConsumer(Object):
                 generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
             )
 
-        # We'll iterate over alert rules.
-        # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
-        # In addition, we need to modify both the alert labels and the expression so that they include the correct juju_unit.
-        # We get that info by looking at the peer relation.
-        for group in alert_rules.groups:
-            new_rules = []
-            for rule in group["rules"]:
-                if rule.get("alert") == "HostMetricsMissing":
-                    for unit in peer_relation_units:
-                        juju_unit = unit.name
-                        modified_rule = copy.deepcopy(rule)
-                        modified_rule["labels"]["juju_unit"] = juju_unit
-                        # Modify the expression to include juju_unit filter
-                        modified_rule["expr"] = self._tool.inject_label_matchers(
-                            re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
-                            {"juju_unit": juju_unit},
-                        )
-                        new_rules.append(modified_rule)
-                else:
-                    new_rules.append(rule)
+        if peer_relation_units:
+            for group in alert_rules.groups:
+                new_rules = []
+                for rule in group["rules"]:
+                    # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
+                    if rule.get("alert") == "HostMetricsMissing":
+
+                        # At this point, the peer_relation_units **set** will contain all units related to this charm, but not the leader unit itself.
+                        # We add this unit to the set so that we also inject juju_unit to its labels and expr.
+                        peer_relation_units.add(self._charm.unit)
+
+                        for unit in peer_relation_units:
+                            juju_unit = unit.name
+                            modified_rule = copy.deepcopy(rule)
+
+                            # Inject juju_unit label.
+                            modified_rule["labels"]["juju_unit"] = juju_unit
+
+                            # Inject juju_unit to the current expr.
+                            modified_rule["expr"] = self._tool.inject_label_matchers(
+                                re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
+                                {"juju_unit": juju_unit},
+                            )
+
+                            new_rules.append(modified_rule)
+                    else:
+                        new_rules.append(rule)
             group["rules"] = new_rules
         alert_rules_as_dict = alert_rules.as_dict()
 
@@ -540,6 +548,7 @@ class PrometheusRemoteWriteConsumer(Object):
                 )
             )
         relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+        logger.info(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
