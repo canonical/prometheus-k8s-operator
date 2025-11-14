@@ -582,8 +582,8 @@ class PrometheusRemoteWriteConsumer(Object):
         """Duplicate HostMetricsMissing alert rule per unit in peer_units list.
 
         Args:
-            alert_rules: A dictionary representing alert rules.
-            peer_units: A list of unit names (str) representing units of this charm.
+            alert_rules: Has type AlertRules representing alert rules.
+            peer_units: A set of unit names (Unit) representing units of this charm.
 
         Returns:
             A dictionary representing alert rules with HostMetricsMissing rule
@@ -595,9 +595,12 @@ class PrometheusRemoteWriteConsumer(Object):
             new_rules = []
             for rule in group["rules"]:
                 # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
-                if rule.get("alert") == "HostMetricsMissing":
+                # We also check that the alert belongs to this application by checking juju_application label.
+                # Otherwise, we would be duplicating alerts that do not belong to this application.
+                # e.g. HostMetricsMissing alerts for charms that are scraped by this remote writer.
+                if rule.get("alert") == "HostMetricsMissing" and rule.get("labels", {}).get("juju_application") == self._charm.app.name:
 
-                    # At this point, the peer_relation_units **set** will contain all units related to this charm, but not the leader unit itself.
+                    # At this point, the peer_relation_units **set** will contain all peer units related to this charm, but not the leader unit itself.
                     # We add this unit to the set so that we also inject juju_unit to its labels and expr.
                     peer_units.add(self._charm.unit)
 
