@@ -13,33 +13,6 @@ from scenario import Context, PeerRelation, Relation, State
 
 logger = logging.getLogger(__name__)
 COLLECTOR_CHARM = "opentelemetry-collector-k8s"
-ALERT_RULES = {
-    "groups": [
-        {
-            "name": "test-model_e674af04-0e76-4c11-92a0-f219fa8b4386_remote_writer",
-            "rules": [
-                {
-                    "alert": "HostMetricsMissing",
-                    "expr": 'absent(up{juju_application="remote_writer",juju_model="test-model",juju_model_uuid="e674af04-0e76-4c11-92a0-f219fa8b4386"}) == 0',
-                    "for": "0m",
-                    "labels": {
-                        "severity": "critical",
-                        "juju_model": "test-model",
-                        "juju_model_uuid": "e674af04-0e76-4c11-92a0-f219fa8b4386",
-                        "juju_application": "remote_writer",
-                        "juju_charm": COLLECTOR_CHARM,
-                    },
-                    "annotations": {
-                        "summary": "Prometheus target missing (instance {{ $labels.instance }})",
-                        "description": "A Prometheus target has disappeared."
-                        "VALUE = {{ $value }}\n  LABELS = {{ $labels }}",
-                    },
-                },
-
-            ],
-        }
-    ]
-}
 
 class RemoteWriteConsumerCharm(CharmBase):
     @patch_cos_tool_path
@@ -71,15 +44,16 @@ def test_remote_write_absent_alert_duplicated_for_units():
     context = Context(charm_type=RemoteWriteConsumerCharm, meta=META)
     remote_relation = Relation(
         endpoint="send-remote-write",
-        remote_app_data={"alert_rules": json.dumps(ALERT_RULES)},
     )
+
     peer_relation = PeerRelation(endpoint="peers", peers_data={1: {}, 2: {}, 3: {}},)
 
     state = State(relations={remote_relation, peer_relation}, leader=True)
     state_out = context.run(context.on.relation_joined(remote_relation), state)
 
     remote_write_relation = next((obj for obj in state_out.relations if obj.endpoint == "send-remote-write"), None)
-    remote_write_relation_json = json.loads(remote_write_relation.local_app_data.get("alert_rules", {}))
+
+    remote_write_relation_json = json.loads(getattr(remote_write_relation, "local_app_data", {}).get("alert_rules", {}))
     assert remote_write_relation_json
 
     # Expecting the HostMetricsMissing rule to be duplicated for each unit: we should have three in total.

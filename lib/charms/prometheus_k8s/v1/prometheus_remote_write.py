@@ -23,7 +23,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Set
 
 import yaml
 from cosl import JujuTopology
@@ -36,8 +36,8 @@ from ops.charm import (
     RelationMeta,
     RelationRole,
 )
-from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
-from ops.model import Relation
+from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents 
+from ops.model import Relation, Unit
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -512,33 +512,7 @@ class PrometheusRemoteWriteConsumer(Object):
             )
 
         if peer_relation_units:
-            for group in alert_rules.groups:
-                new_rules = []
-                for rule in group["rules"]:
-                    # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
-                    if rule.get("alert") == "HostMetricsMissing":
-
-                        # At this point, the peer_relation_units **set** will contain all units related to this charm, but not the leader unit itself.
-                        # We add this unit to the set so that we also inject juju_unit to its labels and expr.
-                        peer_relation_units.add(self._charm.unit)
-
-                        for unit in peer_relation_units:
-                            juju_unit = unit.name
-                            modified_rule = copy.deepcopy(rule)
-
-                            # Inject juju_unit label.
-                            modified_rule["labels"]["juju_unit"] = juju_unit
-
-                            # Inject juju_unit to the current expr.
-                            modified_rule["expr"] = self._tool.inject_label_matchers(
-                                re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
-                                {"juju_unit": juju_unit},
-                            )
-
-                            new_rules.append(modified_rule)
-                    else:
-                        new_rules.append(rule)
-            group["rules"] = new_rules
+            alert_rules.groups = self._duplicate_host_metrics_missing_rule_per_unit(alert_rules, set(peer_relation_units))
         alert_rules_as_dict = alert_rules.as_dict()
 
         if self._extra_alert_labels:
@@ -548,7 +522,6 @@ class PrometheusRemoteWriteConsumer(Object):
                 )
             )
         relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
-        logger.info(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
@@ -603,6 +576,50 @@ class PrometheusRemoteWriteConsumer(Object):
         deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
         return deduplicated_endpoints
 
+    def _duplicate_host_metrics_missing_rule_per_unit(
+        self, alert_rules: AlertRules, peer_units: Set[Unit]
+    ) -> List:
+        """Duplicate HostMetricsMissing alert rule per unit in peer_units list.
+
+        Args:
+            alert_rules: A dictionary representing alert rules.
+            peer_units: A list of unit names (str) representing units of this charm.
+
+        Returns:
+            A dictionary representing alert rules with HostMetricsMissing rule
+            duplicated per unit.
+        """
+        updated_alert_rules = copy.deepcopy(alert_rules)
+
+        for group in updated_alert_rules.groups:
+            new_rules = []
+            for rule in group["rules"]:
+                # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
+                if rule.get("alert") == "HostMetricsMissing":
+
+                    # At this point, the peer_relation_units **set** will contain all units related to this charm, but not the leader unit itself.
+                    # We add this unit to the set so that we also inject juju_unit to its labels and expr.
+                    peer_units.add(self._charm.unit)
+
+                    for unit in peer_units:
+                        juju_unit = unit.name
+                        modified_rule = copy.deepcopy(rule)
+
+                        # Inject juju_unit label.
+                        modified_rule["labels"]["juju_unit"] = juju_unit
+
+                        # Inject juju_unit to the current expr.
+                        modified_rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
+                            {"juju_unit": juju_unit},
+                        )
+
+                        new_rules.append(modified_rule)
+                else:
+                    new_rules.append(rule)
+
+            group["rules"] = new_rules
+        return updated_alert_rules.groups
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
     """Event emitted when Prometheus remote_write alerts change."""
