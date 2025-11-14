@@ -65,7 +65,6 @@ def test_remote_write_absent_alert_duplicated_for_units():
 
     total_host_metrics_missing_rules = 0
     matching_rules = []
-    logger.info("Groups are %s", remote_write_relation_json.get('groups', []))
     for group in remote_write_relation_json.get('groups', []):
         for rule in group.get('rules', []):
             if rule.get('alert') == 'HostMetricsMissing':
@@ -105,7 +104,6 @@ def test_remote_write_no_alert_duplication_when_no_peers():
     # Expecting the HostMetricsMissing rule NOT to be duplicated.
     total_host_metrics_missing_rules = 0
     matching_rules = []
-    logger.info("Groups are %s", remote_write_relation_json.get('groups', []))
     for group in remote_write_relation_json.get('groups', []):
         for rule in group.get('rules', []):
             labels = rule.get('labels', {})
