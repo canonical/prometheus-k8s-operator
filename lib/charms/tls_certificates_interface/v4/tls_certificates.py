@@ -77,7 +77,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 25
+LIBPATCH = 26
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -868,6 +868,15 @@ class CertificateSigningRequest:
         """Return the CSR as a string."""
         return self._csr.public_bytes(serialization.Encoding.PEM).decode().strip()
 
+    @property
+    def additional_critical_extensions(self) -> List[x509.ExtensionType]:
+        """Return additional critical extensions present on the CSR (excluding SAN)."""
+        extensions: List[x509.ExtensionType] = []
+        for extension in self._csr.extensions:
+            if extension.critical and extension.oid != ExtensionOID.SUBJECT_ALTERNATIVE_NAME:
+                extensions.append(extension.value)
+        return extensions
+
     @classmethod
     def from_string(cls, csr: str) -> "CertificateSigningRequest":
         """Create a CertificateSigningRequest object from a CSR."""
@@ -987,6 +996,9 @@ class CertificateSigningRequest:
             csr_builder = csr_builder.add_extension(
                 x509.SubjectAlternativeName(set(_sans)), critical=False
             )
+        if attributes.additional_critical_extensions:
+            for extension in attributes.additional_critical_extensions:
+                csr_builder = csr_builder.add_extension(extension, critical=True)
         signed_certificate_request = csr_builder.sign(signing_key, hashes.SHA256())
         return cls(x509_object=signed_certificate_request)
 
@@ -1008,6 +1020,7 @@ class CertificateRequestAttributes:
         locality_name: Optional[str] = None,
         is_ca: bool = False,
         add_unique_id_to_subject_name: bool = True,
+        additional_critical_extensions: Optional[Collection[x509.ExtensionType]] = None,
     ):
         if not common_name and not sans_dns and not sans_ip and not sans_oid:
             raise ValueError(
@@ -1025,6 +1038,7 @@ class CertificateRequestAttributes:
         self._locality_name = locality_name
         self._is_ca = is_ca
         self._add_unique_id_to_subject_name = add_unique_id_to_subject_name
+        self._additional_critical_extensions = list(additional_critical_extensions or [])
 
     @property
     def common_name(self) -> str:
@@ -1087,6 +1101,11 @@ class CertificateRequestAttributes:
         """Return whether to add a unique identifier to the subject name."""
         return self._add_unique_id_to_subject_name
 
+    @property
+    def additional_critical_extensions(self) -> List[x509.ExtensionType]:
+        """Return additional critical extensions to be added to the CSR."""
+        return self._additional_critical_extensions
+
     @classmethod
     def from_csr(
         cls, csr: CertificateSigningRequest, is_ca: bool
@@ -1113,6 +1132,7 @@ class CertificateRequestAttributes:
             locality_name=csr.locality_name,
             is_ca=is_ca,
             add_unique_id_to_subject_name=csr.has_unique_identifier,
+            additional_critical_extensions=csr.additional_critical_extensions,
         )
 
     def __eq__(self, other: object) -> bool:
@@ -1132,6 +1152,7 @@ class CertificateRequestAttributes:
             and self.locality_name == other.locality_name
             and self.is_ca == other.is_ca
             and self.add_unique_id_to_subject_name == other.add_unique_id_to_subject_name
+            and self.additional_critical_extensions == other.additional_critical_extensions
         )
 
     def is_valid(self) -> bool:
