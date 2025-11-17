@@ -505,14 +505,17 @@ class PrometheusRemoteWriteConsumer(Object):
         peer_relation_units = peer_relations.units if peer_relations else []
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
+
         if self._forward_alert_rules:
-            alert_rules.add_path(self._alert_rules_path)
             alert_rules.add(
                 generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
             )
 
-        if peer_relation_units:
-            alert_rules.groups = self._duplicate_host_metrics_missing_rule_per_unit(alert_rules, set(peer_relation_units))
+            if peer_relation_units:
+                alert_rules.groups = self._duplicate_host_metrics_missing_rule_per_unit(alert_rules, set(peer_relation_units))
+
+            alert_rules.add_path(self._alert_rules_path)
+
         alert_rules_as_dict = alert_rules.as_dict()
 
         if self._extra_alert_labels:
@@ -586,19 +589,17 @@ class PrometheusRemoteWriteConsumer(Object):
             peer_units: A set of unit names (Unit) representing units of this charm.
 
         Returns:
-            A dictionary representing alert rules with HostMetricsMissing rule
-            duplicated per unit.
+            A list representing alert rules with HostMetricsMissing rule
+            duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
         """
         updated_alert_rules = copy.deepcopy(alert_rules)
 
         for group in updated_alert_rules.groups:
             new_rules = []
             for rule in group["rules"]:
+
                 # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
-                # We also check that the alert belongs to this application by checking juju_application label.
-                # Otherwise, we would be duplicating alerts that do not belong to this application.
-                # e.g. HostMetricsMissing alerts for charms that are scraped by this remote writer.
-                if rule.get("alert") == "HostMetricsMissing" and rule.get("labels", {}).get("juju_application") == self._charm.app.name:
+                if rule.get("alert") == "HostMetricsMissing":
 
                     # At this point, the peer_relation_units **set** will contain all peer units related to this charm, but not the leader unit itself.
                     # We add this unit to the set so that we also inject juju_unit to its labels and expr.
