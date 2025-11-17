@@ -43,7 +43,6 @@ def prometheus_container():
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
 
-
 @pytest.fixture(autouse=True)
 def patch_buffer_file_for_charm_tracing(tmp_path):
     with patch(

@@ -18,6 +18,9 @@ from urllib.parse import urlparse
 import yaml
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
+from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificateTransferRequires, CertificatesAvailableEvent, CertificatesRemovedEvent
+)
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.mimir_coordinator_k8s.v0.prometheus_api import (
@@ -87,6 +90,7 @@ ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
 CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
 CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
+RECV_CA_CERT_FOLDER_PATH = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
 # To get the behaviour consistent with mimir that doesn't allow lower values
@@ -163,7 +167,7 @@ class PrometheusCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._fqdn = socket.getfqdn()
-
+        logging.warning("+++CONSTRUCTOR")
         # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
         # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
         self._stored.set_default(
@@ -197,6 +201,7 @@ class PrometheusCharm(CharmBase):
             relationship_name="certificates",
             certificate_requests=[self._csr_attributes],
         )
+        self._cert_transfer = CertificateTransferRequires(self, "receive-ca-cert")
         # Update certs here in init to avoid code ordering issues
         self._update_cert()
 
@@ -260,6 +265,7 @@ class PrometheusCharm(CharmBase):
             self, relation_name="workload-tracing", protocols=["otlp_grpc"]
         )
 
+        # TODO: If we allow other server certs, would we need to use them in tracing? Would tracing ever go through ingress? ping tracing team for review
         self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
             self.charm_tracing, self._ca_cert_path
         )
@@ -276,6 +282,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
+        self.framework.observe(self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs)
+        self.framework.observe(self._cert_transfer.on.certificates_removed, self._on_receive_ca_certs)
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -542,9 +550,23 @@ class PrometheusCharm(CharmBase):
         self._update_cert()
         self._configure(_)
 
+    def _on_receive_ca_certs(self, _):
+        self._update_ca_certs()
+
     # TLS CONFIG
     @property
     def _tls_config(self) -> Optional[TLSConfig]:
+        # TODO: What is happening is that we have 2 libs doing 2 different things:
+        # 1. self._cert_requirer is getting us a server cert, and by association the CA cert from the CA which signed us
+        # 2. We need to introduce self.cert_transfer so that we can receive other CA certs, not from the CA which signed us.
+        # NOTE: We need to coordinate these certs in the _update_cert method which is called in the constructor AND self._cert_requirer.on.certificate_available
+        # Do we want to also add event handling for the cert_transfer lib?
+        # TODO: Find the docs page which shows how to use the lib. @Leon had this.
+        # Refs:
+        # 1. https://github.com/canonical/opentelemetry-collector-k8s-operator/pull/20
+        # 2. https://github.com/canonical/charm-relation-interfaces/tree/main/interfaces/certificate_transfer/v1
+        # 3. https://discourse.charmhub.io/t/getting-started-with-the-tls-certificates-library-v4/15537
+
         certificates, key = self._cert_requirer.get_assigned_certificate(
             certificate_request=self._csr_attributes
         )
@@ -557,6 +579,7 @@ class PrometheusCharm(CharmBase):
     def _tls_available(self) -> bool:
         return bool(self._tls_config)
 
+    # TODO: There is overlap with my method for setting up certs. Merge the 2 functionalities
     def _update_cert(self):
         if not self.container.can_connect():
             return
@@ -575,11 +598,13 @@ class PrometheusCharm(CharmBase):
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
+            # TODO: Update to push all files in the certs dir to disk in charm container
             self.container.push(
                 ca_cert_path,
                 tls_config.ca_cert,
                 make_dirs=True,
             )
+            # FIXME: as part of this PR
             # FIXME with the update-ca-certificates machinery prometheus shouldn't need
             #  CA_CERT_PATH.
             self.container.push(
@@ -601,6 +626,28 @@ class PrometheusCharm(CharmBase):
 
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
         subprocess.run(["update-ca-certificates", "--fresh"])
+
+    def _update_ca_certs(self):
+        # TODO: docstring
+        """."""
+        logging.warning("+++Receiving CA certificates")
+        if not self.container.can_connect():
+            return
+
+        # Obtain certs from relation data
+        ca_certs = self._cert_transfer.get_all_certificates()
+        logging.warning(f"+++CA certificates from lib: {ca_certs}")
+        # Clean-up previously existing certs
+        self.container.remove_path(RECV_CA_CERT_FOLDER_PATH, recursive=True)
+
+        # Write current certs
+        for i, cert in enumerate(ca_certs):
+            self.container.push(RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt", cert, make_dirs=True)
+
+        logging.warning(f'+++CA certificates on disk: {self.container.list_files(RECV_CA_CERT_FOLDER_PATH)}')
+        # Refresh system certs
+        self.container.exec(["update-ca-certificates", "--fresh"]).wait()
+
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -1031,6 +1078,9 @@ class PrometheusCharm(CharmBase):
             "endpoint": self.workload_tracing.get_endpoint("otlp_grpc"),
             "sampling_fraction": 1,
         }
+        # TODO: This is important because the logic we are adding is to receive a CA cert from relation data
+        # And the tracing lib assumes that the Tempo and Prom use the same CA
+        # How does this make sense, essentially Tempo is handing Prom the CA that signed it
         # communicate over TLS if a CA certificate exists.
         # the assumption is that both charms use the same CA.
         if self.container.exists(self._ca_cert_path):
