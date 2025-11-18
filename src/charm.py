@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2020 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
@@ -549,7 +549,6 @@ class PrometheusCharm(CharmBase):
 
     def _on_receive_ca_certs(self, _):
         self._update_ca_certs()
-        self._configure(_)
 
     # TLS CONFIG
     @property
@@ -618,10 +617,8 @@ class PrometheusCharm(CharmBase):
         for i, cert in enumerate(ca_certs):
             self.container.push(RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt", cert, make_dirs=True)
 
-        # TODO: Hash the contents of the certs dir, ALL CERTS, to reduce restarts
         # Refresh system certs
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
-        # TODO: add this to an itest
         self.container.restart("prometheus")
 
 
