@@ -89,7 +89,6 @@ ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 # These are used to present to clients and to authenticate other servers.
 KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
 CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
-CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
 RECV_CA_CERT_FOLDER_PATH = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
@@ -264,7 +263,6 @@ class PrometheusCharm(CharmBase):
             self, relation_name="workload-tracing", protocols=["otlp_grpc"]
         )
 
-        # TODO:  If we allow other server certs, would we need to use them in tracing? Would tracing ever go through ingress? ping tracing team for review
         self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
             self.charm_tracing, self._ca_cert_path
         )
@@ -459,7 +457,7 @@ class PrometheusCharm(CharmBase):
                 {
                     "scheme": "https",
                     "tls_config": {
-                        "ca_file": CA_CERT_PATH,
+                        "ca_file": self._ca_cert_path,
                     },
                 }
             )
@@ -551,6 +549,7 @@ class PrometheusCharm(CharmBase):
 
     def _on_receive_ca_certs(self, _):
         self._update_ca_certs()
+        self._configure(_)
 
     # TLS CONFIG
     @property
@@ -585,17 +584,8 @@ class PrometheusCharm(CharmBase):
                 make_dirs=True,
             )
             # Save the CA among the trusted CAs and trust it
-            # TODO: Update to push all files in the certs dir to disk in charm container
             self.container.push(
                 ca_cert_path,
-                tls_config.ca_cert,
-                make_dirs=True,
-            )
-            # FIXME:  as part of this PR
-            # FIXME with the update-ca-certificates machinery prometheus shouldn't need
-            #  CA_CERT_PATH.
-            self.container.push(
-                CA_CERT_PATH,
                 tls_config.ca_cert,
                 make_dirs=True,
             )
@@ -607,7 +597,6 @@ class PrometheusCharm(CharmBase):
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
             self.container.remove_path(ca_cert_path, recursive=True)
-            self.container.remove_path(CA_CERT_PATH, recursive=True)  # TODO: remove (see FIXME ^)
             # Repeat for the charm container.
             ca_cert_path.unlink(missing_ok=True)
 
@@ -615,7 +604,6 @@ class PrometheusCharm(CharmBase):
         subprocess.run(["update-ca-certificates", "--fresh"])
 
     def _update_ca_certs(self):
-        # TODO: docstring
         """Get CA certs from relation data and install them in the workload container's root store."""
         if not self.container.can_connect():
             return
@@ -630,8 +618,11 @@ class PrometheusCharm(CharmBase):
         for i, cert in enumerate(ca_certs):
             self.container.push(RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt", cert, make_dirs=True)
 
+        # TODO: Hash the contents of the certs dir, ALL CERTS, to reduce restarts
         # Refresh system certs
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
+        # TODO: add this to an itest
+        self.container.restart("prometheus")
 
 
     def _configure(self, _):
@@ -1063,9 +1054,6 @@ class PrometheusCharm(CharmBase):
             "endpoint": self.workload_tracing.get_endpoint("otlp_grpc"),
             "sampling_fraction": 1,
         }
-        # TODO: This is important because the logic we are adding is to receive a CA cert from relation data
-        # And the tracing lib assumes that the Tempo and Prom use the same CA
-        # How does this make sense, essentially Tempo is handing Prom the CA that signed it
         # communicate over TLS if a CA certificate exists.
         # the assumption is that both charms use the same CA.
         if self.container.exists(self._ca_cert_path):

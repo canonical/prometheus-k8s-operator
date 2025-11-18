@@ -145,7 +145,7 @@ requires:
       For Prometheus to create a trusted (TLS) connection with servers
       it scrapes, it needs to trust the CA that signed the server it
       talks to. CA certs forwarded over this relation are installed in
-      the root CA store.
+      the root CA store of the prometheus container.
 
 peers:
   prometheus-peers:

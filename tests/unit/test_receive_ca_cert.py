@@ -4,9 +4,6 @@
 
 import json
 
-from charms.certificate_transfer_interface.v1.certificate_transfer import (
-    CertificateTransferRequires,
-)
 from ops.testing import Relation, State
 
 from src.charm import RECV_CA_CERT_FOLDER_PATH
@@ -48,19 +45,25 @@ def test_ca_forwarded_over_rel_data(context, prometheus_container):
     ]
     state = State(leader=True, containers={prometheus_container}, relations=relations)
 
-    # WHEN any event is emitted
-    out = context.run(context.on.relation_changed(relations[0]), state)
+    # WHEN a certificate_set_updated event is emitted
+    out_1 = context.run(context.on.relation_changed(relations[0]), state)
 
     # THEN recv_ca_cert-associated certs are present
-    container = out.get_container("prometheus")
+    container = out_1.get_container("prometheus")
     fs = container.get_filesystem(context)
     certs_dir = fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/"))
     assert certs_dir.exists()
     certs = {file.read_text() for file in certs_dir.glob("*.crt")}
     assert certs == {cert1a, cert1b, cert2a, cert2b}
 
-    # AND WHEN one relation is removed
-    relations.pop(0)
+    # AND WHEN one relation is removed, i.e. a certificates_removed event is emitted
     state = State(leader=True, containers={prometheus_container}, relations=relations)
-    # WHEN any event is emitted
-    out = context.run(context.on.update_status(), out)
+    out_2 = context.run(context.on.relation_broken(relations[0]), out_1)
+
+    # THEN its certs are removed, but the others remain
+    container = out_2.get_container("prometheus")
+    fs = container.get_filesystem(context)
+    certs_dir = fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/"))
+    assert certs_dir.exists()
+    certs = {file.read_text() for file in certs_dir.glob("*.crt")}
+    assert certs == {cert2a, cert2b}
