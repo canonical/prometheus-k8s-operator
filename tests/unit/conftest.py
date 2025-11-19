@@ -1,10 +1,11 @@
-# Copyright 2023 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 from unittest.mock import patch
 
 import pytest
 from charms.tempo_coordinator_k8s.v0.charm_tracing import charm_tracing_disabled
+from ops import pebble
 from scenario import Container, Context, Exec
 
 from charm import PrometheusCharm
@@ -40,6 +41,8 @@ def prometheus_container():
     return Container(
         "prometheus",
         can_connect=True,
+        layers={"prometheus": pebble.Layer({"services": {"prometheus": {}}})},
+        service_statuses={"prometheus": pebble.ServiceStatus.INACTIVE},
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
 

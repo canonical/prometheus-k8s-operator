@@ -10,6 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+import jubilant
 import pytest
 
 logger = logging.getLogger(__name__)
@@ -90,3 +91,10 @@ async def prometheus_tester_charm(ops_test):
     await ops_test.run(*clean_cmd)
     charm = await ops_test.build_charm(charm_path)
     return charm
+
+
+@pytest.fixture(scope="module")
+def juju():
+    keep_models: bool = os.environ.get("KEEP_MODELS") is not None
+    with jubilant.temp_model(keep=keep_models) as juju:
+        yield juju
