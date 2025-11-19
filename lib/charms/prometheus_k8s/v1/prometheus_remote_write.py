@@ -417,7 +417,7 @@ class PrometheusRemoteWriteConsumer(Object):
             alert_rules_path: Path of the directory containing the alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set alerts data.
-            peer_relation_name: Name of the peer relation containing units of this charm e.g. peers.
+            peer_relation_name: Name of the peer relation containing units of this charm.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
             extra_alert_labels: Dict of extra labels to inject alert rules with.
 
@@ -609,10 +609,10 @@ class PrometheusRemoteWriteConsumer(Object):
                         juju_unit = unit.name
                         modified_rule = copy.deepcopy(rule)
 
-                        # Inject juju_unit label.
+                        # Inject juju_unit alert label.
                         modified_rule["labels"]["juju_unit"] = juju_unit
 
-                        # Inject juju_unit to the current expr.
+                        # Inject juju_unit label matcher.
                         modified_rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
                             {"juju_unit": juju_unit},
