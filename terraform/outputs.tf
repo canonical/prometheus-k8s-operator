@@ -11,6 +11,7 @@ output "endpoints" {
     ingress          = "ingress"
     catalogue        = "catalogue"
     certificates     = "certificates"
+    receive_ca_cert  = "receive-ca-cert"
     charm_tracing    = "charm-tracing"
     workload_tracing = "workload-tracing"
 
