@@ -1132,13 +1132,7 @@ class PrometheusCharm(CharmBase):
             # prometheus and all scrape jobs are signed by the same CA.
 
             ca_file = tls_config.get("ca_file")
-            if not ca_file and self._tls_config:
-                ca_file = self._tls_config.ca_cert
-
             if ca_file:
-                # TODO we shouldn't be passing CA certs over relation data, because that
-                #  reduces to self-signed certs. Both parties need to separately trust the CA
-                #  instead.
                 filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                 certs[filename] = ca_file
                 job["tls_config"] = {**tls_config, **{"ca_file": filename}}
