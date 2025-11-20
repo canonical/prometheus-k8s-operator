@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2020 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """A Juju charm for Prometheus on Kubernetes."""
@@ -18,6 +18,9 @@ from urllib.parse import urlparse
 import yaml
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
+from charms.certificate_transfer_interface.v1.certificate_transfer import (
+    CertificateTransferRequires,
+)
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
 from charms.mimir_coordinator_k8s.v0.prometheus_api import (
@@ -86,7 +89,7 @@ ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 # These are used to present to clients and to authenticate other servers.
 KEY_PATH = f"{PROMETHEUS_DIR}/server.key"
 CERT_PATH = f"{PROMETHEUS_DIR}/server.cert"
-CA_CERT_PATH = f"{PROMETHEUS_DIR}/ca.cert"
+RECV_CA_CERT_FOLDER_PATH = "/usr/local/share/ca-certificates/juju_receive-ca-cert"
 WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 
 # To get the behaviour consistent with mimir that doesn't allow lower values
@@ -163,7 +166,6 @@ class PrometheusCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._fqdn = socket.getfqdn()
-
         # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
         # https://discourse.charmhub.io/t/its-probably-ok-for-a-unit-to-go-into-error-state/13022
         self._stored.set_default(
@@ -197,6 +199,7 @@ class PrometheusCharm(CharmBase):
             relationship_name="certificates",
             certificate_requests=[self._csr_attributes],
         )
+        self._cert_transfer = CertificateTransferRequires(self, "receive-ca-cert")
         # Update certs here in init to avoid code ordering issues
         self._update_cert()
 
@@ -276,6 +279,8 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
+        self.framework.observe(self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs)
+        self.framework.observe(self._cert_transfer.on.certificates_removed, self._on_receive_ca_certs)
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -452,7 +457,7 @@ class PrometheusCharm(CharmBase):
                 {
                     "scheme": "https",
                     "tls_config": {
-                        "ca_file": CA_CERT_PATH,
+                        "ca_file": self._ca_cert_path,
                     },
                 }
             )
@@ -542,6 +547,9 @@ class PrometheusCharm(CharmBase):
         self._update_cert()
         self._configure(_)
 
+    def _on_receive_ca_certs(self, _):
+        self._update_ca_certs()
+
     # TLS CONFIG
     @property
     def _tls_config(self) -> Optional[TLSConfig]:
@@ -580,13 +588,6 @@ class PrometheusCharm(CharmBase):
                 tls_config.ca_cert,
                 make_dirs=True,
             )
-            # FIXME with the update-ca-certificates machinery prometheus shouldn't need
-            #  CA_CERT_PATH.
-            self.container.push(
-                CA_CERT_PATH,
-                tls_config.ca_cert,
-                make_dirs=True,
-            )
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
@@ -595,12 +596,31 @@ class PrometheusCharm(CharmBase):
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
             self.container.remove_path(ca_cert_path, recursive=True)
-            self.container.remove_path(CA_CERT_PATH, recursive=True)  # TODO: remove (see FIXME ^)
             # Repeat for the charm container.
             ca_cert_path.unlink(missing_ok=True)
 
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
         subprocess.run(["update-ca-certificates", "--fresh"])
+
+    def _update_ca_certs(self):
+        """Get CA certs from relation data and install them in the workload container's root store."""
+        if not self.container.can_connect():
+            return
+
+        # Obtain certs from relation data
+        ca_certs = self._cert_transfer.get_all_certificates()
+
+        # Clean-up previously existing certs
+        self.container.remove_path(RECV_CA_CERT_FOLDER_PATH, recursive=True)
+
+        # Write current certs
+        for i, cert in enumerate(ca_certs):
+            self.container.push(RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt", cert, make_dirs=True)
+
+        # Refresh system certs
+        self.container.exec(["update-ca-certificates", "--fresh"]).wait()
+        self.container.restart("prometheus")
+
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -1112,13 +1132,7 @@ class PrometheusCharm(CharmBase):
             # prometheus and all scrape jobs are signed by the same CA.
 
             ca_file = tls_config.get("ca_file")
-            if not ca_file and self._tls_config:
-                ca_file = self._tls_config.ca_cert
-
             if ca_file:
-                # TODO we shouldn't be passing CA certs over relation data, because that
-                #  reduces to self-signed certs. Both parties need to separately trust the CA
-                #  instead.
                 filename = f"{PROMETHEUS_DIR}/{job['job_name']}-ca.crt"
                 certs[filename] = ca_file
                 job["tls_config"] = {**tls_config, **{"ca_file": filename}}

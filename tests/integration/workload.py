@@ -145,8 +145,8 @@ class Prometheus:
                 #           "severity": "High"
                 #         },
                 #         "annotations": {
-                #           "description": " of job non_existing_job is firing the dummy alarm.",
-                #           "summary": "Instance  dummy alarm (always firing)"
+                #           "description": " of job non_existing_job is firing the sample alarm.",
+                #           "summary": "Instance  sample alarm (always firing)"
                 #         },
                 #         "state": "firing",
                 #         "activeAt": "2022-01-13T18:53:12.808550042Z",
