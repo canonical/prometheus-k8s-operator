@@ -23,7 +23,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
@@ -37,7 +37,7 @@ from ops.charm import (
     RelationRole,
 )
 from ops.framework import BoundEvent, EventBase, EventSource, Object, ObjectEvents
-from ops.model import Relation
+from ops.model import Relation, Unit
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f783823fa75f4b7880eb70f2077ec259"
@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 PYDEPS = ["cosl"]
 
@@ -404,6 +404,7 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         *,
+        peer_relation_name: str,
         forward_alert_rules: bool = True,
         extra_alert_labels: Dict = {},
     ):
@@ -416,6 +417,7 @@ class PrometheusRemoteWriteConsumer(Object):
             alert_rules_path: Path of the directory containing the alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set alerts data.
+            peer_relation_name: Name of the peer relation containing units of this charm.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
             extra_alert_labels: Dict of extra labels to inject alert rules with.
 
@@ -448,9 +450,9 @@ class PrometheusRemoteWriteConsumer(Object):
         self._alert_rules_path = alert_rules_path
         self._forward_alert_rules = forward_alert_rules
         self._extra_alert_labels = extra_alert_labels
-
+        self._peer_relation_name = peer_relation_name
         self.topology = JujuTopology.from_charm(charm)
-
+        self._tool = CosTool(self._charm)
         on_relation = self._charm.on[self._relation_name]
 
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
@@ -499,12 +501,20 @@ class PrometheusRemoteWriteConsumer(Object):
         if not self._charm.unit.is_leader():
             return
 
+        peer_relations = self._charm.model.get_relation(self._peer_relation_name)
+        peer_relation_units = peer_relations.units if peer_relations else []
+
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
+
         if self._forward_alert_rules:
-            alert_rules.add_path(self._alert_rules_path)
             alert_rules.add(
                 generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
             )
+
+            if peer_relation_units:
+                alert_rules.groups = self._duplicate_host_metrics_missing_rule_per_unit(alert_rules, set(peer_relation_units))
+
+            alert_rules.add_path(self._alert_rules_path)
 
         alert_rules_as_dict = alert_rules.as_dict()
 
@@ -514,7 +524,6 @@ class PrometheusRemoteWriteConsumer(Object):
                     alert_rules_as_dict, self._extra_alert_labels
                 )
             )
-
         relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
@@ -570,6 +579,51 @@ class PrometheusRemoteWriteConsumer(Object):
         deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
         return deduplicated_endpoints
 
+    def _duplicate_host_metrics_missing_rule_per_unit(
+        self, alert_rules: AlertRules, peer_units: Set[Unit]
+    ) -> List:
+        """Duplicate HostMetricsMissing alert rule per unit in peer_units list.
+
+        Args:
+            alert_rules: Has type AlertRules representing alert rules.
+            peer_units: A set of unit names (Unit) representing units of this charm.
+
+        Returns:
+            A list representing alert rules with HostMetricsMissing rule
+            duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
+        """
+        updated_alert_rules = copy.deepcopy(alert_rules)
+
+        for group in updated_alert_rules.groups:
+            new_rules = []
+            for rule in group["rules"]:
+
+                # If there is a HostMetricsMissing alert there, we need to duplicate it per unit of this app.
+                if rule.get("alert") == "HostMetricsMissing":
+
+                    # At this point, the peer_relation_units **set** will contain all peer units related to this charm, but not the leader unit itself.
+                    # We add this unit to the set so that we also inject juju_unit to its labels and expr.
+                    peer_units.add(self._charm.unit)
+
+                    for unit in peer_units:
+                        juju_unit = unit.name
+                        modified_rule = copy.deepcopy(rule)
+
+                        # Inject juju_unit alert label.
+                        modified_rule["labels"]["juju_unit"] = juju_unit
+
+                        # Inject juju_unit label matcher.
+                        modified_rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
+                            {"juju_unit": juju_unit},
+                        )
+
+                        new_rules.append(modified_rule)
+                else:
+                    new_rules.append(rule)
+
+            group["rules"] = new_rules
+        return updated_alert_rules.groups
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
     """Event emitted when Prometheus remote_write alerts change."""
