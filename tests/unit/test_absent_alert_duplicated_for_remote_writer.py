@@ -100,7 +100,7 @@ def test_remote_write_no_alert_duplication_when_no_peers():
 
     remote_write_relation_json = json.loads(getattr(remote_write_relation, "local_app_data", {}).get("alert_rules", {}))
     assert remote_write_relation_json
-
+    logger.info(remote_write_relation_json)
     # Expecting the HostMetricsMissing rule NOT to be duplicated.
     total_host_metrics_missing_rules = 0
     matching_rules = []
