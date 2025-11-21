@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.8, <4"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -1037,7 +1037,7 @@ wheels = [
 
 [[package]]
 name = "cosl"
-version = "1.3.1"
+version = "1.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ops" },
@@ -1049,9 +1049,9 @@ dependencies = [
     { name = "typing-extensions", version = "4.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "typing-extensions", version = "4.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/d5/a9ea4a4c29a374d6d356bbdc2a78348de5dc7aa2d869b932bbd559367d2b/cosl-1.3.1.tar.gz", hash = "sha256:aa836828350398beb5bbd4fe85cb582e796a7b8b5d9a214a5bc6fd855cde11af", size = 45361, upload-time = "2025-10-08T09:58:04.504Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/b3/bd83f017c73044a221bc0c7ad62f583d11d1276190f65eb1c086150e24e4/cosl-1.3.2.tar.gz", hash = "sha256:dea8e937629b44232bb306f76fbf88064a1a0093fe66dacdd43ab2cb06b7f35f", size = 46029, upload-time = "2025-11-20T22:03:14.031Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/54/a72b67cae15af226882dd6c7da011c26ae3c9c5843c36511d0dd1753c298/cosl-1.3.1-py3-none-any.whl", hash = "sha256:8ab9b23b367f041ec0f4eae63d4b1960712431a2b3bf6fb6fdec473efea30f77", size = 36387, upload-time = "2025-10-08T09:58:03.544Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/e2/d10330cce5be3d8842d3a8889ed368546a2fa41b701c1abb56b0bf9b59f2/cosl-1.3.2-py3-none-any.whl", hash = "sha256:52ca0983fb0bf3bfa8d0bb796fc6a8208a71bbf4481a5c90905b1f71a1184d4b", size = 36598, upload-time = "2025-11-20T22:03:12.736Z" },
 ]
 
 [[package]]
