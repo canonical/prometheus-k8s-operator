@@ -1038,7 +1038,7 @@ wheels = [
 [[package]]
 name = "cosl"
 version = "1.3.1"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/canonical/cos-lib.git?rev=feat%2Faggregator-metrics-missing-rule#5b055376cb3f3a93b84a102f78ee3f43ecd4dfd3" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic", version = "2.10.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -1048,10 +1048,6 @@ dependencies = [
     { name = "tenacity", version = "9.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "typing-extensions", version = "4.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "typing-extensions", version = "4.14.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/d5/a9ea4a4c29a374d6d356bbdc2a78348de5dc7aa2d869b932bbd559367d2b/cosl-1.3.1.tar.gz", hash = "sha256:aa836828350398beb5bbd4fe85cb582e796a7b8b5d9a214a5bc6fd855cde11af", size = 45361, upload-time = "2025-10-08T09:58:04.504Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/54/a72b67cae15af226882dd6c7da011c26ae3c9c5843c36511d0dd1753c298/cosl-1.3.1-py3-none-any.whl", hash = "sha256:8ab9b23b367f041ec0f4eae63d4b1960712431a2b3bf6fb6fdec473efea30f77", size = 36387, upload-time = "2025-10-08T09:58:03.544Z" },
 ]
 
 [[package]]
@@ -4151,7 +4147,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", marker = "extra == 'dev'" },
     { name = "codespell", marker = "extra == 'dev'" },
-    { name = "cosl" },
+    { name = "cosl", git = "https://github.com/canonical/cos-lib.git?rev=feat%2Faggregator-metrics-missing-rule" },
     { name = "coverage", extras = ["toml"], marker = "extra == 'dev'" },
     { name = "cryptography" },
     { name = "deepdiff", marker = "extra == 'dev'" },

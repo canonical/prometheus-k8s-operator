@@ -4,6 +4,7 @@ import logging
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteConsumer,
 )
+from cosl.rules import HOST_METRICS_MISSING_RULE_NAME
 from helpers import (
     UNITTEST_DIR,
     patch_cos_tool_path,
@@ -67,7 +68,7 @@ def test_remote_write_absent_alert_duplicated_for_units():
     matching_rules = []
     for group in remote_write_relation_json.get('groups', []):
         for rule in group.get('rules', []):
-            if rule.get('alert') == 'HostMetricsMissing':
+            if rule.get('alert') == HOST_METRICS_MISSING_RULE_NAME:
                 total_host_metrics_missing_rules += 1
                 labels = rule.get('labels', {})
                 unit = labels.get('juju_unit')
@@ -100,21 +101,21 @@ def test_remote_write_no_alert_duplication_when_no_peers():
 
     remote_write_relation_json = json.loads(getattr(remote_write_relation, "local_app_data", {}).get("alert_rules", {}))
     assert remote_write_relation_json
-    logger.info(remote_write_relation_json)
+
     # Expecting the HostMetricsMissing rule NOT to be duplicated.
     total_host_metrics_missing_rules = 0
     matching_rules = []
     for group in remote_write_relation_json.get('groups', []):
         for rule in group.get('rules', []):
             labels = rule.get('labels', {})
-            unit = labels.get('juju_unit')
             expr = rule.get('expr', '')
             app = labels.get('juju_application')
+
             # THEN because we only have one remote writer unit, there should be no duplication.
             # AND there should be no juju_unit label or mention in expr.
-            if rule.get('alert') == 'HostMetricsMissing':
+            if rule.get('alert') == HOST_METRICS_MISSING_RULE_NAME:
                 total_host_metrics_missing_rules += 1
-                if unit is None and 'juju_unit' not in expr and app == 'test':
+                if 'juju_unit' in expr and app == 'test':
                     matching_rules.append(rule)
 
     # AND we find exactly one matching rule.

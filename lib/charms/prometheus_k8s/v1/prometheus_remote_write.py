@@ -27,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
-from cosl.rules import AlertRules, generic_alert_groups
+from cosl.rules import HOST_METRICS_MISSING_RULE_NAME, AlertRules, generic_alert_groups
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -503,21 +503,14 @@ class PrometheusRemoteWriteConsumer(Object):
     def _push_alerts_to_relation_databag(self, relation: Relation) -> None:
         if not self._charm.unit.is_leader():
             return
-
         peer_relations = self._charm.model.get_relation(self._peer_relation_name)
         unit_names = ({unit.name for unit in peer_relations.units} if peer_relations else set()) | {self._charm.unit.name}
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
 
         if self._forward_alert_rules:
-            # TODO: update comment above: we want the unit in the expr always, not just when > 1 units.
 
-            # Critical alert = aggregator rules, we pass severity = critical to the duplicator.
-            # Warning alert = duplicated alerts per unit, we need to pass severity = warning to the duplcicator.
-            # We need to differentiate between VMs and K8s. For K8s, we have both critical and warning rules.
-            # For machines, always critical.
-
-            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names)
+            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names, duplicate_keys=[HOST_METRICS_MISSING_RULE_NAME], is_subordinate=self._charm.meta.subordinate)
             alert_rules.add(agg_rules, group_name_prefix=self.topology.identifier)
 
             alert_rules.add_path(self._alert_rules_path)
@@ -586,44 +579,45 @@ class PrometheusRemoteWriteConsumer(Object):
         return deduplicated_endpoints
 
     def _duplicate_rules_per_unit(
-        self, alert_rules: AlertRules, peer_unit_names: Set[str], duplicate_only: Optional[List[str]] = None
-    ) -> List:
+        self, alert_rules: Dict[str, Any], peer_unit_names: Set[str], duplicate_keys: List[str], is_subordinate: bool = False
+    ) -> Dict[str, Any]:
         """Duplicate alert rule per unit in peer_units list.
 
         Args:
-            alert_rules: Has type AlertRules representing alert rules.
+            alert_rules: A dictionary where key = "groups" and value is a list of rules.
             peer_unit_names: A set of unit names (str) representing units of this charm.
-            duplicate_only: An optional list of alert names (str). If provided,
-                only alert rules with names in this list will be duplicated per unit.
-                If not provided, all alert rules will be duplicated per unit.
+            duplicate_keys: A list of alert rule names to be duplicated.
+            is_subordinate: A boolean denoting whether the charm duplicating alert rules is a subordinate or not. If yes, the severity of the alerts in duplicate_keys needs to be set to critical.
 
         Returns:
-            A list representing alert rules with HostMetricsMissing rule
+            A Dict[str, any] representing alert rules with HostMetricsMissing rule
             duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
         """
         updated_alert_rules = copy.deepcopy(alert_rules)
 
-        for group in updated_alert_rules.get("groups", []):
+        for group in updated_alert_rules.get("groups", {}):
             new_rules = []
             for rule in group["rules"]:
+                if rule.get("alert", "") not in duplicate_keys:
+                    new_rules.append(rule)
+                else:
+                    for name in peer_unit_names:
+                        juju_unit = name
+                        modified_rule = copy.deepcopy(rule)
 
-                # TODO: use include_only here.
-                for name in peer_unit_names:
-                    juju_unit = name
-                    modified_rule = copy.deepcopy(rule)
+                        # Inject juju_unit alert label.
+                        modified_rule["labels"]["juju_unit"] = juju_unit
 
-                    # Inject juju_unit alert label.
-                    modified_rule["labels"]["juju_unit"] = juju_unit
+                        # Inject juju_unit label matcher.
+                        modified_rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
+                            {"juju_unit": juju_unit},
+                        )
 
-                    # Inject juju_unit label matcher.
-                    modified_rule["expr"] = self._tool.inject_label_matchers(
-                        re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
-                        {"juju_unit": juju_unit},
-                    )
+                        # If the charm is a subordinate, the severity of the alerts need to be bumped to critical.
+                        modified_rule["labels"]["severity"] = "critical" if is_subordinate else "warning"
 
-                    new_rules.append(modified_rule)
-            else:
-                new_rules.append(rule)
+                        new_rules.append(modified_rule)
 
             group["rules"] = new_rules
         return updated_alert_rules
