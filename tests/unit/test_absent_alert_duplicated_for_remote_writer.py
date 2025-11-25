@@ -80,7 +80,7 @@ def test_remote_write_absent_alert_duplicated_for_units():
     assert len(matching_rules) == 4
     assert {unit for unit, _ in matching_rules} == expected_units
 
-    # AND we should have in total five HostMetricsMissing rules.
+    # AND we should have in total five HostMetricsMissing rules; x4 with `juju_unit` label and x1 without.
     assert total_host_metrics_missing_rules == 5
 
 def test_remote_write_no_alert_duplication_when_no_peers():
@@ -112,7 +112,6 @@ def test_remote_write_no_alert_duplication_when_no_peers():
             app = labels.get('juju_application')
 
             # THEN because we only have one remote writer unit, there should be no duplication.
-            # AND there should be no juju_unit label or mention in expr.
             if rule.get('alert') == HOST_METRICS_MISSING_RULE_NAME:
                 total_host_metrics_missing_rules += 1
                 if 'juju_unit' in expr and app == 'test':

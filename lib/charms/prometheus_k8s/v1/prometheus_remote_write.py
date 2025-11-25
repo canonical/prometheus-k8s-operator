@@ -510,7 +510,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         if self._forward_alert_rules:
 
-            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names, duplicate_keys=[HOST_METRICS_MISSING_RULE_NAME], is_subordinate=self._charm.meta.subordinate)
+            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names, rule_names_to_duplicate=[HOST_METRICS_MISSING_RULE_NAME], is_subordinate=self._charm.meta.subordinate)
             alert_rules.add(agg_rules, group_name_prefix=self.topology.identifier)
 
             alert_rules.add_path(self._alert_rules_path)
@@ -579,18 +579,18 @@ class PrometheusRemoteWriteConsumer(Object):
         return deduplicated_endpoints
 
     def _duplicate_rules_per_unit(
-        self, alert_rules: Dict[str, Any], peer_unit_names: Set[str], duplicate_keys: List[str], is_subordinate: bool = False
+        self, alert_rules: Dict[str, Any], peer_unit_names: Set[str], rule_names_to_duplicate: List[str], is_subordinate: bool = False
     ) -> Dict[str, Any]:
         """Duplicate alert rule per unit in peer_units list.
 
         Args:
             alert_rules: A dictionary where key = "groups" and value is a list of rules.
             peer_unit_names: A set of unit names (str) representing units of this charm.
-            duplicate_keys: A list of alert rule names to be duplicated.
+            rule_names_to_duplicate: A list of alert rule names to be duplicated.
             is_subordinate: A boolean denoting whether the charm duplicating alert rules is a subordinate or not. If yes, the severity of the alerts in duplicate_keys needs to be set to critical.
 
         Returns:
-            A Dict[str, any] representing alert rules with HostMetricsMissing rule
+            A Dict[str, any] the updated alert rules with the rules specified in rule_names_to_duplicate
             duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
         """
         updated_alert_rules = copy.deepcopy(alert_rules)
@@ -598,7 +598,7 @@ class PrometheusRemoteWriteConsumer(Object):
         for group in updated_alert_rules.get("groups", {}):
             new_rules = []
             for rule in group["rules"]:
-                if rule.get("alert", "") not in duplicate_keys:
+                if rule.get("alert", "") not in rule_names_to_duplicate:
                     new_rules.append(rule)
                 else:
                     for name in peer_unit_names:
