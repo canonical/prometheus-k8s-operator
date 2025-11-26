@@ -1,0 +1,16 @@
+alert: HostMetricsMissing
+expr: absent(up{%%juju_topology%%}) == 0
+for: 0m
+labels:
+  severity: critical
+  juju_model: test-model
+  juju_model_uuid: e674af04-0e76-4c11-92a0-f219fa8b4386
+  juju_application: scraped_charm
+  juju_charm: scraped-charm-k8s
+annotations:
+  summary: 'Host metrics missing (instance {{ $labels.instance }})'
+  description: >
+    Host metrics have disappeared from Prometheus.
+    This may indicate that the exporter is down or unreachable.
+    VALUE = {{ $value }}
+    LABELS = {{ $labels }}
