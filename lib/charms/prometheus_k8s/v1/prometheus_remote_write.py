@@ -23,11 +23,11 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
-from cosl.rules import AlertRules, generic_alert_groups
+from cosl.rules import HOST_METRICS_MISSING_RULE_NAME, AlertRules, generic_alert_groups
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 11
 
 PYDEPS = ["cosl"]
 
@@ -404,10 +404,14 @@ class PrometheusRemoteWriteConsumer(Object):
         alert_rules_path: str = DEFAULT_ALERT_RULES_RELATIVE_PATH,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         *,
+        peer_relation_name: str,
         forward_alert_rules: bool = True,
         extra_alert_labels: Dict = {},
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
+
+        Since remote write consumers need to inject labels into alert expressions, they need
+        to have the cos tool binary available.
 
         Args:
             charm: The charm object that instantiated this class.
@@ -416,6 +420,7 @@ class PrometheusRemoteWriteConsumer(Object):
             alert_rules_path: Path of the directory containing the alert rules.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set alerts data.
+            peer_relation_name: Name of the peer relation containing units of this charm.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
             extra_alert_labels: Dict of extra labels to inject alert rules with.
 
@@ -448,9 +453,9 @@ class PrometheusRemoteWriteConsumer(Object):
         self._alert_rules_path = alert_rules_path
         self._forward_alert_rules = forward_alert_rules
         self._extra_alert_labels = extra_alert_labels
-
+        self._peer_relation_name = peer_relation_name
         self.topology = JujuTopology.from_charm(charm)
-
+        self._tool = CosTool(self._charm)
         on_relation = self._charm.on[self._relation_name]
 
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
@@ -498,13 +503,17 @@ class PrometheusRemoteWriteConsumer(Object):
     def _push_alerts_to_relation_databag(self, relation: Relation) -> None:
         if not self._charm.unit.is_leader():
             return
+        peer_relations = self._charm.model.get_relation(self._peer_relation_name)
+        unit_names = ({unit.name for unit in peer_relations.units} if peer_relations else set()) | {self._charm.unit.name}
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
+
         if self._forward_alert_rules:
+
+            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names, rule_names_to_duplicate=[HOST_METRICS_MISSING_RULE_NAME], is_subordinate=self._charm.meta.subordinate)
+            alert_rules.add(agg_rules, group_name_prefix=self.topology.identifier)
+
             alert_rules.add_path(self._alert_rules_path)
-            alert_rules.add(
-                generic_alert_groups.aggregator_rules, group_name_prefix=self.topology.identifier
-            )
 
         alert_rules_as_dict = alert_rules.as_dict()
 
@@ -514,7 +523,6 @@ class PrometheusRemoteWriteConsumer(Object):
                     alert_rules_as_dict, self._extra_alert_labels
                 )
             )
-
         relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
 
     def reload_alerts(self) -> None:
@@ -570,6 +578,49 @@ class PrometheusRemoteWriteConsumer(Object):
         deduplicated_endpoints = [dict(t) for t in {tuple(d.items()) for d in endpoints}]
         return deduplicated_endpoints
 
+    def _duplicate_rules_per_unit(
+        self, alert_rules: Dict[str, Any], peer_unit_names: Set[str], rule_names_to_duplicate: List[str], is_subordinate: bool = False
+    ) -> Dict[str, Any]:
+        """Duplicate alert rule per unit in peer_units list.
+
+        Args:
+            alert_rules: A dictionary where key = "groups" and value is a list of rules.
+            peer_unit_names: A set of unit names (str) representing units of this charm.
+            rule_names_to_duplicate: A list of alert rule names to be duplicated.
+            is_subordinate: A boolean denoting whether the charm duplicating alert rules is a subordinate or not. If yes, the severity of the alerts in duplicate_keys needs to be set to critical.
+
+        Returns:
+            A Dict[str, any] the updated alert rules with the rules specified in rule_names_to_duplicate
+            duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
+        """
+        updated_alert_rules = copy.deepcopy(alert_rules)
+
+        for group in updated_alert_rules.get("groups", {}):
+            new_rules = []
+            for rule in group["rules"]:
+                if rule.get("alert", "") not in rule_names_to_duplicate:
+                    new_rules.append(rule)
+                else:
+                    for name in peer_unit_names:
+                        juju_unit = name
+                        modified_rule = copy.deepcopy(rule)
+
+                        # Inject juju_unit alert label.
+                        modified_rule["labels"]["juju_unit"] = juju_unit
+
+                        # Inject juju_unit label matcher.
+                        modified_rule["expr"] = self._tool.inject_label_matchers(
+                            re.sub(r"%%juju_unit%%,?", "", modified_rule["expr"]),
+                            {"juju_unit": juju_unit},
+                        )
+
+                        # If the charm is a subordinate, the severity of the alerts need to be bumped to critical.
+                        modified_rule["labels"]["severity"] = "critical" if is_subordinate else "warning"
+
+                        new_rules.append(modified_rule)
+
+            group["rules"] = new_rules
+        return updated_alert_rules
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
     """Event emitted when Prometheus remote_write alerts change."""
