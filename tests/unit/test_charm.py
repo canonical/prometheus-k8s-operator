@@ -801,6 +801,7 @@ class TestTlsConfig(unittest.TestCase):
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
     def test_tls_config_missing_key(self, *_):
+        self.harness.set_leader(True)
         scrape_jobs = [
             {
                 "job_name": "job1",
@@ -832,3 +833,9 @@ class TestTlsConfig(unittest.TestCase):
 
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
+        
+        # Verify that scrape_job_errors are set in relation data
+        app_data = json.loads(
+            self.harness.get_relation_data(self.rel_id, self.harness.charm.app.name).get("event", "{}")
+        )
+        self.assertIn("scrape_job_errors", app_data)
