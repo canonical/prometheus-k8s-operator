@@ -772,8 +772,8 @@ class TestTlsConfig(unittest.TestCase):
                     {"targets": ["*:80"]},
                 ],
                 "tls_config": {
-                    "ca_file": "CA 1",
-                    "key_file": "CLIENT KEY 1",
+                    "ca_file": "ca_file.pem",
+                    "key_file": "private.key",
                 },
             },
         ]
@@ -795,7 +795,7 @@ class TestTlsConfig(unittest.TestCase):
         )
 
         self.harness.evaluate_status()
-        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
@@ -808,8 +808,8 @@ class TestTlsConfig(unittest.TestCase):
                     {"targets": ["*:80"]},
                 ],
                 "tls_config": {
-                    "ca_file": "CA 1",
-                    "cert_file": "CLIENT CERT 1",
+                    "ca_file": "ca_file.pem",
+                    "cert_file": "cert.pem",
                 },
             },
         ]
@@ -831,4 +831,4 @@ class TestTlsConfig(unittest.TestCase):
         )
 
         self.harness.evaluate_status()
-        self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
+        self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
