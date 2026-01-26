@@ -92,6 +92,11 @@ provides:
     optional: true
     description: |
       The integration point for other charms to consume Prometheus's API, for example so they can query the database.
+  slos:
+    interface: slo
+    optional: true
+    description: |
+      Integration to provide SLO specs to Sloth for SLO based alerting and dashboards.
 
 requires:
   metrics-endpoint:
@@ -233,6 +238,12 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
+    slos:
+      default: ""
+      type: string
+      description: |
+        Provides SLO (Service Level Objective) specifications to Sloth for generating 
+        Prometheus recording and alerting rules.
 
 actions:
   validate-configuration:
@@ -240,3 +251,16 @@ actions:
       Run `promtool` inside the workload to validate the Prometheus configuration file, and
       return the resulting output. This can be used to troubleshoot a Prometheus instance
       which will not start, or misbehaves, due to a bad configuration.
+  get-slo-template:
+    description: |
+      Returns a template SLO specification for Prometheus with placeholders for customization.
+      The template includes example SLOs for key metrics and KPIs such as #TODO.
+      
+      Usage:
+        # Extract template to file (recommended):
+        juju run prometheus-k8s/0 get-slo-template --format=json | jq -r '.template' > prometheus-slo.yaml
+        
+        # Then edit prometheus-slo.yaml to fill in the <OBJECTIVE> placeholder for each SLO.
+        
+        # Apply the configuration:
+        juju config prometheus-k8s slos="$(cat prometheus-slo.yaml)"

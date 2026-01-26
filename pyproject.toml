@@ -3,7 +3,7 @@
 [project]
 name = "prometheus-k8s"
 version = "0.0"
-requires-python = "~=3.8"
+requires-python = "~=3.10"
 
 dependencies = [
   "ops",
@@ -21,6 +21,7 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http",
   "opentelemetry-sdk",
   "pydantic>=2",
+  "charmlibs-slo",
 ]
 
 [project.optional-dependencies]
@@ -92,3 +93,6 @@ addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
 [tool.codespell]
 skip = ".git,.tox,build,venv*"
 ignore-words-list = "assertIn"
+
+[tool.uv.sources]
+charmlibs-slo = { git = "https://github.com/canonical/charmlibs", subdirectory = "slo", branch = "feat/slo" }

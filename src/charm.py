@@ -55,6 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRevokedForUnitEvent,
 )
 from cosl import JujuTopology
+from charmlibs.slo import SLOProvider
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -156,7 +157,6 @@ class TLSConfig:
         Prometheus,
     ],
 )
-
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
 
@@ -272,6 +272,8 @@ class PrometheusCharm(CharmBase):
             requirer_endpoint=None,
         )
 
+        self.slo_provider = SLOProvider(self)
+
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
@@ -287,6 +289,7 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
+        self.framework.observe(self.on.get_slo_template_action, self._on_get_slo_template)
         self.framework.observe(
             self.on.send_datasource_relation_joined, self._on_grafana_source_changed
         )
@@ -678,6 +681,7 @@ class PrometheusCharm(CharmBase):
         self.catalogue.update_item(item=self._catalogue_item)
 
         self._update_prometheus_api()
+        self._update_slo_provider()
 
         try:
             # Need to reload if config or alerts changed.
@@ -924,6 +928,14 @@ class PrometheusCharm(CharmBase):
         output, err = self._promtool_check_config()
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
+        )
+
+    def _on_get_slo_template(self, event: ActionEvent) -> None:
+        # Return the SLO template file.
+        pth = Path(__file__).parent/"sli_templates"/"sli.yaml"
+
+        event.set_results(
+            {"result": pth.read_text()}
         )
 
     def _get_pvc_capacity(self) -> str:
@@ -1231,6 +1243,25 @@ class PrometheusCharm(CharmBase):
 
     def _on_prometheus_api_relation_changed(self, _):
         self._update_prometheus_api()
+
+    def _update_slo_provider(self) -> None:
+        """Reconciler for the `slos` endpoint."""
+
+        # ATM provide_slos publishes to unit databag but we're changing that to app. So:
+        if not self.unit.is_leader():
+            return
+
+        if not (slo_config := self.config["slos"]):
+            logger.debug("no slos configured; skipping slo provider update")
+            return
+
+        # FIXME: this will be a public method at some point
+        if self.model.relations.get(self.slo_provider._relation_name, None):  # type:ignore
+            logger.debug("updating slo provider")
+            self.slo_provider.provide_slos(
+                slo_config
+            )
+
 
     def _update_prometheus_api(self) -> None:
         """Update all applications related to us via the prometheus-api relation."""
