@@ -3,10 +3,10 @@
 [project]
 name = "prometheus-k8s"
 version = "0.0"
-requires-python = "~=3.8"
+requires-python = "~=3.10"
 
 dependencies = [
-  "ops",
+  "ops==2.22.0",
   "pyyaml",
   "cosl",
   "lightkube>=0.11",
