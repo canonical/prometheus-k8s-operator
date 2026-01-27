@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import yaml
+from charmlibs.interfaces.slo import SLOProvider
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
@@ -55,7 +56,6 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRevokedForUnitEvent,
 )
 from cosl import JujuTopology
-from charmlibs.interfaces.slo import SLOProvider
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -1246,12 +1246,12 @@ class PrometheusCharm(CharmBase):
 
     def _update_slo_provider(self) -> None:
         """Reconciler for the `slos` endpoint."""
-
         # ATM provide_slos publishes to unit databag but we're changing that to app. So:
         if not self.unit.is_leader():
             return
 
-        if not (slo_config := self.config["slos"]):
+        slo_config = str(self.config["slos"])
+        if not slo_config:
             logger.debug("no slos configured; skipping slo provider update")
             return
 
