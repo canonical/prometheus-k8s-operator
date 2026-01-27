@@ -55,7 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRevokedForUnitEvent,
 )
 from cosl import JujuTopology
-from charmlibs.slo import SLOProvider
+from charmlibs.interfaces.slo import SLOProvider
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -1256,7 +1256,7 @@ class PrometheusCharm(CharmBase):
             return
 
         # FIXME: this will be a public method at some point
-        if self.model.relations.get(self.slo_provider._relation_name, None):  # type:ignore
+        if self.model.relations.get(self.slo_provider.relation_name, None):  # type:ignore
             logger.debug("updating slo provider")
             self.slo_provider.provide_slos(
                 slo_config

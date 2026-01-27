@@ -21,7 +21,7 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http",
   "opentelemetry-sdk",
   "pydantic>=2",
-  "charmlibs-slo",
+  "charmlibs-interfaces-slo",
 ]
 
 [project.optional-dependencies]
@@ -95,4 +95,4 @@ skip = ".git,.tox,build,venv*"
 ignore-words-list = "assertIn"
 
 [tool.uv.sources]
-charmlibs-slo = { git = "https://github.com/canonical/charmlibs", subdirectory = "slo", branch = "feat/slo" }
+charmlibs-interfaces-slo = { git = "https://github.com/canonical/charmlibs", subdirectory = "interfaces/slo", branch = "feat/slo" }
