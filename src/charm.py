@@ -1246,7 +1246,6 @@ class PrometheusCharm(CharmBase):
             logger.debug("no slos configured; skipping slo provider update")
             return
 
-        # FIXME: this will be a public method at some point
         if self.model.relations.get(self.slo_provider.relation_name, None):  # type:ignore
             logger.debug("updating slo provider")
             self.slo_provider.provide_slos(
