@@ -1243,11 +1243,10 @@ class PrometheusCharm(CharmBase):
 
         slo_config = str(self.config["slos"])
         if not slo_config:
-            logger.debug("no slos configured; skipping slo provider update")
             return
 
-        if self.model.relations.get(self.slo_provider.relation_name, None):  # type:ignore
-            logger.debug("updating slo provider")
+        relations = self.model.relations.get(self.slo_provider.relation_name, None)  # type:ignore
+        if relations:
             self.slo_provider.provide_slos(
                 slo_config
             )

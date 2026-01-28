@@ -9,16 +9,24 @@ RELATION_NAME = "slos"
 INTERFACE_NAME = "slo"
 
 SLO_CONFIG = """
-version: "v1"
-service: "test-service"
+version: prometheus/v1
+service: test-service
+labels:
+  team: test-team
 slos:
   - name: availability
     objective: 99.9
     description: "Service availability"
     sli:
       events:
-        error_query: 'sum(rate(http_requests_total{status=~"5.."}[5m]))'
-        total_query: 'sum(rate(http_requests_total[5m]))'
+        error_query: 'sum(rate(http_requests_total{status=~"5.."}[{{.window}}]))'
+        total_query: 'sum(rate(http_requests_total[{{.window}}]))'
+    alerting:
+      name: TestServiceHighErrorRate
+      labels:
+        severity: critical
+      annotations:
+        summary: "Test service is experiencing high error rate"
 """
 
 
@@ -140,8 +148,38 @@ def test_slo_config_updated_on_relation(context, prometheus_container):
     slo_relation = Relation(RELATION_NAME, INTERFACE_NAME)
     relations = [slo_relation]
 
-    initial_config = "version: v1\nservice: test"
-    updated_config = "version: v1\nservice: test-updated"
+    initial_config = """version: prometheus/v1
+service: test-initial
+labels:
+  team: test-team
+slos:
+  - name: test-slo
+    objective: 99.5
+    sli:
+      events:
+        error_query: 'sum(rate(errors[{{.window}}]))'
+        total_query: 'sum(rate(requests[{{.window}}]))'
+    alerting:
+      name: TestAlert
+      labels:
+        severity: warning
+"""
+    updated_config = """version: prometheus/v1
+service: test-updated
+labels:
+  team: test-team
+slos:
+  - name: test-slo-updated
+    objective: 99.9
+    sli:
+      events:
+        error_query: 'sum(rate(errors[{{.window}}]))'
+        total_query: 'sum(rate(requests[{{.window}}]))'
+    alerting:
+      name: TestAlertUpdated
+      labels:
+        severity: critical
+"""
 
     # Start with initial config
     state = State(
