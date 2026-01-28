@@ -251,16 +251,3 @@ actions:
       Run `promtool` inside the workload to validate the Prometheus configuration file, and
       return the resulting output. This can be used to troubleshoot a Prometheus instance
       which will not start, or misbehaves, due to a bad configuration.
-  get-slo-template:
-    description: |
-      Returns a template SLO specification for Prometheus with placeholders for customization.
-      The template includes example SLOs for key metrics and KPIs such as #TODO.
-      
-      Usage:
-        # Extract template to file (recommended):
-        juju run prometheus-k8s/0 get-slo-template --format=json | jq -r '.template' > prometheus-slo.yaml
-        
-        # Then edit prometheus-slo.yaml to fill in the <OBJECTIVE> placeholder for each SLO.
-        
-        # Apply the configuration:
-        juju config prometheus-k8s slos="$(cat prometheus-slo.yaml)"

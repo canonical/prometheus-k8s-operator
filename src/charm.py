@@ -289,7 +289,6 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.alertmanager_consumer.on.cluster_changed, self._configure)
         self.framework.observe(self.resources_patch.on.patch_failed, self._on_k8s_patch_failed)
         self.framework.observe(self.on.validate_configuration_action, self._on_validate_config)
-        self.framework.observe(self.on.get_slo_template_action, self._on_get_slo_template)
         self.framework.observe(
             self.on.send_datasource_relation_joined, self._on_grafana_source_changed
         )
@@ -928,14 +927,6 @@ class PrometheusCharm(CharmBase):
         output, err = self._promtool_check_config()
         event.set_results(
             {"result": output, "error-message": err, "valid": False if err else True}
-        )
-
-    def _on_get_slo_template(self, event: ActionEvent) -> None:
-        # Return the SLO template file.
-        pth = Path(__file__).parent/"sli_templates"/"sli.yaml"
-
-        event.set_results(
-            {"result": pth.read_text()}
         )
 
     def _get_pvc_capacity(self) -> str:
