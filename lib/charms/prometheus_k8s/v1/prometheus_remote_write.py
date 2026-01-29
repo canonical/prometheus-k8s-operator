@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 PYDEPS = ["cosl"]
 
@@ -504,13 +504,19 @@ class PrometheusRemoteWriteConsumer(Object):
         if not self._charm.unit.is_leader():
             return
         peer_relations = self._charm.model.get_relation(self._peer_relation_name)
-        unit_names = ({unit.name for unit in peer_relations.units} if peer_relations else set()) | {self._charm.unit.name}
+        unit_names = (
+            {unit.name for unit in peer_relations.units} if peer_relations else set()
+        ) | {self._charm.unit.name}
 
         alert_rules = AlertRules(query_type="promql", topology=self.topology)
 
         if self._forward_alert_rules:
-
-            agg_rules = self._duplicate_rules_per_unit(generic_alert_groups.aggregator_rules, unit_names, rule_names_to_duplicate=[HOST_METRICS_MISSING_RULE_NAME], is_subordinate=self._charm.meta.subordinate)
+            agg_rules = self._duplicate_rules_per_unit(
+                copy.deepcopy(generic_alert_groups.aggregator_rules),
+                unit_names,
+                rule_names_to_duplicate=[HOST_METRICS_MISSING_RULE_NAME],
+                is_subordinate=self._charm.meta.subordinate,
+            )
             alert_rules.add(agg_rules, group_name_prefix=self.topology.identifier)
 
             alert_rules.add_path(self._alert_rules_path)
@@ -579,7 +585,11 @@ class PrometheusRemoteWriteConsumer(Object):
         return deduplicated_endpoints
 
     def _duplicate_rules_per_unit(
-        self, alert_rules: Dict[str, Any], peer_unit_names: Set[str], rule_names_to_duplicate: List[str], is_subordinate: bool = False
+        self,
+        alert_rules: Dict[str, Any],
+        peer_unit_names: Set[str],
+        rule_names_to_duplicate: List[str],
+        is_subordinate: bool = False,
     ) -> Dict[str, Any]:
         """Duplicate alert rule per unit in peer_units list.
 
@@ -615,12 +625,15 @@ class PrometheusRemoteWriteConsumer(Object):
                         )
 
                         # If the charm is a subordinate, the severity of the alerts need to be bumped to critical.
-                        modified_rule["labels"]["severity"] = "critical" if is_subordinate else "warning"
+                        modified_rule["labels"]["severity"] = (
+                            "critical" if is_subordinate else "warning"
+                        )
 
                         new_rules.append(modified_rule)
 
             group["rules"] = new_rules
         return updated_alert_rules
+
 
 class PrometheusRemoteWriteAlertsChangedEvent(EventBase):
     """Event emitted when Prometheus remote_write alerts change."""
