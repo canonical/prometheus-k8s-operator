@@ -678,7 +678,7 @@ wheels = [
 [[package]]
 name = "charmlibs-interfaces-slo"
 version = "0.0.0.dev0"
-source = { git = "https://github.com/canonical/charmlibs?subdirectory=interfaces%2Fslo&branch=feat%2Fslo#94dd339a9de13f90ac4f5c35a202dba9191aa235" }
+source = { git = "https://github.com/canonical/charmlibs?subdirectory=interfaces%2Fslo&branch=feat%2Fslo#14d32cf357ae39fc34996778ede232d8532ec6ca" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic", version = "2.10.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
