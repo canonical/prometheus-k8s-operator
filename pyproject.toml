@@ -3,7 +3,7 @@
 [project]
 name = "prometheus-k8s"
 version = "0.0"
-requires-python = "~=3.10.0"
+requires-python = ">=3.10"
 
 dependencies = [
   "ops",
