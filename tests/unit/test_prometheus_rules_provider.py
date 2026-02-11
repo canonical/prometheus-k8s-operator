@@ -39,9 +39,9 @@ def _relation_local_app_alerts(state_out, endpoint_name="metrics-endpoint"):
 
 def test_reload_when_dir_is_still_empty_changes_nothing(tmp_path):
     alert_dir = str(tmp_path)
-    ConsumerCharm = _make_consumer_charm(alert_dir)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
-    context = Context(charm_type=ConsumerCharm, meta=yaml.safe_load(ConsumerCharm.metadata_yaml))
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
     rel = Relation(endpoint="metrics-endpoint")
     state = State(relations={rel}, leader=True)
 
@@ -52,12 +52,12 @@ def test_reload_when_dir_is_still_empty_changes_nothing(tmp_path):
 
 def test_reload_after_dir_is_populated_updates_relation_data(tmp_path):
     alert_dir = str(tmp_path)
-    ConsumerCharm = _make_consumer_charm(alert_dir)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
     # create an alert file
     (tmp_path / "alert.rule").write_text(ALERT)
 
-    context = Context(charm_type=ConsumerCharm, meta=yaml.safe_load(ConsumerCharm.metadata_yaml))
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
     rel = Relation(endpoint="metrics-endpoint")
     state = State(relations={rel}, leader=True)
 
@@ -68,13 +68,13 @@ def test_reload_after_dir_is_populated_updates_relation_data(tmp_path):
 
 def test_reload_after_dir_is_emptied_updates_relation_data(tmp_path):
     alert_dir = str(tmp_path)
-    ConsumerCharm = _make_consumer_charm(alert_dir)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
     # create alert then remove it
     p = tmp_path / "alert.rule"
     p.write_text(ALERT)
 
-    context = Context(charm_type=ConsumerCharm, meta=yaml.safe_load(ConsumerCharm.metadata_yaml))
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
     rel = Relation(endpoint="metrics-endpoint")
     state = State(relations={rel}, leader=True)
 
@@ -92,7 +92,7 @@ def test_reload_after_dir_is_emptied_updates_relation_data(tmp_path):
 
 def test_only_files_with_rule_or_rules_suffixes_are_loaded(tmp_path):
     alert_dir = str(tmp_path)
-    ConsumerCharm = _make_consumer_charm(alert_dir)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
     filenames = [
         "alert.rule",
@@ -109,7 +109,7 @@ def test_only_files_with_rule_or_rules_suffixes_are_loaded(tmp_path):
         rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
         (tmp_path / filename).write_text(rule_file)
 
-    context = Context(charm_type=ConsumerCharm, meta=yaml.safe_load(ConsumerCharm.metadata_yaml))
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
     rel = Relation(endpoint="metrics-endpoint")
     state = State(relations={rel}, leader=True)
 
@@ -122,12 +122,12 @@ def test_only_files_with_rule_or_rules_suffixes_are_loaded(tmp_path):
 
 def test_reload_with_empty_rules(tmp_path):
     alert_dir = str(tmp_path)
-    ConsumerCharm = _make_consumer_charm(alert_dir)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
     # write empty file
     (tmp_path / "alert.rule").write_text("")
 
-    context = Context(charm_type=ConsumerCharm, meta=yaml.safe_load(ConsumerCharm.metadata_yaml))
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
     rel = Relation(endpoint="metrics-endpoint")
     state = State(relations={rel}, leader=True)
 
