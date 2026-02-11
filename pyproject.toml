@@ -79,9 +79,19 @@ convention = "google"
 
 [tool.pyright]
 extraPaths = ["src", "lib"]
-pythonVersion = "3.8"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 exclude = ["tests/integration/prometheus-tester/**"]
+
+[[tool.pyright.executionEnvironments]]
+root = "lib/charms/prometheus_k8s"
+pythonVersion = "3.8"
+extraPaths = ["src", "lib"]
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
+pythonVersion = "3.10"
+extraPaths = ["src", "lib"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
