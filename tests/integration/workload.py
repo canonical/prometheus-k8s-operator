@@ -227,12 +227,12 @@ class Prometheus:
                 return result["data"]["headStats"] if result["status"] == "success" else {}
 
     async def run_promql(self, query: str, disable_ssl: bool = True) -> list:
-      """Run a PromQL query using Prometheus HTTP API.
+        """Run a PromQL query using Prometheus HTTP API.
 
-      Returns the list of results from the query (same shape as prometheus_api_client).
-      """
-      url = f"{self.base_url}/api/v1/query?query={quote_plus(query)}"
-      async with aiohttp.ClientSession(timeout=self.timeout) as session:
-        async with session.get(url, ssl=not disable_ssl) as response:
-          result = await response.json()
-          return result.get("data", {}).get("result", []) if result.get("status") == "success" else []
+        Returns the list of results from the query (same shape as prometheus_api_client).
+        """
+        url = f"{self.base_url}/api/v1/query?query={quote_plus(query)}"
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            async with session.get(url, ssl=not disable_ssl) as response:
+                result = await response.json()
+                return result.get("data", {}).get("result", []) if result.get("status") == "success" else []
