@@ -39,6 +39,7 @@ dev = [
   "deepdiff",
   "httpcore",
   "fs",
+  "setuptools",
   # Interface
   "pytest-interface-tester>2.0.0",
   # Integration

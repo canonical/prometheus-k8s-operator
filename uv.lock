@@ -1135,6 +1135,7 @@ dev = [
     { name = "pytest-operator" },
     { name = "responses" },
     { name = "ruff" },
+    { name = "setuptools" },
     { name = "sh" },
     { name = "tenacity" },
 ]
@@ -1175,6 +1176,7 @@ requires-dist = [
     { name = "requests" },
     { name = "responses", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
+    { name = "setuptools", marker = "extra == 'dev'" },
     { name = "sh", marker = "extra == 'dev'" },
     { name = "tenacity", marker = "extra == 'dev'" },
 ]
