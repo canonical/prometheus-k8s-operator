@@ -3,158 +3,134 @@
 
 import json
 import textwrap
-import unittest
 
 import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
-from fs.tempfs import TempFS
 from ops.charm import CharmBase
-from ops.testing import Harness
+from scenario import Context, Relation, State
+
+NO_ALERTS = json.dumps({})
+
+# use a short-form free-standing alert, for brevity
+ALERT = yaml.safe_dump({"alert": "free_standing", "expr": "avg(some_vector[5m]) > 5"})
 
 
-class TestReloadAlertRules(unittest.TestCase):
-    """Feature: Provider charm can manually invoke reloading of alerts.
-
-    Background: In use cases such as cos-configuration-k8s-operator, the last hook can fire before
-    the alert files show up on disk. In that case relation data would remain empty of alerts. To
-    circumvent that, a public method for reloading alert rules is offered.
-    """
-
-    NO_ALERTS = json.dumps({})  # relation data representation for the case of "no alerts"
-
-    # use a short-form free-standing alert, for brevity
-    ALERT = yaml.safe_dump({"alert": "free_standing", "expr": "avg(some_vector[5m]) > 5"})
-
-    def setUp(self):
-        self.sandbox = TempFS("rule_files", auto_clean=True)
-        self.addCleanup(self.sandbox.close)
-
-        alert_rules_path = self.sandbox.getsyspath("/")
-
-        class ConsumerCharm(CharmBase):
-            metadata_yaml = textwrap.dedent(
-                """
-                provides:
-                  metrics-endpoint:
-                    interface: prometheus_scrape
-                """
-            )
-
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args)
-                self.rules_provider = PrometheusRulesProvider(self, dir_path=alert_rules_path)
-
-        self.harness = Harness(ConsumerCharm, meta=ConsumerCharm.metadata_yaml)
-        # self.harness = Harness(FakeConsumerCharm, meta=FakeConsumerCharm.metadata_yaml)
-        self.addCleanup(self.harness.cleanup)
-        self.harness.begin_with_initial_hooks()
-        self.harness.set_leader(True)
-        rel_id = self.harness.add_relation("metrics-endpoint", "prom")
-        self.harness.add_relation_unit(rel_id, "prom/0")
-
-    def test_reload_when_dir_is_still_empty_changes_nothing(self):
-        """Scenario: The reload method is called when the alerts dir is still empty."""
-        # GIVEN relation data contains no alerts
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
-
-        # WHEN no rule files are present
-
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
-
-        # THEN relation data is unchanged
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
-
-    def test_reload_after_dir_is_populated_updates_relation_data(self):
-        """Scenario: The reload method is called after some alert files are added."""
-        # GIVEN relation data contains no alerts
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
-
-        # WHEN some rule files are added to the alerts dir
-        self.sandbox.writetext("alert.rule", self.ALERT)
-
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
-
-        # THEN relation data is updated
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertNotEqual(
-            relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
+def _make_consumer_charm(alert_rules_path: str):
+    class ConsumerCharm(CharmBase):
+        metadata_yaml = textwrap.dedent(
+            """
+            provides:
+              metrics-endpoint:
+                interface: prometheus_scrape
+            """
         )
 
-    def test_reload_after_dir_is_emptied_updates_relation_data(self):
-        """Scenario: The reload method is called after all the loaded alert files are removed."""
-        # GIVEN alert files are present and relation data contains respective alerts
-        self.sandbox.writetext("alert.rule", self.ALERT)
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertNotEqual(
-            relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS
-        )
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args)
+            self.rules_provider = PrometheusRulesProvider(self, dir_path=alert_rules_path)
 
-        # WHEN all rule files are deleted from the alerts dir
-        self.sandbox.clean()
+    return ConsumerCharm
 
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
-        # THEN relation data is empty again
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
+def _relation_local_app_alerts(state_out, endpoint_name="metrics-endpoint"):
+    rel = next((r for r in state_out.relations if getattr(r, "endpoint", None) == endpoint_name), None)
+    return getattr(rel, "local_app_data", {}).get("alert_rules")
 
-    def test_only_files_with_rule_or_rules_suffixes_are_loaded(self):
-        """Scenario: User has both short-form rules (*.rule) and long-form rules (*.rules)."""
-        # GIVEN various tricky combinations of files present
-        filenames = [
-            "alert.rule",
-            "alert.rules",
-            "alert.ruless",
-            "alertrule",
-            "alertrules",
-            "alert.yml",
-            "alert.yaml",
-            "alert.txt",
-            "alert.json",
-        ]
-        for filename in filenames:
-            rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
-            self.sandbox.writetext(filename, rule_file)
 
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
+def test_relation_joined_when_dir_is_still_empty_changes_nothing(tmp_path):
+    alert_dir = str(tmp_path)
+    consumer_charm = _make_consumer_charm(alert_dir)
 
-        # THEN only the *.rule and *.rules files are loaded
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        alert_rules = json.loads(relation.data[self.harness.charm.app].get("alert_rules", ""))
-        alert_names = [groups["rules"][0]["alert"] for groups in alert_rules["groups"]]
-        self.assertEqual(
-            set(alert_names), {"alert.rule", "alert.rules", "alert.yml", "alert.yaml"}
-        )
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
+    rel = Relation(endpoint="metrics-endpoint")
+    state = State(relations={rel}, leader=True)
 
-    def test_reload_with_empty_rules(self):
-        """Scenario: The reload method is called with a zero-size alert file."""
-        # GIVEN relation data contains no alerts
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
+    state_out = context.run(context.on.relation_joined(rel), state)
 
-        # WHEN an empty rules file is written
-        self.sandbox.writetext("alert.rule", "")
+    assert _relation_local_app_alerts(state_out) == NO_ALERTS
 
-        # AND the reload method is called
-        self.harness.charm.rules_provider._reinitialize_alert_rules()
 
-        # THEN relation data is not updated
-        relation = self.harness.charm.model.get_relation("metrics-endpoint")
-        assert relation
-        self.assertEqual(relation.data[self.harness.charm.app].get("alert_rules"), self.NO_ALERTS)
+def test_relation_joined_after_dir_is_populated_updates_relation_data(tmp_path):
+    alert_dir = str(tmp_path)
+    consumer_charm = _make_consumer_charm(alert_dir)
+
+    # create an alert file
+    (tmp_path / "alert.rule").write_text(ALERT)
+
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
+    rel = Relation(endpoint="metrics-endpoint")
+    state = State(relations={rel}, leader=True)
+
+    state_out = context.run(context.on.relation_joined(rel), state)
+
+    assert _relation_local_app_alerts(state_out) != NO_ALERTS
+
+
+def test_relation_joined_after_dir_is_emptied_updates_relation_data(tmp_path):
+    alert_dir = str(tmp_path)
+    consumer_charm = _make_consumer_charm(alert_dir)
+
+    # create alert then remove it
+    p = tmp_path / "alert.rule"
+    p.write_text(ALERT)
+
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
+    rel = Relation(endpoint="metrics-endpoint")
+    state = State(relations={rel}, leader=True)
+
+    # initial run -> non-empty
+    state_out = context.run(context.on.relation_joined(rel), state)
+    assert _relation_local_app_alerts(state_out) != NO_ALERTS
+
+    # remove files
+    p.unlink()
+
+    # run update again
+    state_out = context.run(context.on.relation_joined(rel), state)
+    assert _relation_local_app_alerts(state_out) == NO_ALERTS
+
+
+def test_only_files_with_rule_or_rules_suffixes_are_loaded(tmp_path):
+    alert_dir = str(tmp_path)
+    consumer_charm = _make_consumer_charm(alert_dir)
+
+    filenames = [
+        "alert.rule",
+        "alert.rules",
+        "alert.ruless",
+        "alertrule",
+        "alertrules",
+        "alert.yml",
+        "alert.yaml",
+        "alert.txt",
+        "alert.json",
+    ]
+    for filename in filenames:
+        rule_file = yaml.safe_dump({"alert": filename, "expr": "avg(some_vector[5m]) > 5"})
+        (tmp_path / filename).write_text(rule_file)
+
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
+    rel = Relation(endpoint="metrics-endpoint")
+    state = State(relations={rel}, leader=True)
+
+    state_out = context.run(context.on.relation_joined(rel), state)
+
+    alert_rules = json.loads(_relation_local_app_alerts(state_out) or "{}")
+    alert_names = [groups["rules"][0]["alert"] for groups in alert_rules.get("groups", [])]
+    assert set(alert_names) == {"alert.rule", "alert.rules", "alert.yml", "alert.yaml"}
+
+
+def test_relation_joined_with_empty_rules(tmp_path):
+    alert_dir = str(tmp_path)
+    consumer_charm = _make_consumer_charm(alert_dir)
+
+    # write empty file
+    (tmp_path / "alert.rule").write_text("")
+
+    context = Context(charm_type=consumer_charm, meta=yaml.safe_load(consumer_charm.metadata_yaml))
+    rel = Relation(endpoint="metrics-endpoint")
+    state = State(relations={rel}, leader=True)
+
+    state_out = context.run(context.on.relation_joined(rel), state)
+
+    assert _relation_local_app_alerts(state_out) == NO_ALERTS

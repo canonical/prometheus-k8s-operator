@@ -3,7 +3,7 @@
 [project]
 name = "prometheus-k8s"
 version = "0.0"
-requires-python = "~=3.8"
+requires-python = ">=3.10"
 
 dependencies = [
   "ops",
@@ -39,6 +39,7 @@ dev = [
   "deepdiff",
   "httpcore",
   "fs",
+  "setuptools",
   # Interface
   "pytest-interface-tester>2.0.0",
   # Integration
@@ -79,9 +80,22 @@ convention = "google"
 
 [tool.pyright]
 extraPaths = ["src", "lib"]
-pythonVersion = "3.8"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 exclude = ["tests/integration/prometheus-tester/**"]
+
+[[tool.pyright.executionEnvironments]]
+## The charm library `lib/charms/prometheus_k8s` folder should be
+## checked with Python 3.8, as it could be used by charms that use
+## Python 3.8, such as machine charms packed on Ubuntu 20.04.
+root = "lib/charms/prometheus_k8s"
+pythonVersion = "3.8"
+extraPaths = ["src", "lib"]
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
+pythonVersion = "3.10"
+extraPaths = ["src", "lib"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
