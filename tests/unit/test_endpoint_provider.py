@@ -3,7 +3,10 @@
 
 import functools
 import json
+import os
 import re
+import shutil
+import tempfile
 import unittest
 from typing import List
 from unittest.mock import patch
@@ -20,9 +23,6 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from cosl import JujuTopology
 from cosl.rules import AlertRules, generic_alert_groups
 from deepdiff import DeepDiff
-import tempfile
-import os
-import shutil
 from helpers import PROJECT_DIR, UNITTEST_DIR
 from ops.charm import CharmBase
 from ops.framework import StoredState

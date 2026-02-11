@@ -4,12 +4,10 @@
 import json
 import textwrap
 
-import pytest
 import yaml
 from charms.prometheus_k8s.v0.prometheus_scrape import PrometheusRulesProvider
 from ops.charm import CharmBase
 from scenario import Context, Relation, State
-
 
 NO_ALERTS = json.dumps({})
 

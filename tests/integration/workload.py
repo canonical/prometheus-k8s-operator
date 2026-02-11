@@ -3,10 +3,10 @@
 # See LICENSE file for licensing details.
 
 import logging
-from typing import List, Literal, Optional, cast
+from typing import List, Literal, Optional
+from urllib.parse import quote_plus
 
 import aiohttp
-from urllib.parse import quote_plus
 
 logger = logging.getLogger(__name__)
 
