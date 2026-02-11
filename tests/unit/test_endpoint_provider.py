@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import unittest
+from pathlib import Path
 from typing import List
 from unittest.mock import patch
 
@@ -467,16 +468,14 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         os.makedirs(os.path.join(self.sandbox_dir, "rules/prom/mixed_format"), exist_ok=True)
         os.makedirs(os.path.join(self.sandbox_dir, "rules/prom/lma_format"), exist_ok=True)
         os.makedirs(os.path.join(self.sandbox_dir, "rules/prom/prom_format"), exist_ok=True)
-        open(os.path.join(self.sandbox_dir, "rules/prom/mixed_format/lma_rule.rule"), "w").write(
-            yaml.safe_dump(alert_rule)
-        )
-        open(os.path.join(self.sandbox_dir, "rules/prom/mixed_format/standard_rule.rule"), "w").write(
+        Path(self.sandbox_dir, "rules/prom/mixed_format/lma_rule.rule").write_text(yaml.safe_dump(alert_rule))
+        Path(self.sandbox_dir, "rules/prom/mixed_format/standard_rule.rule").write_text(
             yaml.safe_dump(rules_file_dict)
         )
-        open(os.path.join(self.sandbox_dir, "rules/prom/lma_format/free_standing_rule.rule"), "w").write(
+        Path(self.sandbox_dir, "rules/prom/lma_format/free_standing_rule.rule").write_text(
             yaml.safe_dump(free_standing_rule)
         )
-        open(os.path.join(self.sandbox_dir, "rules/prom/prom_format/standard_rule.rule"), "w").write(
+        Path(self.sandbox_dir, "rules/prom/prom_format/standard_rule.rule").write_text(
             yaml.safe_dump(rules_file_dict)
         )
 
@@ -609,7 +608,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         rules_file_dict = {"groups": [self.gen_group(1), self.gen_group(2)]}
         with tempfile.TemporaryDirectory(prefix="rule_files_") as sandbox:
             os.makedirs(os.path.join(sandbox, "rules"), exist_ok=True)
-            open(os.path.join(sandbox, "rules/file.rule"), "w").write(yaml.safe_dump(rules_file_dict))
+            Path(sandbox, "rules", "file.rule").write_text(yaml.safe_dump(rules_file_dict))
 
             rules = AlertRules(query_type="promql", topology=self.topology)
             rules.add_path(os.path.join(sandbox, "rules"), recursive=False)
@@ -647,7 +646,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory(prefix="rule_files_") as sandbox:
             os.makedirs(os.path.join(sandbox, "rules"), exist_ok=True)
-            open(os.path.join(sandbox, "rules/file.rule"), "w").write(yaml.safe_dump(rules_file_dict))
+            Path(sandbox, "rules", "file.rule").write_text(yaml.safe_dump(rules_file_dict))
 
             rules = AlertRules(query_type="promql", topology=self.topology)
             rules.add_path(os.path.join(sandbox, "rules"), recursive=False)
@@ -670,7 +669,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         rules_file_dict = {"groups": [self.gen_group("same"), self.gen_group("same")]}
         with tempfile.TemporaryDirectory(prefix="rule_files_") as sandbox:
             os.makedirs(os.path.join(sandbox, "rules"), exist_ok=True)
-            open(os.path.join(sandbox, "rules/file.rule"), "w").write(yaml.safe_dump(rules_file_dict))
+            Path(sandbox, "rules", "file.rule").write_text(yaml.safe_dump(rules_file_dict))
 
             rules = AlertRules(query_type="promql", topology=self.topology)
             rules.add_path(os.path.join(sandbox, "rules"), recursive=False)
@@ -699,9 +698,9 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
     def test_deeply_nested(self):
         with tempfile.TemporaryDirectory(prefix="rule_files_") as sandbox:
             os.makedirs(os.path.join(sandbox, "rules/a/b/"), exist_ok=True)
-            open(os.path.join(sandbox, "rules/file.rule"), "w").write(yaml.safe_dump(self.gen_rule(0)))
-            open(os.path.join(sandbox, "rules/a/file.rule"), "w").write(yaml.safe_dump(self.gen_rule(1)))
-            open(os.path.join(sandbox, "rules/a/b/file.rule"), "w").write(yaml.safe_dump(self.gen_rule(2)))
+            Path(sandbox, "rules", "file.rule").write_text(yaml.safe_dump(self.gen_rule(0)))
+            Path(sandbox, "rules", "a", "file.rule").write_text(yaml.safe_dump(self.gen_rule(1)))
+            Path(sandbox, "rules", "a", "b", "file.rule").write_text(yaml.safe_dump(self.gen_rule(2)))
 
             rules = AlertRules(query_type="promql", topology=self.topology)
             rules.add_path(os.path.join(sandbox, "rules"), recursive=True)
