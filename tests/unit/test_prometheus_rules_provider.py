@@ -37,7 +37,7 @@ def _relation_local_app_alerts(state_out, endpoint_name="metrics-endpoint"):
     return getattr(rel, "local_app_data", {}).get("alert_rules")
 
 
-def test_reload_when_dir_is_still_empty_changes_nothing(tmp_path):
+def test_relation_joined_when_dir_is_still_empty_changes_nothing(tmp_path):
     alert_dir = str(tmp_path)
     consumer_charm = _make_consumer_charm(alert_dir)
 
@@ -50,7 +50,7 @@ def test_reload_when_dir_is_still_empty_changes_nothing(tmp_path):
     assert _relation_local_app_alerts(state_out) == NO_ALERTS
 
 
-def test_reload_after_dir_is_populated_updates_relation_data(tmp_path):
+def test_relation_joined_after_dir_is_populated_updates_relation_data(tmp_path):
     alert_dir = str(tmp_path)
     consumer_charm = _make_consumer_charm(alert_dir)
 
@@ -66,7 +66,7 @@ def test_reload_after_dir_is_populated_updates_relation_data(tmp_path):
     assert _relation_local_app_alerts(state_out) != NO_ALERTS
 
 
-def test_reload_after_dir_is_emptied_updates_relation_data(tmp_path):
+def test_relation_joined_after_dir_is_emptied_updates_relation_data(tmp_path):
     alert_dir = str(tmp_path)
     consumer_charm = _make_consumer_charm(alert_dir)
 
@@ -120,7 +120,7 @@ def test_only_files_with_rule_or_rules_suffixes_are_loaded(tmp_path):
     assert set(alert_names) == {"alert.rule", "alert.rules", "alert.yml", "alert.yaml"}
 
 
-def test_reload_with_empty_rules(tmp_path):
+def test_relation_joined_with_empty_rules(tmp_path):
     alert_dir = str(tmp_path)
     consumer_charm = _make_consumer_charm(alert_dir)
 
