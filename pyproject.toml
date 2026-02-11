@@ -85,6 +85,9 @@ pythonPlatform = "All"
 exclude = ["tests/integration/prometheus-tester/**"]
 
 [[tool.pyright.executionEnvironments]]
+## The charm library `lib/charms/prometheus_k8s` folder should be
+## checked with Python 3.8, as it could be used by charms that use
+## Python 3.8, such as machine charms packed on Ubuntu 20.04.
 root = "lib/charms/prometheus_k8s"
 pythonVersion = "3.8"
 extraPaths = ["src", "lib"]
