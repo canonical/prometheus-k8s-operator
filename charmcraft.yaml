@@ -242,7 +242,7 @@ config:
       default: ""
       description: |
         SLOs for the application to be forwarded to a Sloth charm.
-        Reference: see the `sli_templates/sli.yaml` file.
+        Reference: see the `src/slos/slo.yaml` file.
       type: string
 
 actions:
