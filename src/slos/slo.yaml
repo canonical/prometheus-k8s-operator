@@ -1,3 +1,7 @@
+# Since SLOs are defined by users, not by charm developers, this simply serves as an example for
+# people to define their own SLOs, and to indicate which, according to the charm developer, are
+# important and worth configuring.
+
 version: "prometheus/v1"
 service: "prometheus"
 labels:
