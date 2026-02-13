@@ -1259,20 +1259,10 @@ class PrometheusCharm(CharmBase):
         )
 
     def _provide_slos(self):
-        # TODO: Add docstring
-        # TODO: Add actual slo definitions
-        slo_config = """
-        version: prometheus/v1
-        service: my-service
-        slos:
-          - name: requests-availability
-            objective: 99.9
-            sli:
-              events:
-                error_query: 'sum(rate(http_requests_total{status=~"5.."}[{{.window}}]))'
-                total_query: 'sum(rate(http_requests_total[{{.window}}]))'
-        """
-        self.sloth_provider.provide_slos(slo_config)
+        """Provide SLOs to the Sloth charm if any is defined."""
+        slos_config = cast(str, self.config.get("slos"))
+        if slos_config:
+            self.sloth_provider.provide_slos(slos_config)
 
 
 if __name__ == "__main__":

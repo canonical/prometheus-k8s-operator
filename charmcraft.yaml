@@ -96,7 +96,7 @@ provides:
     interface: sloth
     optional: true
     description: |
-      Sends SLI/SLO definitions to Sloth
+      Forwards the SLOs definition to a Sloth charm.
 
 requires:
   metrics-endpoint:
@@ -238,10 +238,11 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
-    slo:
+    slos:
       default: ""
       description: |
-        ...
+      SLOs for the application to be forwarded to a Sloth charm.
+      Reference: see the `sli_templates/sli.yaml` file.
 
 actions:
   validate-configuration:
