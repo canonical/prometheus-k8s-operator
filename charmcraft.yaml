@@ -241,8 +241,8 @@ config:
     slos:
       default: ""
       description: |
-      SLOs for the application to be forwarded to a Sloth charm.
-      Reference: see the `sli_templates/sli.yaml` file.
+        SLOs for the application to be forwarded to a Sloth charm.
+        Reference: see the `sli_templates/sli.yaml` file.
 
 actions:
   validate-configuration:
