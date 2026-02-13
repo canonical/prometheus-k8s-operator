@@ -1260,6 +1260,8 @@ class PrometheusCharm(CharmBase):
 
     def _provide_slos(self):
         """Provide SLOs to the Sloth charm if any is defined."""
+        if not self.unit.is_leader():
+            return
         slos_config = cast(str, self.config.get("slos"))
         if slos_config:
             self.sloth_provider.provide_slos(slos_config)
