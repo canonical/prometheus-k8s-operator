@@ -1,8 +1,7 @@
 from dataclasses import replace
 
-import pytest
 import yaml
-from ops.testing import PeerRelation, Relation, State
+from ops.testing import Relation, State
 
 SLOS_SPEC = """
 version: "prometheus/v1"
@@ -57,21 +56,9 @@ slos:
 """
 
 
-@pytest.fixture
-def prometheus_peers():
-    return PeerRelation("prometheus-peers")
-
-
-@pytest.fixture
-def base_state(prometheus_container, prometheus_peers):
-    return State(
-        containers={prometheus_container},
-        relations={prometheus_peers},
-    )
-
-
-def test_slos_relation_sends_spec(context, base_state):
+def test_slos_relation_sends_spec(context, prometheus_container, prometheus_peers):
     """Test that SLO spec is sent when slos relation changes."""
+    base_state = State(containers={prometheus_container}, relations={prometheus_peers})
     relation = Relation(endpoint="send-slos", remote_app_name="sloth")
 
     state_out = context.run(
