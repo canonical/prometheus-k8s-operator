@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 import yaml
-from ops.testing import Container, PeerRelation, Relation, State
+from ops.testing import PeerRelation, Relation, State
 
 SLOS_SPEC = """
 version: "prometheus/v1"
