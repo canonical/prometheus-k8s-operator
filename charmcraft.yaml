@@ -96,7 +96,7 @@ provides:
     interface: sloth
     optional: true
     description: |
-      Forwards the SLOs definition to a Sloth charm.
+      Forwards the SLOs definition to a Sloth charm, in order to generate alerts and recording rules.
 
 requires:
   metrics-endpoint:
