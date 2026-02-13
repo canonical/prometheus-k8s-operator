@@ -21,6 +21,8 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-http",
   "opentelemetry-sdk",
   "pydantic>=2",
+  # Charmlibs
+  "charmlibs-interfaces-sloth",
 ]
 
 [project.optional-dependencies]

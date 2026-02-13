@@ -92,6 +92,11 @@ provides:
     optional: true
     description: |
       The integration point for other charms to consume Prometheus's API, for example so they can query the database.
+  send-slos:
+    interface: sloth
+    optional: true
+    description: |
+      Sends SLI/SLO definitions to Sloth
 
 requires:
   metrics-endpoint:
@@ -233,6 +238,10 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
+    slo:
+      default: ""
+      description: |
+        ...
 
 actions:
   validate-configuration:
