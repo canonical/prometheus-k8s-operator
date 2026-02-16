@@ -92,11 +92,6 @@ provides:
     optional: true
     description: |
       The integration point for other charms to consume Prometheus's API, for example so they can query the database.
-  send-slos:
-    interface: sloth
-    optional: true
-    description: |
-      Forwards the SLOs definition to a Sloth charm, in order to generate alerts and recording rules.
 
 requires:
   metrics-endpoint:
@@ -238,12 +233,6 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
-    slos:
-      default: ""
-      description: |
-        SLOs for the application to be forwarded to a Sloth charm.
-        Reference: see the `src/slos/slo.yaml` file.
-      type: string
 
 actions:
   validate-configuration:

@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from charms.tempo_coordinator_k8s.v0.charm_tracing import charm_tracing_disabled
 from ops import pebble
-from scenario import Container, Context, Exec, PeerRelation
+from scenario import Container, Context, Exec
 
 from charm import PrometheusCharm
 
@@ -45,10 +45,6 @@ def prometheus_container():
         service_statuses={"prometheus": pebble.ServiceStatus.INACTIVE},
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-
-@pytest.fixture
-def prometheus_peers():
-    return PeerRelation("prometheus-peers")
 
 
 @pytest.fixture(autouse=True)
