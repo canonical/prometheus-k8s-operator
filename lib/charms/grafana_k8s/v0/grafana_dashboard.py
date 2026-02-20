@@ -217,7 +217,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 47
+LIBPATCH = 48
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -585,9 +585,19 @@ class CharmedDashboard:
                     datasources[template_value["name"]] = template_value["query"].lower()
 
             # Put our own variables in the template
+            # We only want to inject our own dropdowns IFF they are NOT
+            # already in the template coming over relation data.
+            # We'll store all dropdowns in the template from the provider
+            # in a set. We'll add our own if they are not in this set.
+            existing_names = {
+                item.get("name")
+                for item in dict_content["templating"]["list"]
+            }
+
             for d in template_dropdowns:  # type: ignore
-                if d not in dict_content["templating"]["list"]:
+                if d.get("name") not in existing_names:
                     dict_content["templating"]["list"].insert(0, d)
+                    existing_names.add(d.get("name"))
 
         dict_content = cls._replace_template_fields(dict_content, datasources, existing_templates)
         return json.dumps(dict_content)
