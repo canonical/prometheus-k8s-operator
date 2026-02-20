@@ -1,0 +1,8 @@
+alert: CPUOverUse
+expr: process_cpu_seconds_total > 0.12
+for: 0m
+labels:
+  severity: Low
+annotations:
+  summary: "Instance {{ $labels.instance }} CPU over use"
+  description: "{{ $labels.instance }} of job {{ $labels.job }} has used too much CPU."

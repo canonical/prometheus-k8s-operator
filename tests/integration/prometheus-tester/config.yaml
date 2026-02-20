@@ -1,0 +1,16 @@
+# Copyright 2021 Canonical Ltd
+# See LICENSE file for licensing details.
+
+options:
+  scrape-interval:
+    default: 1s
+    description: "Prometheus job configuration for scrape interval"
+    type: string
+  alert-rules-path:
+    default: src/prometheus_alert_rules
+    description: "Path for alert rules passed to the Provider"
+    type: string
+  scrape_jobs:
+    default: "[]"
+    description: "Scrape jobs to pass to the MetricsEndpointProvider constructor"
+    type: string

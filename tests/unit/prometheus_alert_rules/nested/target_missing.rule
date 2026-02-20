@@ -1,0 +1,10 @@
+groups:
+- name: NestedHighRequestLatency
+  rules:
+  - alert: NestedHighRequestLatency
+    expr: job:request_latency_seconds:mean5m{%%juju_topology%%} > 0.5
+    for: 10m
+    labels:
+      severity: page
+    annotations:
+      summary: Nested high request latency

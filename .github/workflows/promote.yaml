@@ -1,0 +1,20 @@
+name: Promote Charm
+
+on:
+  workflow_dispatch:
+    inputs:
+      promotion:
+        type: choice
+        description: Channel to promote from
+        options:
+          - edge -> beta
+          - beta -> candidate
+          - candidate -> stable
+
+jobs:
+  promote:
+    name: Promote
+    uses: canonical/observability/.github/workflows/charm-promote.yaml@v1
+    with:
+      promotion: ${{ github.event.inputs.promotion }}
+    secrets: inherit
