@@ -54,3 +54,4 @@ def patch_buffer_file_for_charm_tracing(tmp_path):
         str(tmp_path / "foo.json"),
     ):
         yield
+
