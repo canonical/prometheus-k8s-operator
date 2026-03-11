@@ -1,0 +1,108 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+[project]
+name = "prometheus-k8s"
+version = "0.0"
+requires-python = ">=3.10"
+
+dependencies = [
+  "ops",
+  "pyyaml",
+  "cosl",
+  "lightkube>=0.11",
+  "lightkube-models>=1.22.0.4",
+  "httpx==0.24.1",
+  "httpcore==0.17.3",
+  "cryptography",
+  "jsonschema",
+  "requests",
+  # from PYDEPS
+  "importlib-metadata~=6.0.0",
+  "opentelemetry-exporter-otlp-proto-http",
+  "opentelemetry-sdk",
+  "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = [
+  # Linting
+  "ruff",
+  "codespell",
+  # Static
+  "pyright", 
+  # Unit
+  "pytest",
+  "coverage[toml]",
+  "ops[testing]",
+  "pytest-asyncio",
+  "responses",
+  "deepdiff",
+  "httpcore",
+  "fs",
+  "setuptools",
+  # Interface
+  "pytest-interface-tester>2.0.0",
+  # Integration
+  "juju",
+  "pytest-operator",
+  "prometheus-client",
+  "prometheus-api-client",
+  "tenacity",
+  "pytest-httpserver",
+  "aiohttp",
+  "minio",
+  "sh",
+  "jubilant",
+]
+
+# Testing tools configuration
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+# Linting tools configuration
+[tool.ruff]
+line-length = 99
+extend-exclude = ["__pycache__", "*.egg_info"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "C", "N", "R", "D", "I001"]
+# Ignore E501 because using black creates errors with this
+# Ignore D107 Missing docstring in __init__
+ignore = ["E501", "D107", "RET504", "C901"]
+# D100, D101, D102, D103: Ignore missing docstrings in tests
+per-file-ignores = {"tests/*" = ["D100","D101","D102","D103"]}
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pyright]
+extraPaths = ["src", "lib"]
+pythonVersion = "3.10"
+pythonPlatform = "All"
+exclude = ["tests/integration/prometheus-tester/**"]
+
+[[tool.pyright.executionEnvironments]]
+## The charm library `lib/charms/prometheus_k8s` folder should be
+## checked with Python 3.8, as it could be used by charms that use
+## Python 3.8, such as machine charms packed on Ubuntu 20.04.
+root = "lib/charms/prometheus_k8s"
+pythonVersion = "3.8"
+extraPaths = ["src", "lib"]
+
+[[tool.pyright.executionEnvironments]]
+root = "src"
+pythonVersion = "3.10"
+extraPaths = ["src", "lib"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+log_cli_level = "INFO"
+asyncio_mode = "auto"
+addopts = "--tb=native --verbose --capture=no --log-cli-level=INFO"
+
+[tool.codespell]
+skip = ".git,.tox,build,venv*"
+ignore-words-list = "assertIn"
