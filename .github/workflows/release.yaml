@@ -1,6 +1,7 @@
 name: Release Charm
 
 on:
+  workflow_dispatch: {}
   push:
     branches:
       - main
@@ -11,4 +12,4 @@ jobs:
     uses: canonical/observability/.github/workflows/charm-release.yaml@v1
     secrets: inherit
     with:
-      default-track: 2
+      default-track: dev
