@@ -890,7 +890,7 @@ class MetricsEndpointConsumer(Object):
         rel_id = event.relation.id
         self.on.targets_changed.emit(relation_id=rel_id)
 
-    def jobs(self) -> list:
+    def jobs(self, *, errors: Optional[List[Exception]] = None) -> DataClass(list, error):
         """Fetch the list of scrape jobs.
 
         Returns:
@@ -913,6 +913,7 @@ class MetricsEndpointConsumer(Object):
                         data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                         data["scrape_job_errors"] = str(e)
                         relation.data[self._charm.app]["event"] = json.dumps(data)
+                    errors.add_error(e)
                 else:
                     scrape_jobs.extend(static_scrape_jobs)
 

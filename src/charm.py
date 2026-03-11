@@ -1079,7 +1079,11 @@ class PrometheusCharm(CharmBase):
 
         prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         certs: Dict[str, str] = {}
-        scrape_jobs = self.metrics_consumer.jobs()
+        # TODO: We can pass in some sort of errors collector which allows the `jobs` method to mutate the errors
+        # so we can use them to self._stored.status["cos-tool"] to report any issues with the scrape jobs
+        # (e.g. missing TLS certs for a job that requires TLS).
+        errors = []
+        scrape_jobs = self.metrics_consumer.jobs(errors)
         for job in scrape_jobs:
             job["honor_labels"] = True
 
