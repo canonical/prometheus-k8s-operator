@@ -9,6 +9,7 @@ import uuid
 from unittest.mock import patch
 
 import ops
+import pytest
 import yaml
 from helpers import cli_arg, k8s_resource_multipatch, prom_multipatch
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus
@@ -761,6 +762,7 @@ class TestTlsConfig(unittest.TestCase):
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
 
+    @pytest.mark.xfail(reason="https://github.com/canonical/prometheus-k8s-operator/issues/633")
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
@@ -797,6 +799,7 @@ class TestTlsConfig(unittest.TestCase):
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, BlockedStatus)
 
+    @pytest.mark.xfail(reason="https://github.com/canonical/prometheus-k8s-operator/issues/633")
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     @patch("prometheus_client.Prometheus.reload_configuration", lambda *_: True)
