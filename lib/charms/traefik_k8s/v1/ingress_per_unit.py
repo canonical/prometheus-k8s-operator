@@ -65,7 +65,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import yaml
 from ops import EventBase
 from ops.charm import CharmBase, RelationEvent
-from ops.framework import EventSource, Object, ObjectEvents, StoredDict, StoredList, StoredState
+from ops.framework import (
+    EventSource,
+    Object,
+    ObjectEvents,
+    StoredDict,
+    StoredList,
+    StoredState,
+)
 from ops.model import Application, ModelError, Relation, Unit
 
 # The unique Charmhub library identifier, never change it
@@ -76,7 +83,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 23
 
 log = logging.getLogger(__name__)
 
@@ -496,9 +503,6 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
         For convenience, we convert 'port' to integer.
         """
         if not relation.app or not relation.app.name:
-            # Handle edge case where remote app name can be missing, e.g.,
-            # relation_broken events.
-            # FIXME https://github.com/canonical/traefik-k8s-operator/issues/34
             return {}
 
         databag = relation.data[remote_unit]
@@ -525,9 +529,12 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
     def _provider_app_data(self, relation: Relation) -> ProviderApplicationData:
         """Fetch and validate the provider's app databag."""
         if not relation.app or not relation.app.name:
-            # Handle edge case where remote app name can be missing, e.g.,
-            # relation_broken events.
-            # FIXME https://github.com/canonical/traefik-k8s-operator/issues/34
+            log.warning(
+                (
+                    f"no app or app name in relation {relation} when fetching proxied endpoints:"
+                    "skipping"
+                )
+            )
             return {}
 
         # we start by looking at the provider's app databag
@@ -535,6 +542,10 @@ class IngressPerUnitProvider(_IngressPerUnitBase):
             # only leaders can read their app's data
             data = relation.data[self.app].get("ingress")
             if not data:
+                log.warning(
+                    f"no ingress data in relation {relation} app databag when fetching "
+                    "proxied endpoints: skipping"
+                )
                 return {}
 
             deserialized = yaml.safe_load(data)
