@@ -77,7 +77,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 26
+LIBPATCH = 27
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -367,6 +367,10 @@ class PrivateKey:
             .decode()
             .strip()
         )
+
+    def __hash__(self):
+        """Return the hash of the private key."""
+        return hash(self.raw)
 
     @classmethod
     def from_string(cls, private_key: str) -> "PrivateKey":
@@ -739,6 +743,10 @@ class Certificate:
 
         return cert
 
+    def __hash__(self):
+        """Return the hash of the private key."""
+        return hash(self.raw)
+
 
 class CertificateSigningRequest:
     """A representation of the certificate signing request."""
@@ -892,6 +900,10 @@ class CertificateSigningRequest:
         if not isinstance(other, CertificateSigningRequest):
             return NotImplemented
         return self.raw == other.raw
+
+    def __hash__(self):
+        """Return the hash of the private key."""
+        return hash(self.raw)
 
     def matches_certificate(self, certificate: Certificate) -> bool:
         """Check if this CSR matches a given certificate.

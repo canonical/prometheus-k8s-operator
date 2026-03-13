@@ -100,7 +100,7 @@ juju integrate <certificate_transfer provider charm> <certificate_transfer requi
 
 import json
 import logging
-from typing import List, MutableMapping, Optional, Set
+from typing import Dict, List, MutableMapping, Optional, Set
 
 import pydantic
 from ops import (
@@ -124,7 +124,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 15
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +338,7 @@ class CertificateTransferProvides(Object):
         relations = self._get_active_relations(relation_id)
         if not relations:
             if relation_id is not None:
-                logger.warning(
+                logger.debug(
                     "At least 1 matching relation ID not found with the relation name '%s'",
                     self.relationship_name,
                 )
@@ -371,7 +371,7 @@ class CertificateTransferProvides(Object):
         relations = self._get_active_relations(relation_id)
         if not relations:
             if relation_id is not None:
-                logger.warning(
+                logger.debug(
                     "At least 1 matching relation ID not found with the relation name '%s'",
                     self.relationship_name,
                 )
@@ -407,7 +407,7 @@ class CertificateTransferProvides(Object):
         relations = self._get_active_relations(relation_id)
         if not relations:
             if relation_id is not None:
-                logger.warning(
+                logger.debug(
                     "At least 1 matching relation ID not found with the relation name '%s'",
                     self.relationship_name,
                 )
@@ -632,6 +632,27 @@ class CertificateTransferRequires(Object):
         for relation in relations:
             data = self._get_relation_data(relation)
             result = result.union(data)
+        return result
+
+    def get_all_certificates_by_relation(
+        self, relation_id: Optional[int] = None
+    ) -> Dict[int, List[str]]:
+        """Get a deterministic list of certificates grouped by relation.
+
+        - Grouped by relation_id.
+        - The list order is sorted lexicographically by PEM content.
+
+        Args:
+            relation_id: If provided, only certificates for this relation are returned.
+
+        Returns:
+            Dict where keys are relation IDs and values are ordered lists of PEMs.
+        """
+        relations = self._get_active_relations(relation_id)
+        result: Dict[int, List[str]] = {}
+        for relation in relations:
+            certificates = sorted(self._get_relation_data(relation))
+            result[relation.id] = certificates
         return result
 
     def is_ready(self, relation: Relation) -> bool:
