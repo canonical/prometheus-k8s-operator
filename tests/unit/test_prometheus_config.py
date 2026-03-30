@@ -465,6 +465,70 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         self.assertEqual(unmatched_jobs[0]["static_configs"][0]["targets"], ["99.99.99.99:9093"])
         self.assertNotIn("juju_unit", unmatched_jobs[0]["static_configs"][0].get("labels", {}))
 
+    def test_non_wildcard_target_matching_unit_ipv6_gets_juju_unit_label(self):
+        # GIVEN a non-wildcard target using IPv6 notation
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["[2001:db8::1]:9093"]}],
+            }
+        ]
+
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        # AND the unit's address is the same IPv6 address
+        hosts = {
+            "unit/0": ("2001:db8::1", "", ""),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the IPv6 target is correctly parsed and matched to the unit
+        # AND juju_unit label is included
+        self.assertEqual(len(expanded), 1)
+        job = expanded[0]
+        self.assertEqual(job["job_name"], "job-0")
+        self.assertEqual(job["static_configs"][0]["labels"]["juju_unit"], "unit/0")
+
+    def test_non_wildcard_target_matching_unit_uses_unit_path(self):
+        # GIVEN a non-wildcard target matching a unit that has a per-unit path prefix
+        # (e.g., the unit is behind a per-unit ingress)
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["10.10.10.10:9093"]}],
+            }
+        ]
+
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        hosts = {
+            "unit/0": ("10.10.10.10", "/model-unit-0", ""),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the per-unit path prefix is applied to the metrics path
+        self.assertEqual(len(expanded), 1)
+        job = expanded[0]
+        self.assertEqual(job["job_name"], "job-0")
+        self.assertEqual(job["metrics_path"], "/model-unit-0/metrics")
+        self.assertEqual(job["static_configs"][0]["labels"]["juju_unit"], "unit/0")
+
 
 class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
     """Similar to `TestWildcardExpansion`, but with path prefix."""
