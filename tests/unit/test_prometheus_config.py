@@ -22,8 +22,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -59,8 +59,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -97,8 +97,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -140,8 +140,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -182,8 +182,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -264,8 +264,8 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # AND some topology
@@ -322,6 +322,149 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
             ],
         )
 
+    def test_non_wildcard_target_matching_unit_ip_gets_juju_unit_label(self):
+        # GIVEN a non-wildcard target whose host matches a known unit's IP address
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["10.10.10.10:9093"]}],
+            }
+        ]
+
+        # AND hosts dict with 3-tuples (address, path, fqdn)
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        hosts = {
+            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the non-wildcard target is expanded into a per-unit job
+        # AND juju_unit label is included because the IP matched a known unit
+        # AND topology_relabel_config_wildcard is used (includes juju_unit in instance)
+        self.assertEqual(len(expanded), 1)
+        job = expanded[0]
+        self.assertEqual(job["job_name"], "job-0")
+        labels = job["static_configs"][0]["labels"]
+        self.assertEqual(labels.get("juju_unit"), "unit/0")
+        self.assertIn(PrometheusConfig.topology_relabel_config_wildcard, job["relabel_configs"])
+
+    def test_non_wildcard_target_matching_unit_fqdn_gets_juju_unit_label(self):
+        # GIVEN a non-wildcard target whose host matches a known unit's FQDN
+        # (this is the alertmanager self-scrape use case: targets are FQDNs, not IPs)
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["unit-0.svc.cluster.local:9093"]}],
+            }
+        ]
+
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        # AND the unit publishes its pod IP as address and FQDN separately
+        hosts = {
+            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the non-wildcard FQDN target is expanded into a per-unit job
+        # AND juju_unit label is included because the FQDN matched a known unit
+        self.assertEqual(len(expanded), 1)
+        job = expanded[0]
+        self.assertEqual(job["job_name"], "job-0")
+        labels = job["static_configs"][0]["labels"]
+        self.assertEqual(labels.get("juju_unit"), "unit/0")
+        self.assertIn(PrometheusConfig.topology_relabel_config_wildcard, job["relabel_configs"])
+
+    def test_non_wildcard_target_not_matching_any_unit_has_no_juju_unit_label(self):
+        # GIVEN a non-wildcard target pointing to an external service (not a Juju unit)
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [{"targets": ["99.99.99.99:9093"]}],
+            }
+        ]
+
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        hosts = {
+            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the target is kept in a single job without juju_unit (original behaviour)
+        self.assertEqual(len(expanded), 1)
+        job = expanded[0]
+        self.assertEqual(job["job_name"], "job")
+        labels = job["static_configs"][0].get("labels", {})
+        self.assertNotIn("juju_unit", labels)
+        self.assertIn(PrometheusConfig.topology_relabel_config, job["relabel_configs"])
+
+    def test_mixed_non_wildcard_targets_matched_and_unmatched(self):
+        # GIVEN a job with two non-wildcard targets: one matching a known unit, one external
+        jobs = [
+            {
+                "job_name": "job",
+                "static_configs": [
+                    {"targets": ["10.10.10.10:9093", "99.99.99.99:9093"]}
+                ],
+            }
+        ]
+
+        topology = JujuTopology(
+            model="model",
+            model_uuid=str(uuid.uuid4()),
+            application="app",
+            charm_name="charm",
+        )
+        hosts = {
+            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
+        }
+
+        # WHEN the jobs are processed
+        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+            jobs, hosts, topology
+        )
+
+        # THEN the matched target becomes a per-unit job with juju_unit
+        # AND the unmatched target stays in its own job without juju_unit
+        self.assertEqual(len(expanded), 2)
+
+        per_unit_jobs = [j for j in expanded if j["job_name"] == "job-0"]
+        unmatched_jobs = [j for j in expanded if j["job_name"] == "job"]
+
+        self.assertEqual(len(per_unit_jobs), 1)
+        self.assertEqual(per_unit_jobs[0]["static_configs"][0]["targets"], ["10.10.10.10:9093"])
+        self.assertEqual(per_unit_jobs[0]["static_configs"][0]["labels"]["juju_unit"], "unit/0")
+
+        self.assertEqual(len(unmatched_jobs), 1)
+        self.assertEqual(unmatched_jobs[0]["static_configs"][0]["targets"], ["99.99.99.99:9093"])
+        self.assertNotIn("juju_unit", unmatched_jobs[0]["static_configs"][0].get("labels", {}))
+
 
 class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
     """Similar to `TestWildcardExpansion`, but with path prefix."""
@@ -336,8 +479,8 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", "/model-unit-0"),
-            "unit/1": ("11.11.11.11", "/model-unit-1"),
+            "unit/0": ("10.10.10.10", "/model-unit-0", ""),
+            "unit/1": ("11.11.11.11", "/model-unit-1", ""),
         }
 
         # WHEN the jobs are processed
@@ -379,8 +522,8 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", "/model-unit-0"),
-            "unit/1": ("11.11.11.11", "/model-unit-1"),
+            "unit/0": ("10.10.10.10", "/model-unit-0", ""),
+            "unit/1": ("11.11.11.11", "/model-unit-1", ""),
         }
 
         # WHEN the jobs are processed

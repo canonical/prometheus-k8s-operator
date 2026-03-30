@@ -361,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 56
+LIBPATCH = 57
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -462,21 +462,86 @@ class PrometheusConfig:
         return modified_scrape_configs
 
     @staticmethod
+    def _build_per_unit_job(
+        job: dict,
+        static_config: dict,
+        targets: List[str],
+        unit_name: str,
+        unit_path: str,
+        topology: Optional[JujuTopology],
+    ) -> dict:
+        """Build a single per-unit scrape job with topology labels and relabeling rules.
+
+        Used for both wildcard and matched non-wildcard targets to avoid duplication.
+
+        Args:
+            job: the original scrape job dict to base the new job on.
+            static_config: the original static_config dict to copy labels from.
+            targets: the resolved target addresses for this unit.
+            unit_name: the Juju unit name (e.g. "alertmanager/0").
+            unit_path: path prefix to prepend to the metrics path (from external URL, may be "").
+            topology: optional topology for adding Juju labels.
+
+        Returns:
+            A new scrape job dict for this unit.
+        """
+        unit_num = unit_name.split("/")[-1]
+        new_static = static_config.copy()
+        new_static["targets"] = targets
+        if topology:
+            new_static["labels"] = {
+                **topology.label_matcher_dict,
+                "juju_unit": unit_name,
+                **new_static.get("labels", {}),
+            }
+        new_job = job.copy()
+        new_job["job_name"] = new_job.get("job_name", "unnamed-job") + "-" + unit_num
+        new_job["metrics_path"] = unit_path + (new_job.get("metrics_path") or "/metrics")
+        new_job["static_configs"] = [new_static]
+        if topology:
+            # Instance relabeling for topology should be last in order.
+            new_job["relabel_configs"] = new_job.get("relabel_configs", []) + [
+                PrometheusConfig.topology_relabel_config_wildcard
+            ]
+        return new_job
+
+    @staticmethod
     def expand_wildcard_targets_into_individual_jobs(
         scrape_jobs: List[dict],
-        hosts: Dict[str, Tuple[str, str]],
+        hosts: Dict[str, Tuple[str, str, str]],
         topology: Optional[JujuTopology] = None,
     ) -> List[dict]:
         """Extract wildcard hosts from the given scrape_configs list into separate jobs.
 
+        For wildcard targets (e.g. "*:9093"), one job per unit is created with the
+        corresponding ``juju_unit`` topology label.
+
+        For non-wildcard targets (fully qualified hostnames/IPs), the host portion of
+        each target is matched against the known unit addresses in ``hosts``. Targets
+        whose address matches a known unit are expanded into a per-unit job with the
+        ``juju_unit`` label, mirroring the wildcard behaviour. Targets with no match
+        (e.g. external services) are kept in a single job without ``juju_unit``,
+        preserving the previous behaviour.
+
         Args:
             scrape_jobs: list of scrape jobs.
-            hosts: a dictionary mapping host names to host address for
-                all units of the relation for which this job configuration
-                must be constructed.
+            hosts: a dictionary mapping unit names to ``(address, path, fqdn)`` tuples for
+                all units of the relation for which this job configuration must be
+                constructed.
             topology: optional arg for adding topology labels to scrape targets.
         """
-        # hosts = self._relation_hosts(relation)
+        # Reverse lookup: both unit address and FQDN → unit name, so that non-wildcard
+        # targets specified as either IP or FQDN can be matched to their Juju unit.
+        # {addr, fqdn} deduplicates in the case where address is already a FQDN.
+        host_to_unit: Dict[str, str] = (
+            {
+                identifier: unit_name
+                for unit_name, (addr, _, fqdn) in hosts.items()
+                for identifier in {addr, fqdn} - {""}
+            }
+            if topology
+            else {}
+        )
 
         modified_scrape_jobs = []
         for job in scrape_jobs:
@@ -484,9 +549,9 @@ class PrometheusConfig:
             if not static_configs:
                 continue
 
-            # When a single unit specified more than one wildcard target, then they are expanded
-            # into a static_config per target
-            non_wildcard_static_configs = []
+            # Accumulates non-wildcard targets that could not be matched to any known unit.
+            # These are kept in a single job without juju_unit, preserving original behaviour.
+            unmatched_static_configs = []
 
             for static_config in static_configs:
                 targets = static_config.get("targets")
@@ -510,58 +575,55 @@ class PrometheusConfig:
                         # This is not a wildcard target. Copy it over into its own static_config.
                         non_wildcard_targets.append(target)
 
-                # All non-wildcard targets remain in the same static_config
+                # Non-wildcard targets: try to match each target's host against known unit
+                # addresses. Matched targets get a per-unit job with juju_unit; unmatched
+                # targets fall back to the previous behaviour (no juju_unit label).
                 if non_wildcard_targets:
-                    non_wildcard_static_config = static_config.copy()
-                    non_wildcard_static_config["targets"] = non_wildcard_targets
+                    unmatched_targets = []
+                    matched_by_unit: Dict[str, List[str]] = {}
 
-                    if topology:
-                        # When non-wildcard targets (aka fully qualified hostnames) are specified,
-                        # there is no reliable way to determine the name (Juju topology unit name)
-                        # for such a target. Therefore labeling with Juju topology, excluding the
-                        # unit name.
-                        non_wildcard_static_config["labels"] = {
-                            **topology.label_matcher_dict,
-                            **non_wildcard_static_config.get("labels", {}),
-                        }
+                    for target in non_wildcard_targets:
+                        target_host = target.split(":")[0]
+                        matched_unit = host_to_unit.get(target_host)
+                        if matched_unit:
+                            matched_by_unit.setdefault(matched_unit, []).append(target)
+                        else:
+                            unmatched_targets.append(target)
 
-                    non_wildcard_static_configs.append(non_wildcard_static_config)
+                    # Unmatched targets: no unit mapping found — preserve original behaviour.
+                    if unmatched_targets:
+                        unmatched_static_config = static_config.copy()
+                        unmatched_static_config["targets"] = unmatched_targets
+                        if topology:
+                            unmatched_static_config["labels"] = {
+                                **topology.label_matcher_dict,
+                                **unmatched_static_config.get("labels", {}),
+                            }
+                        unmatched_static_configs.append(unmatched_static_config)
+
+                    # Matched targets: one per-unit job with juju_unit label.
+                    for unit_name, unit_targets_list in matched_by_unit.items():
+                        modified_scrape_jobs.append(
+                            PrometheusConfig._build_per_unit_job(
+                                job, static_config, unit_targets_list, unit_name, "", topology
+                            )
+                        )
 
                 # Extract wildcard targets into individual jobs
                 if wildcard_targets:
-                    for unit_name, (unit_hostname, unit_path) in hosts.items():
-                        modified_job = job.copy()
-                        modified_job["static_configs"] = [static_config.copy()]
-                        modified_static_config = modified_job["static_configs"][0]
-                        modified_static_config["targets"] = [
+                    for unit_name, (unit_hostname, unit_path, _unit_fqdn) in hosts.items():
+                        resolved_targets = [
                             target.replace("*", unit_hostname) for target in wildcard_targets
                         ]
-
-                        unit_num = unit_name.split("/")[-1]
-                        job_name = modified_job.get("job_name", "unnamed-job") + "-" + unit_num
-                        modified_job["job_name"] = job_name
-                        modified_job["metrics_path"] = unit_path + (
-                            job.get("metrics_path") or "/metrics"
+                        modified_scrape_jobs.append(
+                            PrometheusConfig._build_per_unit_job(
+                                job, static_config, resolved_targets, unit_name, unit_path, topology
+                            )
                         )
 
-                        if topology:
-                            # Add topology labels
-                            modified_static_config["labels"] = {
-                                **topology.label_matcher_dict,
-                                **{"juju_unit": unit_name},
-                                **modified_static_config.get("labels", {}),
-                            }
-
-                            # Instance relabeling for topology should be last in order.
-                            modified_job["relabel_configs"] = modified_job.get(
-                                "relabel_configs", []
-                            ) + [PrometheusConfig.topology_relabel_config_wildcard]
-
-                        modified_scrape_jobs.append(modified_job)
-
-            if non_wildcard_static_configs:
+            if unmatched_static_configs:
                 modified_job = job.copy()
-                modified_job["static_configs"] = non_wildcard_static_configs
+                modified_job["static_configs"] = unmatched_static_configs
                 modified_job["metrics_path"] = modified_job.get("metrics_path") or "/metrics"
 
                 if topology:
@@ -1147,8 +1209,17 @@ class MetricsEndpointConsumer(Object):
         # are expected to be made available by the charm via the `update-ca-certificates` mechanism.
         return scrape_configs
 
-    def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str]]:
-        """Returns a mapping from unit names to (address, path) tuples, for the given relation."""
+    def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str, str]]:
+        """Returns a mapping from unit names to (address, path, fqdn) tuples.
+
+        Args:
+            relation: the relation to read unit data from.
+
+        Returns:
+            A dict mapping each unit name to a ``(address, path, fqdn)`` tuple, where
+            ``fqdn`` is an empty string when the unit address is already a hostname
+            (e.g. when ``external_url`` is set) or when the FQDN is not available.
+        """
         hosts = {}
         for unit in relation.units:
             if not (unit_databag := relation.data.get(unit)):
@@ -1161,11 +1232,12 @@ class MetricsEndpointConsumer(Object):
             unit_address = unit_databag.get("prometheus_scrape_unit_address") or unit_databag.get(
                 "prometheus_scrape_host"
             )
+            unit_fqdn = unit_databag.get("prometheus_scrape_unit_fqdn", "")
 
             if not (unit_name and unit_address):
                 continue
 
-            hosts.update({unit_name: (unit_address, unit_path)})
+            hosts.update({unit_name: (unit_address, unit_path, unit_fqdn)})
 
         return hosts
 
@@ -1540,11 +1612,14 @@ class MetricsEndpointProvider(Object):
                 parsed = urlparse(self.external_url)
                 unit_address = parsed.hostname
                 path = parsed.path
+                unit_fqdn = ""
             elif self._is_valid_unit_address(unit_ip):
                 unit_address = unit_ip
+                unit_fqdn = socket.getfqdn()
                 path = ""
             else:
                 unit_address = socket.getfqdn()
+                unit_fqdn = unit_address
                 path = ""
 
             relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_address
@@ -1552,6 +1627,7 @@ class MetricsEndpointProvider(Object):
             relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
                 self._charm.model.unit.name
             )
+            relation.data[self._charm.unit]["prometheus_scrape_unit_fqdn"] = unit_fqdn
 
     def _is_valid_unit_address(self, address: str) -> bool:
         """Validate a unit address.
