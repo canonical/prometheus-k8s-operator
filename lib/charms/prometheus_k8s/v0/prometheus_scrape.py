@@ -513,15 +513,17 @@ class PrometheusConfig:
     ) -> List[dict]:
         """Extract wildcard hosts from the given scrape_configs list into separate jobs.
 
-        For wildcard targets (e.g. "*:9093"), one job per unit is created with the
-        corresponding ``juju_unit`` topology label.
+        For wildcard targets (e.g. "*:9093"), one job per unit is created. When
+        ``topology`` is provided, the ``juju_unit`` label is injected into each
+        per-unit job; without ``topology`` the per-unit jobs are created but no
+        topology labels are added.
 
         For non-wildcard targets (fully qualified hostnames/IPs), the host portion of
         each target is matched against the known unit addresses in ``hosts``. Targets
-        whose address matches a known unit are expanded into a per-unit job with the
-        ``juju_unit`` label, mirroring the wildcard behaviour. Targets with no match
-        (e.g. external services) are kept in a single job without ``juju_unit``,
-        preserving the previous behaviour.
+        whose address matches a known unit are expanded into a per-unit job (with
+        ``juju_unit`` when ``topology`` is provided), mirroring the wildcard behaviour.
+        Targets with no match (e.g. external services) are kept in a single job without
+        ``juju_unit``, preserving the previous behaviour.
 
         Args:
             scrape_jobs: list of scrape jobs.
@@ -529,6 +531,8 @@ class PrometheusConfig:
                 all units of the relation for which this job configuration must be
                 constructed.
             topology: optional arg for adding topology labels to scrape targets.
+                When ``None``, per-unit jobs are still created for wildcard and matched
+                non-wildcard targets, but no ``juju_unit`` or topology labels are added.
         """
         # Reverse lookup: both unit address and FQDN → unit name, so that non-wildcard
         # targets specified as either IP or FQDN can be matched to their Juju unit.
@@ -1220,9 +1224,10 @@ class MetricsEndpointConsumer(Object):
             relation: the relation to read unit data from.
 
         Returns:
-            A dict mapping each unit name to a ``(address, path, fqdn)`` tuple, where
-            ``fqdn`` is an empty string when the unit address is already a hostname
-            (e.g. when ``external_url`` is set) or when the FQDN is not available.
+            A dict mapping each unit name to a ``(address, path, fqdn)`` tuple. The
+            ``fqdn`` element may be an empty string when the FQDN is not known; when
+            present, it may either be distinct from or equal to ``address`` (for
+            example, when the unit address itself is already a hostname).
         """
         hosts = {}
         for unit in relation.units:
