@@ -583,7 +583,10 @@ class PrometheusConfig:
                     matched_by_unit: Dict[str, List[str]] = {}
 
                     for target in non_wildcard_targets:
-                        target_host = target.split(":")[0]
+                        # Use urlparse to correctly handle IPv6 addresses (e.g. [::1]:9093)
+                        # as well as plain host:port and bare hostnames.
+                        parsed = urlparse(f"//{target}")
+                        target_host = parsed.hostname or target.split(":", 1)[0]
                         matched_unit = host_to_unit.get(target_host)
                         if matched_unit:
                             matched_by_unit.setdefault(matched_unit, []).append(target)
@@ -603,9 +606,10 @@ class PrometheusConfig:
 
                     # Matched targets: one per-unit job with juju_unit label.
                     for unit_name, unit_targets_list in matched_by_unit.items():
+                        _, unit_path, _ = hosts.get(unit_name, ("", "", ""))
                         modified_scrape_jobs.append(
                             PrometheusConfig._build_per_unit_job(
-                                job, static_config, unit_targets_list, unit_name, "", topology
+                                job, static_config, unit_targets_list, unit_name, unit_path, topology
                             )
                         )
 
