@@ -488,21 +488,20 @@ class PrometheusConfig:
         unit_num = unit_name.split("/")[-1]
         new_static = static_config.copy()
         new_static["targets"] = targets
+        new_job = job.copy()
+        new_job["job_name"] = new_job.get("job_name", "unnamed-job") + "-" + unit_num
+        new_job["metrics_path"] = unit_path + (new_job.get("metrics_path") or "/metrics")
         if topology:
             new_static["labels"] = {
                 **topology.label_matcher_dict,
                 "juju_unit": unit_name,
                 **new_static.get("labels", {}),
             }
-        new_job = job.copy()
-        new_job["job_name"] = new_job.get("job_name", "unnamed-job") + "-" + unit_num
-        new_job["metrics_path"] = unit_path + (new_job.get("metrics_path") or "/metrics")
-        new_job["static_configs"] = [new_static]
-        if topology:
             # Instance relabeling for topology should be last in order.
             new_job["relabel_configs"] = new_job.get("relabel_configs", []) + [
                 PrometheusConfig.topology_relabel_config_wildcard
             ]
+        new_job["static_configs"] = [new_static]
         return new_job
 
     @staticmethod
