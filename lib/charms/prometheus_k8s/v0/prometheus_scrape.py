@@ -531,8 +531,10 @@ class PrometheusConfig:
                 all units of the relation for which this job configuration must be
                 constructed.
             topology: optional arg for adding topology labels to scrape targets.
-                When ``None``, per-unit jobs are still created for wildcard and matched
-                non-wildcard targets, but no ``juju_unit`` or topology labels are added.
+                When ``None``, wildcard targets are still expanded into per-unit jobs but
+                no ``juju_unit`` or topology labels are added. Non-wildcard target matching
+                is skipped entirely (all non-wildcard targets are kept in a single job),
+                since matching only serves the purpose of injecting ``juju_unit`` labels.
         """
         # Reverse lookup: both unit address and FQDN → unit name, so that non-wildcard
         # targets specified as either IP or FQDN can be matched to their Juju unit.
