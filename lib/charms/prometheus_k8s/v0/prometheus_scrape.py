@@ -1227,9 +1227,9 @@ class MetricsEndpointConsumer(Object):
 
         Returns:
             A dict mapping each unit name to a ``(address, path, fqdn)`` tuple. The
-            ``fqdn`` element may be an empty string when the FQDN is not known; when
-            present, it may either be distinct from or equal to ``address`` (for
-            example, when the unit address itself is already a hostname).
+            ``fqdn`` element may be an empty string when the FQDN is not known. When
+            present, it may either be distinct from, or equal to ``address``. For
+            example, when the unit address itself is already a hostname.
         """
         hosts = {}
         for unit in relation.units:
