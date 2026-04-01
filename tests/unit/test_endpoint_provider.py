@@ -77,18 +77,20 @@ class EndpointProviderCharm(CharmBase):
         )
 
 
-class EndpointProviderCharmExternalUrl(CharmBase):
-    _stored = StoredState()
+def make_endpoint_provider_charm_with_external_url(external_url: str) -> type:
+    """Return a CharmBase subclass whose MetricsEndpointProvider uses the given external_url."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args)
+    class _Charm(CharmBase):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args)
+            self.provider = MetricsEndpointProvider(
+                self,
+                jobs=JOBS,
+                alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
+                external_url=external_url,
+            )
 
-        self.provider = MetricsEndpointProvider(
-            self,
-            jobs=JOBS,
-            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
-            external_url="9.12.20.18",
-        )
+    return _Charm
 
 
 class EndpointProviderCharmWithMultipleEvents(CharmBase):
@@ -234,9 +236,10 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("prometheus_scrape_unit_address", data)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
         self.assertIn("prometheus_scrape_unit_name", data)
+        self.assertEqual(data.get("prometheus_scrape_unit_path", ""), "")
 
     def test_provider_sets_external_url(self):
-        harness = Harness(EndpointProviderCharmExternalUrl, meta=PROVIDER_META)
+        harness = Harness(make_endpoint_provider_charm_with_external_url("9.12.20.18"), meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
         harness.set_leader(True)
         harness.begin()
@@ -298,6 +301,7 @@ class TestEndpointProvider(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertEqual(data["prometheus_scrape_unit_address"], "some.host")
         self.assertEqual(data["prometheus_scrape_unit_fqdn"], "some.host")
+        self.assertEqual(data.get("prometheus_scrape_unit_path", ""), "")
 
     @patch("socket.getfqdn", new=lambda *args: "unit-0.svc.cluster.local")
     def test_provider_unit_sets_fqdn_from_getfqdn_when_bind_address_is_valid_ip(self):
@@ -313,6 +317,7 @@ class TestEndpointProvider(unittest.TestCase):
         data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
         self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
         self.assertEqual(data["prometheus_scrape_unit_fqdn"], "unit-0.svc.cluster.local")
+        self.assertEqual(data.get("prometheus_scrape_unit_path", ""), "")
 
     def test_provider_unit_sets_empty_fqdn_when_external_url_is_set(self):
         """When external_url is set, fqdn is always empty (the URL hostname is the address).
@@ -320,7 +325,7 @@ class TestEndpointProvider(unittest.TestCase):
         Juju (and the ops Harness) treats empty-string relation data as unset, so
         the key will not appear in the relation data dict.
         """
-        harness = Harness(EndpointProviderCharmExternalUrl, meta=PROVIDER_META)
+        harness = Harness(make_endpoint_provider_charm_with_external_url("9.12.20.18"), meta=PROVIDER_META)
         harness.set_model_name("MyUUID")
         harness.set_leader(True)
         harness.begin()
@@ -333,6 +338,25 @@ class TestEndpointProvider(unittest.TestCase):
 
         data = harness.get_relation_data(rel_id, harness.charm.unit.name)
         # Empty string is treated as unset in Juju relation data; absence == empty fqdn.
+        self.assertEqual(data.get("prometheus_scrape_unit_fqdn", ""), "")
+        self.assertEqual(data.get("prometheus_scrape_unit_path", ""), "")
+
+    def test_provider_unit_sets_path_from_external_url(self):
+        """When external_url includes a path prefix, it is published as the unit path."""
+        harness = Harness(make_endpoint_provider_charm_with_external_url("http://9.12.20.18/some/prefix"), meta=PROVIDER_META)
+        harness.set_model_name("MyUUID")
+        harness.set_leader(True)
+        harness.begin()
+        rel_id = harness.add_relation(RELATION_NAME, "provider")
+        harness.add_relation_unit(rel_id, "provider/0")
+
+        # Ugly re-init workaround: manually call `set_scrape_job_spec`
+        # https://github.com/canonical/operator/issues/736
+        harness.charm.provider.set_scrape_job_spec()
+
+        data = harness.get_relation_data(rel_id, harness.charm.unit.name)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "9.12.20.18")
+        self.assertEqual(data["prometheus_scrape_unit_path"], "/some/prefix")
         self.assertEqual(data.get("prometheus_scrape_unit_fqdn", ""), "")
 
     def test_provider_supports_multiple_jobs(self):
