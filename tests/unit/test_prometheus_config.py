@@ -445,9 +445,10 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
             }
         ]
 
+        model_uuid = str(uuid.uuid4())
         topology = JujuTopology(
             model="model",
-            model_uuid=str(uuid.uuid4()),
+            model_uuid=model_uuid,
             application="app",
             charm_name="charm",
         )
@@ -460,20 +461,64 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
             jobs, hosts, topology
         )
 
+        expected_matched = {
+            'job_name': 'job-0',
+            'static_configs': [
+                {
+                    'targets': ['10.10.10.10:9093'],
+                    'labels': {
+                        'juju_model': 'model',
+                        'juju_model_uuid': model_uuid,
+                        'juju_application': 'app',
+                        'juju_charm': 'charm',
+                        'juju_unit': 'unit/0'
+                    }
+                }
+            ],
+            'metrics_path': '/metrics',
+            'relabel_configs': [
+                {
+                    'source_labels': ['juju_model', 'juju_model_uuid', 'juju_application', 'juju_unit'],
+                    'separator': '_',
+                    'target_label': 'instance',
+                    'regex': '(.*)'
+                    }
+            ]
+        }
+        expected_unmatched = {
+            'job_name': 'job',
+            'static_configs': [
+                {
+                    'targets': ['99.99.99.99:9093'],
+                    'labels': {
+                        'juju_model': 'model',
+                        'juju_model_uuid': model_uuid,
+                        'juju_application': 'app',
+                        'juju_charm': 'charm'
+                    }
+                }
+            ],
+            'metrics_path': '/metrics',
+            'relabel_configs': [
+                {
+                    'source_labels': ['juju_model', 'juju_model_uuid', 'juju_application'],
+                    'separator': '_',
+                    'target_label': 'instance',
+                    'regex': '(.*)'
+                }
+            ]
+        }
+
+
         # THEN the matched target becomes a per-unit job with juju_unit
         # AND the unmatched target stays in its own job without juju_unit
-        self.assertEqual(len(expanded), 2)
-
         per_unit_jobs = [j for j in expanded if j["job_name"] == "job-0"]
         unmatched_jobs = [j for j in expanded if j["job_name"] == "job"]
 
         self.assertEqual(len(per_unit_jobs), 1)
-        self.assertEqual(per_unit_jobs[0]["static_configs"][0]["targets"], ["10.10.10.10:9093"])
-        self.assertEqual(per_unit_jobs[0]["static_configs"][0]["labels"]["juju_unit"], "unit/0")
-
         self.assertEqual(len(unmatched_jobs), 1)
-        self.assertEqual(unmatched_jobs[0]["static_configs"][0]["targets"], ["99.99.99.99:9093"])
-        self.assertNotIn("juju_unit", unmatched_jobs[0]["static_configs"][0].get("labels", {}))
+        self.assertDictEqual(per_unit_jobs[0], expected_matched)
+        self.assertDictEqual(unmatched_jobs[0], expected_unmatched)
 
     def test_non_wildcard_target_matching_unit_ipv6_gets_juju_unit_label(self):
         # GIVEN a non-wildcard target using IPv6 notation
