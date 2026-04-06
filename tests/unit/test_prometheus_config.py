@@ -322,6 +322,16 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
             ],
         )
 
+
+
+class TestNonWildcardExpansionWithTopology(unittest.TestCase):
+    """Tests for juju_unit label injection on non-wildcard (fully-qualified) targets.
+
+    When a non-wildcard target's host matches a known unit's address or FQDN,
+    it is expanded into a per-unit job with the juju_unit label — mirroring the
+    behaviour of wildcard targets.
+    """
+
     def test_non_wildcard_target_matching_unit_ip_gets_juju_unit_label(self):
         # GIVEN a non-wildcard target whose host matches a known unit's IP address
         jobs = [
