@@ -1634,12 +1634,12 @@ class MetricsEndpointProvider(Object):
                 unit_fqdn = unit_address
                 path = ""
 
-            relation.data[self._charm.unit]["prometheus_scrape_unit_address"] = unit_address
-            relation.data[self._charm.unit]["prometheus_scrape_unit_path"] = path
-            relation.data[self._charm.unit]["prometheus_scrape_unit_name"] = str(
-                self._charm.model.unit.name
-            )
-            relation.data[self._charm.unit]["prometheus_scrape_unit_fqdn"] = unit_fqdn
+            relation.data[self._charm.unit].update({
+                "prometheus_scrape_unit_address": unit_address,
+                "prometheus_scrape_unit_path": path,
+                "prometheus_scrape_unit_name": str(self._charm.model.unit.name),
+                "prometheus_scrape_unit_fqdn": unit_fqdn,
+            })
 
     def _is_valid_unit_address(self, address: str) -> bool:
         """Validate a unit address.
