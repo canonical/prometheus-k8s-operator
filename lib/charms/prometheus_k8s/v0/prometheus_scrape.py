@@ -555,7 +555,8 @@ class PrometheusConfig:
                 continue
 
             # Accumulates non-wildcard targets that could not be matched to any known unit.
-            # These are kept in a single job without juju_unit, preserving original behaviour.
+            # These are kept in a single job with topology-only labels (no juju_unit):
+            # fully-qualified targets that predate this feature are unaffected.
             unmatched_static_configs = []
 
             for static_config in static_configs:
@@ -582,7 +583,7 @@ class PrometheusConfig:
 
                 # Non-wildcard targets: try to match each target's host against known unit
                 # addresses. Matched targets get a per-unit job with juju_unit; unmatched
-                # targets fall back to the previous behaviour (no juju_unit label).
+                # targets get topology-only labels with no per-unit expansion.
                 if non_wildcard_targets:
                     unmatched_targets = []
                     matched_by_unit: Dict[str, List[str]] = {}
@@ -598,7 +599,8 @@ class PrometheusConfig:
                         else:
                             unmatched_targets.append(target)
 
-                    # Unmatched targets: no unit mapping found — preserve original behaviour.
+                    # Unmatched targets: no unit mapping found — kept with topology-only
+                    # labels and no per-unit expansion (juju_unit is not added).
                     if unmatched_targets:
                         unmatched_static_config = static_config.copy()
                         unmatched_static_config["targets"] = unmatched_targets

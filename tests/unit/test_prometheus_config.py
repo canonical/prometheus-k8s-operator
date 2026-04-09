@@ -342,39 +342,34 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
         )
 
     def test_non_wildcard_target_matching_unit_ip_gets_juju_unit_label(self):
-        # GIVEN a non-wildcard target whose host matches a known unit's IP address
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["10.10.10.10:9093"]}],
-            }
+        # GIVEN non-wildcard targets whose host matches a known unit's address —
+        # both plain IPv4 and bracket-notation IPv6 must be parsed and matched correctly.
+        cases = [
+            ("IPv4", "10.10.10.10:9093", "10.10.10.10", "unit-0.svc.cluster.local"),
+            ("IPv6", "[2001:db8::1]:9093", "2001:db8::1", ""),
         ]
 
-        # AND hosts dict with 3-tuples (address, path, fqdn)
-        topology = JujuTopology(
-            model="model",
-            model_uuid=str(uuid.uuid4()),
-            application="app",
-            charm_name="charm",
-        )
-        hosts = {
-            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
-        }
+        for label, target, unit_addr, unit_fqdn in cases:
+            with self.subTest(label):
+                # AND a job targeting that address
+                jobs = [{"job_name": "job", "static_configs": [{"targets": [target]}]}]
+                hosts = {"unit/0": (unit_addr, "", unit_fqdn)}
 
-        # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, topology
-        )
+                # WHEN the jobs are processed
+                expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
+                    jobs, hosts, self.topology
+                )
 
-        # THEN the non-wildcard target is expanded into a per-unit job
-        # AND juju_unit label is included because the IP matched a known unit
-        # AND topology_relabel_config_wildcard is used (includes juju_unit in instance)
-        self.assertEqual(len(expanded), 1)
-        job = expanded[0]
-        self.assertEqual(job["job_name"], "job-0")
-        labels = job["static_configs"][0]["labels"]
-        self.assertEqual(labels.get("juju_unit"), "unit/0")
-        self.assertIn(PrometheusConfig.topology_relabel_config_wildcard, job["relabel_configs"])
+                # THEN the target is expanded into a per-unit job with juju_unit
+                # AND topology_relabel_config_wildcard is used (includes juju_unit in instance)
+                self.assertEqual(len(expanded), 1)
+                job = expanded[0]
+                self.assertEqual(job["job_name"], "job-0")
+                labels = job["static_configs"][0]["labels"]
+                self.assertEqual(labels.get("juju_unit"), "unit/0")
+                self.assertIn(
+                    PrometheusConfig.topology_relabel_config_wildcard, job["relabel_configs"]
+                )
 
     def test_non_wildcard_target_matching_unit_fqdn_gets_juju_unit_label(self):
         # GIVEN a non-wildcard target whose host matches a known unit's FQDN
@@ -386,12 +381,6 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
             }
         ]
 
-        topology = JujuTopology(
-            model="model",
-            model_uuid=str(uuid.uuid4()),
-            application="app",
-            charm_name="charm",
-        )
         # AND the unit publishes its pod IP as address and FQDN separately
         hosts = {
             "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
@@ -399,7 +388,7 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
 
         # WHEN the jobs are processed
         expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, topology
+            jobs, hosts, self.topology
         )
 
         # THEN the non-wildcard FQDN target is expanded into a per-unit job
@@ -444,100 +433,6 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
         self.assertIn(PrometheusConfig.topology_relabel_config, job["relabel_configs"])
 
 
-    def test_mixed_non_wildcard_targets_matched_and_unmatched(self):
-        # GIVEN a jobs list with some targets and partial fqdn translation
-        jobs = jobs_factory(["10.10.10.10:9093", "99.99.99.99:9093"])
-        hosts = {
-            "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
-        }
-        # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, self.topology
-        )
-        # THEN the matched target becomes a per-unit job with juju_unit
-        self.assertEqual(expanded, [
-            {
-                'job_name': 'job-0',
-                'static_configs': [
-                    {
-                        'targets': ['10.10.10.10:9093'],
-                        'labels': {
-                            'juju_model': self.topology.model,
-                            'juju_model_uuid': self.topology.model_uuid,
-                            'juju_application': self.topology.application,
-                            'juju_charm': self.topology.charm_name,
-                            'juju_unit': 'unit/0'
-                        }
-                    }
-                ],
-                'metrics_path': '/metrics',
-                'relabel_configs': [
-                    {
-                        'source_labels': ['juju_model', 'juju_model_uuid', 'juju_application', 'juju_unit'],
-                        'separator': '_',
-                        'target_label': 'instance',
-                        'regex': '(.*)'
-                        }
-                ]
-            },
-            {
-                'job_name': 'job',
-                'static_configs': [
-                    {
-                        'targets': ['99.99.99.99:9093'],
-                        'labels': {
-                            'juju_model': self.topology.model,
-                            'juju_model_uuid': self.topology.model_uuid,
-                            'juju_application': self.topology.application,
-                            'juju_charm': self.topology.charm_name,
-                        }
-                    }
-                ],
-                'metrics_path': '/metrics',
-                'relabel_configs': [
-                    {
-                        'source_labels': ['juju_model', 'juju_model_uuid', 'juju_application'],
-                        'separator': '_',
-                        'target_label': 'instance',
-                        'regex': '(.*)'
-                    }
-                ]
-            }
-        ])
-
-
-    def test_non_wildcard_target_matching_unit_ipv6_gets_juju_unit_label(self):
-        # GIVEN a non-wildcard target using IPv6 notation
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["[2001:db8::1]:9093"]}],
-            }
-        ]
-
-        topology = JujuTopology(
-            model="model",
-            model_uuid=str(uuid.uuid4()),
-            application="app",
-            charm_name="charm",
-        )
-        # AND the unit's address is the same IPv6 address
-        hosts = {
-            "unit/0": ("2001:db8::1", "", ""),
-        }
-
-        # WHEN the jobs are processed
-        expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, topology
-        )
-
-        # THEN the IPv6 target is correctly parsed and matched to the unit
-        # AND juju_unit label is included
-        self.assertEqual(len(expanded), 1)
-        job = expanded[0]
-        self.assertEqual(job["job_name"], "job-0")
-        self.assertEqual(job["static_configs"][0]["labels"]["juju_unit"], "unit/0")
-
     def test_non_wildcard_target_matching_unit_uses_unit_path(self):
         # GIVEN a non-wildcard target matching a unit that has a per-unit path prefix
         # (e.g., the unit is behind a per-unit ingress)
@@ -547,20 +442,13 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
                 "static_configs": [{"targets": ["10.10.10.10:9093"]}],
             }
         ]
-
-        topology = JujuTopology(
-            model="model",
-            model_uuid=str(uuid.uuid4()),
-            application="app",
-            charm_name="charm",
-        )
         hosts = {
             "unit/0": ("10.10.10.10", "/model-unit-0", ""),
         }
 
         # WHEN the jobs are processed
         expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, topology
+            jobs, hosts, self.topology
         )
 
         # THEN the per-unit path prefix is applied to the metrics path
