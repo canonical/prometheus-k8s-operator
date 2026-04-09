@@ -4,7 +4,7 @@ import dataclasses
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 from unittest.mock import patch
 
 import requests
@@ -141,3 +141,14 @@ def add_relation_sequence(context: Context, state: State, relation: Relation):
         context.on.relation_changed(relation_2), state_after_relation_joined
     )
     return state_after_relation_changed
+
+def jobs_factory(targets: List):
+
+    return  [
+            {
+                "job_name": "job",
+                "static_configs": [
+                    {"targets": targets}
+                ],
+            }
+    ]
