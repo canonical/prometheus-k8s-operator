@@ -15,13 +15,7 @@ logger = logging.getLogger(__name__)
 class TestWildcardExpansion(unittest.TestCase):
     def test_single_wildcard_target(self):
         # GIVEN scrape_configs (aka jobs) with only one, wildcard, target
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["*:1234"]}],
-            }
-        ]
-
+        jobs = jobs_factory(["*:1234"])
         hosts = {
             "unit/0": ("10.10.10.10", "", ""),
             "unit/1": ("11.11.11.11", "", ""),
@@ -88,15 +82,7 @@ class TestWildcardExpansion(unittest.TestCase):
 
     def test_mixed_targets_in_same_list(self):
         # GIVEN scrape_configs with both wildcard and non-wildcard targets in the same list
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [
-                    {"targets": ["*:1234", "*:5678", "1.1.1.1:1111", "2.2.2.2:2222"]}
-                ],
-            }
-        ]
-
+        jobs = jobs_factory(["*:1234", "*:5678", "1.1.1.1:1111", "2.2.2.2:2222"])
         hosts = {
             "unit/0": ("10.10.10.10", "", ""),
             "unit/1": ("11.11.11.11", "", ""),
@@ -133,13 +119,7 @@ class TestWildcardExpansion(unittest.TestCase):
 
     def test_mixed_targets_in_same_list_without_port_number(self):
         # GIVEN scrape_configs with mixed target types in the same list, and without port numbers
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
-            }
-        ]
-
+        jobs = jobs_factory(["*", "1.1.1.1"])
         hosts = {
             "unit/0": ("10.10.10.10", "", ""),
             "unit/1": ("11.11.11.11", "", ""),
@@ -257,13 +237,7 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
 
     def test_mixed_targets_with_topology(self):
         # GIVEN scrape_configs with mixed target types in the same list, and without port numbers
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
-            }
-        ]
-
+        jobs = jobs_factory(["*", "1.1.1.1"])
         hosts = {
             "unit/0": ("10.10.10.10", "", ""),
             "unit/1": ("11.11.11.11", "", ""),
@@ -352,7 +326,7 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
         for label, target, unit_addr, unit_fqdn in cases:
             with self.subTest(label):
                 # AND a job targeting that address
-                jobs = [{"job_name": "job", "static_configs": [{"targets": [target]}]}]
+                jobs = jobs_factory([target])
                 hosts = {"unit/0": (unit_addr, "", unit_fqdn)}
 
                 # WHEN the jobs are processed
@@ -374,12 +348,7 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
     def test_non_wildcard_target_matching_unit_fqdn_gets_juju_unit_label(self):
         # GIVEN a non-wildcard target whose host matches a known unit's FQDN
         # (this is the alertmanager self-scrape use case: targets are FQDNs, not IPs)
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["unit-0.svc.cluster.local:9093"]}],
-            }
-        ]
+        jobs = jobs_factory(["unit-0.svc.cluster.local:9093"])
 
         # AND the unit publishes its pod IP as address and FQDN separately
         hosts = {
@@ -402,26 +371,14 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
 
     def test_non_wildcard_target_not_matching_any_unit_has_no_juju_unit_label(self):
         # GIVEN a non-wildcard target pointing to an external service (not a Juju unit)
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["99.99.99.99:9093"]}],
-            }
-        ]
-
-        topology = JujuTopology(
-            model="model",
-            model_uuid=str(uuid.uuid4()),
-            application="app",
-            charm_name="charm",
-        )
+        jobs = jobs_factory(["99.99.99.99:9093"])
         hosts = {
             "unit/0": ("10.10.10.10", "", "unit-0.svc.cluster.local"),
         }
 
         # WHEN the jobs are processed
         expanded = PrometheusConfig.expand_wildcard_targets_into_individual_jobs(
-            jobs, hosts, topology
+            jobs, hosts, self.topology
         )
 
         # THEN the target is kept in a single job without juju_unit (original behaviour)
@@ -436,12 +393,7 @@ class TestNonWildcardExpansionWithTopology(unittest.TestCase):
     def test_non_wildcard_target_matching_unit_uses_unit_path(self):
         # GIVEN a non-wildcard target matching a unit that has a per-unit path prefix
         # (e.g., the unit is behind a per-unit ingress)
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["10.10.10.10:9093"]}],
-            }
-        ]
+        jobs = jobs_factory(["10.10.10.10:9093"])
         hosts = {
             "unit/0": ("10.10.10.10", "/model-unit-0", ""),
         }
@@ -464,13 +416,7 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
 
     def test_default_metrics_endpoint_with_ingress_per_unit(self):
         # GIVEN scrape_configs and per-unit path prefix
-        jobs = [
-            {
-                "job_name": "job",
-                "static_configs": [{"targets": ["*", "1.1.1.1"]}],
-            }
-        ]
-
+        jobs = jobs_factory(["*", "1.1.1.1"])
         hosts = {
             "unit/0": ("10.10.10.10", "/model-unit-0", ""),
             "unit/1": ("11.11.11.11", "/model-unit-1", ""),
