@@ -535,9 +535,10 @@ class PrometheusConfig:
                 is skipped entirely (all non-wildcard targets are kept in a single job),
                 since matching only serves the purpose of injecting ``juju_unit`` labels.
         """
-        # Reverse lookup: both unit address and FQDN → unit name, so that non-wildcard
-        # targets specified as either IP or FQDN can be matched to their Juju unit.
-        # {addr, fqdn} deduplicates in the case where address is already a FQDN.
+        # Build a reverse lookup: {address: unit_name, fqdn: unit_name, ...}
+        # so that non-wildcard targets can be matched whether specified as IP or FQDN.
+        # The set subtraction {addr, fqdn} - {""} drops empty strings (absent FQDN)
+        # and deduplicates when addr == fqdn (non-IP bind address).
         host_to_unit: Dict[str, str] = (
             {
                 identifier: unit_name
