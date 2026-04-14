@@ -215,7 +215,9 @@ class PrometheusCharm(CharmBase):
         self._topology = JujuTopology.from_charm(self)
 
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
-        self.metrics_consumer = MetricsEndpointConsumer(self)
+        # Fallback to PrometheusText0.0.4 for older Prometheus versions that don't support OpenMetrics or the newer Prometheus text format OR
+        # for scrape targets that don't set a Content-Type header.
+        self.metrics_consumer = MetricsEndpointConsumer(self, fallback_scrape_protocol="PrometheusText0.0.4")
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
