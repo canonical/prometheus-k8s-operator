@@ -68,7 +68,7 @@ class TestCharm(unittest.TestCase):
             expected_logs = {
                 "WARNING:root:Invalid loglevel: bad-level given, "
                 "debug/info/warn/error/fatal allowed. "
-                "defaulting to DEBUG loglevel."
+                "Defaulting to DEBUG loglevel."
             }
             self.assertGreaterEqual(set(logger.output), expected_logs)  # type: ignore
 
@@ -369,6 +369,58 @@ class TestConfigMaximumRetentionSize(unittest.TestCase):
         self.assertEqual(cli_arg(plan, "--storage.tsdb.retention.size"), "0.42GB")
         self.harness.evaluate_status()
         self.assertIsInstance(self.harness.model.unit.status, ActiveStatus)
+
+@prom_multipatch
+class TestConfigLogLevel(unittest.TestCase):
+    """Test the charmcraft.yaml option 'log_level'."""
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    @prom_multipatch
+    def setUp(self, *unused):
+        self.harness = Harness(PrometheusCharm)
+        self.addCleanup(self.harness.cleanup)
+
+        patcher = patch.object(PrometheusCharm, "_get_pvc_capacity")
+        self.mock_capacity = patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.mock_capacity.return_value = "1Gi"
+        self.harness.container_pebble_ready("prometheus")
+        self.harness.handle_exec("prometheus", ["update-ca-certificates"], result=0)
+        self.harness.begin_with_initial_hooks()
+        self.harness.evaluate_status()
+
+    def _check_state(self, expected_log_level, status_class):
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(cli_arg(plan, "--log.level"), expected_log_level)
+        self.harness.evaluate_status()
+        self.assertIsInstance(self.harness.model.unit.status, status_class)
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_invalid_log_level_config_option_string(self, *unused):
+        # GIVEN a running charm with default values
+        #self.harness.begin_with_initial_hooks()
+        self._check_state("info", ActiveStatus)
+
+        # WHEN the config option is set to an invalid string
+        self.harness.update_config({"log_level": "bad-level"})
+
+        # THEN cli arg defaults to "debug" and the unit is blocked
+        self._check_state("debug", BlockedStatus)
+
+        # AND WHEN the config option is set to another invalid string
+        self.harness.update_config({"log_level": "very-bad-level"})
+
+        # THEN cli arg defaults to "debug" and the unit is blocked
+        self._check_state("debug", BlockedStatus)
+
+        # AND WHEN the config option is corrected
+        self.harness.update_config({"log_level": "error"})
+
+        # THEN cli arg is updated and the unit is goes back to active
+        self._check_state("error", ActiveStatus)
 
 
 @prom_multipatch
