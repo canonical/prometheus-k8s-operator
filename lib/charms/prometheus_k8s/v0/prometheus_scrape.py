@@ -335,7 +335,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
@@ -361,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 57
+LIBPATCH = 58
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -398,6 +398,14 @@ DEFAULT_RELATION_NAME = "metrics-endpoint"
 RELATION_INTERFACE_NAME = "prometheus_scrape"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+FallbackScrapeProtocol = Literal[
+    "PrometheusProto",
+    "OpenMetricsText0.0.1",
+    "OpenMetricsText1.0.0",
+    "PrometheusText0.0.4",
+    "PrometheusText1.0.0",
+]
 
 
 class PrometheusConfig:
@@ -939,7 +947,12 @@ class MetricsEndpointConsumer(Object):
 
     on = MonitoringEvents()  # pyright: ignore
 
-    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_RELATION_NAME,
+        fallback_scrape_protocol: Optional[FallbackScrapeProtocol] = None,
+    ):
         """A Prometheus based Monitoring service.
 
         Args:
@@ -950,6 +963,17 @@ class MetricsEndpointConsumer(Object):
                 It is strongly advised not to change the default, so that people
                 deploying your charm will have a consistent experience with all
                 other charms that consume metrics endpoints.
+            fallback_scrape_protocol: an optional fallback protocol to use when the
+                Content-Type header of a scrape response is missing or invalid. Supported
+                values: "PrometheusProto", "OpenMetricsText0.0.1", "OpenMetricsText1.0.0",
+                "PrometheusText0.0.4", "PrometheusText1.0.0". Ref:
+                https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config.
+                This had to be added after we bumped to Prometheus workload major version 3. Starting in major 3,
+                Prometheus no longer defaults to the Prometheus text format (PrometheusText0.0.4)
+                when the Content-Type header is missing or invalid, and instead fails the scrape with an error.
+                This parameter should only be used by MetricsEndpointConsumers that use Prometheus 3 and above, as setting
+                this key in the scrape configs of Prometheus 2 will result in the error:
+                "field fallback_scrape_protocol not found in type config.ScrapeConfig".
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -968,6 +992,7 @@ class MetricsEndpointConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
+        self._fallback_scrape_protocol = fallback_scrape_protocol
         self._tool = CosTool(self._charm)
         events = self._charm.on[relation_name]
         self.framework.observe(events.relation_changed, self._on_metrics_provider_relation_changed)
@@ -1261,6 +1286,11 @@ class MetricsEndpointConsumer(Object):
 
         # For https scrape targets we still do not render a `tls_config` section because certs
         # are expected to be made available by the charm via the `update-ca-certificates` mechanism.
+
+        if self._fallback_scrape_protocol:
+            for job in scrape_configs:
+                job["fallback_scrape_protocol"] = self._fallback_scrape_protocol
+
         return scrape_configs
 
     def _relation_hosts(self, relation: Relation) -> Dict[str, Tuple[str, str, str]]:

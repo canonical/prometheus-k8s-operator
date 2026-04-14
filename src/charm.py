@@ -215,7 +215,12 @@ class PrometheusCharm(CharmBase):
         self._topology = JujuTopology.from_charm(self)
 
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
-        self.metrics_consumer = MetricsEndpointConsumer(self)
+        # Starting in Prometheus major version 3, Prometheus no longer defaults to PrometheusText0.0.4
+        # when a scrape target's Content-Type header is missing or invalid, and instead fails the scrape.
+        # Set fallback_scrape_protocol to preserve the previous behaviour for non-compliant targets.
+        # The `fallback_scrape_protocol` parameter should only be set for MetricsEndpointConsumers that use Prometheus 3+.
+        # Setting it for Prometheus 2 will result in an error.
+        self.metrics_consumer = MetricsEndpointConsumer(self, fallback_scrape_protocol="PrometheusText0.0.4")
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
@@ -834,8 +839,6 @@ class PrometheusCharm(CharmBase):
             f"--config.file={PROMETHEUS_CONFIG}",
             "--storage.tsdb.path=/var/lib/prometheus",
             "--web.enable-lifecycle",
-            "--web.console.templates=/usr/share/prometheus/consoles",
-            "--web.console.libraries=/usr/share/prometheus/console_libraries",
         ]
 
         if self._web_config():
