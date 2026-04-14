@@ -968,6 +968,12 @@ class MetricsEndpointConsumer(Object):
                 values: "PrometheusProto", "OpenMetricsText0.0.1", "OpenMetricsText1.0.0",
                 "PrometheusText0.0.4", "PrometheusText1.0.0". Ref:
                 https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config.
+                This had to be added after we bumped to Prometheus workload major version 3. Starting in major 3,
+                Prometheus no longer defaults to the Prometheus text format (PrometheusText0.0.4)
+                when the Content-Type header is missing or invalid, and instead fails the scrape with an error.
+                This parameter should only be used by MetricsEndpointConsumers that use Prometheus 3 and above, as setting
+                this key in the scrape configs of Prometheus 2 will result in the error:
+                "field fallback_scrape_protocol not found in type config.ScrapeConfig".
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
