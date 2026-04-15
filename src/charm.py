@@ -123,6 +123,7 @@ class CompositeStatus(TypedDict):
     # These are going to go into stored state, so we must use marshallable objects.
     # They are passed to StatusBase.from_name().
     retention_size: Tuple[str, str]
+    log_level: Tuple[str, str]
     k8s_patch: Tuple[str, str]
     config: Tuple[str, str]
 
@@ -171,6 +172,7 @@ class PrometheusCharm(CharmBase):
         self._stored.set_default(
             status=CompositeStatus(
                 retention_size=to_tuple(ActiveStatus()),
+                log_level=to_tuple(ActiveStatus()),
                 k8s_patch=to_tuple(ActiveStatus()),
                 config=to_tuple(ActiveStatus()),
             )
@@ -406,14 +408,18 @@ class PrometheusCharm(CharmBase):
         allowed_log_levels = ["debug", "info", "warn", "error", "fatal"]
         log_level = cast(str, self.model.config["log_level"]).lower()
 
-        if log_level not in allowed_log_levels:
-            logging.warning(
-                "Invalid loglevel: %s given, %s allowed. defaulting to DEBUG loglevel.",
-                log_level,
-                "/".join(allowed_log_levels),
-            )
-            log_level = "debug"
-        return log_level
+        if log_level in allowed_log_levels:
+            self._stored.status["log_level"] = to_tuple(ActiveStatus())
+            return log_level
+
+        log_message = (
+            f"Invalid loglevel: {log_level} given, "
+            f"{'/'.join(allowed_log_levels)} allowed. "
+            f"Defaulting to DEBUG loglevel."
+        )
+        logging.warning(log_message)
+        self._stored.status["log_level"] = to_tuple(BlockedStatus(log_message))
+        return "debug"
 
     @property
     def _default_config(self):
@@ -625,7 +631,6 @@ class PrometheusCharm(CharmBase):
         # Refresh system certs
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
         self.container.restart("prometheus")
-
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -1188,7 +1193,6 @@ class PrometheusCharm(CharmBase):
         if exemplars_from_config > 0:
             return max(exemplars_from_config, EXEMPLARS_FLOOR)
         return 0
-
 
     def _pull(self, path) -> Optional[str]:
         """Pull file from container (without raising pebble errors).
