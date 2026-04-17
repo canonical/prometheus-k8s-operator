@@ -4,15 +4,30 @@ name: prometheus-k8s
 type: charm
 summary: Prometheus for Kubernetes clusters
 description: |
-  Prometheus is an open source monitoring solution. Prometheus
-  supports aggregating high dimensional data and exposes a powerful
-  query language PromQL. This charm deploys and operates Prometheus on
-  Kubernetes clusters. Prometheus can raise alerts through a relation
-  with the Alertmanager charm. Alerting rules for Prometheus need to
-  be provided through a relation with the application that requires
-  alerting. Prometheus provides its own dashboard for data
-  visualization but a richer visualization interface may be obtained
-  through a relation with the Grafana charm.
+  Prometheus K8s is a Juju charm that deploys and manages Prometheus on Kubernetes, providing a
+  monitoring and alerting solution based on a time-series database. It is a core component of
+  COS Lite, the lightweight version of the Canonical Observability Stack (COS):
+  https://documentation.ubuntu.com/observability
+
+  Related charms automatically register their metrics endpoints and alert rules through Juju
+  relations, and collected metrics can be visualized in Grafana and used to trigger alerts via
+  Alertmanager.
+
+  Key features:
+
+  - Automatic metrics scraping and alert rule registration via Juju relations with any charm
+    that supports the prometheus_scrape interface.
+  - Prometheus remote write endpoint for receiving metrics from agents such as Opentelemetry
+    Collector.
+  - Seamless integration with Grafana, Alertmanager, and other charms in the COS ecosystem
+    through Juju relations.
+  - Built-in Grafana dashboards and Prometheus alert rules for self-monitoring.
+  - Configurable metrics retention by time and storage size, with WAL compression support.
+  - Per-unit ingress support for cross-model access through reverse proxies such as Traefik.
+  - TLS support via the certificates relation.
+  - Distributed tracing support via integration with Tempo.
+  - Persistent storage for the time-series database across container restarts.
+  - Configurable Kubernetes resource limits for CPU and memory.
 
 links:
   documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
