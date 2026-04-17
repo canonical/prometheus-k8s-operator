@@ -17,7 +17,7 @@ description: |
 
   - Automatic metrics scraping and alert rule registration via Juju relations with any charm
     that supports the prometheus_scrape interface.
-  - Prometheus remote write endpoint for receiving metrics from agents such as Opentelemetry
+  - Prometheus remote write endpoint for receiving metrics from agents such as OpenTelemetry
     Collector.
   - Seamless integration with Grafana, Alertmanager, and other charms in the COS ecosystem
     through Juju relations.
