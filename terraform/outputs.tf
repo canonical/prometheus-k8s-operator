@@ -2,10 +2,19 @@ output "app_name" {
   value = juju_application.prometheus.name
 }
 
-output "endpoints" {
+output "provides" {
   value = {
-    # Requires
+    self_metrics_endpoint = "self-metrics-endpoint"
+    grafana_source        = "grafana-source"
+    grafana_dashboard     = "grafana-dashboard"
+    receive_remote_write  = "receive-remote-write"
+    send_datasource       = "send-datasource"
+    prometheus_api        = "prometheus-api"
+  }
+}
 
+output "requires" {
+  value = {
     metrics_endpoint = "metrics-endpoint"
     alertmanager     = "alertmanager"
     ingress          = "ingress"
@@ -14,14 +23,5 @@ output "endpoints" {
     receive_ca_cert  = "receive-ca-cert"
     charm_tracing    = "charm-tracing"
     workload_tracing = "workload-tracing"
-
-    # Provides
-
-    self_metrics_endpoint = "self-metrics-endpoint"
-    grafana_source        = "grafana-source"
-    grafana_dashboard     = "grafana-dashboard"
-    receive_remote_write  = "receive-remote-write"
-    send_datasource       = "send-datasource"
-    prometheus_api        = "prometheus-api"
   }
 }
