@@ -582,7 +582,7 @@ wheels = [
 [[package]]
 name = "cosl"
 version = "1.10.0"
-source = { git = "https://github.com/swetha1654/cos-lib?rev=feat%2Frewrite-rules#48d7c5c759a9f3ef4200d839dcd883b7b96dcf48" }
+source = { git = "https://github.com/swetha1654/cos-lib?rev=feat%2Frewrite-rules#c2ba23ace7b1951a6bd68d0053dcd44c7b271dc1" }
 dependencies = [
     { name = "ops" },
     { name = "pydantic" },
