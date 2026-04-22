@@ -13,3 +13,7 @@ tests/integration/prometheus-tester/lib/charms/prometheus_k8s/v0/prometheus_scra
 cos-tool*
 .hypothesis/*
 
+
+# Terraform
+**/.terraform/*
+**/.terraform.lock.hcl
