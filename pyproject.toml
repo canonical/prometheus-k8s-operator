@@ -8,7 +8,7 @@ requires-python = ">=3.10"
 dependencies = [
   "ops",
   "pyyaml",
-  "cosl",
+  "cosl @ git+https://github.com/swetha1654/cos-lib@feat/rewrite-rules",
   "lightkube>=0.11",
   "lightkube-models>=1.22.0.4",
   "httpx==0.24.1",
