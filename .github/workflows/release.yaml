@@ -9,7 +9,7 @@ on:
 
 jobs:
   release:
-    uses: canonical/observability/.github/workflows/charm-release.yaml@v1
+    uses: canonical/observability/.github/workflows/charm-release.yaml@v2
     secrets: inherit
     with:
       default-track: dev
