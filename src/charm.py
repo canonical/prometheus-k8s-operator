@@ -252,7 +252,7 @@ class PrometheusCharm(CharmBase):
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
-        self.tracing = ops_tracing.Tracing(
+        self.charm_tracing = ops_tracing.Tracing(
             self,
             tracing_relation_name="charm-tracing",
             ca_relation_name="receive-ca-cert",
