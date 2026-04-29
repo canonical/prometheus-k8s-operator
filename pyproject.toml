@@ -51,6 +51,7 @@ dev = [
   "minio",
   "sh",
   "jubilant",
+  "opentelemetry-exporter-otlp-proto-http",
 ]
 
 # Testing tools configuration
