@@ -429,7 +429,10 @@ async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> str:
 
         trace_id_hex = format_trace_id(trace_id)
 
-        counter.add(100, {"trace_id":trace_id_hex})
+        counter.add(100, {"trace_id": trace_id_hex})
+
+    # Shut down the meter provider to flush all pending metrics
+    meter_provider.shutdown()
 
     return trace_id_hex
 
@@ -441,7 +444,7 @@ async def query_exemplars(
 
     backend_url = await unit_address(ops_test, app, 0)
 
-    response = requests.get(f"http://{backend_url}:9090/api/v1/query_exemplars", params={'query': f"{query_name}_total"})
+    response = requests.get(f"http://{backend_url}:9090/api/v1/query_exemplars", params={'query': query_name})
 
     assert response.status_code == 200
 
