@@ -46,7 +46,7 @@ parts:
   charm:
     source: .
     plugin: uv
-    build-packages: [git]
+    build-packages: [git, cargo]
     build-snaps: [astral-uv]
     override-build: |
       craftctl default

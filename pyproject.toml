@@ -6,7 +6,7 @@ version = "0.0"
 requires-python = ">=3.10"
 
 dependencies = [
-  "ops",
+  "ops[tracing]",
   "pyyaml",
   "cosl",
   "lightkube>=0.11",
@@ -18,8 +18,6 @@ dependencies = [
   "requests",
   # from PYDEPS
   "importlib-metadata~=6.0.0",
-  "opentelemetry-exporter-otlp-proto-http",
-  "opentelemetry-sdk",
   "pydantic>=2",
 ]
 
