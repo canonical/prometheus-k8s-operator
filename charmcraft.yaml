@@ -165,7 +165,7 @@ requires:
     interface: loki_push_api
     optional: true
     description: |
-      Receives Loki's push api endpoint address to push logs to, and forwards charm's built-in alert rules to Loki.
+      Receives Loki's push API endpoint address and forwards logs to Loki.
 
 peers:
   prometheus-peers:
