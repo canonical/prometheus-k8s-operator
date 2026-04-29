@@ -161,6 +161,11 @@ requires:
       it scrapes, it needs to trust the CA that signed the server it
       talks to. CA certs forwarded over this relation are installed in
       the root CA store of the prometheus container.
+  logging:
+    interface: loki_push_api
+    optional: true
+    description: |
+      Receives Loki's push api endpoint address to push logs to, and forwards charm's built-in alert rules to Loki.
 
 peers:
   prometheus-peers:

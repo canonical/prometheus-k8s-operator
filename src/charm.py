@@ -23,6 +23,7 @@ from charms.certificate_transfer_interface.v1.certificate_transfer import (
 )
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
 from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.mimir_coordinator_k8s.v0.prometheus_api import (
     DEFAULT_RELATION_NAME as PROMETHEUS_API_RELATION_NAME,
 )
@@ -273,6 +274,8 @@ class PrometheusCharm(CharmBase):
         self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
             self.charm_tracing, self._ca_cert_path
         )
+        self._log_forwarding = LogForwarder(self, relation_name="logging")
+
         self.datasource_exchange = DatasourceExchange(
             self,
             provider_endpoint="send-datasource",
