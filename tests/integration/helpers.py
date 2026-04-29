@@ -401,11 +401,16 @@ async def get_application_ip(ops_test: OpsTest, app_name: str) -> str:
     return app.public_address
 
 
-async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> str:
+async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> tuple[str, MeterProvider]:
     """Push a metric along with a trace ID to an Opentelemetry Collector that is related to Prometheus so that the exemplar can be stored in Prometheus.
 
     This block creates an exemplars by attaching a trace ID provided by the Opentelemetry SDK to a metric.
     Please visit https://opentelemetry.io/docs/languages/python/instrumentation/ for more info on how the instrumentation works and/or how to modify it.
+
+    Returns a tuple of (trace_id, meter_provider). The caller must shut down the meter_provider
+    after verification is complete. The provider is kept alive so that the periodic reader
+    continues re-sending the metric (with cumulative temporality) until the remote-write
+    pipeline is fully established.
     """
     otel_url = await unit_address(ops_test, "otelcol", 0)
     collector_endpoint = f"http://{otel_url}:4318/v1/metrics"
@@ -416,7 +421,7 @@ async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> str:
     })
 
     otlp_exporter = OTLPMetricExporter(endpoint=collector_endpoint)
-    metric_reader = PeriodicExportingMetricReader(otlp_exporter, export_interval_millis=5000)
+    metric_reader = PeriodicExportingMetricReader(otlp_exporter, export_interval_millis=2000)
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
     meter = metrics.get_meter("meter", "1.0.0")
@@ -431,10 +436,10 @@ async def push_to_otelcol(ops_test: OpsTest, metric_name: str) -> str:
 
         counter.add(100, {"trace_id": trace_id_hex})
 
-    # Shut down the meter provider to flush all pending metrics
-    meter_provider.shutdown()
+    # Flush to ensure at least one export attempt is made immediately
+    meter_provider.force_flush()
 
-    return trace_id_hex
+    return trace_id_hex, meter_provider
 
 
 @retry(wait=wait_fixed(20), stop=stop_after_attempt(6))

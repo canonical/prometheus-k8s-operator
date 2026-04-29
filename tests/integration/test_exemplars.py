@@ -33,8 +33,11 @@ def test_prepare_environment(ops_test, prometheus_charm):
 async def test_exemplars(ops_test):
     # WHEN exemplars are pushed to otel collector
     metric_name = "sample_metric"
-    trace_id = await push_to_otelcol(ops_test, metric_name=metric_name)
+    trace_id, meter_provider = await push_to_otelcol(ops_test, metric_name=metric_name)
 
-    # THEN exemplars are found
-    found_trace_id = await query_exemplars(ops_test, query_name=metric_name, app=APP_NAME)
-    assert found_trace_id == trace_id
+    try:
+        # THEN exemplars are found
+        found_trace_id = await query_exemplars(ops_test, query_name=metric_name, app=APP_NAME)
+        assert found_trace_id == trace_id
+    finally:
+        meter_provider.shutdown()
