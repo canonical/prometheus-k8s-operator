@@ -6,7 +6,6 @@ import json
 from unittest.mock import patch
 
 import pytest
-from charms.tempo_coordinator_k8s.v0.charm_tracing import charm_tracing_disabled
 from interface_tester import InterfaceTester
 from scenario import Container, Exec, Relation, State
 
@@ -29,8 +28,7 @@ def prometheus_charm():
         _promtool_check_config=lambda *_: ("stdout", ""),
         _prometheus_version="0.1.0",
     ):
-        with charm_tracing_disabled():
-            yield PrometheusCharm
+        yield PrometheusCharm
 
 
 prometheus_container = Container(

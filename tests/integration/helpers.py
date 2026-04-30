@@ -449,7 +449,7 @@ async def query_exemplars(
 
     backend_url = await unit_address(ops_test, app, 0)
 
-    response = requests.get(f"http://{backend_url}:9090/api/v1/query_exemplars", params={'query': f"{query_name}_total"})
+    response = requests.get(f"http://{backend_url}:9090/api/v1/query_exemplars", params={'query': query_name})
 
     assert response.status_code == 200
 

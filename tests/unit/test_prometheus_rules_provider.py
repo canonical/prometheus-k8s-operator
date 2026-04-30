@@ -19,6 +19,7 @@ def _make_consumer_charm(alert_rules_path: str):
     class ConsumerCharm(CharmBase):
         metadata_yaml = textwrap.dedent(
             """
+            name: consumer-charm
             provides:
               metrics-endpoint:
                 interface: prometheus_scrape
