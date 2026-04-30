@@ -96,7 +96,7 @@ WEB_CONFIG_PATH = f"{PROMETHEUS_DIR}/prometheus-web-config.yml"
 # To get the behaviour consistent with mimir that doesn't allow lower values
 # than 100k exemplars, we set the same floor in prometheus. If the user specifies
 # a lower but positive value, we configure Prometheus to store 100k exemplars.
-EXEMPLARS_FLOOR=100000
+EXEMPLARS_FLOOR = 100000
 
 # To keep a tidy debug-log, we suppress some DEBUG/INFO logs from some imported libs,
 # even when charm logging is set to a lower level.
@@ -138,6 +138,7 @@ def to_status(tpl: Tuple[str, str]) -> StatusBase:
     """Convert a tuple to a StatusBase, so it could be used natively with ops."""
     name, message = tpl
     return StatusBase.from_name(name, message)
+
 
 @dataclass
 class TLSConfig:
@@ -212,7 +213,9 @@ class PrometheusCharm(CharmBase):
         # Set fallback_scrape_protocol to preserve the previous behaviour for non-compliant targets.
         # The `fallback_scrape_protocol` parameter should only be set for MetricsEndpointConsumers that use Prometheus 3+.
         # Setting it for Prometheus 2 will result in an error.
-        self.metrics_consumer = MetricsEndpointConsumer(self, fallback_scrape_protocol="PrometheusText0.0.4")
+        self.metrics_consumer = MetricsEndpointConsumer(
+            self, fallback_scrape_protocol="PrometheusText0.0.4"
+        )
         self.alertmanager_consumer = AlertmanagerConsumer(
             charm=self,
             relation_name="alertmanager",
@@ -262,9 +265,6 @@ class PrometheusCharm(CharmBase):
             self, relation_name="workload-tracing", protocols=["otlp_grpc"]
         )
 
-        self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
-            self.charm_tracing, self._ca_cert_path
-        )
         self._log_forwarding = LogForwarder(self, relation_name="logging")
 
         self.datasource_exchange = DatasourceExchange(
@@ -279,9 +279,15 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self._cert_requirer.on.certificate_available, self._on_certificate_available)
-        self.framework.observe(self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs)
-        self.framework.observe(self._cert_transfer.on.certificates_removed, self._on_receive_ca_certs)
+        self.framework.observe(
+            self._cert_requirer.on.certificate_available, self._on_certificate_available
+        )
+        self.framework.observe(
+            self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs
+        )
+        self.framework.observe(
+            self._cert_transfer.on.certificates_removed, self._on_receive_ca_certs
+        )
         self.framework.observe(self.remote_write_provider.on.alert_rules_changed, self._configure)
         self.framework.observe(self.remote_write_provider.on.consumers_changed, self._configure)
         self.framework.observe(self.metrics_consumer.on.targets_changed, self._configure)
@@ -356,7 +362,7 @@ class PrometheusCharm(CharmBase):
             "Labels": "/api/v1/labels",
             "Targets": "/api/v1/targets",
             "Rules": "/api/v1/rules",
-            "Alerts": "/api/v1/alerts"
+            "Alerts": "/api/v1/alerts",
         }
         return CatalogueItem(
             name="Prometheus",
@@ -367,7 +373,9 @@ class PrometheusCharm(CharmBase):
                 "alongside optional key-value pairs called labels."
             ),
             api_docs="https://prometheus.io/docs/prometheus/latest/querying/api/",
-            api_endpoints={key: f"{self.external_url}{path}" for key, path in api_endpoints.items()}
+            api_endpoints={
+                key: f"{self.external_url}{path}" for key, path in api_endpoints.items()
+            },
         )
 
     @property
@@ -596,7 +604,9 @@ class PrometheusCharm(CharmBase):
 
             # Repeat for the charm container. We need it there for prometheus client requests.
             ca_cert_path.parent.mkdir(exist_ok=True, parents=True)
-            ca_cert_path.write_text(tls_config.ca_cert,)  # pyright: ignore
+            ca_cert_path.write_text(
+                tls_config.ca_cert,
+            )  # pyright: ignore
         else:
             self.container.remove_path(CERT_PATH, recursive=True)
             self.container.remove_path(KEY_PATH, recursive=True)
@@ -873,7 +883,9 @@ class PrometheusCharm(CharmBase):
         except ValueError as e:
             logger.warning(e)
             self._stored.status["retention_size"] = to_tuple(
-                BlockedStatus(f"Invalid retention size: {e}, only metrics_retention_time is in effect")
+                BlockedStatus(
+                    f"Invalid retention size: {e}, only metrics_retention_time is in effect"
+                )
             )
 
         else:
@@ -937,9 +949,9 @@ class PrometheusCharm(CharmBase):
         # Assuming the storage name is "databases" (must match metadata.yaml).
         # This assertion would be picked up by every integration test so no concern this would
         # reach production.
-        assert (
-            "database" in self.model.storages
-        ), "The 'database' storage is no longer in metadata: must update literals in charm code."
+        assert "database" in self.model.storages, (
+            "The 'database' storage is no longer in metadata: must update literals in charm code."
+        )
 
         # Get PVC capacity from kubernetes
         client = Client()  # pyright: ignore
@@ -1092,11 +1104,7 @@ class PrometheusCharm(CharmBase):
         web_config = self._web_config()
 
         if self._exemplars:
-            prometheus_config["storage"] = {
-                "exemplars": {
-                    "max_exemplars": self._exemplars
-                }
-            }
+            prometheus_config["storage"] = {"exemplars": {"max_exemplars": self._exemplars}}
 
         if self.workload_tracing_endpoint:
             prometheus_config["tracing"] = self._tracing_config()
@@ -1183,7 +1191,9 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _exemplars(self) -> int:
-        exemplars_from_config = cast(int, self.model.config.get("max_global_exemplars_per_user", 0))
+        exemplars_from_config = cast(
+            int, self.model.config.get("max_global_exemplars_per_user", 0)
+        )
         if exemplars_from_config > 0:
             return max(exemplars_from_config, EXEMPLARS_FLOOR)
         return 0
