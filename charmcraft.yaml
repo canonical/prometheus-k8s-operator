@@ -70,7 +70,7 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ubuntu/prometheus@sha256:3b037e9157370026b1e67e5b3edfb17fb08f22b8db2a22400baeb250963dd78f  # renovate: oci-image tag: 3.11-24.04
+    upstream-source: ubuntu/prometheus@sha256:a16d290184ee199aa49f5352d0754ba6c8b050e1cfde9adefdd0117b876eef0b  # renovate: oci-image tag: 3.11-24.04
 
 storage:
   database:
