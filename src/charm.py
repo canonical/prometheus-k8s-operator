@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
+import ops_tracing
 import yaml
 from charms.alertmanager_k8s.v1.alertmanager_dispatch import AlertmanagerConsumer
 from charms.catalogue_k8s.v1.catalogue import CatalogueConsumer, CatalogueItem
@@ -43,8 +44,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
 from charms.prometheus_k8s.v1.prometheus_remote_write import (
     PrometheusRemoteWriteProvider,
 )
-from charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
-from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer, charm_tracing_config
+from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.tls_certificates_interface.v4.tls_certificates import (
     CertificateRequestAttributes,
     TLSCertificatesRequiresV4,
@@ -146,17 +146,6 @@ class TLSConfig:
     ca_cert: str
     private_key: str
 
-@trace_charm(
-    tracing_endpoint="charm_tracing_endpoint",
-    server_cert="server_cert",
-    extra_types=[
-        KubernetesComputeResourcesPatch,
-        TLSCertificatesRequiresV4,
-        MetricsEndpointConsumer,
-        MetricsEndpointProvider,
-        Prometheus,
-    ],
-)
 
 class PrometheusCharm(CharmBase):
     """A Juju Charm for Prometheus."""
@@ -263,15 +252,13 @@ class PrometheusCharm(CharmBase):
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
-        self.charm_tracing = TracingEndpointRequirer(
-            self, relation_name="charm-tracing", protocols=["otlp_http"]
+        self.charm_tracing = ops_tracing.Tracing(
+            self,
+            tracing_relation_name="charm-tracing",
+            ca_relation_name="receive-ca-cert",
         )
         self.workload_tracing = TracingEndpointRequirer(
             self, relation_name="workload-tracing", protocols=["otlp_grpc"]
-        )
-
-        self.charm_tracing_endpoint, self.server_cert = charm_tracing_config(
-            self.charm_tracing, self._ca_cert_path
         )
         self.datasource_exchange = DatasourceExchange(
             self,
