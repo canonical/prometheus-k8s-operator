@@ -537,11 +537,24 @@ class PrometheusRemoteWriteConsumer(Object):
 
     @staticmethod
     def _inject_extra_labels_to_alert_rules(rules: Dict, extra_alert_labels: Dict) -> Dict:
-        """Return a copy of the rules dict with extra labels injected."""
+        """Return a copy of the rules dict with extra labels injected.
+
+        Labels whose value is None or an empty string are removed from every
+        rule rather than being set.  If removing labels leaves the ``labels``
+        dict empty, the key is dropped from the rule entirely.
+        """
         result = copy.deepcopy(rules)
+        labels_to_drop = {k for k, v in extra_alert_labels.items() if v is None or v == ""}
+        labels_to_set = {k: v for k, v in extra_alert_labels.items() if k not in labels_to_drop}
+
         for group in result.get("groups", []):
             for rule in group.get("rules", []):
-                rule.setdefault("labels", {}).update(extra_alert_labels)
+                rule_labels = rule.setdefault("labels", {})
+                rule_labels.update(labels_to_set)
+                for key in labels_to_drop:
+                    rule_labels.pop(key, None)
+                if not rule_labels:
+                    del rule["labels"]
         return result
 
     @property
