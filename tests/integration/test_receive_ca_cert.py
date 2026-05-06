@@ -7,6 +7,7 @@ import time
 import jubilant
 from helpers import oci_image
 from requests import request
+from tenacity import retry, stop_after_delay, wait_fixed
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +47,16 @@ def test_with_ca_cert_forwarded(juju: jubilant.Juju):
     juju.integrate("ca:send-ca-cert", "prom:receive-ca-cert")
     juju.wait(jubilant.all_active, delay=10, timeout=600)
 
-    # Wait for scrape interval (1 minute) to elapse
-    scrape_interval = 60  # seconds!
-    lookback_window = scrape_interval + 10  # seconds!
-    time.sleep(lookback_window)
-
-    # THEN scrape succeeds
+    # THEN scrape succeeds (poll until target is up, allowing time for Prometheus to
+    # reload its CA trust store and complete a scrape cycle)
     prom_ip = juju.status().apps["prom"].units["prom/0"].address
-    response = request("GET", f"http://{prom_ip}:9090/api/v1/targets").text
-    data = json.loads(response)["data"]
-    for target in data["activeTargets"]:
-        if "am" in target["discoveredLabels"]["juju_application"]:
-            assert target["health"] == "up"
+
+    @retry(wait=wait_fixed(10), stop=stop_after_delay(180), reraise=True)
+    def assert_target_healthy():
+        response = request("GET", f"http://{prom_ip}:9090/api/v1/targets").text
+        data = json.loads(response)["data"]
+        for target in data["activeTargets"]:
+            if "am" in target["discoveredLabels"]["juju_application"]:
+                assert target["health"] == "up"
+
+    assert_target_healthy()
