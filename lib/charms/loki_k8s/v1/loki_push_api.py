@@ -505,21 +505,20 @@ import os
 import platform
 import re
 import socket
-import subprocess
-import tempfile
 import warnings
 from copy import deepcopy
 from gzip import GzipFile
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from urllib import request
 from urllib.error import URLError
 
 import yaml
-from cosl import JujuTopology
+from cosl import CosTool, JujuTopology
 from cosl.rules import AlertRules
+from cosl.types import OfficialRuleFileFormat
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -545,7 +544,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 PYDEPS = ["cosl"]
 
@@ -718,42 +717,6 @@ class InvalidAlertRulePathError(Exception):
 
         super().__init__(self.message)
 
-
-def _is_official_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in the upstream format as supported by Loki.
-
-    Alert rules in dictionary format are in "official" form if they
-    contain a "groups" key, since this implies they contain a list of
-    alert rule groups.
-
-    Args:
-        rules_dict: a set of alert rules in Python dictionary format
-
-    Returns:
-        True if alert rules are in official Loki file format.
-    """
-    return "groups" in rules_dict
-
-
-def _is_single_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in single rule format.
-
-    The Loki charm library supports reading of alert rules in a
-    custom format that consists of a single alert rule per file. This
-    does not conform to the official Loki alert rule file format
-    which requires that each alert rules file consists of a list of
-    alert rule groups and each group consists of a list of alert
-    rules.
-
-    Alert rules in dictionary form are considered to be in single rule
-    format if in the least it contains two keys corresponding to the
-    alert rule name and alert expression.
-
-    Returns:
-        True if alert rule is in single rule file format.
-    """
-    # one alert rule per file
-    return set(rules_dict) >= {"alert", "expr"}
 
 def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
     """Resolve the provided path items against the directory of the main file.
@@ -965,7 +928,7 @@ class LokiPushApiProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._tool = CosTool(self)
+        self._tool = CosTool("logql")
         self.port = int(port)
         self.scheme = scheme
         self.path = path
@@ -1218,9 +1181,10 @@ class LokiPushApiProvider(Object):
                 )
                 continue
 
-            _, errmsg = self._tool.validate_alert_rules(alert_rules)
+            _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
             if errmsg:
-                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                if self._charm.unit.is_leader():
+                    relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
                 continue
 
             alerts[identifier] = alert_rules
@@ -2522,123 +2486,6 @@ class LogForwarder(ConsumerBase):
         endpoints = self._extract_urls(relation)
 
         return endpoints
-
-
-class CosTool:
-    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
-
-    _path = None
-    _disabled = False
-
-    def __init__(self, charm):
-        self._charm = charm
-
-    @property
-    def path(self):
-        """Lazy lookup of the path of cos-tool."""
-        if self._disabled:
-            return None
-        if not self._path:
-            self._path = self._get_tool_path()
-            if not self._path:
-                logger.debug("Skipping injection of juju topology as label matchers")
-                self._disabled = True
-        return self._path
-
-    def apply_label_matchers(self, rules) -> dict:
-        """Will apply label matchers to the expression of all alerts in all supplied groups."""
-        if not self.path:
-            return rules
-        for group in rules["groups"]:
-            rules_in_group = group.get("rules", [])
-            for rule in rules_in_group:
-                topology = {}
-                # if the user for some reason has provided juju_unit, we'll need to honor it
-                # in most cases, however, this will be empty
-                for label in [
-                    "juju_model",
-                    "juju_model_uuid",
-                    "juju_application",
-                    "juju_charm",
-                    "juju_unit",
-                ]:
-                    if label in rule["labels"]:
-                        topology[label] = rule["labels"][label]
-
-                rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
-        return rules
-
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True, ""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            rule_path = Path(tmpdir + "/validate_rule.yaml")
-
-            # Smash "our" rules format into what upstream actually uses, which is more like:
-            #
-            # groups:
-            #   - name: foo
-            #     rules:
-            #       - alert: SomeAlert
-            #         expr: up
-            #       - alert: OtherAlert
-            #         expr: up
-            transformed_rules = {"groups": []}  # type: ignore
-            for rule in rules["groups"]:
-                transformed_rules["groups"].append(rule)
-
-            rule_path.write_text(yaml.dump(transformed_rules))
-            args = [str(self.path), "--format", "logql", "validate", str(rule_path)]
-            # noinspection PyBroadException
-            try:
-                self._exec(args)
-                return True, ""
-            except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join([line for line in e.output if "error validating" in line])
-
-    def inject_label_matchers(self, expression, topology) -> str:
-        """Add label matchers to an expression."""
-        if not topology:
-            return expression
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
-            return expression
-        args = [str(self.path), "--format", "logql", "transform"]
-        args.extend(
-            ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
-        )
-
-        args.extend(["{}".format(expression)])
-        # noinspection PyBroadException
-        try:
-            return self._exec(args)
-        except subprocess.CalledProcessError as e:
-            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            print('Applying the expression failed: "{}", falling back to the original'.format(e))
-            return expression
-
-    def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.processor()
-        arch = "amd64" if arch == "x86_64" else arch
-        res = "cos-tool-{}".format(arch)
-        try:
-            path = Path(res).resolve()
-            path.chmod(0o777)
-            return path
-        except NotImplementedError:
-            logger.debug("System lacks support for chmod")
-        except FileNotFoundError:
-            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
-        return None
-
-    def _exec(self, cmd) -> str:
-        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-        output = result.stdout.decode("utf-8").strip()
-        return output
 
 
 def charm_logging_config(
