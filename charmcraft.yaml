@@ -221,6 +221,39 @@ config:
         halved with little extra cpu load.
       type: boolean
       default: false
+    alert_rule_customizations:
+      description: |
+        YAML document used to customize Prometheus rule files after they are
+        received by this charm. Supports three top-level keys:
+
+        - `remove`: list of selectors used to delete matching rules.
+        - `patch`: list of selector-and-update entries used to modify matching rules.
+        - `add`: a rule file or list of rule files to append as extra groups.
+
+        Selectors may match rule keys such as `alert`, `record`, `expr`, the
+        containing group name via `group` or `name`, and nested `labels` or
+        `annotations` maps.
+
+        Example:
+
+        remove:
+          - match:
+              alert: NginxHighHttp4xxErrorRate
+        patch:
+          - match:
+              alert: MimirGossipMembersTooLow
+            set:
+              expr: "... * 0.3"
+              labels:
+                severity: warning
+        add:
+          groups:
+            - name: custom
+              rules:
+                - alert: MyNewRule
+                  expr: up == 0
+      type: string
+      default: ""
     evaluation_interval:
       description: |
         How frequently rules will be evaluated.

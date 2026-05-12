@@ -1,0 +1,26 @@
+remove:
+  - match:
+      alert: AlwaysFiringDueToAbsentMetric
+
+patch:
+  - match:
+      alert: HostDown 
+    set:
+      for: 40m
+      labels:
+        severity: critical
+      annotations:
+        summary: Testingggggggg
+        bruh: bruhhhhh
+add:
+  groups:
+    - name: custom
+      rules:
+        - alert: MyNewRule
+          expr: up == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Target is down
+            description: One or more scrape targets are reporting down

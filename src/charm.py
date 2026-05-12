@@ -10,9 +10,10 @@ import logging
 import re
 import socket
 import subprocess
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, TypedDict, cast
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, cast
 from urllib.parse import urlparse
 
 import ops_tracing
@@ -115,6 +116,162 @@ class ConfigError(Exception):
     """Configuration specific errors."""
 
     pass
+
+
+class AlertRuleCustomizationSpec(TypedDict):
+    """Alert rule customization document."""
+
+    remove: List[dict[str, Any]]
+    patch: List[dict[str, Any]]
+    add: List[dict[str, Any]]
+
+
+def _ensure_mapping(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ConfigError(f"alert_rule_customizations: '{field_name}' entries must be mappings")
+    return cast(dict[str, Any], value)
+
+
+def _ensure_list(value: Any, field_name: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise ConfigError(f"alert_rule_customizations: '{field_name}' must be a list")
+    return cast(list[Any], value)
+
+
+def _rule_matches_selector(rule: dict[str, Any], group: dict[str, Any], selector: dict[str, Any]) -> bool:
+    for key, expected in selector.items():
+        if key in {"group", "name"}:
+            if group.get("name") != expected:
+                return False
+            continue
+
+        if key in {"labels", "annotations"}:
+            actual = rule.get(key) or {}
+            if not isinstance(expected, dict) or not isinstance(actual, dict):
+                return False
+            if any(actual.get(label_key) != label_value for label_key, label_value in expected.items()):
+                return False
+            continue
+
+        if rule.get(key) != expected:
+            return False
+
+    return True
+
+
+def _merge_rule_patch(rule: dict[str, Any], patch_values: dict[str, Any]) -> dict[str, Any]:
+    merged_rule = deepcopy(rule)
+    for key, value in patch_values.items():
+        if key in {"labels", "annotations"} and isinstance(value, dict):
+            existing = merged_rule.get(key) or {}
+            if not isinstance(existing, dict):
+                existing = {}
+            merged_rule[key] = {**existing, **value}
+            continue
+
+        merged_rule[key] = value
+
+    return merged_rule
+
+
+def _normalize_added_rule_files(additions: Any) -> list[dict[str, Any]]:
+    if additions is None:
+        return []
+
+    if isinstance(additions, dict):
+        additions = [additions]
+
+    normalized = []
+    for index, added_rule_file in enumerate(_ensure_list(additions, "add")):
+        rule_file = _ensure_mapping(added_rule_file, f"add[{index}]")
+        groups = rule_file.get("groups")
+        if not isinstance(groups, list):
+            raise ConfigError(
+                f"alert_rule_customizations: 'add[{index}]' must contain a 'groups' list"
+            )
+        normalized.append(rule_file)
+
+    return normalized
+
+
+def _parse_alert_rule_customizations(raw_value: str) -> AlertRuleCustomizationSpec:
+    if not raw_value.strip():
+        return AlertRuleCustomizationSpec(remove=[], patch=[], add=[])
+
+    try:
+        parsed = yaml.safe_load(raw_value)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"Invalid alert_rule_customizations YAML: {exc}") from exc
+
+    if parsed is None:
+        return AlertRuleCustomizationSpec(remove=[], patch=[], add=[])
+
+    if not isinstance(parsed, dict):
+        raise ConfigError("alert_rule_customizations must be a YAML mapping")
+
+    unknown_keys = set(parsed) - {"remove", "patch", "add"}
+    if unknown_keys:
+        unknown = ", ".join(sorted(unknown_keys))
+        raise ConfigError(f"alert_rule_customizations has unsupported top-level keys: {unknown}")
+
+    remove_entries = []
+    for index, entry in enumerate(_ensure_list(parsed.get("remove", []), "remove")):
+        remove_entry = _ensure_mapping(entry, f"remove[{index}]")
+        selector = _ensure_mapping(remove_entry.get("match"), f"remove[{index}].match")
+        remove_entries.append({"match": selector})
+
+    patch_entries = []
+    for index, entry in enumerate(_ensure_list(parsed.get("patch", []), "patch")):
+        patch_entry = _ensure_mapping(entry, f"patch[{index}]")
+        selector = _ensure_mapping(patch_entry.get("match"), f"patch[{index}].match")
+        patch_values = _ensure_mapping(patch_entry.get("set"), f"patch[{index}].set")
+        patch_entries.append({"match": selector, "set": patch_values})
+
+    return AlertRuleCustomizationSpec(
+        remove=remove_entries,
+        patch=patch_entries,
+        add=_normalize_added_rule_files(parsed.get("add")),
+    )
+
+
+def _apply_alert_rule_customizations(
+    rule_file: dict[str, Any], customizations: AlertRuleCustomizationSpec
+) -> dict[str, Any]:
+    updated_rule_file = deepcopy(rule_file)
+    groups = updated_rule_file.get("groups")
+    if not isinstance(groups, list):
+        raise ConfigError("alert rule file is missing a valid 'groups' list")
+
+    updated_groups = []
+    for group in groups:
+        group_mapping = _ensure_mapping(group, "groups[]")
+        rules = group_mapping.get("rules")
+        if not isinstance(rules, list):
+            raise ConfigError("alert rule group is missing a valid 'rules' list")
+
+        updated_rules = []
+        for rule in rules:
+            rule_mapping = _ensure_mapping(rule, "rules[]")
+
+            if any(
+                _rule_matches_selector(rule_mapping, group_mapping, entry["match"])
+                for entry in customizations["remove"]
+            ):
+                continue
+
+            updated_rule = rule_mapping
+            for entry in customizations["patch"]:
+                if _rule_matches_selector(updated_rule, group_mapping, entry["match"]):
+                    updated_rule = _merge_rule_patch(updated_rule, entry["set"])
+
+            updated_rules.append(updated_rule)
+
+        if updated_rules:
+            group_mapping["rules"] = updated_rules
+            updated_groups.append(group_mapping)
+
+    updated_rule_file["groups"] = updated_groups
+    return updated_rule_file
 
 
 class CompositeStatus(TypedDict):
@@ -792,18 +949,23 @@ class PrometheusCharm(CharmBase):
         """
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
-        alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
+        customizations_raw = cast(str, self.model.config["alert_rule_customizations"])
+        customizations = _parse_alert_rule_customizations(customizations_raw)
+        alerts_hash = sha256(
+            str(metrics_consumer_alerts) + str(remote_write_alerts) + customizations_raw
+        )
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
             self.container.remove_path(RULES_DIR, recursive=True)
-            self._push_alert_rules(metrics_consumer_alerts)
-            self._push_alert_rules(remote_write_alerts)
+            self._push_alert_rules(metrics_consumer_alerts, customizations)
+            self._push_alert_rules(remote_write_alerts, customizations)
+            self._push_added_alert_rules(customizations)
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
 
-    def _push_alert_rules(self, alerts):
+    def _push_alert_rules(self, alerts, customizations: AlertRuleCustomizationSpec):
         """Pushes alert rules from a rules file to the prometheus container.
 
         Args:
@@ -813,10 +975,22 @@ class PrometheusCharm(CharmBase):
         for topology_identifier, rules_file in alerts.items():
             filename = f"juju_{topology_identifier}.rules"
             path = f"{RULES_DIR}/{filename}"
+            customized_rules = _apply_alert_rule_customizations(rules_file, customizations)
 
-            rules = yaml.safe_dump(rules_file)
+            if not customized_rules.get("groups"):
+                logger.debug("Skipped alert rules file %s because no groups remain", filename)
+                continue
+
+            rules = yaml.safe_dump(customized_rules)
 
             self._push(path, rules)
+            logger.debug("Updated alert rules file %s", filename)
+
+    def _push_added_alert_rules(self, customizations: AlertRuleCustomizationSpec) -> None:
+        for index, rule_file in enumerate(customizations["add"]):
+            filename = f"juju_user_additions_{index}.rules"
+            path = f"{RULES_DIR}/{filename}"
+            self._push(path, yaml.safe_dump(rule_file))
             logger.debug("Updated alert rules file %s", filename)
 
     def _generate_command(self) -> str:
