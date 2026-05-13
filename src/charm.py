@@ -84,11 +84,15 @@ PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
-# The alerts-editor UI runs as a second Pebble service inside the prometheus
-# container. charmcraft.yaml does not (yet) declare a separate sidecar.
+# The alerts-editor UI runs in its own sidecar container (see charmcraft.yaml).
+# The container name and the Pebble service name happen to be the same string.
+ALERTS_EDITOR_CONTAINER = "alerts-editor"
 ALERTS_EDITOR_SERVICE = "alerts-editor"
 ALERTS_EDITOR_PORT = 8080
 DIFF_PATH = f"{RULES_DIR}/diff.yaml"
+# Pebble custom-notice key the UI fires after a save. Must match the constant
+# in src/ui/app.py.
+DIFF_SAVED_NOTICE_KEY = "canonical.com/alerts-editor/diff-saved"
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
@@ -178,6 +182,7 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
         self.container = self.unit.get_container(self._name)
+        self._alerts_editor_container = self.unit.get_container(ALERTS_EDITOR_CONTAINER)
         self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
@@ -280,6 +285,14 @@ class PrometheusCharm(CharmBase):
         )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(
+            self.on[ALERTS_EDITOR_CONTAINER].pebble_ready,
+            self._on_alerts_editor_pebble_ready,
+        )
+        self.framework.observe(
+            self.on[ALERTS_EDITOR_CONTAINER].pebble_custom_notice,
+            self._on_alerts_editor_notice,
+        )
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
@@ -546,11 +559,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _alerts_editor_layer(self) -> Layer:
-        """Pebble layer for the alerts-editor UI workload.
-
-        Added with `combine=True` to the same prometheus container so it
-        coexists with the prometheus service.
-        """
+        """Pebble layer for the alerts-editor UI workload (sidecar container)."""
         layer_config = {
             "summary": "Alerts editor layer",
             "description": "Pebble layer for the alerts-editor UI workload",
@@ -822,15 +831,28 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
-    def _configure_alerts_editor(self) -> None:
-        """Push the UI source into the prometheus container and (re)plan its Pebble layer.
+    def _on_alerts_editor_pebble_ready(self, event) -> None:
+        """Pebble ready hook for the alerts-editor sidecar container."""
+        self._configure(event)
 
-        The UI runs as a second Pebble service alongside the prometheus daemon in
-        the same container — there is no dedicated sidecar (see charmcraft.yaml).
+    def _on_alerts_editor_notice(self, event) -> None:
+        """React to a Pebble custom notice from the alerts-editor container.
+
+        The UI fires this after writing diff.yaml so the charm can apply the
+        new overlay immediately instead of waiting for the next update-status
+        (specs/adr/0003-ui-to-charm-transport.md T2).
         """
-        container = self.container
+        if event.notice.key != DIFF_SAVED_NOTICE_KEY:
+            logger.debug("ignoring alerts-editor notice with key %r", event.notice.key)
+            return
+        logger.info("alerts-editor diff-saved notice received, reconciling")
+        self._configure(event)
+
+    def _configure_alerts_editor(self) -> None:
+        """Push the UI source into the alerts-editor container and (re)plan its Pebble layer."""
+        container = self._alerts_editor_container
         if not container.can_connect():
-            logger.debug("prometheus container not ready; skipping alerts-editor configure")
+            logger.debug("alerts-editor container not ready; skipping configure")
             return
 
         # Push the FastAPI app + Jinja templates + static assets from the charm

@@ -81,7 +81,7 @@ resources:
   alerts-editor-image:
     type: oci-image
     description: Container image for the alerts editor UI workload (see specs/adr/0004-ui-workload-design.md).
-    upstream-source: python:3.12-slim
+    upstream-source: docker.io/library/python@sha256:401f6e1a67dad31a1bd78e9ad22d0ee0a3b52154e6bd30e90be696bb6a3d7461
 
 storage:
   database:

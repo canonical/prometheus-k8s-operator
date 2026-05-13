@@ -21,8 +21,10 @@ Dockerfile only ships ``app.py``.
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -33,12 +35,19 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+logger = logging.getLogger(__name__)
+
 RULES_DIR = Path("/etc/prometheus/rules")
 DIFF_FILENAME = "diff.yaml"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 SCHEMA_VERSION = 1
+
+# Pebble custom notice the UI fires after a successful save so the charm can
+# apply the new diff without waiting for the next update-status. Must match
+# the constant in src/charm.py (DIFF_SAVED_NOTICE_KEY).
+DIFF_SAVED_NOTICE_KEY = "canonical.com/alerts-editor/diff-saved"
 
 # Prometheus duration: one or more `<int><unit>` segments. Empty string is allowed
 # (means "no `for`" — same as omitting the field).
@@ -460,11 +469,31 @@ def save(request: Request) -> HTMLResponse:
         )
 
     _STATE["current_diff"] = copy.deepcopy(diff)
+    _notify_charm_of_save()
 
     return templates.TemplateResponse(
         "_save_status.html.j2",
         {"request": request, "errors": [], "saved": True, "path": str(target)},
     )
+
+
+def _notify_charm_of_save() -> None:
+    """Fire a Pebble custom notice so the charm reconciles immediately.
+
+    Best-effort: the file is already written, so a failed notice just means the
+    charm picks up the change on its next update-status hook instead of right
+    away. We never fail the HTTP request on a missing/broken pebble.
+    """
+    try:
+        subprocess.run(
+            ["/charm/bin/pebble", "notify", DIFF_SAVED_NOTICE_KEY],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        logger.warning("could not fire pebble notice %r: %s", DIFF_SAVED_NOTICE_KEY, exc)
 
 
 @app.post("/discard", response_class=HTMLResponse)
