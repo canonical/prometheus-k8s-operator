@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Alerts editor</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: #666; margin-top: 0; }
+    .banner { padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
+    .banner.warn { background: #fff4e5; border-left: 4px solid #b06000; color: #663300; }
+    .banner.empty { background: #f3f3f3; border-left: 4px solid #888; }
+    .rule-card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    .rule-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    .rule-header h2 { margin: 0; font-size: 1.15rem; }
+    .rule-source { color: #777; font-size: 0.85rem; }
+    .rule-source code { background: #f3f3f3; padding: 0.05rem 0.3rem; border-radius: 3px; }
+    dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1rem; margin: 0.75rem 0 0; }
+    dl.fields dt { color: #555; font-weight: 600; }
+    dl.fields dd { margin: 0; }
+    pre.expr {
+      background: #f6f8fa;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.9rem;
+    }
+    .kv-list { margin: 0; padding-left: 1rem; }
+    .kv-list li { margin-bottom: 0.15rem; }
+    .kv-list .key { color: #555; }
+    .summary-row { display: flex; gap: 2rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 1rem; color: #555; }
+    .summary-row strong { color: #222; }
+    footer { color: #888; font-size: 0.85rem; margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Alerts editor</h1>
+  <p class="subtitle">Rules currently loaded from <code>{{ rules_dir }}</code>.</p>
+
+  {% if not rules_dir_mounted %}
+  <div class="banner warn">
+    Shared rules volume <code>{{ rules_dir }}</code> is not mounted. Nothing to show.
+  </div>
+  {% endif %}
+
+  {% if parse_errors %}
+  <div class="banner warn">
+    <strong>Some rule files failed to parse:</strong>
+    <ul>
+      {% for err in parse_errors %}<li><code>{{ err }}</code></li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="summary-row">
+    <span><strong>{{ rules | length }}</strong> alert rule{{ '' if rules | length == 1 else 's' }} loaded</span>
+    <span>{{ rules | map(attribute='source_file') | unique | list | length }} source file(s)</span>
+  </div>
+
+  {% if rules %}
+    {% for rule in rules %}
+    <article class="rule-card">
+      <div class="rule-header">
+        <h2>{{ rule.alert }}</h2>
+        <div class="rule-source">
+          <code>{{ rule.source_file }}</code> / <code>{{ rule.group }}</code>
+        </div>
+      </div>
+      <dl class="fields">
+        <dt>expr</dt>
+        <dd><pre class="expr">{{ rule.expr }}</pre></dd>
+
+        {% if rule['for'] %}
+        <dt>for</dt>
+        <dd><code>{{ rule['for'] }}</code></dd>
+        {% endif %}
+
+        {% if rule.labels %}
+        <dt>labels</dt>
+        <dd>
+          <ul class="kv-list">
+            {% for k, v in rule.labels.items() %}
+              <li><span class="key">{{ k }}:</span> <code>{{ v }}</code></li>
+            {% endfor %}
+          </ul>
+        </dd>
+        {% endif %}
+
+        {% if rule.annotations %}
+        <dt>annotations</dt>
+        <dd>
+          <ul class="kv-list">
+            {% for k, v in rule.annotations.items() %}
+              <li><span class="key">{{ k }}:</span> {{ v }}</li>
+            {% endfor %}
+          </ul>
+        </dd>
+        {% endif %}
+      </dl>
+    </article>
+    {% endfor %}
+  {% elif rules_dir_mounted and not parse_errors %}
+  <div class="banner empty">
+    <p><strong>No rules loaded.</strong> Relate a producer charm (e.g. <code>kube-state-metrics-k8s</code>) to populate this list.</p>
+  </div>
+  {% endif %}
+
+  <footer>
+    Milestone 2 of <code>specs/plans/0001-alerts-editor-implementation.md</code>.
+    Read-only — editing arrives in M3.
+  </footer>
+</body>
+</html>

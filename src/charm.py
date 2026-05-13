@@ -830,14 +830,15 @@ class PrometheusCharm(CharmBase):
             logger.debug("alerts-editor container not ready; skipping configure")
             return
 
-        # Push the FastAPI stub from the charm bundle into the container.
-        ui_src = Path(__file__).parent / "ui" / "app.py"
+        # Push the FastAPI app + Jinja templates from the charm bundle into the container.
+        ui_root = Path(__file__).parent / "ui"
+        ui_sources = [
+            (ui_root / "app.py", "/app/app.py"),
+            (ui_root / "templates" / "index.html.j2", "/app/templates/index.html.j2"),
+        ]
         try:
-            container.push(
-                "/app/app.py",
-                ui_src.read_text(),
-                make_dirs=True,
-            )
+            for src, dst in ui_sources:
+                container.push(dst, src.read_text(), make_dirs=True)
         except (OSError, PebbleError) as e:
             logger.error("Failed to push alerts-editor app source: %s", e)
             return
