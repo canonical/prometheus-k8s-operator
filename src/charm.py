@@ -84,7 +84,9 @@ PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
-ALERTS_EDITOR_CONTAINER = "alerts-editor"
+# The alerts-editor UI runs as a second Pebble service inside the prometheus
+# container. charmcraft.yaml does not (yet) declare a separate sidecar.
+ALERTS_EDITOR_SERVICE = "alerts-editor"
 ALERTS_EDITOR_PORT = 8080
 DIFF_PATH = f"{RULES_DIR}/diff.yaml"
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
@@ -176,7 +178,6 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
         self.container = self.unit.get_container(self._name)
-        self._alerts_editor_container = self.unit.get_container(ALERTS_EDITOR_CONTAINER)
         self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
@@ -208,6 +209,17 @@ class PrometheusCharm(CharmBase):
             strip_prefix=True,
             redirect_https=True,
             scheme=lambda: "https" if self._tls_available else "http",
+        )
+
+        self.ui_ingress = IngressPerUnitRequirer(
+            self,
+            relation_name="ui-ingress",
+            port=ALERTS_EDITOR_PORT,
+            strip_prefix=True,
+            redirect_https=True,
+            # The alerts-editor workload speaks plain HTTP; Traefik can still
+            # terminate TLS externally via redirect_https.
+            scheme=lambda: "http",
         )
 
         self._topology = JujuTopology.from_charm(self)
@@ -279,14 +291,13 @@ class PrometheusCharm(CharmBase):
         )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(
-            self.on.alerts_editor_pebble_ready, self._on_alerts_editor_pebble_ready
-        )
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
+        self.framework.observe(self.ui_ingress.on.ready_for_unit, self._on_ingress_ready)
+        self.framework.observe(self.ui_ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(
             self._cert_requirer.on.certificate_available, self._on_certificate_available
         )
@@ -548,12 +559,16 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _alerts_editor_layer(self) -> Layer:
-        """Pebble layer for the alerts-editor UI workload."""
+        """Pebble layer for the alerts-editor UI workload.
+
+        Added with `combine=True` to the same prometheus container so it
+        coexists with the prometheus service.
+        """
         layer_config = {
             "summary": "Alerts editor layer",
             "description": "Pebble layer for the alerts-editor UI workload",
             "services": {
-                ALERTS_EDITOR_CONTAINER: {
+                ALERTS_EDITOR_SERVICE: {
                     "override": "replace",
                     "summary": "alerts-editor UI",
                     "command": (
@@ -721,6 +736,9 @@ class PrometheusCharm(CharmBase):
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
+        self.ui_ingress.provide_ingress_requirements(
+            scheme="http", port=ALERTS_EDITOR_PORT
+        )
         self.remote_write_provider.update_endpoint()
         self.catalogue.update_item(item=self._catalogue_item)
 
@@ -819,15 +837,15 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
-    def _on_alerts_editor_pebble_ready(self, event) -> None:
-        """Pebble ready hook for the alerts-editor sidecar container."""
-        self._configure(event)
-
     def _configure_alerts_editor(self) -> None:
-        """Push the UI source into the alerts-editor container and (re)plan its Pebble layer."""
-        container = self._alerts_editor_container
+        """Push the UI source into the prometheus container and (re)plan its Pebble layer.
+
+        The UI runs as a second Pebble service alongside the prometheus daemon in
+        the same container — there is no dedicated sidecar (see charmcraft.yaml).
+        """
+        container = self.container
         if not container.can_connect():
-            logger.debug("alerts-editor container not ready; skipping configure")
+            logger.debug("prometheus container not ready; skipping alerts-editor configure")
             return
 
         # Push the FastAPI app + Jinja templates from the charm bundle into the container.
@@ -843,16 +861,22 @@ class PrometheusCharm(CharmBase):
             logger.error("Failed to push alerts-editor app source: %s", e)
             return
 
-        current_planned = container.get_plan().services
         new_layer = self._alerts_editor_layer
-        current_services = container.get_services()
-        all_running = all(svc.is_running() for svc in current_services.values())
+        current_planned = container.get_plan().services
+        already_planned = (
+            ALERTS_EDITOR_SERVICE in current_planned
+            and current_planned[ALERTS_EDITOR_SERVICE] == new_layer.services[ALERTS_EDITOR_SERVICE]
+        )
+        try:
+            running = container.get_service(ALERTS_EDITOR_SERVICE).is_running()
+        except ModelError:
+            running = False
 
-        if current_planned == new_layer.services and all_running:
+        if already_planned and running:
             return
 
         try:
-            container.add_layer(ALERTS_EDITOR_CONTAINER, new_layer, combine=True)
+            container.add_layer(ALERTS_EDITOR_SERVICE, new_layer, combine=True)
             container.replan()
             logger.info("alerts-editor (re)started")
         except PebbleError as e:
@@ -914,8 +938,8 @@ class PrometheusCharm(CharmBase):
                 if entry.name == "diff.yaml":
                     continue
                 self.container.remove_path(entry.path, recursive=True)
-            self._push_alert_rules(metrics_consumer_alerts)
-            self._push_alert_rules(remote_write_alerts)
+            #self._push_alert_rules(metrics_consumer_alerts)
+            #self._push_alert_rules(remote_write_alerts)
             self._wipe_juju_rule_files()
             self._push_alert_rules(merged_rules)
             self._push(ALERTS_HASH_PATH, alerts_hash)
