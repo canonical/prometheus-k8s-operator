@@ -65,30 +65,16 @@ containers:
     mounts:
       - storage: database
         location: /var/lib/prometheus
-      - storage: rules
-        location: /etc/prometheus/rules
-  alerts-editor:
-    resource: alerts-editor-image
-    mounts:
-      - storage: rules
-        location: /etc/prometheus/rules
 
 resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
     upstream-source: ubuntu/prometheus@sha256:3b037e9157370026b1e67e5b3edfb17fb08f22b8db2a22400baeb250963dd78f  # renovate: oci-image tag: 3.11-24.04
-  alerts-editor-image:
-    type: oci-image
-    description: Container image for the alerts editor UI workload (see specs/adr/0004-ui-workload-design.md).
-    upstream-source: python:3.12-slim
 
 storage:
   database:
     type: filesystem
-  rules:
-    type: filesystem
-    description: Shared volume between the prometheus and alerts-editor containers holding the rule files Prometheus loads and the diff.yaml the editor writes.
 
 provides:
   self-metrics-endpoint:

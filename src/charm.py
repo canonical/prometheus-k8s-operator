@@ -84,12 +84,9 @@ PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
-<<<<<<< Updated upstream
 ALERTS_EDITOR_CONTAINER = "alerts-editor"
 ALERTS_EDITOR_PORT = 8080
-=======
 DIFF_PATH = f"{RULES_DIR}/diff.yaml"
->>>>>>> Stashed changes
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
@@ -905,7 +902,6 @@ class PrometheusCharm(CharmBase):
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
-<<<<<<< Updated upstream
             # RULES_DIR is now a Juju storage mount (shared with the alerts-editor
             # sidecar), so we can't remove the directory itself — clear its contents
             # instead. The editor's diff.yaml is preserved across rule reloads.
@@ -919,10 +915,8 @@ class PrometheusCharm(CharmBase):
                 self.container.remove_path(entry.path, recursive=True)
             self._push_alert_rules(metrics_consumer_alerts)
             self._push_alert_rules(remote_write_alerts)
-=======
             self._wipe_juju_rule_files()
             self._push_alert_rules(merged_rules)
->>>>>>> Stashed changes
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
