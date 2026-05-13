@@ -35,7 +35,9 @@ def local_app_data_relation_state(
 
 @patch("charm.PrometheusCharm.internal_url", PropertyMock(return_value=PROMETHEUS_URL))
 @patch("charm.PrometheusCharm._set_alerts", MagicMock())
-def test_provider_sender_sends_data_on_relation_joined(context, prometheus_container):
+def test_provider_sender_sends_data_on_relation_joined(
+    context, prometheus_container, alerts_editor_container
+):
     """Tests that a charm using PrometheusApiProvider sends the correct data on a relation joined event."""
     # Arrange
     prometheus_api = Relation(RELATION_NAME, INTERFACE_NAME)
@@ -46,7 +48,7 @@ def test_provider_sender_sends_data_on_relation_joined(context, prometheus_conta
     state = State(
         relations=relations,
         leader=True,
-        containers=[prometheus_container],
+        containers=[prometheus_container, alerts_editor_container],
     )
 
     # Act
@@ -67,7 +69,7 @@ def test_provider_sender_sends_data_on_relation_joined(context, prometheus_conta
 @patch("charm.PrometheusCharm.internal_url", PropertyMock(return_value=PROMETHEUS_URL))
 @patch("charm.PrometheusCharm._set_alerts", MagicMock())
 def test_provider_sender_sends_data_with_ingress_url_on_relation_joined(
-    context, prometheus_container
+    context, prometheus_container, alerts_editor_container
 ):
     """Tests that a charm using PrometheusApiProvider with an external url sends the correct data."""
     # Arrange
@@ -77,7 +79,7 @@ def test_provider_sender_sends_data_with_ingress_url_on_relation_joined(
     state = State(
         relations=relations,
         leader=True,
-        containers=[prometheus_container],
+        containers=[prometheus_container, alerts_editor_container],
     )
 
     # Act
@@ -94,7 +96,9 @@ def test_provider_sender_sends_data_with_ingress_url_on_relation_joined(
 
 @patch("charm.PrometheusCharm.internal_url", PropertyMock(return_value=PROMETHEUS_URL))
 @patch("charm.PrometheusCharm._set_alerts", MagicMock())
-def test_provider_sends_data_on_config_changed(context, prometheus_container):
+def test_provider_sends_data_on_config_changed(
+    context, prometheus_container, alerts_editor_container
+):
     """Tests that a charm using PrometheusApiProvider sends data on a config-changed event."""
     # Arrange
     prometheus_api = Relation(RELATION_NAME, INTERFACE_NAME)
@@ -103,7 +107,7 @@ def test_provider_sends_data_on_config_changed(context, prometheus_container):
     state = State(
         relations=relations,
         leader=True,
-        containers=[prometheus_container],
+        containers=[prometheus_container, alerts_editor_container],
     )
 
     # Act

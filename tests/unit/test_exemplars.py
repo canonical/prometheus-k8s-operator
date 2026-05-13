@@ -12,7 +12,8 @@ def test_default_config_doesnt_enable_exemplars(context: Context):
         can_connect=True,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container])
+    alerts_editor = Container("alerts-editor", can_connect=True)
+    state = State(containers=[container, alerts_editor])
     state_out = context.run(context.on.update_status(), state)
 
     # THEN the feature flag for exemplars is not set
@@ -31,7 +32,11 @@ def test_when_exemplars_are_enabled_feature_flag_is_set(context: Context):
         can_connect=True,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container], config={"max_global_exemplars_per_user": 150000})
+    alerts_editor = Container("alerts-editor", can_connect=True)
+    state = State(
+        containers=[container, alerts_editor],
+        config={"max_global_exemplars_per_user": 150000},
+    )
     state_out = context.run(context.on.update_status(), state)
 
     # THEN the feature flag for exemplars is set
@@ -53,7 +58,11 @@ def test_exemplars_are_set_in_config(context: Context, set_config, expected_exem
         can_connect=True,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container], config={"max_global_exemplars_per_user": set_config})
+    alerts_editor = Container("alerts-editor", can_connect=True)
+    state = State(
+        containers=[container, alerts_editor],
+        config={"max_global_exemplars_per_user": set_config},
+    )
     state_out = context.run(context.on.config_changed(), state)
 
     # THEN the config file does not contain the exemplars section

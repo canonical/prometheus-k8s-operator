@@ -64,7 +64,10 @@ show_missing = true
 # Linting tools configuration
 [tool.ruff]
 line-length = 99
-extend-exclude = ["__pycache__", "*.egg_info"]
+# src/ui/ runs inside the alerts-editor sidecar container — its deps
+# (fastapi, jinja2, …) live in src/ui/requirements.txt, not in the charm's
+# pyproject.toml, so don't lint/format it with the charm's rules.
+extend-exclude = ["__pycache__", "*.egg_info", "src/ui"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "C", "N", "R", "D", "I001"]
@@ -81,7 +84,7 @@ convention = "google"
 extraPaths = ["src", "lib"]
 pythonVersion = "3.10"
 pythonPlatform = "All"
-exclude = ["tests/integration/prometheus-tester/**"]
+exclude = ["tests/integration/prometheus-tester/**", "src/ui/**"]
 
 [[tool.pyright.executionEnvironments]]
 ## The charm library `lib/charms/prometheus_k8s` folder should be

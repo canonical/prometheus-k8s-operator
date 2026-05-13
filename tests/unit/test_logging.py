@@ -25,11 +25,13 @@ class TestLoggingRelation:
         assert state.unit_status.name != "error"
 
     @pytest.mark.parametrize("event_type", ["relation_joined", "relation_changed"])
-    def test_logging_relation_hooks_do_not_error(self, context, prometheus_container, event_type):
+    def test_logging_relation_hooks_do_not_error(
+        self, context, prometheus_container, alerts_editor_container, event_type
+    ):
         """The charm should remain active through relation_joined and relation_changed."""
         logging_rel = Relation("logging")
         state = State(
-            containers=[prometheus_container],
+            containers=[prometheus_container, alerts_editor_container],
             relations=[logging_rel],
             leader=True,
         )
@@ -37,11 +39,11 @@ class TestLoggingRelation:
         state = context.run(getattr(context.on, event_type)(logging_rel), state)
         assert state.unit_status.name != "error"
 
-    def test_logging_relation_departed(self, context, prometheus_container):
+    def test_logging_relation_departed(self, context, prometheus_container, alerts_editor_container):
         """The charm should remain active after a logging relation is departed."""
         logging_rel = Relation("logging")
         state = State(
-            containers=[prometheus_container],
+            containers=[prometheus_container, alerts_editor_container],
             relations=[logging_rel],
             leader=True,
         )
@@ -49,11 +51,11 @@ class TestLoggingRelation:
         state = context.run(context.on.relation_departed(logging_rel), state)
         assert state.unit_status.name != "error"
 
-    def test_logging_relation_broken(self, context, prometheus_container):
+    def test_logging_relation_broken(self, context, prometheus_container, alerts_editor_container):
         """The charm should remain active after a logging relation is broken."""
         logging_rel = Relation("logging")
         state = State(
-            containers=[prometheus_container],
+            containers=[prometheus_container, alerts_editor_container],
             relations=[logging_rel],
             leader=True,
         )

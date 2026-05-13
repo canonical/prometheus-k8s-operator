@@ -43,3 +43,11 @@ def prometheus_container():
         service_statuses={"prometheus": pebble.ServiceStatus.INACTIVE},
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
+
+
+@pytest.fixture(scope="function")
+def alerts_editor_container():
+    # The alerts-editor sidecar (specs/adr/0004-ui-workload-design.md). Most unit tests
+    # don't exercise it directly, but it must exist in scenario State so the charm's
+    # _configure_alerts_editor() can call can_connect() without crashing.
+    return Container("alerts-editor", can_connect=True)
