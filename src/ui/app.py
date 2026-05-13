@@ -21,6 +21,7 @@ Dockerfile only ships ``app.py``.
 from __future__ import annotations
 
 import copy
+import html
 import logging
 import os
 import re
@@ -352,7 +353,7 @@ def remove_rule(alert_name: str, request: Request) -> HTMLResponse:
         diff["remove"].append({"match": {"alert": alert_name}})
     card = _view_for(alert_name, request)
     if card is None:
-        return HTMLResponse(f"rule {alert_name!r} not found", status_code=404)
+        return HTMLResponse(f"rule {html.escape(alert_name)!r} not found", status_code=404)
     return card
 
 
@@ -361,7 +362,7 @@ def undo_remove(alert_name: str, request: Request) -> HTMLResponse:
     _drop_remove(_working_diff(), alert_name)
     card = _view_for(alert_name, request)
     if card is None:
-        return HTMLResponse(f"rule {alert_name!r} not found", status_code=404)
+        return HTMLResponse(f"rule {html.escape(alert_name)!r} not found", status_code=404)
     return card
 
 
@@ -383,7 +384,7 @@ def patch_rule(
     disk_rules, _ = _load_disk_rules()
     disk = next((r for r in disk_rules if r["alert"] == alert_name), None)
     if disk is None:
-        return HTMLResponse(f"rule {alert_name!r} not found", status_code=404)
+        return HTMLResponse(f"rule {html.escape(alert_name)!r} not found", status_code=404)
 
     diff = _working_diff()
     # Editing un-removes — operator intent is clearly "I want this rule".
