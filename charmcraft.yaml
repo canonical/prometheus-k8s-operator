@@ -125,12 +125,6 @@ requires:
     limit: 1
     description: |
       Integration to obtain an ingressed address to access Prometheus from outside the model.
-  ui-ingress:
-    interface: ingress_per_unit
-    optional: true
-    limit: 1
-    description: |
-      Integration to obtain an ingressed address to access the alerts-editor UI from outside the model.
   catalogue:
     interface: catalogue
     optional: true

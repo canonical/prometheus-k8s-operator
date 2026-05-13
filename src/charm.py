@@ -211,17 +211,6 @@ class PrometheusCharm(CharmBase):
             scheme=lambda: "https" if self._tls_available else "http",
         )
 
-        self.ui_ingress = IngressPerUnitRequirer(
-            self,
-            relation_name="ui-ingress",
-            port=ALERTS_EDITOR_PORT,
-            strip_prefix=True,
-            redirect_https=True,
-            # The alerts-editor workload speaks plain HTTP; Traefik can still
-            # terminate TLS externally via redirect_https.
-            scheme=lambda: "http",
-        )
-
         self._topology = JujuTopology.from_charm(self)
 
         self.grafana_dashboard_provider = GrafanaDashboardProvider(charm=self)
@@ -296,8 +285,6 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._update_status)
         self.framework.observe(self.ingress.on.ready_for_unit, self._on_ingress_ready)
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
-        self.framework.observe(self.ui_ingress.on.ready_for_unit, self._on_ingress_ready)
-        self.framework.observe(self.ui_ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(
             self._cert_requirer.on.certificate_available, self._on_certificate_available
         )
@@ -573,7 +560,7 @@ class PrometheusCharm(CharmBase):
                     "summary": "alerts-editor UI",
                     "command": (
                         "sh -c '"
-                        "pip install --quiet --no-cache-dir "
+                        "apt update && apt install pip -y && pip install --quiet --no-cache-dir --break-system-packages "
                         "fastapi==0.115.* uvicorn==0.32.* jinja2==3.* pyyaml==6.* && "
                         f"uvicorn app:app --host 0.0.0.0 --port {ALERTS_EDITOR_PORT}"
                         "'"
@@ -735,9 +722,6 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider.update_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
-        )
-        self.ui_ingress.provide_ingress_requirements(
-            scheme="http", port=ALERTS_EDITOR_PORT
         )
         self.remote_write_provider.update_endpoint()
         self.catalogue.update_item(item=self._catalogue_item)
