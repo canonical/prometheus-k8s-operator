@@ -561,7 +561,8 @@ class PrometheusCharm(CharmBase):
                     "command": (
                         "sh -c '"
                         "apt update && apt install pip -y && pip install --quiet --no-cache-dir --break-system-packages "
-                        "fastapi==0.115.* uvicorn==0.32.* jinja2==3.* pyyaml==6.* && "
+                        "fastapi==0.115.* uvicorn==0.32.* jinja2==3.* pyyaml==6.* "
+                        "python-multipart==0.0.* && "
                         f"uvicorn app:app --host 0.0.0.0 --port {ALERTS_EDITOR_PORT}"
                         "'"
                     ),
@@ -832,11 +833,16 @@ class PrometheusCharm(CharmBase):
             logger.debug("prometheus container not ready; skipping alerts-editor configure")
             return
 
-        # Push the FastAPI app + Jinja templates from the charm bundle into the container.
+        # Push the FastAPI app + Jinja templates + static assets from the charm
+        # bundle into the container. M3 adds the rule-card / save-status partials
+        # plus the vendored htmx.min.js (specs/plans/0001-alerts-editor-implementation.md).
         ui_root = Path(__file__).parent / "ui"
         ui_sources = [
             (ui_root / "app.py", "/app/app.py"),
             (ui_root / "templates" / "index.html.j2", "/app/templates/index.html.j2"),
+            (ui_root / "templates" / "_rule_card.html.j2", "/app/templates/_rule_card.html.j2"),
+            (ui_root / "templates" / "_save_status.html.j2", "/app/templates/_save_status.html.j2"),
+            (ui_root / "static" / "htmx.min.js", "/app/static/htmx.min.js"),
         ]
         try:
             for src, dst in ui_sources:
@@ -922,8 +928,6 @@ class PrometheusCharm(CharmBase):
                 if entry.name == "diff.yaml":
                     continue
                 self.container.remove_path(entry.path, recursive=True)
-            #self._push_alert_rules(metrics_consumer_alerts)
-            #self._push_alert_rules(remote_write_alerts)
             self._wipe_juju_rule_files()
             self._push_alert_rules(merged_rules)
             self._push(ALERTS_HASH_PATH, alerts_hash)

@@ -3,40 +3,75 @@
 <head>
   <meta charset="utf-8">
   <title>Alerts editor</title>
+  <script src="/static/htmx.min.js" defer></script>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #222; }
     h1 { margin-bottom: 0.25rem; }
     .subtitle { color: #666; margin-top: 0; }
     .banner { padding: 0.75rem 1rem; border-radius: 4px; margin: 1rem 0; }
     .banner.warn { background: #fff4e5; border-left: 4px solid #b06000; color: #663300; }
+    .banner.error { background: #fdecea; border-left: 4px solid #c0392b; color: #7a1d12; }
+    .banner.ok { background: #e6f4ea; border-left: 4px solid #197a3d; color: #194d2c; }
     .banner.empty { background: #f3f3f3; border-left: 4px solid #888; }
+    .toolbar {
+      position: sticky; top: 0; z-index: 10;
+      background: #fafbfc; border: 1px solid #e1e4e8; border-radius: 6px;
+      padding: 0.75rem 1rem; margin: 1rem 0;
+      display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    }
+    .toolbar .counts { color: #555; }
+    .toolbar .counts strong { color: #222; }
+    button {
+      font: inherit; padding: 0.4rem 0.9rem; border-radius: 4px;
+      border: 1px solid #ccc; background: #fff; cursor: pointer;
+    }
+    button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    button.primary:hover { background: #175bd0; }
+    button.danger { background: #fff; border-color: #c0392b; color: #c0392b; }
+    button.danger:hover { background: #fdecea; }
+    button:hover:not(.primary) { background: #f3f3f3; }
+    .badge {
+      display: inline-block; padding: 0.05rem 0.5rem; border-radius: 10px;
+      font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+    .badge.patched { background: #fff4e5; color: #663300; border: 1px solid #e0b070; }
+    .badge.removed { background: #fdecea; color: #7a1d12; border: 1px solid #d99a93; }
+    .badge.ambiguous { background: #f3f3f3; color: #555; border: 1px solid #aaa; }
     .rule-card {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
-      background: #fff;
+      border: 1px solid #ddd; border-radius: 6px;
+      padding: 1rem 1.25rem; margin-bottom: 1rem; background: #fff;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
-    .rule-header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+    .rule-card.removed { opacity: 0.55; }
+    .rule-card.removed h2 { text-decoration: line-through; }
+    .rule-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 1rem; flex-wrap: wrap;
+    }
     .rule-header h2 { margin: 0; font-size: 1.15rem; }
     .rule-source { color: #777; font-size: 0.85rem; }
     .rule-source code { background: #f3f3f3; padding: 0.05rem 0.3rem; border-radius: 3px; }
-    dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1rem; margin: 0.75rem 0 0; }
-    dl.fields dt { color: #555; font-weight: 600; }
-    dl.fields dd { margin: 0; }
-    pre.expr {
-      background: #f6f8fa;
-      padding: 0.5rem 0.75rem;
-      border-radius: 4px;
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 0.9rem;
+    .rule-form { margin: 0.75rem 0 0; }
+    .field-row {
+      display: grid; grid-template-columns: max-content 1fr; gap: 0.4rem 1rem;
+      align-items: start; margin-bottom: 0.5rem;
     }
-    .kv-list { margin: 0; padding-left: 1rem; }
-    .kv-list li { margin-bottom: 0.15rem; }
-    .kv-list .key { color: #555; }
+    .field-row label { color: #555; font-weight: 600; padding-top: 0.35rem; }
+    .field-row input[type=text],
+    .field-row textarea {
+      font: inherit; padding: 0.35rem 0.5rem; border: 1px solid #ccc;
+      border-radius: 4px; width: 100%; box-sizing: border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem;
+    }
+    .field-row textarea { min-height: 3.5rem; resize: vertical; }
+    .field-row .hint { color: #777; font-size: 0.8rem; margin-top: 0.15rem; }
+    .actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; justify-content: flex-end; }
+    .errors {
+      background: #fdecea; border-left: 4px solid #c0392b; color: #7a1d12;
+      padding: 0.4rem 0.75rem; border-radius: 4px; margin-top: 0.5rem;
+    }
+    .errors ul { margin: 0.25rem 0 0 1rem; padding: 0; }
     .summary-row { display: flex; gap: 2rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 1rem; color: #555; }
     .summary-row strong { color: #222; }
     footer { color: #888; font-size: 0.85rem; margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem; }
@@ -52,6 +87,10 @@
   </div>
   {% endif %}
 
+  {% if load_error %}
+  <div class="banner warn">{{ load_error }}</div>
+  {% endif %}
+
   {% if parse_errors %}
   <div class="banner warn">
     <strong>Some rule files failed to parse:</strong>
@@ -61,6 +100,23 @@
   </div>
   {% endif %}
 
+  <div class="toolbar">
+    <div class="counts">
+      <span><strong>{{ patched_count }}</strong> patched</span> ·
+      <span><strong>{{ removed_count }}</strong> removed</span>
+    </div>
+    <div style="flex:1"></div>
+    <button class="primary"
+            hx-post="/save"
+            hx-target="#save-status"
+            hx-swap="innerHTML">Save all changes</button>
+    <button hx-post="/discard"
+            hx-target="body"
+            hx-swap="outerHTML"
+            hx-confirm="Discard all unsaved changes?">Discard</button>
+  </div>
+  <div id="save-status"></div>
+
   <div class="summary-row">
     <span><strong>{{ rules | length }}</strong> alert rule{{ '' if rules | length == 1 else 's' }} loaded</span>
     <span>{{ rules | map(attribute='source_file') | unique | list | length }} source file(s)</span>
@@ -68,45 +124,7 @@
 
   {% if rules %}
     {% for rule in rules %}
-    <article class="rule-card">
-      <div class="rule-header">
-        <h2>{{ rule.alert }}</h2>
-        <div class="rule-source">
-          <code>{{ rule.source_file }}</code> / <code>{{ rule.group }}</code>
-        </div>
-      </div>
-      <dl class="fields">
-        <dt>expr</dt>
-        <dd><pre class="expr">{{ rule.expr }}</pre></dd>
-
-        {% if rule['for'] %}
-        <dt>for</dt>
-        <dd><code>{{ rule['for'] }}</code></dd>
-        {% endif %}
-
-        {% if rule.labels %}
-        <dt>labels</dt>
-        <dd>
-          <ul class="kv-list">
-            {% for k, v in rule.labels.items() %}
-              <li><span class="key">{{ k }}:</span> <code>{{ v }}</code></li>
-            {% endfor %}
-          </ul>
-        </dd>
-        {% endif %}
-
-        {% if rule.annotations %}
-        <dt>annotations</dt>
-        <dd>
-          <ul class="kv-list">
-            {% for k, v in rule.annotations.items() %}
-              <li><span class="key">{{ k }}:</span> {{ v }}</li>
-            {% endfor %}
-          </ul>
-        </dd>
-        {% endif %}
-      </dl>
-    </article>
+      {% include "_rule_card.html.j2" %}
     {% endfor %}
   {% elif rules_dir_mounted and not parse_errors %}
   <div class="banner empty">
@@ -115,8 +133,9 @@
   {% endif %}
 
   <footer>
-    Milestone 2 of <code>specs/plans/0001-alerts-editor-implementation.md</code>.
-    Read-only — editing arrives in M3.
+    Milestone 3 of <code>specs/plans/0001-alerts-editor-implementation.md</code>.
+    Edits are written to <code>{{ rules_dir }}/diff.yaml</code> on Save;
+    the charm-side merge wiring lands in M4.
   </footer>
 </body>
 </html>
