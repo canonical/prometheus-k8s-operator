@@ -1,6 +1,7 @@
 # ADR 0003 — UI ↔ charm transport and reconcile signaling
 
-**Status:** Accepted (hackathon) — file write + `update-status` polling
+**Status:** Accepted (revised 2026-05-13) — T2: Pebble custom notice from UI to alerts-editor container
+**Supersedes:** prior decision T1 (file write + `update-status` polling)
 **Date:** 2026-05-13
 **Related:** [ADR-0001](0001-packaging-sidecar-vs-separate-charm.md), [ADR-0002](0002-diff-storage.md), [ADR-0005](0005-charm-merge-pipeline.md)
 
@@ -50,29 +51,36 @@ Bypasses the charm entirely on the hot path.
 - ❌ The charm's next reconcile will overwrite whatever the UI wrote, since it regenerates rule files from scratch.
 - ❌ Wrong layering: workloads shouldn't reach across into other workloads' state.
 
-## Decision (hackathon)
+## Decision (revised)
 
-**T1 — file write + `update-status` polling.** Accepted with full awareness that demo latency requires a manual nudge.
+**T2 — Pebble custom notice from the UI to the alerts-editor container.**
 
-Rationale: the user explicitly picked the lowest-plumbing option for the hackathon. The ~5 min worst-case latency is irrelevant for a demo where we can force a reconcile by running any action, refreshing config, or restarting the unit. T2 is the natural post-hackathon upgrade.
+Concretely:
+
+- The UI atomically writes `/etc/prometheus/rules/diff.yaml` (tmp + rename).
+- On a successful rename, the UI fires `pebble notify canonical.com/alerts-overlay/changed` on its own container's Pebble socket (the `pebble` binary is on PATH in any Pebble-managed container; `PEBBLE_SOCKET` is inherited from the Pebble parent process).
+- The charm observes `self.on[ALERTS_EDITOR_CONTAINER].pebble_custom_notice` and, on the matching notice key, calls `_configure` — which already calls `_set_alerts`, which already reads `diff.yaml`.
+
+Rationale for the flip from T1: the polling latency (up to 5 min) is unacceptable for the demo UX, and once we sketched the change it turned out to be ~10 lines split across the UI (one `subprocess.run`) and the charm (one observer + handler) — much smaller than the original ADR feared. The "polling is zero plumbing" advantage evaporates against "notices are also nearly zero plumbing, and an order of magnitude faster".
+
+The pre-overlay behaviour of `_update_status` (only reconcile when the unit isn't `Active`, to recover from stuck WAL replays / ingress-not-yet-ready) is restored. `_update_status` no longer participates in overlay propagation at all.
 
 ## Consequences
 
-- `_set_alerts` is the only consumer of the diff file. It pulls `/etc/prometheus/rules/diff.yaml` from the Prometheus container via Pebble, applies, returns whether anything changed. No new event observers added.
-- The demo script needs a "force a reconcile now" step. Suggested approaches, in order of cheapness:
-  1. Bump a config option (e.g. flip `log_level` and flip back).
-  2. Run the existing `validate-configuration` action — it doesn't trigger reconcile by itself, so this doesn't actually work. Strike.
-  3. `juju refresh` the charm to its own revision (overkill but reliable).
-  4. Just wait up to 5 min.
-- The UI must communicate save success purely from its own perspective ("diff written to /etc/prometheus/rules/diff.yaml"). It cannot wait for the charm to ack — there is no return channel.
+- `_set_alerts` remains the only consumer of the diff file; it pulls `/etc/prometheus/rules/diff.yaml` from the Prometheus container via Pebble. The change is the *trigger*, not the consumer.
+- A new observer is added to the charm — `self.on[ALERTS_EDITOR_CONTAINER].pebble_custom_notice` → `_on_alerts_overlay_changed`. The handler is a key-check + delegation to `_configure`.
+- The notice key `canonical.com/alerts-overlay/changed` becomes part of the implicit contract between the UI workload and the charm. Document it as a constant in both codebases (`ALERTS_OVERLAY_NOTICE_KEY` in `charm.py`; a matching constant in `src/ui/app.py`).
+- `_update_status` reverts to the original `if self.unit.status != ActiveStatus(): self._configure(event)` — no longer the overlay-propagation hook.
+- If a notice fires while a reconcile is in flight, Juju's hook serialisation queues the next one — no concurrency concerns.
+- Pebble notices persist until acked by the framework, so a notice fired during a brief charm outage is not lost.
+- No demo "force a reconcile" step is needed any more; saves take effect sub-second.
 
 ## Defer for post-hackathon
 
-- **Upgrade to T2 (Pebble notice).** Same file storage, add `pebble-custom-notice` observer in the charm and a one-liner in the UI. Closes the latency gap without changing the data model.
-- **Status feedback in the UI** ("last applied at HH:MM:SS"). Requires the charm to write a small ack file the UI can read.
-- **Save rate-limit.** If an operator hammers save, T1 doesn't care (each save is just a file overwrite). T2 would care — needs debouncing.
+- **Status feedback in the UI** ("last applied at HH:MM:SS"). Requires the charm to write a small ack file the UI can read; meaningful now that saves trigger immediate reconciles and operators can see effect promptly.
+- **Save rate-limit / debounce.** With T1 each save was a cheap file overwrite; with T2 each save also schedules a charm reconcile. Hammering save can therefore queue reconciles. Add a small debounce in the UI (e.g. 200 ms) if this turns out to matter in practice.
 
 ## Open questions
 
-- For the demo, do we want a hard-coded shorter `update-status` interval (`juju model-config update-status-hook-interval=30s`)? Trades demo snappiness for log noise. Probably yes for the demo window.
-- If the diff file is malformed when the charm reads it, what's the UI-visible feedback path? In T1 there is none — operator only sees the bad state by checking `juju status`. Post-hackathon item.
+- If the `pebble` binary is absent or `PEBBLE_SOCKET` is unset for any reason, the UI's `_notify_charm` becomes a silent no-op. Do we want a one-line health check at UI startup that logs a warning if `pebble notify` fails a dry-run? Cheap to add, prevents silent regressions.
+- If the diff file is malformed when the charm reads it, what's the UI-visible feedback path? Still no return channel under T2 — operator only sees the bad state by checking `juju status`. Tracked as a post-hackathon item alongside the "last applied at" status feedback.
