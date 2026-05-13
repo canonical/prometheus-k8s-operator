@@ -76,6 +76,7 @@ from ops.model import (
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
 
+import alerts_overlay
 from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
@@ -83,8 +84,12 @@ PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
+<<<<<<< Updated upstream
 ALERTS_EDITOR_CONTAINER = "alerts-editor"
 ALERTS_EDITOR_PORT = 8080
+=======
+DIFF_PATH = f"{RULES_DIR}/diff.yaml"
+>>>>>>> Stashed changes
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
@@ -870,22 +875,37 @@ class PrometheusCharm(CharmBase):
 
     def _update_status(self, event):
         """Fired intermittently by the Juju agent."""
-        # Unit could still be blocked if a reload failed (e.g. during WAL replay or ingress not
-        # yet ready). Calling `_configure` to recover.
-        if self.unit.status != ActiveStatus():
-            self._configure(event)
+        # Always reconcile so an operator-saved diff.yaml is picked up — the
+        # diff lives on a shared mount and the only signal we get is this hook
+        # (specs/adr/0003-ui-to-charm-transport.md, T1).
+        self._configure(event)
 
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
 
+        Reads an optional operator-authored diff at DIFF_PATH and applies it to
+        the relation-supplied rules before writing. The selective wipe leaves
+        diff.yaml in place; see specs/adr/0005-charm-merge-pipeline.md.
+
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
-        metrics_consumer_alerts = self.metrics_consumer.alerts
-        remote_write_alerts = self.remote_write_provider.alerts
-        alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
+        base_rules: Dict[str, dict] = {
+            **self.metrics_consumer.alerts,
+            **self.remote_write_provider.alerts,
+        }
+
+        try:
+            diff = alerts_overlay.load_diff(self._pull(DIFF_PATH))
+            merged_rules = alerts_overlay.apply(base_rules, diff)
+        except alerts_overlay.OverlayError as e:
+            logger.error("overlay rejected, falling back to unmodified rules: %s", e)
+            merged_rules = base_rules
+
+        alerts_hash = sha256(str(merged_rules))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
+<<<<<<< Updated upstream
             # RULES_DIR is now a Juju storage mount (shared with the alerts-editor
             # sidecar), so we can't remove the directory itself — clear its contents
             # instead. The editor's diff.yaml is preserved across rule reloads.
@@ -899,9 +919,22 @@ class PrometheusCharm(CharmBase):
                 self.container.remove_path(entry.path, recursive=True)
             self._push_alert_rules(metrics_consumer_alerts)
             self._push_alert_rules(remote_write_alerts)
+=======
+            self._wipe_juju_rule_files()
+            self._push_alert_rules(merged_rules)
+>>>>>>> Stashed changes
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
+
+    def _wipe_juju_rule_files(self) -> None:
+        """Remove only juju_*.rules — diff.yaml is operator-owned and must survive."""
+        try:
+            existing = self.container.list_files(RULES_DIR, pattern="juju_*.rules")
+        except (FileNotFoundError, PebbleError):
+            return
+        for f in existing:
+            self.container.remove_path(f.path)
 
     def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
