@@ -93,7 +93,8 @@ def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) 
         can_connect=False,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container])
+    alerts_editor = Container("alerts-editor", can_connect=False)
+    state = State(containers=[container, alerts_editor])
     peer_rel = PeerRelation("prometheus-peers")
 
     state = context.run(context.on.install(), state)
@@ -111,7 +112,8 @@ def begin_with_initial_hooks_isolated(context: Context, *, leader: bool = True) 
     state = context.run(context.on.config_changed(), state)
 
     container = dataclasses.replace(container, can_connect=True)
-    state = dataclasses.replace(state, containers=[container])
+    alerts_editor = dataclasses.replace(alerts_editor, can_connect=True)
+    state = dataclasses.replace(state, containers=[container, alerts_editor])
     state = context.run(context.on.pebble_ready(container), state)
 
     state = context.run(context.on.start(), state)

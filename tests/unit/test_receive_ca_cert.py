@@ -9,11 +9,11 @@ from ops.testing import Relation, State
 from src.charm import RECV_CA_CERT_FOLDER_PATH
 
 
-def test_no_recv_ca_cert_relations_present(context, prometheus_container):
+def test_no_recv_ca_cert_relations_present(context, prometheus_container, alerts_editor_container):
     # GIVEN the charm is deployed in isolation
     state = State(
         leader=True,
-        containers={prometheus_container},
+        containers={prometheus_container, alerts_editor_container},
     )
 
     # WHEN any event is emitted
@@ -25,7 +25,7 @@ def test_no_recv_ca_cert_relations_present(context, prometheus_container):
     assert not fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/")).exists()
 
 
-def test_ca_forwarded_over_rel_data(context, prometheus_container):
+def test_ca_forwarded_over_rel_data(context, prometheus_container, alerts_editor_container):
     # Relation 1
     cert1a = "-----BEGIN CERTIFICATE-----\n ... cert1a ... \n-----END CERTIFICATE-----"
     cert1b = "-----BEGIN CERTIFICATE-----\n ... cert1b ... \n-----END CERTIFICATE-----"
@@ -43,7 +43,7 @@ def test_ca_forwarded_over_rel_data(context, prometheus_container):
             "receive-ca-cert", remote_app_data={"certificates": json.dumps([cert2a, cert2b])}
         ),
     ]
-    state = State(leader=True, containers={prometheus_container}, relations=relations)
+    state = State(leader=True, containers={prometheus_container, alerts_editor_container}, relations=relations)
 
     # WHEN a certificate_set_updated event is emitted
     out_1 = context.run(context.on.relation_changed(relations[0]), state)
@@ -57,7 +57,7 @@ def test_ca_forwarded_over_rel_data(context, prometheus_container):
     assert certs == {cert1a, cert1b, cert2a, cert2b}
 
     # AND WHEN one relation is removed, i.e. a certificates_removed event is emitted
-    state = State(leader=True, containers={prometheus_container}, relations=relations)
+    state = State(leader=True, containers={prometheus_container, alerts_editor_container}, relations=relations)
     out_2 = context.run(context.on.relation_broken(relations[0]), out_1)
 
     # THEN its certs are removed, but the others remain

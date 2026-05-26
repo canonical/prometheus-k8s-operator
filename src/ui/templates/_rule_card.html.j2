@@ -1,0 +1,79 @@
+<article id="rule-{{ rule.alert }}" class="rule-card{% if rule.removed %} removed{% endif %}">
+  <div class="rule-header">
+    <h2>
+      {{ rule.alert }}
+      {% if rule.patched and not rule.removed %}<span class="badge patched">patched</span>{% endif %}
+      {% if rule.removed %}<span class="badge removed">removed</span>{% endif %}
+      {% if rule.ambiguous %}<span class="badge ambiguous" title="Two producers ship an alert with this name; edits disabled in MVP.">ambiguous</span>{% endif %}
+    </h2>
+    <div class="rule-source">
+      <code>{{ rule.source_file }}</code> / <code>{{ rule.group }}</code>
+    </div>
+  </div>
+
+  {% if rule.removed %}
+    <div class="actions">
+      <button hx-post="/rules/{{ rule.alert }}/undo-remove"
+              hx-target="#rule-{{ rule.alert }}"
+              hx-swap="outerHTML">Undo remove</button>
+    </div>
+  {% elif rule.ambiguous %}
+    <p class="hint" style="margin:0.5rem 0 0;color:#666;">
+      Editing disabled: more than one rule on disk uses the name
+      <code>{{ rule.alert }}</code>. (ADR-0006 D1.)
+    </p>
+  {% else %}
+    <form class="rule-form"
+          hx-post="/rules/{{ rule.alert }}/patch"
+          hx-target="#rule-{{ rule.alert }}"
+          hx-swap="outerHTML">
+      <div class="field-row">
+        <label for="expr-{{ rule.alert }}">expr</label>
+        <div>
+          <textarea id="expr-{{ rule.alert }}" name="expr" rows="2">{{ rule.expr }}</textarea>
+        </div>
+      </div>
+      <div class="field-row">
+        <label for="for-{{ rule.alert }}">for</label>
+        <div>
+          <input type="text" id="for-{{ rule.alert }}" name="for"
+                 value="{{ rule['for'] }}" placeholder="e.g. 5m, 30s" />
+          <div class="hint">Prometheus duration: <code>30s</code>, <code>5m</code>, <code>1h</code> — empty for none.</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <label for="labels-{{ rule.alert }}">labels</label>
+        <div>
+          <textarea id="labels-{{ rule.alert }}" name="labels"
+                    placeholder="severity: warning">{{ rule.labels_text }}</textarea>
+          <div class="hint">One <code>key: value</code> per line.</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <label for="annotations-{{ rule.alert }}">annotations</label>
+        <div>
+          <textarea id="annotations-{{ rule.alert }}" name="annotations"
+                    placeholder="summary: ...">{{ rule.annotations_text }}</textarea>
+          <div class="hint">One <code>key: value</code> per line.</div>
+        </div>
+      </div>
+
+      {% if rule.errors %}
+      <div class="errors">
+        <strong>Couldn't apply edits:</strong>
+        <ul>{% for e in rule.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        <button type="button"
+                class="danger"
+                hx-post="/rules/{{ rule.alert }}/remove"
+                hx-target="#rule-{{ rule.alert }}"
+                hx-swap="outerHTML"
+                hx-confirm="Mark {{ rule.alert }} for removal?">Remove</button>
+        <button type="submit">Apply</button>
+      </div>
+    </form>
+  {% endif %}
+</article>

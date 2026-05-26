@@ -41,14 +41,16 @@ ds = Relation(
 
 @pytest.mark.parametrize("event_type", ("changed", "created", "joined"))
 @pytest.mark.parametrize("relation_to_observe", (ds, loki_dsx, tempo_dsx))
-def test_datasource_send(context, prometheus_container, relation_to_observe, event_type):
+def test_datasource_send(
+    context, prometheus_container, alerts_editor_container, relation_to_observe, event_type
+):
     state_in = State(
         relations=[
             ds,
             loki_dsx,
             tempo_dsx,
         ],
-        containers=[prometheus_container],
+        containers=[prometheus_container, alerts_editor_container],
         leader=True,
     )
 

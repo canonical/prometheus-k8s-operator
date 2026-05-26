@@ -1,0 +1,10 @@
+{% if saved %}
+<div class="banner ok">
+  Saved to <code>{{ path }}</code>.
+</div>
+{% elif errors %}
+<div class="banner error">
+  <strong>Save failed — fix and retry:</strong>
+  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}

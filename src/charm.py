@@ -76,6 +76,7 @@ from ops.model import (
 from ops.pebble import Error as PebbleError
 from ops.pebble import ExecError, Layer
 
+import alerts_overlay
 from prometheus_client import Prometheus
 from utils import convert_k8s_quantity_to_legacy_binary_gigabytes
 
@@ -83,6 +84,15 @@ PROMETHEUS_DIR = "/etc/prometheus"
 PROMETHEUS_CONFIG = f"{PROMETHEUS_DIR}/prometheus.yml"
 PROMETHEUS_GLOBAL_SCRAPE_INTERVAL = "1m"
 RULES_DIR = f"{PROMETHEUS_DIR}/rules"
+# The alerts-editor UI runs in its own sidecar container (see charmcraft.yaml).
+# The container name and the Pebble service name happen to be the same string.
+ALERTS_EDITOR_CONTAINER = "alerts-editor"
+ALERTS_EDITOR_SERVICE = "alerts-editor"
+ALERTS_EDITOR_PORT = 8080
+DIFF_PATH = f"{RULES_DIR}/diff.yaml"
+# Pebble custom-notice key the UI fires after a save. Must match the constant
+# in src/ui/app.py.
+DIFF_SAVED_NOTICE_KEY = "canonical.com/alerts-editor/diff-saved"
 CONFIG_HASH_PATH = f"{PROMETHEUS_DIR}/config.sha256"
 ALERTS_HASH_PATH = f"{PROMETHEUS_DIR}/alerts.sha256"
 
@@ -172,6 +182,7 @@ class PrometheusCharm(CharmBase):
         self._name = "prometheus"
         self._port = 9090
         self.container = self.unit.get_container(self._name)
+        self._alerts_editor_container = self.unit.get_container(ALERTS_EDITOR_CONTAINER)
         self.set_ports()
 
         self.resources_patch = KubernetesComputeResourcesPatch(
@@ -274,6 +285,14 @@ class PrometheusCharm(CharmBase):
         )
 
         self.framework.observe(self.on.prometheus_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(
+            self.on[ALERTS_EDITOR_CONTAINER].pebble_ready,
+            self._on_alerts_editor_pebble_ready,
+        )
+        self.framework.observe(
+            self.on[ALERTS_EDITOR_CONTAINER].pebble_custom_notice,
+            self._on_alerts_editor_notice,
+        )
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.upgrade_charm, self._configure)
         self.framework.observe(self.on.update_status, self._update_status)
@@ -341,6 +360,7 @@ class PrometheusCharm(CharmBase):
         """Open necessary (and close no longer needed) workload ports."""
         planned_ports = {
             OpenedPort("tcp", self._port),
+            OpenedPort("tcp", ALERTS_EDITOR_PORT),
         }
         actual_ports = self.unit.opened_ports()
 
@@ -535,6 +555,31 @@ class PrometheusCharm(CharmBase):
             },
         }
 
+        return Layer(layer_config)  # pyright: ignore
+
+    @property
+    def _alerts_editor_layer(self) -> Layer:
+        """Pebble layer for the alerts-editor UI workload (sidecar container)."""
+        layer_config = {
+            "summary": "Alerts editor layer",
+            "description": "Pebble layer for the alerts-editor UI workload",
+            "services": {
+                ALERTS_EDITOR_SERVICE: {
+                    "override": "replace",
+                    "summary": "alerts-editor UI",
+                    "command": (
+                        "sh -c '"
+                        "apt update && apt install pip -y && pip install --quiet --no-cache-dir --break-system-packages "
+                        "fastapi==0.115.* uvicorn==0.32.* jinja2==3.* pyyaml==6.* "
+                        "python-multipart==0.0.* && "
+                        f"uvicorn app:app --host 0.0.0.0 --port {ALERTS_EDITOR_PORT}"
+                        "'"
+                    ),
+                    "working-dir": "/app",
+                    "startup": "enabled",
+                }
+            },
+        }
         return Layer(layer_config)  # pyright: ignore
 
     def _resource_reqs_from_config(self):
@@ -754,6 +799,10 @@ class PrometheusCharm(CharmBase):
         else:
             self._stored.status["config"] = to_tuple(ActiveStatus())
 
+        # Bring up the alerts-editor sidecar if its container is ready. Failures here are
+        # logged but do not block Prometheus.
+        self._configure_alerts_editor()
+
         # We only need to reload if pebble didn't replan (if pebble replanned, then new config
         # would be picked up on startup anyway).
         if not layer_changed and should_reload:
@@ -782,6 +831,69 @@ class PrometheusCharm(CharmBase):
                 "Cannot set workload version at this time: could not get Prometheus version."
             )
 
+    def _on_alerts_editor_pebble_ready(self, event) -> None:
+        """Pebble ready hook for the alerts-editor sidecar container."""
+        self._configure(event)
+
+    def _on_alerts_editor_notice(self, event) -> None:
+        """React to a Pebble custom notice from the alerts-editor container.
+
+        The UI fires this after writing diff.yaml so the charm can apply the
+        new overlay immediately instead of waiting for the next update-status
+        (specs/adr/0003-ui-to-charm-transport.md T2).
+        """
+        if event.notice.key != DIFF_SAVED_NOTICE_KEY:
+            logger.debug("ignoring alerts-editor notice with key %r", event.notice.key)
+            return
+        logger.info("alerts-editor diff-saved notice received, reconciling")
+        self._configure(event)
+
+    def _configure_alerts_editor(self) -> None:
+        """Push the UI source into the alerts-editor container and (re)plan its Pebble layer."""
+        container = self._alerts_editor_container
+        if not container.can_connect():
+            logger.debug("alerts-editor container not ready; skipping configure")
+            return
+
+        # Push the FastAPI app + Jinja templates + static assets from the charm
+        # bundle into the container. M3 adds the rule-card / save-status partials
+        # plus the vendored htmx.min.js (specs/plans/0001-alerts-editor-implementation.md).
+        ui_root = Path(__file__).parent / "ui"
+        ui_sources = [
+            (ui_root / "app.py", "/app/app.py"),
+            (ui_root / "templates" / "index.html.j2", "/app/templates/index.html.j2"),
+            (ui_root / "templates" / "_rule_card.html.j2", "/app/templates/_rule_card.html.j2"),
+            (ui_root / "templates" / "_save_status.html.j2", "/app/templates/_save_status.html.j2"),
+            (ui_root / "static" / "htmx.min.js", "/app/static/htmx.min.js"),
+        ]
+        try:
+            for src, dst in ui_sources:
+                container.push(dst, src.read_text(), make_dirs=True)
+        except (OSError, PebbleError) as e:
+            logger.error("Failed to push alerts-editor app source: %s", e)
+            return
+
+        new_layer = self._alerts_editor_layer
+        current_planned = container.get_plan().services
+        already_planned = (
+            ALERTS_EDITOR_SERVICE in current_planned
+            and current_planned[ALERTS_EDITOR_SERVICE] == new_layer.services[ALERTS_EDITOR_SERVICE]
+        )
+        try:
+            running = container.get_service(ALERTS_EDITOR_SERVICE).is_running()
+        except ModelError:
+            running = False
+
+        if already_planned and running:
+            return
+
+        try:
+            container.add_layer(ALERTS_EDITOR_SERVICE, new_layer, combine=True)
+            container.replan()
+            logger.info("alerts-editor (re)started")
+        except PebbleError as e:
+            logger.error("Failed to (re)plan alerts-editor: %s", e)
+
     def _update_layer(self) -> bool:
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
@@ -797,28 +909,61 @@ class PrometheusCharm(CharmBase):
 
     def _update_status(self, event):
         """Fired intermittently by the Juju agent."""
-        # Unit could still be blocked if a reload failed (e.g. during WAL replay or ingress not
-        # yet ready). Calling `_configure` to recover.
-        if self.unit.status != ActiveStatus():
-            self._configure(event)
+        # Always reconcile so an operator-saved diff.yaml is picked up — the
+        # diff lives on a shared mount and the only signal we get is this hook
+        # (specs/adr/0003-ui-to-charm-transport.md, T1).
+        self._configure(event)
 
     def _set_alerts(self) -> bool:
         """Create alert rule files for all Prometheus consumers.
 
+        Reads an optional operator-authored diff at DIFF_PATH and applies it to
+        the relation-supplied rules before writing. The selective wipe leaves
+        diff.yaml in place; see specs/adr/0005-charm-merge-pipeline.md.
+
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
-        metrics_consumer_alerts = self.metrics_consumer.alerts
-        remote_write_alerts = self.remote_write_provider.alerts
-        alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
+        base_rules: Dict[str, dict] = {
+            **self.metrics_consumer.alerts,
+            **self.remote_write_provider.alerts,
+        }
+
+        try:
+            diff = alerts_overlay.load_diff(self._pull(DIFF_PATH))
+            merged_rules = alerts_overlay.apply(base_rules, diff)
+        except alerts_overlay.OverlayError as e:
+            logger.error("overlay rejected, falling back to unmodified rules: %s", e)
+            merged_rules = base_rules
+
+        alerts_hash = sha256(str(merged_rules))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
-            self.container.remove_path(RULES_DIR, recursive=True)
-            self._push_alert_rules(metrics_consumer_alerts)
-            self._push_alert_rules(remote_write_alerts)
+            # RULES_DIR is now a Juju storage mount (shared with the alerts-editor
+            # sidecar), so we can't remove the directory itself — clear its contents
+            # instead. The editor's diff.yaml is preserved across rule reloads.
+            try:
+                entries = self.container.list_files(RULES_DIR)
+            except PebbleError:
+                entries = []
+            for entry in entries:
+                if entry.name == "diff.yaml":
+                    continue
+                self.container.remove_path(entry.path, recursive=True)
+            self._wipe_juju_rule_files()
+            self._push_alert_rules(merged_rules)
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         return alert_rules_changed
+
+    def _wipe_juju_rule_files(self) -> None:
+        """Remove only juju_*.rules — diff.yaml is operator-owned and must survive."""
+        try:
+            existing = self.container.list_files(RULES_DIR, pattern="juju_*.rules")
+        except (FileNotFoundError, PebbleError):
+            return
+        for f in existing:
+            self.container.remove_path(f.path)
 
     def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.

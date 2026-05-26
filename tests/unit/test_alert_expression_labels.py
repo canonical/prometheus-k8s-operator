@@ -44,7 +44,10 @@ def test_alert_expression_labels(context):
         can_connect=True,
         execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
     )
-    state = State(containers=[container], relations=[remote_write_relation])
+    alerts_editor = Container("alerts-editor", can_connect=True)
+    state = State(
+        containers=[container, alerts_editor], relations=[remote_write_relation]
+    )
     context.run(context.on.relation_changed(remote_write_relation), state=state)
     rules_file = (
         container.get_filesystem(context)
