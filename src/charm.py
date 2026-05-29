@@ -156,6 +156,7 @@ class PrometheusCharm(CharmBase):
     _ca_cert_path = "/usr/local/share/ca-certificates/ca.crt"
 
     def __init__(self, *args):
+        """Initialize charm state, relations, and event observers."""
         super().__init__(*args)
         self._fqdn = socket.getfqdn()
         # Prometheus has a mix of pull and push statuses. We need stored state for push statuses.
@@ -325,9 +326,11 @@ class PrometheusCharm(CharmBase):
         )
 
     def _on_grafana_source_changed(self, _):
+        """Refresh datasource-exchange data after grafana-source relation changes."""
         self._update_datasource_exchange()
 
     def _on_collect_unit_status(self, event: CollectStatusEvent):
+        """Collect pull and stored push statuses for this unit."""
         # "Pull" statuses
         retention_time = self.model.config.get("metrics_retention_time", "")
         if not is_valid_timespec(cast(str, retention_time)):
@@ -355,6 +358,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _catalogue_item(self) -> CatalogueItem:
+        """Build the service catalogue item and API endpoints metadata."""
         api_endpoints = {
             "Instant queries": "/api/v1/query",
             "Range queries": "/api/v1/query_range",
@@ -538,6 +542,7 @@ class PrometheusCharm(CharmBase):
         return Layer(layer_config)  # pyright: ignore
 
     def _resource_reqs_from_config(self):
+        """Build Kubernetes resource requirements from charm configuration."""
         limits = {
             "cpu": self.model.config.get("cpu"),
             "memory": self.model.config.get("memory"),
@@ -546,26 +551,32 @@ class PrometheusCharm(CharmBase):
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
     def _on_ingress_ready(self, event: IngressPerUnitReadyForUnitEvent):
+        """Reconfigure the workload when ingress becomes available."""
         logger.info("Ingress for unit ready on '%s'", event.url)
         self._configure(event)
 
     def _on_ingress_revoked(self, event: IngressPerUnitRevokedForUnitEvent):
+        """Reconfigure the workload when ingress access is revoked."""
         logger.info("Ingress for unit revoked.")
         self._configure(event)
 
     def _on_k8s_patch_failed(self, event: K8sResourcePatchFailedEvent):
+        """Store a blocked status when Kubernetes resource patching fails."""
         self._stored.status["k8s_patch"] = to_tuple(BlockedStatus(cast(str, event.message)))
 
     def _on_certificate_available(self, _):
+        """Update certificates and reconfigure when cert data is available."""
         self._update_cert()
         self._configure(_)
 
     def _on_receive_ca_certs(self, _):
+        """Refresh trusted CA certificates received over relation data."""
         self._update_ca_certs()
 
     # TLS CONFIG
     @property
     def _tls_config(self) -> Optional[TLSConfig]:
+        """Return assigned workload TLS materials, if present."""
         certificates, key = self._cert_requirer.get_assigned_certificate(
             certificate_request=self._csr_attributes
         )
@@ -576,9 +587,11 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _tls_available(self) -> bool:
+        """Report whether workload TLS certificates are currently available."""
         return bool(self._tls_config)
 
     def _update_cert(self):
+        """Sync workload and charm CA/certificate files and refresh trust stores."""
         if not self.container.can_connect():
             return
 
@@ -783,6 +796,7 @@ class PrometheusCharm(CharmBase):
             )
 
     def _update_layer(self) -> bool:
+        """Update the Pebble plan when service definition or runtime state changed."""
         current_planned_services = self.container.get_plan().services
         new_layer = self._prometheus_layer
 
@@ -931,6 +945,7 @@ class PrometheusCharm(CharmBase):
         return output, err
 
     def _on_validate_config(self, event: ActionEvent) -> None:
+        """Run config validation action and return promtool results."""
         if not self.container.can_connect():
             event.fail("Could not connect to the Prometheus workload!")
             return
@@ -1061,6 +1076,7 @@ class PrometheusCharm(CharmBase):
         return alerting_config
 
     def _tracing_config(self) -> dict:
+        """Build Prometheus tracing configuration for the workload tracer endpoint."""
         config = {
             "endpoint": self.workload_tracing.get_endpoint("otlp_grpc"),
             "sampling_fraction": 1,
@@ -1133,6 +1149,7 @@ class PrometheusCharm(CharmBase):
         return True
 
     def _process_tls_config(self, job):
+        """Rewrite scrape-job TLS inline certs into workload files and return created files."""
         certs: Dict[str, str] = {}  # Mapping form cert filename to cert content.
         if (tls_config := job.get("tls_config", {})) or job.get("scheme") == "https":
             # Certs are transferred over relation data and need to be written to files on disk.
@@ -1191,6 +1208,7 @@ class PrometheusCharm(CharmBase):
 
     @property
     def _exemplars(self) -> int:
+        """Return validated max exemplars value, enforcing the configured floor."""
         exemplars_from_config = cast(
             int, self.model.config.get("max_global_exemplars_per_user", 0)
         )
@@ -1241,6 +1259,7 @@ class PrometheusCharm(CharmBase):
         return None
 
     def _on_prometheus_api_relation_changed(self, _):
+        """Publish updated prometheus-api endpoints after relation changes."""
         self._update_prometheus_api()
 
     def _update_prometheus_api(self) -> None:

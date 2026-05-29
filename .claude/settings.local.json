@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(juju debug-log *)",
+      "Bash(juju ssh *)",
+      "Bash(unzip -p *.charm src/ui/app.py)",
+      "Bash(unzip -l prometheus-k8s_ubuntu@24.04-amd64.charm)",
+      "Bash(python3 *)"
+    ]
+  }
+}
