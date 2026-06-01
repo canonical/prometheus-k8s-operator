@@ -30,7 +30,7 @@ description: |
   - Configurable Kubernetes resource limits for CPU and memory.
 
 links:
-  documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+  documentation: https://documentation.ubuntu.com/observability/latest/
   website: https://charmhub.io/prometheus-k8s
   source: https://github.com/canonical/prometheus-k8s-operator
   issues: https://github.com/canonical/prometheus-k8s-operator/issues
