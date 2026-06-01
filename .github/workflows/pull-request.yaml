@@ -1,0 +1,20 @@
+name: Pull Requests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - track/**
+
+permissions:
+  # Required for all workflows
+  security-events: write
+  # Only required for workflows in private repositories
+  actions: read
+  contents: read
+
+jobs:
+  pull-request:
+    name: PR
+    uses: canonical/observability/.github/workflows/charm-pull-request.yaml@v2
+    secrets: inherit

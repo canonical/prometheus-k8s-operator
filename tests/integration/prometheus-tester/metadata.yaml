@@ -1,0 +1,21 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+name: prometheus-tester
+description: |
+  This charm generates test data which is ingested by the
+  Prometheus operator
+summary: |
+  A charm to test the Prometheus operator
+platforms:
+  - kubernetes
+containers:
+  prometheus-tester:
+    resource: prometheus-tester-image
+resources:
+  prometheus-tester-image:
+    type: oci-image
+    description: upstream docker image for prometheus-tester
+    upstream-source: python:slim
+provides:
+  metrics-endpoint:
+    interface: prometheus_scrape

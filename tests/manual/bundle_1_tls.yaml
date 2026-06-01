@@ -1,0 +1,16 @@
+bundle: kubernetes
+applications:
+  ca:
+    charm: self-signed-certificates
+    channel: edge
+    scale: 1
+  prom:
+    charm: ../../prometheus-k8s_ubuntu-20.04-amd64.charm
+    series: focal
+    scale: 1
+    trust: true
+    resources:
+        prometheus-image: ghcr.io/canonical/prometheus:dev
+relations:
+- - ca:certificates
+  - prom:certificates

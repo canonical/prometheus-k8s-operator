@@ -1,0 +1,23 @@
+name: Release Charm
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+      - track/**
+
+permissions:
+  # Required for all workflows
+  security-events: write
+  # Only required for workflows in private repositories
+  actions: read
+  # Write permission needed for the reusable workflow to push git tags
+  contents: write
+
+jobs:
+  release:
+    uses: canonical/observability/.github/workflows/charm-release.yaml@v2
+    secrets: inherit
+    with:
+      default-track: dev

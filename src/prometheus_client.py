@@ -1,0 +1,89 @@
+# Copyright 2021 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""Helper for interacting with Prometheus throughout the charm's lifecycle."""
+
+import logging
+from typing import Union
+
+import requests
+from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout
+
+logger = logging.getLogger(__name__)
+
+
+class Prometheus:
+    """A class that represents a running instance of Prometheus."""
+
+    def __init__(
+        self,
+        endpoint_url: str = "http://localhost:9090",
+        api_timeout=2.0,
+    ):
+        """Utility to manage a Prometheus application.
+
+        Args:
+            endpoint_url: Prometheus endpoint URL.
+            api_timeout: Timeout (in seconds) to observe when interacting with the API.
+        """
+        # Make sure the URL str does not end with a '/'
+        self.base_url = endpoint_url.rstrip("/")
+        self.api_timeout = api_timeout
+
+    def reload_configuration(self) -> Union[bool, str]:
+        """Send a POST request to hot-reload the config.
+
+        This reduces down-time compared to restarting the service.
+
+        Returns:
+          True if reload succeeded (returned 200 OK);
+          "read_timeout" on a read timeout.
+          False on error.
+        """
+        url = f"{self.base_url}/-/reload"
+        try:
+            response = requests.post(url, timeout=self.api_timeout, verify=False)
+
+            if response.status_code == 200:
+                return True
+        except ReadTimeout as e:
+            logger.info("config reload timed out via {}: {}".format(url, str(e)))
+            return "read_timeout"
+        except (ConnectionError, ConnectTimeout) as e:
+            logger.error("config reload error via %s: %s", url, str(e))
+
+        return False
+
+    def _build_info(self) -> dict:
+        """Fetch build information from Prometheus.
+
+        Returns:
+            a dictionary containing build information (for instance
+            version) of the Prometheus application. If the Prometheus
+            instance is not reachable then an empty dictionary is
+            returned.
+        """
+        url = f"{self.base_url}/api/v1/status/buildinfo"
+
+        try:
+            response = requests.get(url, timeout=self.api_timeout, verify=False)
+
+            if response.status_code == 200:
+                info = response.json()
+                if info and info["status"] == "success":
+                    return info["data"]
+        except Exception:
+            # Nothing worth logging, seriously
+            pass
+
+        return {}
+
+    def version(self) -> str:
+        """Fetch Prometheus server version.
+
+        Returns:
+            a string consisting of the Prometheus version information or
+            empty string if Prometheus server is not reachable.
+        """
+        info = self._build_info()
+        return info.get("version", "")
