@@ -207,6 +207,7 @@ config:
       description: |
         How long to retain samples in the storage.
         Units Supported: y, w, d, h, m, s
+        If `maximum_retention_size` is also set, metrics will be dropped when **either** threshold has been exceeded.
       type: string
       default: 15d
     maximum_retention_size:
@@ -216,7 +217,7 @@ config:
         The percentage value is then converted to bytes and passed to prometheus with the
         `--storage.tsdb.retention.size` argument.
         If this field is set to an invalid value, the `--storage.tsdb.retention.size` argument is dropped. In such cases, retention is only determined by `metrics_retention_time`. 
-        Default is 80%.
+        Default is 80%. If `metrics_retention_time` is also set, metrics will be dropped when **either** threshold has been exceeded.
       type: string
       default: "80%"
     metrics_wal_compression:
