@@ -62,7 +62,6 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPrivateKeyTypes
 from cryptography.x509.oid import ExtensionOID, NameOID
 from ops import BoundEvent, CharmBase, CharmEvents, Secret, SecretExpiredEvent, SecretRemoveEvent
 from ops.framework import EventBase, EventSource, Handle, Object
@@ -77,7 +76,7 @@ LIBAPI = 4
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 27
+LIBPATCH = 28
 
 PYDEPS = [
     "cryptography>=43.0.0",
@@ -632,7 +631,8 @@ class Certificate:
         private_key = serialization.load_pem_private_key(
             str(ca_private_key).encode(), password=None
         )
-        assert isinstance(private_key, CertificateIssuerPrivateKeyTypes)
+        if not isinstance(private_key, rsa.RSAPrivateKey):
+            raise TLSCertificatesError("Expected an RSA private key")
 
         # Create a certificate builder
         cert_builder = x509.CertificateBuilder(
@@ -989,7 +989,8 @@ class CertificateSigningRequest:
             CertificateSigningRequest: CSR
         """
         signing_key = private_key._private_key
-        assert isinstance(signing_key, CertificateIssuerPrivateKeyTypes)
+        if not isinstance(signing_key, rsa.RSAPrivateKey):
+            raise TLSCertificatesError("Expected an RSA private key")
 
         csr_builder = x509.CertificateSigningRequestBuilder()
         if subject_name := _extract_subject_name_attributes(attributes):
