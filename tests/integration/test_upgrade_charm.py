@@ -8,6 +8,12 @@ import logging
 import pytest
 import yaml
 from cosl.rules import generic_alert_groups
+
+# Cross-base upgrades (e.g. 24.04 -> 26.04) are not supported via juju refresh.
+# The charmhub charm is built for 24.04 (Python 3.12), while the local charm
+# targets 26.04 (Python 3.14). Juju refresh only replaces charm code, not the
+# container image, so the old container's Python cannot load the new venv.
+pytestmark = pytest.mark.skip(reason="Cross-base upgrade from 24.04 to 26.04 not supported")
 from helpers import (
     check_prometheus_is_ready,
     get_prometheus_rules,
