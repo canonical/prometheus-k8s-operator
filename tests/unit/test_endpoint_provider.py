@@ -578,7 +578,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{sorted_matchers(self.topology.identifier)}_free_standing_rule_alerts",
+                    "name": f"{sorted_matchers(self.topology.identifier)}_free_standing_rule_rules",
                     "rules": [expected_freestanding_rule],
                 },
             ]
@@ -600,7 +600,7 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_group1_alerts",
+                    "name": f"{self.topology.identifier}_group1_rules",
                     "rules": [expected_alert_rule],
                 },
             ]
@@ -633,19 +633,19 @@ class TestAlertRulesWithOneRulePerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_mixed_format_group1_alerts",
+                    "name": f"{self.topology.identifier}_mixed_format_group1_rules",
                     "rules": [expected_alert_rule],
                 },
                 {
-                    "name": f"{self.topology.identifier}_mixed_format_lma_rule_alerts",
+                    "name": f"{self.topology.identifier}_mixed_format_lma_rule_rules",
                     "rules": [expected_alert_rule],
                 },
                 {
-                    "name": f"{self.topology.identifier}_lma_format_free_standing_rule_alerts",
+                    "name": f"{self.topology.identifier}_lma_format_free_standing_rule_rules",
                     "rules": [expected_freestanding_rule],
                 },
                 {
-                    "name": f"{self.topology.identifier}_prom_format_group1_alerts",
+                    "name": f"{self.topology.identifier}_prom_format_group1_rules",
                     "rules": [expected_alert_rule],
                 },
             ]
@@ -692,14 +692,14 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_group_1_alerts",
+                    "name": f"{self.topology.identifier}_group_1_rules",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
                 {
-                    "name": f"{self.topology.identifier}_group_2_alerts",
+                    "name": f"{self.topology.identifier}_group_2_rules",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
@@ -730,7 +730,7 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_my_group_alerts",
+                    "name": f"{self.topology.identifier}_my_group_rules",
                     "rules": [
                         self.gen_rule("same", labels=self.topology.label_matcher_dict),
                         self.gen_rule("same", labels=self.topology.label_matcher_dict),
@@ -753,14 +753,14 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_group_same_alerts",
+                    "name": f"{self.topology.identifier}_group_same_rules",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
                     ],
                 },
                 {
-                    "name": f"{self.topology.identifier}_group_same_alerts",
+                    "name": f"{self.topology.identifier}_group_same_rules",
                     "rules": [
                         self.gen_rule(1, labels=self.topology.label_matcher_dict),
                         self.gen_rule(2, labels=self.topology.label_matcher_dict),
@@ -784,19 +784,22 @@ class TestAlertRulesWithMultipleRulesPerFile(unittest.TestCase):
         expected_rules_file = {
             "groups": [
                 {
-                    "name": f"{self.topology.identifier}_file_alerts",
+                    "name": f"{self.topology.identifier}_file_rules",
                     "rules": [self.gen_rule(0, labels=self.topology.label_matcher_dict)],
                 },
                 {
-                    "name": f"{self.topology.identifier}_a_file_alerts",
+                    "name": f"{self.topology.identifier}_a_file_rules",
                     "rules": [self.gen_rule(1, labels=self.topology.label_matcher_dict)],
                 },
                 {
-                    "name": f"{self.topology.identifier}_a_b_file_alerts",
+                    "name": f"{self.topology.identifier}_a_b_file_rules",
                     "rules": [self.gen_rule(2, labels=self.topology.label_matcher_dict)],
                 },
             ]
         }
+        # Sort groups by name for comparison since cosl doesn't guarantee order
+        expected_rules_file["groups"].sort(key=lambda g: g["name"])
+        rules_file_dict_read["groups"].sort(key=lambda g: g["name"])
         self.assertDictEqual(expected_rules_file, rules_file_dict_read)
 
 
@@ -835,7 +838,7 @@ class TestAlertRulesContainingUnitTopology(unittest.TestCase):
         for group in alert_rules["groups"]:
             for rule in group["rules"]:
                 if (
-                    "_HostHealth_alerts" not in group["name"]
+                    "_HostHealth_rules" not in group["name"]
                 ):  # _HostHealth_alerts are injected alerts without juju_unit labels, ignore them
                     self.assertIn("juju_unit", rule["labels"])
                     self.assertIn("juju_unit=", rule["expr"])
