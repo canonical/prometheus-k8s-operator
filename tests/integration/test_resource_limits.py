@@ -80,7 +80,9 @@ def test_default_resource_limits_applied(juju: jubilant.Juju):
     logger.info(f"Pod resources: {podspec.resources}")
 
     # If StatefulSet has resources but Pod doesn't, the rollout hasn't completed
-    if sts_resources and sts_resources.requests and not podspec.resources.requests:
+    pod_has_requests = podspec.resources and podspec.resources.requests
+    sts_has_requests = sts_resources and sts_resources.requests
+    if sts_has_requests and not pod_has_requests:
         logger.warning("StatefulSet has resources but Pod doesn't - waiting for rollout...")
         # Wait for pod to be recreated with the new resources
         import time
