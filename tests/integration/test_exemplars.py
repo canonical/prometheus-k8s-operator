@@ -27,7 +27,7 @@ def test_prepare_environment(ops_test, prometheus_charm):
     juju.deploy(prometheus_charm, app=APP_NAME, resources=PROMETHEUS_RESOURCES, trust=True, config={"max_global_exemplars_per_user": 100000})
     juju.integrate(f"{APP_NAME}:receive-remote-write", f"{OTELCOL_APP_NAME}:send-remote-write")
 
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME, OTELCOL_APP_NAME))
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME, OTELCOL_APP_NAME) and jubilant.all_agents_idle(status, APP_NAME, OTELCOL_APP_NAME))
 
 
 async def test_exemplars(ops_test):

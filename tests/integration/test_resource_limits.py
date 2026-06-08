@@ -53,7 +53,7 @@ def test_build_and_deploy(juju: jubilant.Juju, prometheus_charm):
         app=APP_NAME,
         trust=True,
     )
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
 
 
 @pytest.mark.abort_on_fail
@@ -72,7 +72,7 @@ def test_default_resource_limits_applied(juju: jubilant.Juju):
 def test_resource_limits_match_config(juju: jubilant.Juju, cpu, memory):
     custom_limits = {"cpu": cpu, "memory": memory}
     juju.config(APP_NAME, custom_limits)
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -96,7 +96,7 @@ def test_invalid_resource_limits_put_charm_in_blocked_status(juju: jubilant.Juju
 def test_charm_recovers_from_invalid_resource_limits(juju: jubilant.Juju):
     custom_limits = {"cpu": "500m", "memory": "0.5Gi"}
     juju.config(APP_NAME, custom_limits)
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -105,7 +105,7 @@ def test_charm_recovers_from_invalid_resource_limits(juju: jubilant.Juju):
 def test_upgrade(juju: jubilant.Juju, prometheus_charm):
     """Make sure the app is able to upgrade when resource limits are set."""
     juju.refresh(APP_NAME, path=prometheus_charm, resources=RESOURCES)
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME), timeout=300, delay=60)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=300, delay=60)
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -113,7 +113,7 @@ def test_upgrade(juju: jubilant.Juju, prometheus_charm):
 @pytest.mark.abort_on_fail
 def test_default_resource_limits_applied_after_resetting_config(juju: jubilant.Juju):
     juju.config(APP_NAME, reset=["cpu", "memory"])
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
 
     assert juju.model
     podspec = get_podspec(juju.model, APP_NAME, "prometheus")
