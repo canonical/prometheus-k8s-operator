@@ -4,7 +4,9 @@
 
 """This test module tests prometheus resource limits on startup and after config-changed."""
 
+import json
 import logging
+import subprocess
 from pathlib import Path
 
 import jubilant
@@ -12,10 +14,6 @@ import pytest
 import requests
 import yaml
 from helpers import oci_image
-from lightkube import Client
-from lightkube.resources.apps_v1 import StatefulSet
-from lightkube.resources.core_v1 import Pod
-from lightkube.utils.quantity import equals_canonically
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +21,29 @@ METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
 APP_NAME = METADATA["name"]
 RESOURCES = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 
-DEFAULT_LIMITS = None
-DEFAULT_REQUESTS = {"cpu": "0.25", "memory": "200Mi"}
+DEFAULT_LIMITS = {}
+DEFAULT_REQUESTS = {"cpu": "250m", "memory": "200Mi"}
 
 
-def get_podspec(model_name: str, app_name: str, container_name: str):
-    client = Client()
-    pod = client.get(Pod, name=f"{app_name}-0", namespace=model_name)
-    assert pod.spec
-    podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))
-    return podspec
-
-
-def get_statefulset_resources(model_name: str, app_name: str, container_name: str):
-    """Get the resource requirements from the StatefulSet template."""
-    client = Client()
-    sts = client.get(StatefulSet, name=app_name, namespace=model_name)
-    assert sts.spec and sts.spec.template and sts.spec.template.spec
-    for ctr in sts.spec.template.spec.containers:
-        if ctr.name == container_name:
-            return ctr.resources
-    return None
+def get_container_resources(model_name: str, app_name: str, container_name: str) -> dict:
+    """Get container resources using kubectl."""
+    pod = json.loads(
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--namespace",
+                model_name,
+                "get",
+                "pod",
+                "-o",
+                "json",
+                f"{app_name}-0",
+            ],
+            text=True,
+        )
+    )
+    container = next(filter(lambda x: x["name"] == container_name, pod["spec"]["containers"]))
+    return container.get("resources", {})
 
 
 def check_prometheus_is_ready(host: str) -> bool:
@@ -65,37 +65,16 @@ def test_build_and_deploy(juju: jubilant.Juju, prometheus_charm):
         app=APP_NAME,
         trust=True,
     )
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600, delay=5.0)
 
 
 @pytest.mark.abort_on_fail
 def test_default_resource_limits_applied(juju: jubilant.Juju):
     assert juju.model
 
-    # Debug: check what's in the StatefulSet template vs the Pod
-    sts_resources = get_statefulset_resources(juju.model, APP_NAME, "prometheus")
-    logger.info(f"StatefulSet template resources: {sts_resources}")
-
-    podspec = get_podspec(juju.model, APP_NAME, "prometheus")
-    logger.info(f"Pod resources: {podspec.resources}")
-
-    # If StatefulSet has resources but Pod doesn't, the rollout hasn't completed
-    pod_has_requests = podspec.resources and podspec.resources.requests
-    sts_has_requests = sts_resources and sts_resources.requests
-    if sts_has_requests and not pod_has_requests:
-        logger.warning("StatefulSet has resources but Pod doesn't - waiting for rollout...")
-        # Wait for pod to be recreated with the new resources
-        import time
-        for i in range(30):
-            time.sleep(2)
-            podspec = get_podspec(juju.model, APP_NAME, "prometheus")
-            logger.info(f"Retry {i+1}: Pod resources: {podspec.resources}")
-            if podspec.resources and podspec.resources.requests:
-                break
-
-    assert podspec.resources
-    assert equals_canonically(podspec.resources.limits, DEFAULT_LIMITS)
-    assert equals_canonically(podspec.resources.requests, DEFAULT_REQUESTS)
+    resources = get_container_resources(juju.model, APP_NAME, "prometheus")
+    assert resources.get("limits", {}) == DEFAULT_LIMITS
+    assert resources.get("requests", {}) == DEFAULT_REQUESTS
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -105,7 +84,7 @@ def test_default_resource_limits_applied(juju: jubilant.Juju):
 def test_resource_limits_match_config(juju: jubilant.Juju, cpu, memory):
     custom_limits = {"cpu": cpu, "memory": memory}
     juju.config(APP_NAME, custom_limits)
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600, delay=5.0)
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -129,7 +108,7 @@ def test_invalid_resource_limits_put_charm_in_blocked_status(juju: jubilant.Juju
 def test_charm_recovers_from_invalid_resource_limits(juju: jubilant.Juju):
     custom_limits = {"cpu": "500m", "memory": "0.5Gi"}
     juju.config(APP_NAME, custom_limits)
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600, delay=5.0)
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
 
@@ -146,12 +125,11 @@ def test_upgrade(juju: jubilant.Juju, prometheus_charm):
 @pytest.mark.abort_on_fail
 def test_default_resource_limits_applied_after_resetting_config(juju: jubilant.Juju):
     juju.config(APP_NAME, reset=["cpu", "memory"])
-    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600)
+    juju.wait(lambda status: jubilant.all_active(status, APP_NAME) and jubilant.all_agents_idle(status, APP_NAME), timeout=600, delay=5.0)
 
     assert juju.model
-    podspec = get_podspec(juju.model, APP_NAME, "prometheus")
-    assert podspec.resources
-    assert equals_canonically(podspec.resources.limits, DEFAULT_LIMITS)
-    assert equals_canonically(podspec.resources.requests, DEFAULT_REQUESTS)
+    resources = get_container_resources(juju.model, APP_NAME, "prometheus")
+    assert resources.get("limits", {}) == DEFAULT_LIMITS
+    assert resources.get("requests", {}) == DEFAULT_REQUESTS
     host = juju.status().apps[APP_NAME].units[f"{APP_NAME}/0"].address
     assert check_prometheus_is_ready(host)
