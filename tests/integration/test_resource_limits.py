@@ -13,6 +13,7 @@ import requests
 import yaml
 from helpers import oci_image
 from lightkube import Client
+from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import Pod
 from lightkube.utils.quantity import equals_canonically
 
@@ -32,6 +33,17 @@ def get_podspec(model_name: str, app_name: str, container_name: str):
     assert pod.spec
     podspec = next(iter(filter(lambda ctr: ctr.name == container_name, pod.spec.containers)))
     return podspec
+
+
+def get_statefulset_resources(model_name: str, app_name: str, container_name: str):
+    """Get the resource requirements from the StatefulSet template."""
+    client = Client()
+    sts = client.get(StatefulSet, name=app_name, namespace=model_name)
+    assert sts.spec and sts.spec.template and sts.spec.template.spec
+    for ctr in sts.spec.template.spec.containers:
+        if ctr.name == container_name:
+            return ctr.resources
+    return None
 
 
 def check_prometheus_is_ready(host: str) -> bool:
@@ -59,7 +71,26 @@ def test_build_and_deploy(juju: jubilant.Juju, prometheus_charm):
 @pytest.mark.abort_on_fail
 def test_default_resource_limits_applied(juju: jubilant.Juju):
     assert juju.model
+
+    # Debug: check what's in the StatefulSet template vs the Pod
+    sts_resources = get_statefulset_resources(juju.model, APP_NAME, "prometheus")
+    logger.info(f"StatefulSet template resources: {sts_resources}")
+
     podspec = get_podspec(juju.model, APP_NAME, "prometheus")
+    logger.info(f"Pod resources: {podspec.resources}")
+
+    # If StatefulSet has resources but Pod doesn't, the rollout hasn't completed
+    if sts_resources and sts_resources.requests and not podspec.resources.requests:
+        logger.warning("StatefulSet has resources but Pod doesn't - waiting for rollout...")
+        # Wait for pod to be recreated with the new resources
+        import time
+        for i in range(30):
+            time.sleep(2)
+            podspec = get_podspec(juju.model, APP_NAME, "prometheus")
+            logger.info(f"Retry {i+1}: Pod resources: {podspec.resources}")
+            if podspec.resources and podspec.resources.requests:
+                break
+
     assert podspec.resources
     assert equals_canonically(podspec.resources.limits, DEFAULT_LIMITS)
     assert equals_canonically(podspec.resources.requests, DEFAULT_REQUESTS)
