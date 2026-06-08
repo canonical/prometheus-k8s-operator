@@ -238,6 +238,55 @@ class TestEndpointProvider(unittest.TestCase):
         self.assertIn("prometheus_scrape_unit_name", data)
         self.assertEqual(data.get("prometheus_scrape_unit_path", ""), "")
 
+    def test_provider_unit_refreshes_address_on_update_status(self):
+        """A rescheduled pod (new IP) must refresh its address on update_status.
+
+        Regression test for the scenario where a Kubernetes node maintenance/reboot
+        reschedules the workload pod onto a new IP without re-emitting
+        relation_joined/pebble_ready. Without refreshing on update_status, the stale
+        address would linger in relation data and the consumer would keep scraping a
+        dead IP. See canonical/opentelemetry-collector-k8s-operator#270.
+        """
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # GIVEN a provider that already published its (old) pod IP
+        with patch("ops.Network.bind_address", new="10.1.157.116"):
+            self.harness.charm.provider.set_scrape_job_spec()
+            data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+            self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
+
+            # WHEN the pod is rescheduled onto a new IP and only update_status fires
+            with patch("ops.Network.bind_address", new="10.1.200.42"):
+                self.harness.charm.on.update_status.emit()
+
+        # THEN the published address is refreshed to the new pod IP
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.200.42")
+
+    def test_provider_unit_refreshes_address_on_relation_changed(self):
+        """A new pod IP must be reflected on relation_changed as a faster reaction.
+
+        Regression test for canonical/opentelemetry-collector-k8s-operator#270.
+        """
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+
+        # GIVEN a provider that already published its (old) pod IP
+        with patch("ops.Network.bind_address", new="10.1.157.116"):
+            self.harness.charm.provider.set_scrape_job_spec()
+            data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+            self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.157.116")
+
+            # WHEN the pod is rescheduled onto a new IP and relation_changed fires
+            # (triggered here via a remote databag update, which carries the app context)
+            with patch("ops.Network.bind_address", new="10.1.200.42"):
+                self.harness.update_relation_data(rel_id, "provider", {"ping": "pong"})
+
+        # THEN the published address is refreshed to the new pod IP
+        data = self.harness.get_relation_data(rel_id, self.harness.charm.unit.name)
+        self.assertEqual(data["prometheus_scrape_unit_address"], "10.1.200.42")
+
     def test_provider_sets_external_url(self):
         harness = Harness(make_endpoint_provider_charm_with_external_url("9.12.20.18"), meta=PROVIDER_META)
         harness.set_model_name("MyUUID")

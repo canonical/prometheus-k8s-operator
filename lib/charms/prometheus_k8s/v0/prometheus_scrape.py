@@ -361,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 58
+LIBPATCH = 59
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -1622,8 +1622,22 @@ class MetricsEndpointProvider(Object):
         for ev in refresh_event:
             self.framework.observe(ev, self.set_scrape_job_spec)
 
+        # Always re-evaluate the unit address on `update_status`, regardless of the charm type
+        # (sidecar/pebble or podspec) or any user-provided `refresh_event`. On Kubernetes a pod
+        # can be rescheduled (e.g. node reboot/maintenance) and come back with a new IP without
+        # re-emitting `relation_joined`/`pebble_ready`. Without this, the stale address lingers in
+        # relation data and the consumer keeps scraping a dead IP until the relation is recreated.
+        # `update_status` fires periodically, so the address self-heals within one hook interval.
+        # See https://github.com/canonical/opentelemetry-collector-k8s-operator/issues/270
+        self.framework.observe(self._charm.on.update_status, self._set_unit_ip)
+
     def _on_relation_changed(self, event):
         """Check for alert rule messages in the relation data before moving on."""
+        # Refresh the unit address on every `relation_changed`. This reacts faster than waiting for
+        # the next `update_status` when the pod IP changes, and is a no-op when the address is
+        # unchanged. See https://github.com/canonical/opentelemetry-collector-k8s-operator/issues/270
+        self._set_unit_ip()
+
         if self._charm.unit.is_leader():
             ev = json.loads(event.relation.data[event.app].get("event", "{}"))
 
