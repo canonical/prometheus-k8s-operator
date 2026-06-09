@@ -1634,8 +1634,7 @@ class MetricsEndpointProvider(Object):
     def _on_relation_changed(self, event):
         """Check for alert rule messages in the relation data before moving on."""
         # Refresh the unit address on every `relation_changed`. This reacts faster than waiting for
-        # the next `update_status` when the pod IP changes, and is a no-op when the address is
-        # unchanged. See https://github.com/canonical/opentelemetry-collector-k8s-operator/issues/270
+        # the next `update_status` when the pod IP changes, and is safe to call repeatedly.
         self._set_unit_ip()
 
         if self._charm.unit.is_leader():
