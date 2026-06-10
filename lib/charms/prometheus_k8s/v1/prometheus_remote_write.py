@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 13
 
 PYDEPS = ["cosl"]
 
@@ -842,7 +842,6 @@ class PrometheusRemoteWriteProvider(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
 
                 except KeyError as e:
                     logger.debug(
@@ -865,8 +864,11 @@ class PrometheusRemoteWriteProvider(Object):
                     data["errors"] = errmsg
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
-
             alerts[identifier] = alert_rules
+            if self._charm.unit.is_leader():
+                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                data.pop("errors", None)
+                relation.data[self._charm.app]["event"] = json.dumps(data)
 
         return alerts
 
