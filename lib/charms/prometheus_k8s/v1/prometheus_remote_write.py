@@ -842,6 +842,7 @@ class PrometheusRemoteWriteProvider(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
+                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
                 except KeyError as e:
                     logger.debug(
@@ -859,17 +860,15 @@ class PrometheusRemoteWriteProvider(Object):
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
+                if alerts[identifier]:
+                    del alerts[identifier]
                 if self._charm.unit.is_leader():
                     data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                     data["errors"] = errmsg
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
-            alerts[identifier] = alert_rules
-            if self._charm.unit.is_leader():
-                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
-                data.pop("errors", None)
-                relation.data[self._charm.app]["event"] = json.dumps(data)
 
+            alerts[identifier] = alert_rules
         return alerts
 
     def _get_identifier_by_alert_rules(
