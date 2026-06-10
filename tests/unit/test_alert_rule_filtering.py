@@ -153,6 +153,17 @@ def test_valid_scrape_and_invalid_remote_write_relations(context, prometheus_con
     assert _written_group_names(context, state_out) == {"scrape-valid-group"}
     assert isinstance(_alert_rules_status(state_out), BlockedStatus)
 
+    invalid_remote_write_relation_out = next(
+        r for r in state_out.relations
+        if r.endpoint == "receive-remote-write"
+    )
+
+    # AND WHEN the invalid remote-write relation is removed
+    state_out = context.run(context.on.relation_broken(invalid_remote_write_relation_out), state_out)
+
+    # THEN the charm status must be active since the remaining scrape relation is valid
+    assert isinstance(_alert_rules_status(state_out), ActiveStatus)
+
 
 def test_invalid_scrape_and_valid_remote_write_relations(context, prometheus_container):
     # GIVEN one invalid scrape relation and one valid remote-write relation
@@ -168,6 +179,17 @@ def test_invalid_scrape_and_valid_remote_write_relations(context, prometheus_con
     # THEN only valid rules are written and the alert-rule status is blocked
     assert _written_group_names(context, state_out) == {"remote-write-valid-group"}
     assert isinstance(_alert_rules_status(state_out), BlockedStatus)
+
+    invalid_scrape_relation_out = next(
+        r for r in state_out.relations
+        if r.endpoint == "metrics-endpoint"
+    )
+
+    # AND WHEN the invalid scrape relation is removed
+    state_out = context.run(context.on.relation_broken(invalid_scrape_relation_out), state_out)
+
+    # THEN the charm status must be active since the remaining remote-write relation is valid
+    assert isinstance(_alert_rules_status(state_out), ActiveStatus)
 
 
 def test_invalid_scrape_and_invalid_remote_write_relations(context, prometheus_container):

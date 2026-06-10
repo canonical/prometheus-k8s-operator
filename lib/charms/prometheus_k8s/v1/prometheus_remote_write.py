@@ -751,6 +751,10 @@ class PrometheusRemoteWriteProvider(Object):
             self._on_consumers_changed,
         )
         self.framework.observe(
+            on_relation.relation_broken,
+            self._on_consumers_changed,
+        )
+        self.framework.observe(
             on_relation.relation_changed,
             self._on_relation_changed,
         )
@@ -758,7 +762,9 @@ class PrometheusRemoteWriteProvider(Object):
     def _on_consumers_changed(self, event: RelationEvent) -> None:
         if not isinstance(event, RelationBrokenEvent):
             self.update_endpoint(event.relation)
-        self.on.consumers_changed.emit()
+            self.on.consumers_changed.emit()
+        else:
+            self.on.consumers_changed.emit()
 
     def _on_relation_changed(self, event: RelationEvent) -> None:
         """Flag Providers that data has changed, so they can re-read alerts."""
@@ -857,6 +863,7 @@ class PrometheusRemoteWriteProvider(Object):
                 )
                 continue
 
+            alerts[identifier] = alert_rules
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
@@ -868,7 +875,6 @@ class PrometheusRemoteWriteProvider(Object):
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
 
-            alerts[identifier] = alert_rules
         return alerts
 
     def _get_identifier_by_alert_rules(

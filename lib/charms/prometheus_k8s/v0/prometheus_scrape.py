@@ -999,6 +999,10 @@ class MetricsEndpointConsumer(Object):
         self.framework.observe(
             events.relation_departed, self._on_metrics_provider_relation_departed
         )
+        self.framework.observe(
+            events.relation_broken, self._on_metrics_provider_relation_departed
+        )
+
 
     def _on_metrics_provider_relation_changed(self, event):
         """Handle changes with related metrics providers.
