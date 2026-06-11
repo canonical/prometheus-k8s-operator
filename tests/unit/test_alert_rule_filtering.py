@@ -1,6 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import dataclasses
 import json
 
 import yaml
@@ -206,3 +207,73 @@ def test_invalid_scrape_and_invalid_remote_write_relations(context, prometheus_c
     # THEN invalid relation rules are not written and the alert-rule status is blocked
     assert _written_group_names(context, state_out) == set()
     assert isinstance(_alert_rules_status(state_out), BlockedStatus)
+
+
+def test_invalid_scrape_relation_becoming_valid_recovers_to_active(
+    context, prometheus_container
+):
+    # GIVEN a scrape relation with invalid rules has already blocked the charm
+    state_in = State(
+        leader=True,
+        relations=[INVALID_SCRAPE_RELATION],
+        containers=[prometheus_container],
+    )
+
+    blocked_state = context.run(context.on.relation_changed(INVALID_SCRAPE_RELATION), state_in)
+
+    assert isinstance(_alert_rules_status(blocked_state), BlockedStatus)
+
+    # WHEN the same scrape relation updates its rules to become valid
+    relation_after_invalid = blocked_state.get_relation(INVALID_SCRAPE_RELATION.id)
+    now_valid_relation = dataclasses.replace(
+        relation_after_invalid,
+        remote_app_data={
+            **relation_after_invalid.remote_app_data,
+            "alert_rules": VALID_SCRAPE_RELATION.remote_app_data["alert_rules"],
+        },
+    )
+
+    recovered_state = context.run(
+        context.on.relation_changed(now_valid_relation),
+        dataclasses.replace(blocked_state, relations=[now_valid_relation]),
+    )
+
+    # THEN the previous invalid status is cleared and valid rules are written
+    assert _written_group_names(context, recovered_state) == {"scrape-valid-group"}
+    assert isinstance(_alert_rules_status(recovered_state), ActiveStatus)
+
+
+def test_invalid_remote_write_relation_becoming_valid_recovers_to_active(
+    context, prometheus_container
+):
+    # GIVEN a remote-write relation with invalid rules has already blocked the charm
+    state_in = State(
+        leader=True,
+        relations=[INVALID_REMOTE_WRITE_RELATION],
+        containers=[prometheus_container],
+    )
+
+    blocked_state = context.run(
+        context.on.relation_changed(INVALID_REMOTE_WRITE_RELATION), state_in
+    )
+
+    assert isinstance(_alert_rules_status(blocked_state), BlockedStatus)
+
+    # WHEN the same remote-write relation updates its rules to become valid
+    relation_after_invalid = blocked_state.get_relation(INVALID_REMOTE_WRITE_RELATION.id)
+    now_valid_relation = dataclasses.replace(
+        relation_after_invalid,
+        remote_app_data={
+            **relation_after_invalid.remote_app_data,
+            "alert_rules": VALID_REMOTE_WRITE_RELATION.remote_app_data["alert_rules"],
+        },
+    )
+
+    recovered_state = context.run(
+        context.on.relation_changed(now_valid_relation),
+        dataclasses.replace(blocked_state, relations=[now_valid_relation]),
+    )
+
+    # THEN the previous invalid status is cleared and valid rules are written
+    assert _written_group_names(context, recovered_state) == {"remote-write-valid-group"}
+    assert isinstance(_alert_rules_status(recovered_state), ActiveStatus)

@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 PYDEPS = ["cosl"]
 
@@ -874,6 +874,10 @@ class PrometheusRemoteWriteProvider(Object):
                     data["errors"] = errmsg
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
+            if self._charm.unit.is_leader():
+                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                data.pop("errors", None)
+                relation.data[self._charm.app]["event"] = json.dumps(data)
 
         return alerts
 
