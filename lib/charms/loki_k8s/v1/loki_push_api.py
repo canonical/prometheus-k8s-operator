@@ -544,7 +544,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 25
+LIBPATCH = 26
 
 PYDEPS = ["cosl"]
 
@@ -1174,7 +1174,6 @@ class LokiPushApiProvider(Object):
                 try:
                     metadata = json.loads(relation.data[relation.app]["metadata"])
                     identifier = JujuTopology.from_dict(metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
 
                 except KeyError as e:
                     logger.debug(
@@ -1189,8 +1188,13 @@ class LokiPushApiProvider(Object):
                 )
                 continue
 
+            alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
+
             _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
             if errmsg:
+                logger.error(f"Invalid alert rule file: {errmsg}")
+                if alerts[identifier]:
+                    del alerts[identifier]
                 if self._charm.unit.is_leader():
                     relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
                 continue
