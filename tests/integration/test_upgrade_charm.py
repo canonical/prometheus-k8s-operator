@@ -19,6 +19,12 @@ from helpers import (
 
 logger = logging.getLogger(__name__)
 
+pytestmark = pytest.mark.xfail(
+    reason="pytest-operator does not support 26.04 bases yet. "
+    "See: https://github.com/canonical/prometheus-k8s-operator/actions/runs/27201508899/job/80307287990?pr=814 "
+    "Remove this xfail after 2026-07-10."
+)
+
 PROMETHEUS_CONFIG = "/etc/prometheus/prometheus.yml"
 prometheus_resources = {"prometheus-image": oci_image("./charmcraft.yaml", "prometheus-image")}
 tester_resources = {
