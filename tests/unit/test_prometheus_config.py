@@ -22,8 +22,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -59,8 +59,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -97,8 +97,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -140,8 +140,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -182,8 +182,8 @@ class TestWildcardExpansion(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # WHEN the jobs are processed
@@ -264,8 +264,8 @@ class TestWildcardExpansionWithTopology(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", ""),
-            "unit/1": ("11.11.11.11", ""),
+            "unit/0": ("10.10.10.10", "", ""),
+            "unit/1": ("11.11.11.11", "", ""),
         }
 
         # AND some topology
@@ -336,8 +336,8 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", "/model-unit-0"),
-            "unit/1": ("11.11.11.11", "/model-unit-1"),
+            "unit/0": ("10.10.10.10", "/model-unit-0", ""),
+            "unit/1": ("11.11.11.11", "/model-unit-1", ""),
         }
 
         # WHEN the jobs are processed
@@ -379,8 +379,8 @@ class TestWildcardExpansionWithPathPrefix(unittest.TestCase):
         ]
 
         hosts = {
-            "unit/0": ("10.10.10.10", "/model-unit-0"),
-            "unit/1": ("11.11.11.11", "/model-unit-1"),
+            "unit/0": ("10.10.10.10", "/model-unit-0", ""),
+            "unit/1": ("11.11.11.11", "/model-unit-1", ""),
         }
 
         # WHEN the jobs are processed
