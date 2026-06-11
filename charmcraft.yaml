@@ -40,7 +40,7 @@ assumes:
   - juju >= 3.6
 
 platforms:
-  ubuntu@24.04:amd64:
+  ubuntu@26.04:amd64:
 
 parts:
   charm:
@@ -70,7 +70,7 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ubuntu/prometheus@sha256:3b037e9157370026b1e67e5b3edfb17fb08f22b8db2a22400baeb250963dd78f  # renovate: oci-image tag: 3.11-24.04
+    upstream-source: ubuntu/prometheus@sha256:a2249016b6429b3b5d9035b45c17231d30ec9cd68cc21b0d9323e3a17a17d09a  # renovate: oci-image tag: 3.11-26.04
 
 storage:
   database:

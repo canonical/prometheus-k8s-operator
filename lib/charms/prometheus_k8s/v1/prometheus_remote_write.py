@@ -23,7 +23,7 @@ import socket
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 import yaml
 from cosl import JujuTopology
@@ -586,7 +586,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     def _duplicate_rules_per_unit(
         self,
-        alert_rules: Dict[str, Any],
+        alert_rules: Mapping[str, Any],
         peer_unit_names: Set[str],
         rule_names_to_duplicate: List[str],
         is_subordinate: bool = False,
@@ -603,7 +603,7 @@ class PrometheusRemoteWriteConsumer(Object):
             A Dict[str, any] the updated alert rules with the rules specified in rule_names_to_duplicate
             duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
         """
-        updated_alert_rules = copy.deepcopy(alert_rules)
+        updated_alert_rules: Dict[str, Any] = copy.deepcopy(dict(alert_rules))
 
         for group in updated_alert_rules.get("groups", {}):
             new_rules = []

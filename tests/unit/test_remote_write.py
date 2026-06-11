@@ -183,7 +183,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             self.harness.get_relation_data(rel_id, self.harness.charm.app)["alert_rules"]
         )
         for group in rules["groups"]:
-            if group["name"].endswith("with_template_string_alerts"):
+            if group["name"].endswith("with_template_string_rules"):
                 expr = group["rules"][0]["expr"]
                 self.assertIn("juju_model", expr)
                 self.assertIn("juju_model_uuid", expr)
@@ -210,7 +210,7 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             self.harness.get_relation_data(rel_id, self.harness.charm.app)["alert_rules"]
         )
         for group in rules["groups"]:
-            if group["name"].endswith("with_template_string_and_unit_alerts"):
+            if group["name"].endswith("with_template_string_and_unit_rules"):
                 expr = group["rules"][0]["expr"]
                 self.assertIn("juju_model", expr)
                 self.assertIn("juju_model_uuid", expr)
