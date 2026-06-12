@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 13
+LIBPATCH = 14
 
 PYDEPS = ["cosl"]
 
@@ -751,6 +751,10 @@ class PrometheusRemoteWriteProvider(Object):
             self._on_consumers_changed,
         )
         self.framework.observe(
+            on_relation.relation_broken,
+            self._on_consumers_changed,
+        )
+        self.framework.observe(
             on_relation.relation_changed,
             self._on_relation_changed,
         )
@@ -758,7 +762,9 @@ class PrometheusRemoteWriteProvider(Object):
     def _on_consumers_changed(self, event: RelationEvent) -> None:
         if not isinstance(event, RelationBrokenEvent):
             self.update_endpoint(event.relation)
-        self.on.consumers_changed.emit()
+            self.on.consumers_changed.emit()
+        else:
+            self.on.consumers_changed.emit()
 
     def _on_relation_changed(self, event: RelationEvent) -> None:
         """Flag Providers that data has changed, so they can re-read alerts."""
@@ -842,7 +848,7 @@ class PrometheusRemoteWriteProvider(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
+                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
                 except KeyError as e:
                     logger.debug(
@@ -857,16 +863,21 @@ class PrometheusRemoteWriteProvider(Object):
                 )
                 continue
 
+            alerts[identifier] = alert_rules
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
+                if alerts[identifier]:
+                    del alerts[identifier]
                 if self._charm.unit.is_leader():
                     data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                     data["errors"] = errmsg
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
-
-            alerts[identifier] = alert_rules
+            if self._charm.unit.is_leader():
+                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                data.pop("errors", None)
+                relation.data[self._charm.app]["event"] = json.dumps(data)
 
         return alerts
 

@@ -6,6 +6,7 @@
 """A Juju charm for Prometheus on Kubernetes."""
 
 import hashlib
+import json
 import logging
 import re
 import socket
@@ -33,6 +34,9 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
     K8sResourcePatchFailedEvent,
     KubernetesComputeResourcesPatch,
     adjust_resource_requirements,
+)
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    DEFAULT_RELATION_NAME as DEFAULT_METRICS_RELATION_NAME,
 )
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointConsumer,
@@ -127,6 +131,7 @@ class CompositeStatus(TypedDict):
     log_level: Tuple[str, str]
     k8s_patch: Tuple[str, str]
     config: Tuple[str, str]
+    alert_rules: Tuple[str, str]
 
 
 def to_tuple(status: StatusBase) -> Tuple[str, str]:
@@ -166,6 +171,7 @@ class PrometheusCharm(CharmBase):
                 log_level=to_tuple(ActiveStatus()),
                 k8s_patch=to_tuple(ActiveStatus()),
                 config=to_tuple(ActiveStatus()),
+                alert_rules=to_tuple(ActiveStatus()),
             )
         )
 
@@ -818,7 +824,38 @@ class PrometheusCharm(CharmBase):
             self._push_alert_rules(remote_write_alerts)
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
+        if self._has_alert_rule_errors():
+            msg = "Invalid alert rules. See debug-log"
+            logger.error(msg)
+            self._stored.status["alert_rules"] = to_tuple(BlockedStatus(msg))
+        else:
+            self._stored.status["alert_rules"] = to_tuple(ActiveStatus())
+
         return alert_rules_changed
+
+    def _has_alert_rule_errors(self) -> bool:
+        """Check if any alert-rule relation reported validation errors."""
+        for relation_name in (DEFAULT_METRICS_RELATION_NAME, DEFAULT_REMOTE_WRITE_RELATION_NAME):
+            for relation in self.model.relations.get(relation_name, []):
+                app_data = relation.data.get(self.app)
+                if not app_data:
+                    continue
+
+                event_raw = app_data.get("event", "{}")
+                try:
+                    event_data = json.loads(event_raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                if event_data.get("errors"):
+                    logger.debug(
+                        "Alert rule validation error on relation %s: %s",
+                        relation.id,
+                        event_data["errors"],
+                    )
+                    return True
+
+        return False
 
     def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.

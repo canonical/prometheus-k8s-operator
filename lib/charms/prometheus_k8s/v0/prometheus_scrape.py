@@ -361,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 59
+LIBPATCH = 60
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -999,6 +999,10 @@ class MetricsEndpointConsumer(Object):
         self.framework.observe(
             events.relation_departed, self._on_metrics_provider_relation_departed
         )
+        self.framework.observe(
+            events.relation_broken, self._on_metrics_provider_relation_departed
+        )
+
 
     def _on_metrics_provider_relation_changed(self, event):
         """Handle changes with related metrics providers.
@@ -1141,6 +1145,7 @@ class MetricsEndpointConsumer(Object):
 
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
+                logger.error(f"Invalid alert rule file: {errmsg}")
                 if alerts[identifier]:
                     del alerts[identifier]
                 if self._charm.unit.is_leader():
@@ -1148,6 +1153,10 @@ class MetricsEndpointConsumer(Object):
                     data["errors"] = errmsg
                     relation.data[self._charm.app]["event"] = json.dumps(data)
                 continue
+            if self._charm.unit.is_leader():
+                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                data.pop("errors", None)
+                relation.data[self._charm.app]["event"] = json.dumps(data)
 
         return alerts
 
