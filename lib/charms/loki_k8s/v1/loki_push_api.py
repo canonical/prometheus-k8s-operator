@@ -544,7 +544,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 27
+LIBPATCH = 28
 
 PYDEPS = ["cosl"]
 
@@ -1704,7 +1704,7 @@ class LogProxyConsumer(ConsumerBase):
         self._promtails_ports = self._generate_promtails_ports(logs_scheme)
 
         # architecture used for promtail binary
-        arch = platform.processor()
+        arch = platform.machine()
         if arch in ["x86_64", "amd64"]:
             self._arch = "amd64"
         elif arch in ["aarch64", "arm64", "armv8b", "armv8l"]:
