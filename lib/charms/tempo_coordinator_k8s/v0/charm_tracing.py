@@ -33,7 +33,7 @@ def _remove_stale_otel_sdk_packages():
     import shutil
     from collections import defaultdict
 
-    from importlib_metadata import distributions
+    from importlib.metadata import distributions
 
     otel_logger = logging.getLogger("charm_tracing_otel_patcher")
     otel_logger.debug("Applying _remove_stale_otel_sdk_packages patch on charm upgrade")
@@ -143,7 +143,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 12
+LIBPATCH = 13
 
 PYDEPS = ["opentelemetry-exporter-otlp-proto-http==1.21.0"]
 
