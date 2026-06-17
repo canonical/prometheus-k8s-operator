@@ -168,5 +168,5 @@ def test_config_changed_calls_update_relation_data(tmp_path):
     # WHEN a config changed event occurs
     context.run(context.on.config_changed(), state)
 
-    # THEN COS Config, as PromeheusRulesProvider, should call _update_relation_data to update the relation data with the new alert rules
+    # THEN COS Config, as a PrometheusRulesProvider, should call _update_relation_data to update the relation data with the new alert rules
     assert calls > 0
