@@ -142,10 +142,10 @@ def test_config_changed_calls_update_relation_data(tmp_path):
 
     class TestPrometheusRulesProvider(PrometheusRulesProvider):
         """A subclass of PrometheusRulesProvider that counts calls to _update_relation_data."""
-        def _update_relation_data(self, event):
+        def _update_relation_data(self, _):
             nonlocal calls
             calls += 1
-            return super()._update_relation_data(event)
+            return super()._update_relation_data(_)
 
     class MockCOSConfig(CharmBase):
         metadata_yaml = textwrap.dedent(
