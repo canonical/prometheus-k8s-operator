@@ -361,7 +361,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 60
+LIBPATCH = 61
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -1822,6 +1822,7 @@ class PrometheusRulesProvider(Object):
             events.relation_changed,
             self._charm.on.leader_elected,
             self._charm.on.upgrade_charm,
+            self._charm.on.config_changed,
         ]
 
         for event_source in event_sources:

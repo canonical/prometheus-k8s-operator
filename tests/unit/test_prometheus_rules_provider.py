@@ -135,3 +135,38 @@ def test_relation_joined_with_empty_rules(tmp_path):
     state_out = context.run(context.on.relation_joined(rel), state)
 
     assert _relation_local_app_alerts(state_out) == NO_ALERTS
+
+
+def test_config_changed_calls_update_relation_data(tmp_path):
+    calls = 0
+
+    class TestPrometheusRulesProvider(PrometheusRulesProvider):
+        """A subclass of PrometheusRulesProvider that counts calls to _update_relation_data."""
+        def _update_relation_data(self, event):
+            nonlocal calls
+            calls += 1
+            return super()._update_relation_data(event)
+
+    class MockCOSConfig(CharmBase):
+        metadata_yaml = textwrap.dedent(
+            """
+            name: mock-cos-config
+            provides:
+                send-remote-write:
+                    interface: prometheus_scrape
+            """
+        )
+
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.rules_provider = TestPrometheusRulesProvider(self, relation_name = "send-remote-write", dir_path=str(tmp_path))
+
+    # GIVEN a mock charm that instantiates a PrometheusRulesProvider such as COS Configuration
+    context = Context(charm_type=MockCOSConfig, meta=yaml.safe_load(MockCOSConfig.metadata_yaml))
+    rel = Relation(endpoint="send-remote-write")
+    state = State(relations={rel}, leader=True)
+    # WHEN a config changed event occurs
+    context.run(context.on.config_changed(), state)
+
+    # THEN COS Config, as PromeheusRulesProvider, should call _update_relation_data to update the relation data with the new alert rules
+    assert calls > 0
