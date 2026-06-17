@@ -825,9 +825,7 @@ class PrometheusCharm(CharmBase):
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         if self._has_alert_rule_errors():
-            msg = "Invalid alert rules. See debug-log"
-            logger.error(msg)
-            self._stored.status["alert_rules"] = to_tuple(BlockedStatus(msg))
+            self._stored.status["alert_rules"] = to_tuple(BlockedStatus("Invalid alert rules. See debug-log"))
         else:
             self._stored.status["alert_rules"] = to_tuple(ActiveStatus())
 
@@ -848,7 +846,7 @@ class PrometheusCharm(CharmBase):
                     continue
 
                 if event_data.get("errors"):
-                    logger.debug(
+                    logger.error(
                         "Alert rule validation error on relation %s: %s",
                         relation.id,
                         event_data["errors"],
