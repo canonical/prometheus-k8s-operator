@@ -544,7 +544,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 29
+LIBPATCH = 30
 
 PYDEPS = ["cosl"]
 
@@ -1188,7 +1188,10 @@ class LokiPushApiProvider(Object):
                 )
                 continue
 
-            alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
+            # Topology labels are already injected by _inject_alert_expr_labels using
+            # alert_expression_dict, which intentionally excludes juju_charm and juju_unit.
+            # Don't call apply_label_matchers here as it would re-inject juju_charm.
+            alerts[identifier] = alert_rules
 
             _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
             if errmsg:
@@ -1283,10 +1286,13 @@ class LokiPushApiProvider(Object):
                             charm_name=labels.get("juju_charm", ""),
                         )
 
-                        # Inject topology and put it back in the list
+                        # Inject topology and put it back in the list.
+                        # Use alert_expression_dict (excludes juju_charm) instead of
+                        # label_matcher_dict because subordinate charms (e.g. otelcol)
+                        # label logs with their own charm name, not the principal's.
                         rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
-                            topology.label_matcher_dict,
+                            topology.alert_expression_dict,
                         )
                     except KeyError:
                         # Some required JujuTopology key is missing. Just move on.
