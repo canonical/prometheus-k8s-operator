@@ -47,7 +47,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 14
+LIBPATCH = 15
 
 PYDEPS = ["cosl"]
 
@@ -611,7 +611,8 @@ class PrometheusRemoteWriteConsumer(Object):
                 if rule.get("alert", "") not in rule_names_to_duplicate:
                     new_rules.append(rule)
                 else:
-                    for name in peer_unit_names:
+                    # Sort unit names to guarantee a deterministic iteration order.
+                    for name in sorted(peer_unit_names):
                         juju_unit = name
                         modified_rule = copy.deepcopy(rule)
 
