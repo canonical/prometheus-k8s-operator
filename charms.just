@@ -190,10 +190,11 @@ release charm_file channel:
     charmcraft release "{{ charm_name }}" --revision="$charm_revision" --channel="{{ channel }}" $resource_args
     echo "✓ Released {{ charm_name }} revision $charm_revision to {{ channel }}"
 
-# Print all commits between the current branch and the merge-base with `ref`
+# Print all commits between two refs (defaults to current branch for target_ref)
 [group("release")]
-[arg("ref", help="Branch (or generic ref) from to get the changelog from")]
-changelog ref:
+[arg("ref", help="Branch (or generic ref) to get the changelog from")]
+[arg("target_ref", help="Branch (or generic ref) to compare to (defaults to current branch)")]
+changelog ref target_ref="":
     #!/usr/bin/env python3
     import re
     import subprocess
@@ -206,16 +207,22 @@ changelog ref:
     match = re.search(r"github\.com[:/]([^/]+/[^/.]+)", remote_url)
     repo_path = match.group(1) if match else ""
 
-    # Resolve ref
+    # Resolve refs
     ref = "{{ ref }}"
     try:
         git("rev-parse", "--verify", ref)
     except subprocess.CalledProcessError:
         ref = f"origin/{ref}"
 
+    target_ref = "{{ target_ref }}" or git("rev-parse", "--abbrev-ref", "HEAD")
+    try:
+        git("rev-parse", "--verify", target_ref)
+    except subprocess.CalledProcessError:
+        target_ref = f"origin/{target_ref}"
+
     # Get merge-base and commits
-    base = git("merge-base", "HEAD", ref)
-    log_output = git("log", f"--format=%H\t%s", f"{base}..HEAD")
+    base = git("merge-base", target_ref, ref)
+    log_output = git("log", f"--format=%H\t%s", f"{base}..{target_ref}")
 
     # Categorize commits
     categories = {"breaking": [], "features": [], "fixes": [], "others": []}
@@ -251,7 +258,9 @@ changelog ref:
             categories["others"].append(formatted)
 
     # Print changelog
+    short_base = base[:7]
     print("# Changelog\n")
+    print(f"Changes on `{target_ref}` since diverging from `{ref}` (merge-base: `{short_base}`).\n")
     sections = [("Breaking Changes", "breaking"), ("Features", "features"), ("Fixes", "fixes"), ("Others", "others")]
     for title, key in sections:
         if categories[key]:
