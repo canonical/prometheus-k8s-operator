@@ -24,7 +24,7 @@ from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
-from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.grafana_k8s.v1.grafana_source import GrafanaSourceProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.mimir_coordinator_k8s.v0.prometheus_api import (
     DEFAULT_RELATION_NAME as PROMETHEUS_API_RELATION_NAME,
@@ -251,7 +251,6 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.most_external_url,
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
             refresh_event=[
                 self.ingress.on.ready_for_unit,
@@ -259,6 +258,9 @@ class PrometheusCharm(CharmBase):
                 self.on.update_status,
                 self._cert_requirer.on.certificate_available,
             ],
+            app_datasource=False,
+            unit_datasources=True,
+            unit_datasource_url=self.most_external_url,
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
@@ -690,7 +692,7 @@ class PrometheusCharm(CharmBase):
 
         # We use the internal url for grafana source due to
         # https://github.com/canonical/operator/issues/970
-        self.grafana_source_provider.update_source(self.internal_url)
+        self.grafana_source_provider.update_unit_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
