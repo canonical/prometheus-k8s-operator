@@ -4,15 +4,14 @@
 
 """Integration tests for the logging (log forwarding) relation."""
 
-import asyncio
 import logging
 from pathlib import Path
 
+import jubilant
 import pytest
 import requests
 import yaml
-from helpers import oci_image, unit_address
-from pytest_operator.plugin import OpsTest
+from helpers import oci_image
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
@@ -24,33 +23,39 @@ PROMETHEUS_RESOURCES = {"prometheus-image": oci_image("./charmcraft.yaml", "prom
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest, prometheus_charm):
+def test_build_and_deploy(juju: jubilant.Juju, prometheus_charm):
     """Deploy prometheus and loki, then wait for active status."""
-    assert ops_test.model
-    await asyncio.gather(
-        ops_test.model.deploy(
-            prometheus_charm,
-            resources=PROMETHEUS_RESOURCES,
-            application_name=APP_NAME,
-            trust=True,
-        ),
-        ops_test.model.deploy("loki-k8s", LOKI_APP_NAME, channel="dev/edge", trust=True),
+    juju.deploy(
+        prometheus_charm,
+        resources=PROMETHEUS_RESOURCES,
+        app=APP_NAME,
+        trust=True,
     )
-    await ops_test.model.wait_for_idle(apps=[APP_NAME, LOKI_APP_NAME], status="active")
+    juju.deploy("loki-k8s", LOKI_APP_NAME, channel="dev/edge", trust=True)
+    juju.wait(
+        lambda status: jubilant.all_active(status, APP_NAME, LOKI_APP_NAME)
+        and jubilant.all_agents_idle(status, APP_NAME, LOKI_APP_NAME),
+        timeout=600,
+        delay=5.0,
+    )
 
 
 @pytest.mark.abort_on_fail
-async def test_logging_integration(ops_test: OpsTest):
+def test_logging_integration(juju: jubilant.Juju):
     """Integrate prometheus with loki via the logging relation."""
-    assert ops_test.model
-    await ops_test.model.add_relation(f"{APP_NAME}:logging", f"{LOKI_APP_NAME}:logging")
-    await ops_test.model.wait_for_idle(apps=[APP_NAME, LOKI_APP_NAME], status="active")
+    juju.integrate(f"{APP_NAME}:logging", f"{LOKI_APP_NAME}:logging")
+    juju.wait(
+        lambda status: jubilant.all_active(status, APP_NAME, LOKI_APP_NAME)
+        and jubilant.all_agents_idle(status, APP_NAME, LOKI_APP_NAME),
+        timeout=600,
+        delay=5.0,
+    )
 
 
 @retry(wait=wait_fixed(15), stop=stop_after_attempt(20))
-async def test_logs_are_forwarded_to_loki(ops_test: OpsTest):
+def test_logs_are_forwarded_to_loki(juju: jubilant.Juju):
     """Verify that prometheus logs are present in Loki."""
-    loki_address = await unit_address(ops_test, LOKI_APP_NAME, 0)
+    loki_address = juju.status().apps[LOKI_APP_NAME].units[f"{LOKI_APP_NAME}/0"].address
     url = f"http://{loki_address}:3100/loki/api/v1/query_range"
     response = requests.get(url, params={"query": f'{{juju_application="{APP_NAME}"}}'})
     response.raise_for_status()
