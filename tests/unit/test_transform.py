@@ -4,9 +4,11 @@
 import subprocess
 import unittest
 from pathlib import PosixPath
+from typing import cast
 from unittest import mock
 
 from charms.prometheus_k8s.v0.prometheus_scrape import CosTool
+from cosl.types import OfficialRuleFileFormat
 from ops.charm import CharmBase
 from ops.testing import Harness
 
@@ -18,7 +20,7 @@ class ToolProviderCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.tool = CosTool(self)
+        self.tool = CosTool("promql")
 
 
 class TestTransform(unittest.TestCase):
@@ -63,7 +65,7 @@ class TestTransform(unittest.TestCase):
 
         tool = self.harness.charm.tool
         output = tool.apply_label_matchers(
-            {
+            cast(OfficialRuleFileFormat, {
                 "groups": [
                     {
                         "alert": "CPUOverUse",
@@ -82,15 +84,15 @@ class TestTransform(unittest.TestCase):
                         },
                     }
                 ]
-            }
+            })
         )
-        self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
+        self.assertEqual(cast(dict, output)["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
     @mock.patch("platform.machine", lambda: "invalid")
     def test_uses_original_expression_when_binary_missing(self):
         tool = self.harness.charm.tool
         output = tool.apply_label_matchers(
-            {
+            cast(OfficialRuleFileFormat, {
                 "groups": [
                     {
                         "alert": "CPUOverUse",
@@ -109,9 +111,9 @@ class TestTransform(unittest.TestCase):
                         },
                     }
                 ]
-            }
+            })
         )
-        self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
+        self.assertEqual(cast(dict, output)["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
     @mock.patch("platform.machine", lambda: "x86_64")
     def test_fetches_the_correct_expression(self):
@@ -157,14 +159,14 @@ class TestValidateAlerts(unittest.TestCase):
     def test_returns_errors_on_bad_rule_file(self):
         tool = self.harness.charm.tool
         valid, errs = tool.validate_alert_rules(
-            {
+            cast(OfficialRuleFileFormat, {
                 "groups": [
                     {
                         "alert": "BadSyntax",
                         "expr": "process_cpu_seconds_total{) > 0.12",
                     }
                 ]
-            }
+            })
         )
         self.assertEqual(valid, False)
         self.assertIn("error validating", errs)
@@ -173,7 +175,7 @@ class TestValidateAlerts(unittest.TestCase):
     def test_successfully_validates_good_alert_rules(self):
         tool = self.harness.charm.tool
         valid, errs = tool.validate_alert_rules(
-            {
+            cast(OfficialRuleFileFormat, {
                 "groups": [
                     {
                         "name": "group_name",
@@ -197,7 +199,7 @@ class TestValidateAlerts(unittest.TestCase):
                         ],
                     }
                 ]
-            }
+            })
         )
         self.assertEqual(errs, "")
         self.assertEqual(valid, True)
