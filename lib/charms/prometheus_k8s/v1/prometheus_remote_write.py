@@ -20,7 +20,7 @@ import os
 import re
 import socket
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from cosl import CosTool, JujuTopology
 from cosl.rules import HOST_METRICS_MISSING_RULE_NAME, AlertRules, generic_alert_groups
@@ -830,7 +830,7 @@ class PrometheusRemoteWriteProvider(Object):
         Returns:
             a dictionary mapping the name of an alert rule group to the group.
         """
-        alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        alerts: Dict[str, OfficialRuleFileFormat] = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
@@ -846,9 +846,7 @@ class PrometheusRemoteWriteProvider(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                    alerts[identifier] = cast(
-                        dict, self._tool.apply_label_matchers(cast(OfficialRuleFileFormat, alert_rules))
-                    )
+                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
                 except KeyError as e:
                     logger.debug(
@@ -864,7 +862,7 @@ class PrometheusRemoteWriteProvider(Object):
                 continue
 
             alerts[identifier] = alert_rules
-            _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
+            _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
                 if alerts[identifier]:
@@ -882,7 +880,7 @@ class PrometheusRemoteWriteProvider(Object):
         return alerts
 
     def _get_identifier_by_alert_rules(
-        self, rules: Dict[str, Any]
+        self, rules: OfficialRuleFileFormat
     ) -> Tuple[Union[str, None], Union[JujuTopology, None]]:
         """Determine an appropriate dict key for alert rules.
 
@@ -902,7 +900,9 @@ class PrometheusRemoteWriteProvider(Object):
         # Construct an ID based on what's in the alert rules if they have labels
         for group in rules["groups"]:
             try:
-                labels = group["rules"][0]["labels"]
+                labels = group["rules"][0].get("labels")
+                if not labels:
+                    continue
                 topology = JujuTopology(
                     # Don't try to safely get required constructor fields. There's already
                     # a handler for KeyErrors
@@ -929,7 +929,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         return None, None
 
-    def _inject_alert_expr_labels(self, rules: Dict[str, Any]) -> Dict[str, Any]:
+    def _inject_alert_expr_labels(self, rules: OfficialRuleFileFormat) -> OfficialRuleFileFormat:
         """Iterate through alert rules and inject topology into expressions.
 
         Args:

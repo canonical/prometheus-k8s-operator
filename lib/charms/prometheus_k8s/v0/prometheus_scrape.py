@@ -335,7 +335,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Literal, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import yaml
@@ -844,7 +844,7 @@ def _type_convert_stored(obj):
     if isinstance(obj, StoredList):
         return list(map(_type_convert_stored, obj))
     if isinstance(obj, StoredDict):
-        rdict = {}  # type: Dict[Any, Any]
+        rdict = {}
         for k in obj.keys():
             rdict[k] = _type_convert_stored(obj[k])
         return rdict
@@ -1108,7 +1108,7 @@ class MetricsEndpointConsumer(Object):
             A dictionary mapping the Juju topology identifier of the source charm to
             its list of alert rule groups.
         """
-        alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        alerts: Dict[str, OfficialRuleFileFormat] = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
@@ -1144,7 +1144,7 @@ class MetricsEndpointConsumer(Object):
 
             alerts[identifier] = alert_rules
 
-            _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
+            _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
                 if alerts[identifier]:
@@ -1162,7 +1162,7 @@ class MetricsEndpointConsumer(Object):
         return alerts
 
     def _get_identifier_by_alert_rules(
-        self, rules: dict
+        self, rules: OfficialRuleFileFormat
     ) -> Tuple[Union[str, None], Union[JujuTopology, None]]:
         """Determine an appropriate dict key for alert rules.
 
@@ -1182,7 +1182,9 @@ class MetricsEndpointConsumer(Object):
         # Construct an ID based on what's in the alert rules if they have labels
         for group in rules["groups"]:
             try:
-                labels = group["rules"][0]["labels"]
+                labels = group["rules"][0].get("labels")
+                if not labels:
+                    continue
                 topology = JujuTopology(
                     # Don't try to safely get required constructor fields. There's already
                     # a handler for KeyErrors
@@ -1209,7 +1211,7 @@ class MetricsEndpointConsumer(Object):
 
         return None, None
 
-    def _inject_alert_expr_labels(self, rules: Dict[str, Any]) -> Dict[str, Any]:
+    def _inject_alert_expr_labels(self, rules: OfficialRuleFileFormat) -> OfficialRuleFileFormat:
         """Iterate through alert rules and inject topology into expressions.
 
         Args:
