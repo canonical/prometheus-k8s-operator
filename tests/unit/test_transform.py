@@ -18,7 +18,7 @@ class ToolProviderCharm(CharmBase):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.tool = CosTool(self)
+        self.tool = CosTool("promql")
 
 
 class TestTransform(unittest.TestCase):
@@ -66,25 +66,30 @@ class TestTransform(unittest.TestCase):
             {
                 "groups": [
                     {
-                        "alert": "CPUOverUse",
-                        "expr": "process_cpu_seconds_total > 0.12",
-                        "for": "0m",
-                        "labels": {
-                            "severity": "Low",
-                            "juju_model": "None",
-                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
-                            "juju_application": "consumer-tester",
-                        },
-                        "annotations": {
-                            "summary": "Instance {{ $labels.instance }} CPU over use",
-                            "description": "{{ $labels.instance }} of job "
-                            "{{ $labels.job }} has used too much CPU.",
-                        },
+                        "name": "test_group",
+                        "rules": [
+                            {
+                                "alert": "CPUOverUse",
+                                "expr": "process_cpu_seconds_total > 0.12",
+                                "for": "0m",
+                                "labels": {
+                                    "severity": "Low",
+                                    "juju_model": "None",
+                                    "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                                    "juju_application": "consumer-tester",
+                                },
+                                "annotations": {
+                                    "summary": "Instance {{ $labels.instance }} CPU over use",
+                                    "description": "{{ $labels.instance }} of job "
+                                    "{{ $labels.job }} has used too much CPU.",
+                                },
+                            }
+                        ],
                     }
                 ]
             }
         )
-        self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
+        self.assertEqual(output.get("groups", [])[0]["rules"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
     @mock.patch("platform.machine", lambda: "invalid")
     def test_uses_original_expression_when_binary_missing(self):
@@ -93,25 +98,30 @@ class TestTransform(unittest.TestCase):
             {
                 "groups": [
                     {
-                        "alert": "CPUOverUse",
-                        "expr": "process_cpu_seconds_total > 0.12",
-                        "for": "0m",
-                        "labels": {
-                            "severity": "Low",
-                            "juju_model": "None",
-                            "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
-                            "juju_application": "consumer-tester",
-                        },
-                        "annotations": {
-                            "summary": "Instance {{ $labels.instance }} CPU over use",
-                            "description": "{{ $labels.instance }} of job "
-                            "{{ $labels.job }} has used too much CPU.",
-                        },
+                        "name": "test_group",
+                        "rules": [
+                            {
+                                "alert": "CPUOverUse",
+                                "expr": "process_cpu_seconds_total > 0.12",
+                                "for": "0m",
+                                "labels": {
+                                    "severity": "Low",
+                                    "juju_model": "None",
+                                    "juju_model_uuid": "f2c1b2a6-e006-11eb-ba80-0242ac130004",
+                                    "juju_application": "consumer-tester",
+                                },
+                                "annotations": {
+                                    "summary": "Instance {{ $labels.instance }} CPU over use",
+                                    "description": "{{ $labels.instance }} of job "
+                                    "{{ $labels.job }} has used too much CPU.",
+                                },
+                            }
+                        ],
                     }
                 ]
             }
         )
-        self.assertEqual(output["groups"][0]["expr"], "process_cpu_seconds_total > 0.12")
+        self.assertEqual(output.get("groups", [])[0]["rules"][0]["expr"], "process_cpu_seconds_total > 0.12")
 
     @mock.patch("platform.machine", lambda: "x86_64")
     def test_fetches_the_correct_expression(self):
@@ -160,8 +170,13 @@ class TestValidateAlerts(unittest.TestCase):
             {
                 "groups": [
                     {
-                        "alert": "BadSyntax",
-                        "expr": "process_cpu_seconds_total{) > 0.12",
+                        "name": "test_group",
+                        "rules": [
+                            {
+                                "alert": "BadSyntax",
+                                "expr": "process_cpu_seconds_total{) > 0.12",
+                            }
+                        ],
                     }
                 ]
             }
