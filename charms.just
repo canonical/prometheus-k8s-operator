@@ -87,7 +87,7 @@ lock:
 [group("maintenance")]
 scan:
     @echo "Scanning for security vulnerabilities..."
-    uvx uv-secure
+    uv audit
 
 # Fetch centralized files from canonical/observability
 [group("maintenance")]
@@ -257,6 +257,7 @@ release charm_file channel:
 [arg("to_ref", help="Branch (or generic ref) to compare to (defaults to current branch)")]
 changelog from_ref="" to_ref="":
     #!/usr/bin/env python3
+    import os
     import re
     import subprocess
     import sys
@@ -297,7 +298,7 @@ changelog from_ref="" to_ref="":
 
     # Get merge-base and commits
     base = git("merge-base", to_ref, from_ref)
-    log_output = git("log", f"--format=%H\t%s", f"{base}..{to_ref}")
+    log_output = git("log", f"--format=%H\t%s", f"{base}..{to_ref}", "--", os.getcwd())
 
     # Categorize commits
     categories = {"breaking": [], "features": [], "fixes": [], "others": []}
