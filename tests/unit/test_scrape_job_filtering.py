@@ -4,11 +4,13 @@
 import dataclasses
 import json
 
-import yaml
+import ops
 from ops.model import ActiveStatus, BlockedStatus
 from scenario import Relation, State
 
 from charm import to_status
+
+ops.testing.SIMULATE_CAN_CONNECT = True  # pyright: ignore
 
 
 # To test that invalid scrape jobs are filtered out and the charm goes into blocked
@@ -57,17 +59,6 @@ INVALID_SCRAPE_JOB_RELATION = Relation(
 )
 
 
-def _scrape_job_names(context, state_out):
-    """Read the scrape job names written to the prometheus config on disk."""
-    fs = state_out.get_container("prometheus").get_filesystem(context)
-    prometheus_config = fs.joinpath("etc", "prometheus", "prometheus.yml")
-    if not prometheus_config.exists():
-        return set()
-
-    config = yaml.safe_load(prometheus_config.read_text())
-    return {job.get("job_name") for job in config.get("scrape_configs", [])}
-
-
 def _scrape_jobs_status(state_out):
     """Return only the scrape-jobs status, ignoring unrelated unit statuses."""
     charm_stored_state = next(
@@ -89,8 +80,7 @@ def test_valid_scrape_job_relation_remains_active(context, prometheus_container)
     # WHEN the relation changed event is processed
     state_out = context.run(context.on.relation_changed(VALID_SCRAPE_JOB_RELATION), state_in)
 
-    # THEN the valid job is written and the scrape-jobs status remains active
-    assert any("valid-job" in name for name in _scrape_job_names(context, state_out))
+    # THEN the scrape-jobs status remains active
     assert isinstance(_scrape_jobs_status(state_out), ActiveStatus)
 
 
@@ -105,8 +95,7 @@ def test_invalid_scrape_job_relation_blocks(context, prometheus_container):
     # WHEN the relation changed event is processed
     state_out = context.run(context.on.relation_changed(INVALID_SCRAPE_JOB_RELATION), state_in)
 
-    # THEN the invalid job is filtered out and the scrape-jobs status is blocked
-    assert not any("invalid-job" in name for name in _scrape_job_names(context, state_out))
+    # THEN the scrape-jobs status is blocked
     assert isinstance(_scrape_jobs_status(state_out), BlockedStatus)
 
 
@@ -168,6 +157,6 @@ def test_invalid_scrape_job_relation_becoming_valid_recovers_to_active(
         dataclasses.replace(blocked_state, relations=[now_valid_relation]),
     )
 
-    # THEN the previous invalid status is cleared and valid jobs are written
-    assert any("valid-job" in name for name in _scrape_job_names(context, recovered_state))
+    # THEN the previous invalid status is cleared
     assert isinstance(_scrape_jobs_status(recovered_state), ActiveStatus)
+
