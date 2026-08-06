@@ -205,8 +205,8 @@ features:
 # Update the Terraform README with auto-generated content
 [group("terraform")]
 terraform-docs:
-    which terraform-docs > /dev/null 2>&1 || { echo "× terraform-docs not found"; exit 1; }
-    terraform-docs --config .tfdocs.yaml .
+    which terraform-docs > /dev/null 2>&1 || { echo "× terraform-docs not found; you can install it via:"; echo "   snap install terraform-docs"; exit 1; }
+    terraform-docs --config .tfdocs.yaml terraform
     @echo "✓ Terraform docs updated"
 
 # Lint and validate the Terraform module
