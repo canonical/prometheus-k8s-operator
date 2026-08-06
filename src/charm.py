@@ -132,6 +132,7 @@ class CompositeStatus(TypedDict):
     k8s_patch: Tuple[str, str]
     config: Tuple[str, str]
     alert_rules: Tuple[str, str]
+    scrape_jobs: Tuple[str, str]
 
 
 def to_tuple(status: StatusBase) -> Tuple[str, str]:
@@ -172,6 +173,7 @@ class PrometheusCharm(CharmBase):
                 k8s_patch=to_tuple(ActiveStatus()),
                 config=to_tuple(ActiveStatus()),
                 alert_rules=to_tuple(ActiveStatus()),
+                scrape_jobs=to_tuple(ActiveStatus()),
             )
         )
 
@@ -857,6 +859,29 @@ class PrometheusCharm(CharmBase):
 
         return False
 
+    def _has_scrape_job_errors(self) -> bool:
+        """Check if any metrics-endpoint relation reported scrape job validation errors."""
+        for relation in self.model.relations.get(DEFAULT_METRICS_RELATION_NAME, []):
+            app_data = relation.data.get(self.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if event_data.get("scrape_job_errors"):
+                logger.error(
+                    "Scrape job validation error on relation %s: %s",
+                    relation.id,
+                    event_data["scrape_job_errors"],
+                )
+                return True
+
+        return False
+
     def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
 
@@ -1137,6 +1162,13 @@ class PrometheusCharm(CharmBase):
             processed_job, processed_certs = self._process_tls_config(job)
             certs = {**certs, **processed_certs}
             prometheus_config["scrape_configs"].append(processed_job)  # type: ignore
+
+        if self._has_scrape_job_errors():
+            msg = "Invalid scrape jobs. See debug-log"
+            logger.error(msg)
+            self._stored.status["scrape_jobs"] = to_tuple(BlockedStatus(msg))
+        else:
+            self._stored.status["scrape_jobs"] = to_tuple(ActiveStatus())
 
         web_config = self._web_config()
 

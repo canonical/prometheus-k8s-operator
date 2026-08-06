@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 62
+LIBPATCH = 63
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -1055,11 +1055,16 @@ class MetricsEndpointConsumer(Object):
                 try:
                     _validate_scrape_jobs(static_scrape_jobs)
                 except subprocess.CalledProcessError as e:
+                    logger.error(f"Invalid scrape job file: {e}")
                     if self._charm.unit.is_leader():
                         data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                         data["scrape_job_errors"] = str(e)
                         relation.data[self._charm.app]["event"] = json.dumps(data)
                 else:
+                    if self._charm.unit.is_leader():
+                        data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                        data.pop("scrape_job_errors", None)
+                        relation.data[self._charm.app]["event"] = json.dumps(data)
                     scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
