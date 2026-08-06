@@ -7,14 +7,14 @@ This is a Terraform module facilitating the deployment of the `prometheus-k8s` c
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5 |
 | <a name="requirement_juju"></a> [juju](#requirement\_juju) | >= 1.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="provider_juju"></a> [juju](#provider\_juju) | >= 1.0 |
 
 ## Modules
@@ -24,7 +24,7 @@ No modules.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_app_name"></a> [app\_name](#input\_app\_name) | Name to give the deployed application | `string` | `"prometheus"` | no |
 | <a name="input_base"></a> [base](#input\_base) | The operating system on which to deploy. E.g. ubuntu@26.04. Check Charmhub for per-charm base support. | `string` | `"ubuntu@26.04"` | no |
 | <a name="input_channel"></a> [channel](#input\_channel) | Channel that the charm is deployed from | `string` | n/a | yes |
@@ -39,7 +39,7 @@ No modules.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_app_name"></a> [app\_name](#output\_app\_name) | n/a |
 | <a name="output_provides"></a> [provides](#output\_provides) | n/a |
 | <a name="output_requires"></a> [requires](#output\_requires) | n/a |
