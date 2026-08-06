@@ -184,7 +184,7 @@ import platform
 import re
 import subprocess
 import tempfile
-import uuid
+
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import yaml
@@ -217,7 +217,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 50
+LIBPATCH = 51
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -390,6 +390,13 @@ REACTIVE_CONVERTER = {  # type: ignore
     "type": "query",
     "useTags": False,
 }
+
+
+def _data_hash(data: Any) -> str:
+    """Deterministic hash of a template dict for use as a stable relation data key."""
+    return hashlib.shake_128(
+        json.dumps(data, sort_keys=True).encode()
+    ).digest(8).hex()
 
 
 class RelationNotFoundError(Exception):
@@ -1366,10 +1373,12 @@ class GrafanaDashboardProvider(Object):
             return  # No change in templates, don't update the databag
 
         # It's completely ridiculous to add a UUID, but if we don't have some
-        # pseudo-random value, this never makes it across 'juju set-state'
+        # pseudo-random value, this never makes it across 'juju set-state'.
+        # Use a deterministic hash of the templates so the value is stable when
+        # templates haven't changed, avoiding spurious relation-changed events.
         stored_data = {
             "templates": new_templates,
-            "uuid": str(uuid.uuid4()),
+            "uuid": _data_hash(new_templates),
         }
 
         relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
@@ -1733,7 +1742,7 @@ class GrafanaDashboardConsumer(Object):
         if not peers or not peers.data:
             logger.info("set_peer_data: no peer relation. Is the charm being installed/removed?")
             return
-        peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore[attr-defined]
+        peers.data[self._charm.app][key] = json.dumps(data, sort_keys=True)  # type: ignore[attr-defined]
 
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
@@ -1864,10 +1873,12 @@ class GrafanaDashboardAggregator(Object):
                 if new_templates == existing_templates:
                     continue  # No change in templates, don't update the databag
 
-                # It's still ridiculous to add a UUID here, but needed
+                # It's still ridiculous to add a UUID here, but needed.
+                # Use a deterministic hash of the templates so the value is stable when
+                # templates haven't changed, avoiding spurious relation-changed events.
                 stored_data = {
                     "templates": new_templates,
-                    "uuid": str(uuid.uuid4()),
+                    "uuid": _data_hash(new_templates),
                 }
                 grafana_relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
 
@@ -1883,9 +1894,10 @@ class GrafanaDashboardAggregator(Object):
         for id in app_ids:
             del self._stored.dashboard_templates[id]  # type: ignore
 
+        remaining_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
         stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
-            "uuid": str(uuid.uuid4()),
+            "templates": remaining_templates,
+            "uuid": _data_hash(remaining_templates),
         }
 
         if self._charm.unit.is_leader():
@@ -2130,11 +2142,11 @@ class CosTool:
             #       - alert: OtherAlert
             #         expr: up
             transformed_rules = {"groups": []}  # type: ignore
-            for rule in rules["groups"]:
-                transformed = {"name": str(uuid.uuid4()), "rules": [rule]}
+            for i, rule in enumerate(rules["groups"]):
+                transformed = {"name": f"group_{i}", "rules": [rule]}
                 transformed_rules["groups"].append(transformed)
 
-            rule_path.write_text(yaml.dump(transformed_rules))
+            rule_path.write_text(yaml.safe_dump(transformed_rules, sort_keys=True)) # databag-order: ignore
 
             args = [str(self.path), "validate", str(rule_path)]
             # noinspection PyBroadException
