@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 64
+LIBPATCH = 65
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -1402,6 +1402,9 @@ class MetricsEndpointConsumer(Object):
             True if any related metrics provider reported the validation error,
             False otherwise.
         """
+        if not self._charm.unit.is_leader():
+            return False
+
         for relation in self._charm.model.relations.get(self._relation_name, []):
             app_data = relation.data.get(self._charm.app)
             if not app_data:
