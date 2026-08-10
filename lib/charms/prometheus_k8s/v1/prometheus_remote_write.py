@@ -44,7 +44,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 16
+LIBPATCH = 17
 
 PYDEPS = ["cosl"]
 
@@ -972,4 +972,47 @@ class PrometheusRemoteWriteProvider(Object):
 
         rules["groups"] = modified_groups
         return rules
+
+    def has_invalid_alert_rules(self) -> bool:
+        """Check whether any relation reported invalid alert rules.
+
+        Validation errors, written to relation app data by the :attr:`alerts`
+        property, are read back to determine whether the relation currently
+        carries an invalid set of alert rules.
+
+        Returns:
+            True if any related consumer reported alert rule validation errors,
+            False otherwise.
+        """
+        return self._has_relation_error("errors", "Alert rule validation error")
+
+    def _has_relation_error(self, error_key: str, error_label: str) -> bool:
+        """Check whether any relation reported the given validation error.
+
+        Args:
+            error_key: the relation app data key that holds the validation error,
+                i.e. "errors".
+            error_label: a human readable description of the validation error
+                type, used for logging, e.g. "Alert rule validation error".
+
+        Returns:
+            True if any related consumer reported the validation error,
+            False otherwise.
+        """
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if error_msg := event_data.get(error_key):
+                logger.error("%s on relation %s: %s", error_label, relation.id, error_msg)
+                return True
+
+        return False
 
