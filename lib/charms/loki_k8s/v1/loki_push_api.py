@@ -544,7 +544,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 30
+LIBPATCH = 31
 
 PYDEPS = ["cosl"]
 
@@ -1209,6 +1209,42 @@ class LokiPushApiProvider(Object):
             alerts[identifier] = alert_rules
 
         return alerts
+
+    def has_invalid_alert_rules(self) -> bool:
+        """Check whether any relation reported invalid alert rules.
+
+        Validation errors, written to relation app data by the :attr:`alerts`
+        property, are read back to determine whether the relation currently
+        carries invalid alert rules. Non-leader units never write the app data
+        that holds these errors, so they always report no errors.
+
+        Returns:
+            True if any related consumer reported alert rule validation
+            errors, False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
+
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if error_msg := event_data.get("errors"):
+                logger.error(
+                    "Alert rule validation error on relation %s: %s",
+                    relation.id,
+                    error_msg,
+                )
+                return True
+
+        return False
 
     def _get_identifier_by_alert_rules(
         self, rules: dict
