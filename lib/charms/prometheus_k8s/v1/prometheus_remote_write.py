@@ -44,7 +44,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 17
+LIBPATCH = 18
 
 PYDEPS = ["cosl"]
 
@@ -999,6 +999,9 @@ class PrometheusRemoteWriteProvider(Object):
             True if any related consumer reported the validation error,
             False otherwise.
         """
+        if not self._charm.unit.is_leader():
+            return False
+
         for relation in self._charm.model.relations.get(self._relation_name, []):
             app_data = relation.data.get(self._charm.app)
             if not app_data:
