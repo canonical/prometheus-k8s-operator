@@ -217,7 +217,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 51
+LIBPATCH = 52
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -1520,6 +1520,41 @@ class GrafanaDashboardConsumer(Object):
             for relation in relations:
                 self._render_dashboards_and_signal_changed(relation)
 
+    def has_invalid_dashboards(self) -> bool:
+        """Check whether any relation reported invalid dashboards.
+
+        Validation errors written to relation app data by this consumer (see
+        :meth:`_render_dashboards_and_signal_changed`) are read back to determine
+        whether the relationship currently carries an invalid dashboard.
+
+        Returns:
+            True if any related dashboard provider reported dashboard validation
+            errors, False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
+
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if event_data.get("errors"):
+                logger.error(
+                    "Invalid dashboards on relation %s: %s",
+                    relation.id,
+                    event_data["errors"],
+                )
+                return True
+
+        return False
+
     def _on_grafana_dashboard_relation_broken(self, event: RelationBrokenEvent) -> None:
         """Update job config when providers depart.
 
@@ -1592,7 +1627,11 @@ class GrafanaDashboardConsumer(Object):
             except json.JSONDecodeError as e:
                 error = str(e.msg)
                 logger.warning("Invalid JSON in Grafana dashboard '{}': {}".format(fname, error))
-                continue
+                relation_has_invalid_dashboards = True
+            except (KeyError, TypeError, AttributeError) as e:
+                error = str(e)
+                logger.warning("Invalid Grafana dashboard '{}': {}".format(fname, error))
+                relation_has_invalid_dashboards = True
 
             # Prepend the relation name and ID to the dashboard ID to avoid clashes with
             # multiple relations with apps from the same charm, or having dashboards with
@@ -1639,6 +1678,12 @@ class GrafanaDashboardConsumer(Object):
 
             # Dropping dashboards for a relation needs to be signalled
             return True
+
+        # Clear any stale validation errors so the charm returns to Active once fixed
+        event_data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+        if event_data.get("errors"):
+            event_data.pop("errors")
+            relation.data[self._charm.app]["event"] = json.dumps(event_data)
 
         stored_data = rendered_dashboards
         currently_stored_data = self._get_stored_dashboards(relation.id)
