@@ -768,7 +768,7 @@ def test_all_three_operations_combined(context, prometheus_container):
 
 
 def test_invalid_yaml_config_sets_blocked_status(context, prometheus_container):
-    """Malformed YAML in alert_rule_customizations causes a BlockedStatus (not a crash)."""
+    """Malformed YAML in alert_rule_customizations causes BlockedStatus but rules are still written."""
     relation = _make_scrape_relation("myapp", [GROUP_MAIN])
     state_in = State(
         leader=True,
@@ -781,11 +781,15 @@ def test_invalid_yaml_config_sets_blocked_status(context, prometheus_container):
 
     state_out = context.run(context.on.config_changed(), state_in)
 
+    # Status must be blocked to signal the bad config.
     assert isinstance(_customization_status(state_out), BlockedStatus)
+    # Unmodified rules must still be written so alerting keeps working.
+    rules = _read_all_rules(context, state_out)
+    assert _alert_names_in_group(rules, "main-group") == {"AlphaFiring", "BetaFiring"}
 
 
 def test_unknown_top_level_key_sets_blocked_status(context, prometheus_container):
-    """A config with an unrecognised top-level key (e.g. 'replace') causes BlockedStatus."""
+    """A config with an unrecognised top-level key causes BlockedStatus but rules are still written."""
     relation = _make_scrape_relation("myapp", [GROUP_MAIN])
     state_in = State(
         leader=True,
@@ -802,7 +806,11 @@ def test_unknown_top_level_key_sets_blocked_status(context, prometheus_container
 
     state_out = context.run(context.on.config_changed(), state_in)
 
+    # Status must be blocked to signal the bad config.
     assert isinstance(_customization_status(state_out), BlockedStatus)
+    # Unmodified rules must still be written so alerting keeps working.
+    rules = _read_all_rules(context, state_out)
+    assert _alert_names_in_group(rules, "main-group") == {"AlphaFiring", "BetaFiring"}
 
 
 def test_empty_config_is_noop(context, prometheus_container):

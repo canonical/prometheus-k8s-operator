@@ -55,7 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import AlertRulesCustomization, JujuTopology
+from cosl import AlertRulesCustomization, AlertRulesCustomizationError, JujuTopology
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -819,26 +819,29 @@ class PrometheusCharm(CharmBase):
             customization = AlertRulesCustomization.from_yaml(
                 cast(str, self.model.config.get("alert_rule_customizations") or "")
             )
-        except Exception as e:
-            logger.error("Failed to parse alert rule customizations: %s", e)
-            self._stored.status["alert_rules_customizations"] = to_tuple(BlockedStatus("Invalid alert rule customizations. See debug-log"))
-            return False
+            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+        except AlertRulesCustomizationError as e:
+            logger.error("An error occurred while parsing alert rule customizations: %s", e)
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Invalid alert rule customizations. See debug-log")
+            )
+            customization = AlertRulesCustomization()  # no-op: write rules unmodified
 
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
 
         # The two rule sets being customized are guaranteed to be valid.
         # The libs are responsible for returning only valid rules.
-        rendered_metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
-        rendered_remote_write_alerts = customization.apply(remote_write_alerts)
+        metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
+        remote_write_alerts = customization.apply(remote_write_alerts)
 
-        alerts_hash = sha256(str(rendered_metrics_consumer_alerts) + str(rendered_remote_write_alerts))
+        alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
         if alert_rules_changed:
             self.container.remove_path(RULES_DIR, recursive=True)
-            self._push_alert_rules(rendered_metrics_consumer_alerts)
-            self._push_alert_rules(rendered_remote_write_alerts)
+            self._push_alert_rules(metrics_consumer_alerts)
+            self._push_alert_rules(remote_write_alerts)
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
         if self._has_alert_rule_errors():
