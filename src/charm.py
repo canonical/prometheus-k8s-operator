@@ -55,7 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import JujuTopology, AlertRulesCustomization, AlertRulesCustomizationError
+from cosl import AlertRulesCustomization, JujuTopology
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -816,10 +816,12 @@ class PrometheusCharm(CharmBase):
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
         try:
-            customization = AlertRulesCustomization.from_yaml(self.model.config["alert_rule_customizations"])
+            customization = AlertRulesCustomization.from_yaml(
+                cast(str, self.model.config.get("alert_rule_customizations") or "")
+            )
         except Exception as e:
             logger.error("Failed to parse alert rule customizations: %s", e)
-            self._stored.status["scrape_jobs"] = to_tuple(BlockedStatus("Invalid alert rule customizations. See debug-log"))
+            self._stored.status["alert_rules_customizations"] = to_tuple(BlockedStatus("Invalid alert rule customizations. See debug-log"))
             return False
 
         metrics_consumer_alerts = self.metrics_consumer.alerts
@@ -829,7 +831,7 @@ class PrometheusCharm(CharmBase):
         # The libs are responsible for returning only valid rules.
         rendered_metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
         rendered_remote_write_alerts = customization.apply(remote_write_alerts)
-    
+
         alerts_hash = sha256(str(rendered_metrics_consumer_alerts) + str(rendered_remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 

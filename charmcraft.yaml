@@ -258,7 +258,59 @@ config:
     alert_rule_customizations:
       type: string
       description: |
-        A YAML object that allows customizing the built-in Prometheus alert rules.
+        A YAML string for customizing the alert rules that Prometheus receives from any
+        connected application via the ``metrics-endpoint`` or ``receive-remote-write``
+        relations. Three top-level operations are supported: ``remove``, ``patch``, and
+        ``add``. All three are optional and can be combined freely.
+
+        **remove** — drop matching alerting rules (or entire groups).
+        Each entry requires a ``where`` selector. When a group is targeted by a
+        group-only selector, the entire group (including any recording rules) is dropped.
+        Otherwise only alerting rules are removed; recording rules are left untouched.
+
+        **patch** — merge a ``set`` block into every matching alerting rule.
+        Each entry requires both a ``where`` selector and a ``set`` block.
+        The ``set`` block may override ``alert``, ``expr``, ``for``, and/or merge into
+        ``labels`` / ``annotations`` (existing keys are overwritten; new keys are added).
+
+        **add** — insert operator-authored rule groups into Prometheus.
+        The ``add`` block must contain a ``groups`` list following the standard Prometheus
+        rule file format. These groups are written under a fixed identifier
+        (``custom_alert_rules``). Juju topology labels are NOT injected automatically;
+        include the relevant matchers in your expressions and labels manually.
+
+        **where selector fields** (AND across fields; multiple list entries are OR'd):
+          - ``alert``: exact match on the alert name
+          - ``group``: exact match on the group name
+          - ``labels``: every key-value pair must be present in the rule's labels
+          - ``annotations``: every key-value pair must be present in the rule's annotations
+
+        Example:
+
+          remove:
+            - where:
+                alert: TargetDown
+            - where:
+                labels:
+                  juju_application: noisy-exporter
+
+          patch:
+            - where:
+                alert: HighLatency
+              set:
+                for: 30m
+                labels:
+                  severity: warning
+
+          add:
+            groups:
+              - name: custom-alerts
+                rules:
+                  - alert: MyCustomAlert
+                    expr: up{juju_model="prod", juju_application="myapp"} == 0
+                    for: 1m
+                    annotations:
+                      summary: "Custom alert triggered"
 
 actions:
   validate-configuration:
