@@ -255,6 +255,11 @@ config:
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
 
+    alert_rule_customizations:
+      type: string
+      description: |
+        A YAML object that allows customizing the built-in Prometheus alert rules.
+
 actions:
   validate-configuration:
     description: |
