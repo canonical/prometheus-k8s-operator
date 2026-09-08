@@ -11,6 +11,24 @@ Charms that need to push data to a charm exposing the Prometheus remote_write AP
 should use the `PrometheusRemoteWriteConsumer`. Charms that operate software that exposes
 the Prometheus remote_write API, that is, they can receive metrics data over remote_write,
 should use the `PrometheusRemoteWriteProducer`.
+
+## Alert rules encoding
+
+The consumer publishes its alert rules to the `alert_rules` key of its application
+databag. Because large deployments can produce enough alert rules to exceed Juju's
+relation data size limit, the rules can be stored LZMA-compressed and base64-encoded
+instead of as plain JSON.
+
+Compression is negotiated over the relation: the provider advertises the encodings it
+is able to read in the `alert_rules_encodings` key of its own application databag, and
+the consumer picks the best encoding both sides support. A consumer related to a
+provider running an older version of this library (which advertises nothing) keeps
+writing plain JSON, so upgrades are safe in any order.
+
+An admin can decode compressed rules with:
+```bash
+<alert-rules-from-show-unit> | base64 -d | xz -d | jq
+```
 """
 
 import copy
@@ -20,9 +38,9 @@ import os
 import re
 import socket
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Union, cast
 
-from cosl import CosTool, JujuTopology
+from cosl import CosTool, JujuTopology, LZMABase64
 from cosl.rules import HOST_METRICS_MISSING_RULE_NAME, AlertRules, generic_alert_groups
 from cosl.types import OfficialRuleFileFormat
 from ops.charm import (
@@ -44,7 +62,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 18
+LIBPATCH = 19
 
 PYDEPS = ["cosl"]
 
@@ -57,6 +75,72 @@ DEFAULT_CONSUMER_NAME = "send-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+ALERT_RULES_KEY = "alert_rules"
+"""Databag key holding the consumer's alert rules."""
+
+ALERT_RULES_ENCODINGS_KEY = "alert_rules_encodings"
+"""Databag key with which the provider advertises the encodings it can read."""
+
+JSON_ENCODING = "json"
+"""Plain JSON alert rules, as written by every version of this library."""
+
+LZMA_ENCODING = "lzma"
+"""LZMA-compressed, base64-encoded JSON alert rules."""
+
+SUPPORTED_ALERT_RULES_ENCODINGS = (LZMA_ENCODING, JSON_ENCODING)
+"""Alert rules encodings this library can read and write, most preferred first."""
+
+
+def _encode_alert_rules(rules: Mapping[str, Any], encoding: str = JSON_ENCODING) -> str:
+    """Serialize alert rules for storing them in a relation databag.
+
+    Args:
+        rules: alert rules in the official Prometheus rule file format.
+        encoding: one of `SUPPORTED_ALERT_RULES_ENCODINGS`. Anything else is treated
+            as `JSON_ENCODING`, because plain JSON is readable by every version of
+            this library.
+
+    Returns:
+        The serialized alert rules.
+    """
+    serialized = json.dumps(rules)
+    if encoding == LZMA_ENCODING:
+        return LZMABase64.compress(serialized)
+    return serialized
+
+
+def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
+    """Deserialize alert rules read from a relation databag.
+
+    Both plain JSON and LZMA-compressed, base64-encoded JSON are accepted, regardless
+    of the encodings this library advertises, so that a provider can always read the
+    rules of a consumer running any version of this library.
+
+    Args:
+        raw: the raw databag value.
+
+    Returns:
+        The alert rules in the official Prometheus rule file format.
+
+    Raises:
+        Exception: if `raw` is neither valid JSON nor a valid compressed payload.
+    """
+    if not raw:
+        return cast(OfficialRuleFileFormat, {})
+
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        # Not JSON, so this must be a compressed payload.
+        decoded = raw
+
+    if isinstance(decoded, str):
+        # A compressed payload, either bare or (as pydantic based libraries write it)
+        # JSON-encoded.
+        decoded = json.loads(LZMABase64.decompress(decoded))
+
+    return cast(OfficialRuleFileFormat, decoded)
 
 
 class RelationNotFoundError(Exception):
@@ -366,6 +450,10 @@ class PrometheusRemoteWriteConsumer(Object):
      If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
      does not load the particular rule.
 
+     The alert rules are published to the `alert_rules` key of this application's databag,
+     LZMA-compressed and base64-encoded if the provider advertises that it can read them
+     that way, and as plain JSON otherwise. See the module docstring for details.
+
      To avoid false positives and false negatives the library will inject label filters
      automatically in the PromQL expression. For example if the charm provides an
      alert rule with an `expr` like this one:
@@ -459,7 +547,10 @@ class PrometheusRemoteWriteConsumer(Object):
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
-        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
+        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_event)
+        # The provider advertises the alert rules encodings it supports over relation data,
+        # so alerts are (re)pushed on relation-changed to pick up the negotiated encoding.
+        self.framework.observe(on_relation.relation_changed, self._push_alerts_on_relation_event)
         self.framework.observe(
             self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
         )
@@ -490,12 +581,51 @@ class PrometheusRemoteWriteConsumer(Object):
 
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
-    def _push_alerts_on_relation_joined(self, event: RelationEvent) -> None:
+    def _push_alerts_on_relation_event(self, event: RelationEvent) -> None:
         self._push_alerts_to_relation_databag(event.relation)
 
     def _push_alerts_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
         for relation in self.model.relations[self._relation_name]:
             self._push_alerts_to_relation_databag(relation)
+
+    def _alert_rules_encoding(self, relation: Relation) -> str:
+        """Return the best alert rules encoding the provider on the other end can read.
+
+        Providers advertise the encodings they support in their application databag.
+        Providers running an older version of this library advertise nothing, in which
+        case plain JSON is used for backwards compatibility.
+
+        Args:
+            relation: the relation whose remote application databag to inspect.
+
+        Returns:
+            One of `SUPPORTED_ALERT_RULES_ENCODINGS`.
+        """
+        if not relation.app:
+            return JSON_ENCODING
+
+        if (remote_databag := relation.data.get(relation.app)) is None:
+            return JSON_ENCODING
+
+        try:
+            advertised = json.loads(remote_databag.get(ALERT_RULES_ENCODINGS_KEY, "[]"))
+        except json.JSONDecodeError:
+            logger.warning(
+                "Could not parse the '%s' advertised over relation %s; "
+                "falling back to plain JSON alert rules.",
+                ALERT_RULES_ENCODINGS_KEY,
+                relation.id,
+            )
+            return JSON_ENCODING
+
+        if not isinstance(advertised, list):
+            return JSON_ENCODING
+
+        for encoding in SUPPORTED_ALERT_RULES_ENCODINGS:
+            if encoding in advertised:
+                return encoding
+
+        return JSON_ENCODING
 
     def _push_alerts_to_relation_databag(self, relation: Relation) -> None:
         if not self._charm.unit.is_leader():
@@ -526,7 +656,9 @@ class PrometheusRemoteWriteConsumer(Object):
                     alert_rules_as_dict, self._extra_alert_labels
                 )
             )
-        relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+        relation.data[self._charm.app][ALERT_RULES_KEY] = _encode_alert_rules(
+            alert_rules_as_dict, self._alert_rules_encoding(relation)
+        )
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
@@ -756,6 +888,17 @@ class PrometheusRemoteWriteProvider(Object):
             on_relation.relation_changed,
             self._on_relation_changed,
         )
+        # Consumers only compress their alert rules if we advertise that we can read them,
+        # so make sure the advertisement is (re)published after an upgrade or a leadership
+        # change, when no relation event may fire.
+        self.framework.observe(
+            self._charm.on.leader_elected,
+            self._publish_encodings_to_all_relation_databags,
+        )
+        self.framework.observe(
+            self._charm.on.upgrade_charm,
+            self._publish_encodings_to_all_relation_databags,
+        )
 
     def _on_consumers_changed(self, event: RelationEvent) -> None:
         if not isinstance(event, RelationBrokenEvent):
@@ -766,7 +909,30 @@ class PrometheusRemoteWriteProvider(Object):
 
     def _on_relation_changed(self, event: RelationEvent) -> None:
         """Flag Providers that data has changed, so they can re-read alerts."""
+        self._publish_alert_rules_encodings(event.relation)
         self.on.alert_rules_changed.emit(event.relation.id)
+
+    def _publish_encodings_to_all_relation_databags(self, _: HookEvent) -> None:
+        for relation in self.model.relations[self._relation_name]:
+            self._publish_alert_rules_encodings(relation)
+
+    def _publish_alert_rules_encodings(self, relation: Relation) -> None:
+        """Advertise the alert rules encodings this library is able to read.
+
+        Consumers use this to decide whether they may compress their alert rules: a
+        consumer related to a provider that does not advertise anything keeps writing
+        plain JSON, which every version of this library can read.
+
+        Args:
+            relation: The relation whose data to update.
+        """
+        if not self._charm.unit.is_leader():
+            # Only the leader unit can write to app data.
+            return
+
+        relation.data[self._charm.app][ALERT_RULES_ENCODINGS_KEY] = json.dumps(
+            list(SUPPORTED_ALERT_RULES_ENCODINGS)
+        )
 
     def update_endpoint(self, relation: Optional[Relation] = None) -> None:
         """Triggers programmatically the update of the relation data.
@@ -777,6 +943,9 @@ class PrometheusRemoteWriteProvider(Object):
         host address change because the charmed operator becomes connected to an
         Ingress after the `prometheus_remote_write` relation is established.
 
+        The alert rules encodings this library can read are advertised at the same
+        time, so that consumers know they may compress their alert rules.
+
         Args:
             relation: An optional instance of `class:ops.model.Relation` to update.
                 If not provided, all instances of the `prometheus_remote_write`
@@ -786,6 +955,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         for relation in relations:
             self._set_endpoint_on_relation(relation)
+            self._publish_alert_rules_encodings(relation)
 
     def _set_endpoint_on_relation(self, relation: Relation) -> None:
         """Set the remote_write endpoint on relations.
@@ -835,7 +1005,20 @@ class PrometheusRemoteWriteProvider(Object):
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            try:
+                alert_rules = _decode_alert_rules(
+                    relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
+                )
+            except Exception as e:
+                # Never let unreadable remote data break the provider: a consumer could
+                # be writing rules in a format this version of the library predates.
+                logger.error(
+                    "Could not read the alert rules published over relation %s: %s",
+                    relation.id,
+                    e,
+                )
+                continue
+
             if not alert_rules:
                 continue
 
