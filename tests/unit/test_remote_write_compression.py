@@ -22,6 +22,7 @@ from charms.prometheus_k8s.v1.prometheus_remote_write import (
     SUPPORTED_ALERT_RULES_ENCODINGS,
     PrometheusRemoteWriteConsumer,
     PrometheusRemoteWriteProvider,
+    _best_alert_rules_encoding,
     _decode_alert_rules,
     _encode_alert_rules,
 )
@@ -174,6 +175,20 @@ def test_decoding_unreadable_rules_raises():
         _decode_alert_rules("!!! not rules !!!")
 
 
+@pytest.mark.parametrize("encoding", SUPPORTED_ALERT_RULES_ENCODINGS)
+def test_encoding_is_deterministic(encoding: str):
+    # GIVEN the same alert rules, with the keys of the inner dicts in a different order
+    # (as could happen when rules are re-read from disk, or built by a different code path)
+    reordered = json.loads(json.dumps(ALERT_RULES))
+    rule = reordered["groups"][0]["rules"][0]
+    reordered["groups"][0]["rules"][0] = dict(reversed(list(rule.items())))
+    assert list(reordered["groups"][0]["rules"][0]) != list(ALERT_RULES["groups"][0]["rules"][0])
+
+    # WHEN both are encoded
+    # THEN the payloads are byte-identical, so no spurious relation-changed is triggered
+    assert _encode_alert_rules(reordered, encoding) == _encode_alert_rules(ALERT_RULES, encoding)
+
+
 def test_compression_shrinks_the_payload():
     # GIVEN a large set of alert rules, as produced by a large deployment
     groups = []
@@ -192,6 +207,41 @@ def test_compression_shrinks_the_payload():
 
 
 # --- Consumer: choosing an encoding ---
+
+
+@pytest.mark.parametrize(
+    "remote_app_databag, expected",
+    [
+        pytest.param(None, JSON_ENCODING, id="unreadable_databag"),
+        pytest.param({}, JSON_ENCODING, id="no_advertisement"),
+        pytest.param({ALERT_RULES_ENCODINGS_KEY: "[]"}, JSON_ENCODING, id="nothing_advertised"),
+        pytest.param(
+            {ALERT_RULES_ENCODINGS_KEY: json.dumps([JSON_ENCODING])}, JSON_ENCODING, id="json_only"
+        ),
+        pytest.param(
+            {ALERT_RULES_ENCODINGS_KEY: json.dumps(["brotli"])},
+            JSON_ENCODING,
+            id="unknown_encoding",
+        ),
+        pytest.param(
+            {ALERT_RULES_ENCODINGS_KEY: "not json"}, JSON_ENCODING, id="malformed_advertisement"
+        ),
+        pytest.param(
+            {ALERT_RULES_ENCODINGS_KEY: json.dumps({"lzma": True})}, JSON_ENCODING, id="not_a_list"
+        ),
+        pytest.param(LZMA_ADVERTISED, LZMA_ENCODING, id="lzma_advertised"),
+        pytest.param(
+            {ALERT_RULES_ENCODINGS_KEY: json.dumps(["brotli", LZMA_ENCODING])},
+            LZMA_ENCODING,
+            id="lzma_among_unknown_encodings",
+        ),
+    ],
+)
+def test_encoding_negotiation(remote_app_databag, expected: str):
+    # GIVEN a remote application databag
+    # WHEN the encoding to use is negotiated
+    # THEN the most preferred encoding both ends support is picked
+    assert _best_alert_rules_encoding(remote_app_databag) == expected
 
 
 @pytest.mark.parametrize(
@@ -272,6 +322,27 @@ def test_consumer_switches_to_compressed_when_provider_starts_advertising(
     with pytest.raises(json.JSONDecodeError):
         json.loads(published)
     assert _decode_alert_rules(published).get("groups")
+
+
+def test_consumer_republishing_is_idempotent(
+    consumer_ctx: Context[RemoteWriteConsumerCharm],
+):
+    # GIVEN a consumer that already published its compressed alert rules
+    relation = Relation("send-remote-write", remote_app_data=LZMA_ADVERTISED)
+    state = State(relations={relation, PeerRelation("peers")}, leader=True, model=MODEL)
+    state_out = consumer_ctx.run(consumer_ctx.on.relation_changed(relation), state)
+    published = _published_rules(state_out, relation)
+
+    # WHEN another relation-changed fires, e.g. because the provider updated its endpoints
+    republished = _published_rules(
+        consumer_ctx.run(
+            consumer_ctx.on.relation_changed(_get_relation(state_out, relation)), state_out
+        ),
+        relation,
+    )
+
+    # THEN the databag value is unchanged, so no further relation-changed is triggered
+    assert republished == published
 
 
 def test_consumer_follower_does_not_publish_rules(
