@@ -171,8 +171,43 @@ def test_decoding_unreadable_rules_raises():
     # GIVEN a databag value that is neither JSON nor a compressed payload
     # WHEN it is decoded
     # THEN an error is raised for the caller to handle
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         _decode_alert_rules("!!! not rules !!!")
+
+
+@pytest.mark.parametrize(
+    "raw, expected_message",
+    [
+        # A JSON string that is not a compressed payload must not be mistaken for a
+        # corrupt one: json.loads('"foo"') returns a str, which is not alert rules.
+        pytest.param('"foo"', "got the string", id="json_encoded_string"),
+        pytest.param('"not compressed at all"', "got the string", id="json_encoded_sentence"),
+        pytest.param("!!! not rules !!!", "got the string", id="not_json_not_compressed"),
+        # A payload that really is compressed, but corrupt, is reported as such.
+        pytest.param(
+            json.dumps(LZMABase64.compress(json.dumps(ALERT_RULES))[:-8]),
+            "Could not decompress",
+            id="truncated_compressed",
+        ),
+        pytest.param(
+            LZMABase64.compress("not json, once decompressed"),
+            "Could not decompress",
+            id="compressed_but_not_json",
+        ),
+        # Valid JSON, but not an object: these used to be returned as-is, and blew up
+        # further down the line in _inject_alert_expr_labels.
+        pytest.param("[]", "must be a JSON object", id="json_list"),
+        pytest.param("null", "must be a JSON object", id="json_null"),
+        pytest.param("5", "must be a JSON object", id="json_number"),
+        pytest.param("true", "must be a JSON object", id="json_bool"),
+    ],
+)
+def test_decoding_reports_what_is_actually_wrong(raw: str, expected_message: str):
+    # GIVEN a databag value that does not hold alert rules
+    # WHEN it is decoded
+    # THEN the error says what is wrong with it, since it is surfaced to an admin
+    with pytest.raises(ValueError, match=expected_message):
+        _decode_alert_rules(raw)
 
 
 @pytest.mark.parametrize("encoding", SUPPORTED_ALERT_RULES_ENCODINGS)

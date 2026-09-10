@@ -34,6 +34,7 @@ An admin can decode compressed rules with:
 import copy
 import json
 import logging
+import lzma
 import os
 import re
 import socket
@@ -95,6 +96,9 @@ This is in preference order, not sorted: it is a constant, so the bytes written 
 databag are stable across hooks, which is what matters for avoiding spurious
 relation-changed events.
 """
+
+_LZMA_BASE64_PREFIX: Final[str] = "/Td6WFoA"
+"""Base64 of the xz magic bytes, b"\\xfd7zXZ\\x00", every compressed payload starts with."""
 
 
 def _encode_alert_rules(rules: Mapping[str, Any], encoding: str = JSON_ENCODING) -> str:
@@ -171,7 +175,7 @@ def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
         The alert rules in the official Prometheus rule file format.
 
     Raises:
-        Exception: if `raw` is neither valid JSON nor a valid compressed payload.
+        ValueError: if `raw` holds neither alert rules nor a compressed payload of them.
     """
     if not raw:
         return cast(OfficialRuleFileFormat, {})
@@ -179,13 +183,28 @@ def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
     try:
         decoded = json.loads(raw)
     except json.JSONDecodeError:
-        # Not JSON, so this must be a compressed payload.
+        # Not JSON at all, so this can only be a bare compressed payload.
         decoded = raw
 
     if isinstance(decoded, str):
         # A compressed payload, either bare or (as pydantic based libraries write it)
         # JSON-encoded.
-        decoded = json.loads(LZMABase64.decompress(decoded))
+        if not decoded.startswith(_LZMA_BASE64_PREFIX):
+            raise ValueError(
+                "Expected either alert rules or an LZMA-compressed, base64-encoded"
+                " payload of them, got the string {!r:.60}".format(decoded)
+            )
+        try:
+            decoded = json.loads(LZMABase64.decompress(decoded))
+        except (ValueError, lzma.LZMAError) as e:
+            # ValueError covers both a malformed base64 payload (binascii.Error) and
+            # compressed content that is not JSON (json.JSONDecodeError).
+            raise ValueError("Could not decompress the alert rules: {}".format(e)) from e
+
+    if not isinstance(decoded, dict):
+        raise ValueError(
+            "Alert rules must be a JSON object, not {}".format(type(decoded).__name__)
+        )
 
     return cast(OfficialRuleFileFormat, decoded)
 
@@ -1018,7 +1037,12 @@ class PrometheusRemoteWriteProvider(Object):
                     relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
                 )
             except Exception as e:
+                # Reported like a validation error, so that the charm blocks on it instead
+                # of silently dropping the consumer's alert rules.
                 unreadable[relation.id] = str(e)
+                self._report_alert_rules_error(
+                    relation, "Could not decode the published alert rules: {}".format(e)
+                )
                 continue
 
             if not alert_rules:
@@ -1052,15 +1076,9 @@ class PrometheusRemoteWriteProvider(Object):
                 logger.error(f"Invalid alert rule file: {errmsg}")
                 if alerts[identifier]:
                     del alerts[identifier]
-                if self._charm.unit.is_leader():
-                    data = json.loads(relation.data[self._charm.app].get("event", "{}"))
-                    data["errors"] = errmsg
-                    relation.data[self._charm.app]["event"] = json.dumps(data)
+                self._report_alert_rules_error(relation, errmsg)
                 continue
-            if self._charm.unit.is_leader():
-                data = json.loads(relation.data[self._charm.app].get("event", "{}"))
-                data.pop("errors", None)
-                relation.data[self._charm.app]["event"] = json.dumps(data)
+            self._report_alert_rules_error(relation, None)
 
         if unreadable:
             logger.error(
@@ -1069,6 +1087,30 @@ class PrometheusRemoteWriteProvider(Object):
             )
 
         return alerts
+
+    def _report_alert_rules_error(self, relation: Relation, errmsg: Optional[str]) -> None:
+        """Report, or clear, an alert rules error for a relation.
+
+        The error is written to the `event` key of this application's databag, from where
+        `has_invalid_alert_rules` reads it back so the charm can block on it, and where the
+        consumer picks it up as an `alert_rule_status_changed` event.
+
+        Args:
+            relation: the relation the error pertains to.
+            errmsg: the error to report, or None to clear a previously reported one.
+        """
+        if not self._charm.unit.is_leader():
+            return
+
+        data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+        if errmsg:
+            data["errors"] = errmsg
+        elif "errors" not in data:
+            return
+        else:
+            data.pop("errors")
+
+        relation.data[self._charm.app]["event"] = json.dumps(data, sort_keys=True)
 
     def _get_identifier_by_alert_rules(
         self, rules: OfficialRuleFileFormat
