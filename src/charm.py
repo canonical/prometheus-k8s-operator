@@ -55,7 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import JujuTopology
+from cosl import AlertRulesCustomization, AlertRulesCustomizationError, JujuTopology
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -129,6 +129,7 @@ class CompositeStatus(TypedDict):
     config: Tuple[str, str]
     alert_rules: Tuple[str, str]
     scrape_jobs: Tuple[str, str]
+    alert_rules_customizations: Tuple[str, str]
 
 
 def to_tuple(status: StatusBase) -> Tuple[str, str]:
@@ -170,6 +171,7 @@ class PrometheusCharm(CharmBase):
                 config=to_tuple(ActiveStatus()),
                 alert_rules=to_tuple(ActiveStatus()),
                 scrape_jobs=to_tuple(ActiveStatus()),
+                alert_rules_customizations=to_tuple(ActiveStatus()),
             )
         )
 
@@ -813,8 +815,26 @@ class PrometheusCharm(CharmBase):
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
+        try:
+            customization = AlertRulesCustomization.from_yaml(
+                cast(str, self.model.config.get("alert_rule_customizations") or "")
+            )
+            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+        except AlertRulesCustomizationError as e:
+            logger.error("An error occurred while parsing alert rule customizations: %s", e)
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Invalid alert rule customizations. See debug-log")
+            )
+            customization = AlertRulesCustomization()  # no-op: write rules unmodified
+
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
+
+        # The two rule sets being customized are guaranteed to be valid.
+        # The libs are responsible for returning only valid rules.
+        metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
+        remote_write_alerts = customization.apply(remote_write_alerts)
+
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
