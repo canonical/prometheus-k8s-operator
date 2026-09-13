@@ -123,21 +123,40 @@ class TestCharm(unittest.TestCase):
         fqdn = socket.getfqdn()
         self.assertEqual(cli_arg(plan, "--web.external-url"), f"http://{fqdn}:9090")
 
-    def test_metrics_wal_compression_is_not_enabled_by_default(self):
+    def test_metrics_wal_compression_is_enabled_by_default(self):
         plan = self.harness.get_container_pebble_plan("prometheus")
-        self.assertEqual(cli_arg(plan, "--storage.tsdb.wal-compression"), None)
+        self.assertEqual(
+            cli_arg(plan, "--storage.tsdb.wal-compression"),
+            "--storage.tsdb.wal-compression",
+        )
+        self.assertIsNone(cli_arg(plan, "--no-storage.tsdb.wal-compression"))
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    def test_metrics_wal_compression_can_be_enabled(self, *unused):
-        compress_config = {"metrics_wal_compression": True}
-        self.harness.update_config(compress_config)
+    def test_metrics_wal_compression_can_be_disabled(self, *unused):
+        self.harness.update_config({"metrics_wal_compression": False})
+
+        # The workload enables WAL compression by default, so disabling it must emit the negated
+        # flag: dropping the flag entirely would leave compression on.
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(
+            cli_arg(plan, "--no-storage.tsdb.wal-compression"),
+            "--no-storage.tsdb.wal-compression",
+        )
+        self.assertIsNone(cli_arg(plan, "--storage.tsdb.wal-compression"))
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_metrics_wal_compression_can_be_re_enabled(self, *unused):
+        self.harness.update_config({"metrics_wal_compression": False})
+        self.harness.update_config({"metrics_wal_compression": True})
 
         plan = self.harness.get_container_pebble_plan("prometheus")
         self.assertEqual(
             cli_arg(plan, "--storage.tsdb.wal-compression"),
             "--storage.tsdb.wal-compression",
         )
+        self.assertIsNone(cli_arg(plan, "--no-storage.tsdb.wal-compression"))
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")

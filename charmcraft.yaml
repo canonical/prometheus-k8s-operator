@@ -222,11 +222,15 @@ config:
       default: "80%"
     metrics_wal_compression:
       description: |
-        This flag enables compression of the write-ahead log (WAL).
+        Whether to compress the write-ahead log (WAL).
         Depending on your data, you can expect the WAL size to be
         halved with little extra cpu load.
+        Enabled by default, matching the Prometheus workload default. Disabling this roughly
+        doubles the size of the `wal` directory, which counts towards the storage the workload
+        needs but is **not** reclaimed by `maximum_retention_size` (only persistent blocks are).
+        Disabling it therefore increases the risk of exhausting the `database` storage.
       type: boolean
-      default: false
+      default: true
     evaluation_interval:
       description: |
         How frequently rules will be evaluated.

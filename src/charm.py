@@ -887,6 +887,8 @@ class PrometheusCharm(CharmBase):
 
         if config.get("metrics_wal_compression"):
             args.append("--storage.tsdb.wal-compression")
+        else:
+            args.append("--no-storage.tsdb.wal-compression")
 
         if self._exemplars:
             args.append("--enable-feature=exemplar-storage")
