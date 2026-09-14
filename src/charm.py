@@ -339,6 +339,10 @@ class PrometheusCharm(CharmBase):
         if not is_valid_timespec(cast(str, retention_time)):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
+        out_of_order_time_window = self.model.config.get("out_of_order_time_window", "")
+        if not is_valid_timespec(cast(str, out_of_order_time_window)):
+            event.add_status(BlockedStatus(f"Invalid time spec : {out_of_order_time_window}"))
+
         # "Push" statuses
         for status in self._stored.status.values():
             event.add_status(to_status(status))
@@ -895,6 +899,11 @@ class PrometheusCharm(CharmBase):
             retention_time := cast(str, config.get("metrics_retention_time", ""))
         ):
             args.append(f"--storage.tsdb.retention.time={retention_time}")
+
+        if is_valid_timespec(
+            out_of_order_time_window := cast(str, config.get("out_of_order_time_window", ""))
+        ):
+            args.append(f"--storage.tsdb.out-of-order.time-window={out_of_order_time_window}")
 
         try:
             ratio = self._percent_string_to_ratio(
