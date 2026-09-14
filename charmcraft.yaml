@@ -254,6 +254,14 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
+    out_of_order_time_window:
+      default: "0s"
+      description: |
+        The time window within which out-of-order samples are accepted for ingestion.
+        Supported units: s, m, h (Prometheus duration format; "m" is minutes).
+        Set to "0s" to disable (default).
+        See https://prometheus.io/docs/prometheus/latest/configuration/configuration/#tsdb
+      type: string
 
 actions:
   validate-configuration:
