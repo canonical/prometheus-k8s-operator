@@ -175,7 +175,26 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
-    @prom_multipatch
+    def test_valid_out_of_order_time_window_can_be_set(self, *unused):
+        acceptable = ["5m", "1h", "30s", "0s"]
+        for value in acceptable:
+            self.harness.update_config({"out_of_order_time_window": value})
+            container = self.harness.charm.unit.get_container(self.harness.charm._name)
+            config = yaml.safe_load(container.pull(PROMETHEUS_CONFIG))
+            self.assertEqual(
+                config.get("storage", {}).get("tsdb", {}).get("out_of_order_time_window"), value
+            )
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_invalid_out_of_order_time_window_can_not_be_set(self, *unused):
+        self.harness.update_config({"out_of_order_time_window": "5min"})
+        container = self.harness.charm.unit.get_container(self.harness.charm._name)
+        config = yaml.safe_load(container.pull(PROMETHEUS_CONFIG))
+        self.assertIsNone(config.get("storage", {}).get("tsdb"))
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_global_evaluation_interval_can_be_set(self, *unused):
         evalint_config = {}
         acceptable_units = ["y", "w", "d", "h", "m", "s"]
