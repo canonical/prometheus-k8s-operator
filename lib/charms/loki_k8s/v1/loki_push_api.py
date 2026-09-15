@@ -478,6 +478,24 @@ Loki Push API and alert rules.
 Units of consumer charm send their alert rules over app relation data using the `alert_rules`
 key.
 
+## Alert rules encoding
+
+The consumer publishes its alert rules to the `alert_rules` key of its application
+databag. Because large deployments can produce enough alert rules to exceed Juju's
+relation data size limit, the rules can be stored LZMA-compressed and base64-encoded
+instead of as plain JSON.
+
+Compression is negotiated over the relation: the provider advertises the encodings it
+is able to read in the `alert_rules_encodings` key of its own application databag, and
+the consumer picks the best encoding both sides support. A consumer related to a
+provider running an older version of this library (which advertises nothing) keeps
+writing plain JSON, so upgrades are safe in any order.
+
+An admin can decode compressed rules with:
+```bash
+<alert-rules-from-show-unit> | base64 -d | xz -d | jq
+```
+
 ## Charm logging
 The `charms.loki_k8s.v0.charm_logging` library can be used in conjunction with this one to configure python's
 logging module to forward all logs to Loki via the loki-push-api interface.
@@ -501,6 +519,7 @@ Do this, and all charm logs will be forwarded to Loki as soon as a relation is f
 import copy
 import json
 import logging
+import lzma
 import os
 import platform
 import re
@@ -511,12 +530,12 @@ from gzip import GzipFile
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, Final, List, Mapping, Optional, Tuple, Union, cast
 from urllib import request
 from urllib.error import URLError
 
 import yaml
-from cosl import CosTool, JujuTopology
+from cosl import CosTool, JujuTopology, LZMABase64
 from cosl.rules import AlertRules
 from cosl.types import OfficialRuleFileFormat
 from ops.charm import (
@@ -544,7 +563,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 33
+LIBPATCH = 34
 
 PYDEPS = ["cosl"]
 
@@ -592,6 +611,123 @@ WORKLOAD_SERVICE_NAME = "promtail"
 # Each new container adds 2 to the previous value.
 HTTP_LISTEN_PORT_START = 9080  # even start port
 GRPC_LISTEN_PORT_START = 9095  # odd start port
+
+ALERT_RULES_KEY: Final[str] = "alert_rules"
+"""Databag key holding the consumer's alert rules."""
+
+ALERT_RULES_ENCODINGS_KEY: Final[str] = "alert_rules_encodings"
+"""Databag key with which the provider advertises the encodings it can read."""
+
+JSON_ENCODING: Final[str] = "json"
+"""Plain JSON alert rules, as written by every version of this library."""
+
+LZMA_ENCODING: Final[str] = "lzma"
+"""LZMA-compressed, base64-encoded JSON alert rules."""
+
+SUPPORTED_ALERT_RULES_ENCODINGS: Final[Tuple[str, ...]] = (LZMA_ENCODING, JSON_ENCODING)
+"""Alert rules encodings this library can read and write, most preferred first.
+
+This is in preference order, not sorted: it is a constant, so the bytes written to the
+databag are stable across hooks, which is what matters for avoiding spurious
+relation-changed events.
+"""
+
+
+def _encode_alert_rules(rules: Mapping[str, Any], encoding: str = JSON_ENCODING) -> str:
+    """Serialize alert rules for storing them in a relation databag.
+
+    Args:
+        rules: alert rules in the official Loki rule file format.
+        encoding: one of `SUPPORTED_ALERT_RULES_ENCODINGS`. Anything else is treated
+            as `JSON_ENCODING`, because plain JSON is readable by every version of
+            this library.
+
+    Returns:
+        The serialized alert rules.
+    """
+    # Sort keys to prevent unnecessary relation-changed churn from key reordering.
+    serialized = json.dumps(rules, sort_keys=True)
+    if encoding == LZMA_ENCODING:
+        return LZMABase64.compress(serialized)
+    return serialized
+
+
+def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
+    """Deserialize alert rules read from a relation databag.
+
+    Both plain JSON and LZMA-compressed, base64-encoded JSON are accepted, regardless
+    of the encodings this library advertises, so that a provider can always read the
+    rules of a consumer running any version of this library.
+
+    Args:
+        raw: the raw databag value.
+
+    Returns:
+        The alert rules in the official Loki rule file format.
+
+    Raises:
+        ValueError: if `raw` is neither valid JSON nor a valid compressed payload, or if it
+            decodes to something other than a JSON object.
+    """
+    if not raw:
+        return cast(OfficialRuleFileFormat, {})
+
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        # Not JSON, so this must be a compressed payload.
+        decoded = raw
+
+    if isinstance(decoded, str):
+        # A compressed payload, either bare or (as pydantic based libraries write it)
+        # JSON-encoded.
+        try:
+            decoded = json.loads(LZMABase64.decompress(decoded))
+        except (ValueError, lzma.LZMAError) as e:
+            raise ValueError(f"Could not decompress alert rules: {e}") from e
+
+    if not isinstance(decoded, dict):
+        raise ValueError(f"Alert rules must be a JSON object, not {type(decoded).__name__}")
+
+    return cast(OfficialRuleFileFormat, decoded)
+
+
+def _best_alert_rules_encoding(remote_app_databag: Optional[Mapping[str, str]]) -> str:
+    """Return the best alert rules encoding the remote application is able to read.
+
+    Providers advertise the encodings they support in their application databag.
+    Providers running an older version of this library advertise nothing, in which
+    case plain JSON is used for backwards compatibility.
+
+    Args:
+        remote_app_databag: the remote application databag, or None if it is not
+            readable yet (e.g. the relation is still being set up).
+
+    Returns:
+        One of `SUPPORTED_ALERT_RULES_ENCODINGS`.
+    """
+    raw = remote_app_databag.get(ALERT_RULES_ENCODINGS_KEY, "[]") if remote_app_databag else "[]"
+
+    try:
+        advertised = json.loads(raw)
+        if not isinstance(advertised, list):
+            raise TypeError("expected a list, got {}".format(type(advertised).__name__))
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(
+            "Ignoring malformed '%s' (%s); assuming the remote end is only able to read "
+            "uncompressed alert rules.",
+            ALERT_RULES_ENCODINGS_KEY,
+            e,
+        )
+        return JSON_ENCODING
+
+    for encoding in SUPPORTED_ALERT_RULES_ENCODINGS:
+        if encoding in advertised:
+            return encoding
+
+    # Either nothing was advertised (an older provider), or only encodings this library
+    # does not know about. Plain JSON is the encoding every version can read.
+    return JSON_ENCODING
 
 
 class LokiPushApiError(Exception):
@@ -940,6 +1076,10 @@ class LokiPushApiProvider(Object):
         self.framework.observe(events.relation_changed, self._on_logging_relation_changed)
         self.framework.observe(events.relation_departed, self._on_logging_relation_departed)
         self.framework.observe(events.relation_broken, self._on_logging_relation_broken)
+        self.framework.observe(
+            self._charm.on.leader_elected,
+            self._publish_encodings_to_all_relation_databags,
+        )
 
     def _on_lifecycle_event(self, _):
         # Upgrade event or other charm-level event
@@ -968,6 +1108,7 @@ class LokiPushApiProvider(Object):
         if self._charm.unit.is_leader():
             event.relation.data[self._charm.app].update(self._promtail_binary_url)
             logger.debug("Saved promtail binary url: %s", self._promtail_binary_url)
+        self._publish_alert_rules_encodings(event.relation)
 
     def _on_logging_relation_changed(self, event: HookEvent):
         """Handle changes in related consumers.
@@ -1046,6 +1187,7 @@ class LokiPushApiProvider(Object):
         """
         relation.data[self._charm.unit]["public_address"] = socket.getfqdn() or ""
         self.update_endpoint(relation=relation)
+        self._publish_alert_rules_encodings(relation)
 
         # Ensure promtail binary URL is set in app data. This is normally done on
         # relation_joined, but charms using the reconcile pattern may miss that event
@@ -1055,6 +1197,28 @@ class LokiPushApiProvider(Object):
                 relation.data[self._charm.app].update(self._promtail_binary_url)
 
         return self._should_update_alert_rules(relation)
+
+    def _publish_encodings_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
+        for relation in self._charm.model.relations[self._relation_name]:
+            self._publish_alert_rules_encodings(relation)
+
+    def _publish_alert_rules_encodings(self, relation: Relation) -> None:
+        """Advertise the alert rules encodings this library is able to read.
+
+        Consumers use this to decide whether they may compress their alert rules: a
+        consumer related to a provider that does not advertise anything keeps writing
+        plain JSON, which every version of this library can read.
+
+        Args:
+            relation: The relation whose data to update.
+        """
+        if not self._charm.unit.is_leader():
+            # Only the leader unit can write to app data.
+            return
+
+        relation.data[self._charm.app][ALERT_RULES_ENCODINGS_KEY] = json.dumps(
+            list(SUPPORTED_ALERT_RULES_ENCODINGS)
+        )
 
     @property
     def _promtail_binary_url(self) -> dict:
@@ -1103,6 +1267,7 @@ class LokiPushApiProvider(Object):
 
         for relation in relations_list:
             relation.data[self._charm.unit].update({"endpoint": json.dumps(endpoint)})
+            self._publish_alert_rules_encodings(relation)
 
         logger.debug("Saved endpoint in unit relation data")
 
@@ -1159,15 +1324,23 @@ class LokiPushApiProvider(Object):
             metadata indexed by relation ID.
         """
         alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        unreadable: Dict[int, str] = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            try:
+                alert_rules = _decode_alert_rules(
+                    relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
+                )
+            except Exception as e:
+                unreadable[relation.id] = str(e)
+                continue
+
             if not alert_rules:
                 continue
 
-            alert_rules = self._inject_alert_expr_labels(alert_rules)
+            alert_rules = self._inject_alert_expr_labels(cast(Dict[str, Any], alert_rules))
 
             identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
             if not topology:
@@ -1207,6 +1380,12 @@ class LokiPushApiProvider(Object):
                 relation.data[self._charm.app]["event"] = json.dumps(event_data)
 
             alerts[identifier] = alert_rules
+
+        if unreadable:
+            logger.error(
+                "Could not read the alert rules published over relation(s): %s",
+                "; ".join("{} ({})".format(rel_id, err) for rel_id, err in unreadable.items()),
+            )
 
         return alerts
 
@@ -1404,9 +1583,9 @@ class ConsumerBase(Object):
             )
 
         relation.data[self._charm.app]["metadata"] = json.dumps(self.topology.as_dict())
-        relation.data[self._charm.app]["alert_rules"] = json.dumps(
-            alert_rules_as_dict,
-            sort_keys=True,  # sort, to prevent unnecessary relation_changed events
+        remote_app_databag = relation.data.get(relation.app) if relation.app else None
+        relation.data[self._charm.app][ALERT_RULES_KEY] = _encode_alert_rules(
+            alert_rules_as_dict, _best_alert_rules_encoding(remote_app_databag)
         )
 
     @property
@@ -1591,6 +1770,11 @@ class LokiPushApiConsumer(ConsumerBase):
             loki_push_api_alert_rules_error: This event is emitted when an invalid alert rules
                 file is encountered or if `alert_rules_path` is empty.
         """
+        # The provider advertises the alert rules encodings it supports over relation data,
+        # which may only become known after relation_joined; (re)send alert rules here so the
+        # negotiated encoding is picked up.
+        self._handle_alert_rules(event.relation)  # pyright: ignore
+
         if self._charm.unit.is_leader():
             ev = json.loads(event.relation.data[event.app].get("event", "{}"))
 
