@@ -341,6 +341,10 @@ class PrometheusCharm(CharmBase):
         if not is_valid_timespec(cast(str, retention_time)):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
+        out_of_order_time_window = self.model.config.get("out_of_order_time_window", "")
+        if not is_valid_timespec(cast(str, out_of_order_time_window)):
+            event.add_status(BlockedStatus(f"Invalid time spec : {out_of_order_time_window}"))
+
         # "Push" statuses
         for status in self._stored.status.values():
             event.add_status(to_status(status))
@@ -1140,8 +1144,15 @@ class PrometheusCharm(CharmBase):
 
         web_config = self._web_config()
 
+        storage_config = {}
         if self._exemplars:
-            prometheus_config["storage"] = {"exemplars": {"max_exemplars": self._exemplars}}
+            storage_config["exemplars"] = {"max_exemplars": self._exemplars}
+        if is_valid_timespec(
+            ooo := cast(str, self.model.config.get("out_of_order_time_window", ""))
+        ):
+            storage_config.setdefault("tsdb", {})["out_of_order_time_window"] = ooo
+        if storage_config:
+            prometheus_config["storage"] = storage_config
 
         if self.workload_tracing_endpoint:
             prometheus_config["tracing"] = self._tracing_config()
