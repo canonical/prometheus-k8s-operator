@@ -206,12 +206,6 @@ class TestCharm(unittest.TestCase):
             gconfig = global_config(config)
             self.assertEqual(gconfig["evaluation_interval"], evalint_config["evaluation_interval"])
 
-    def test_default_scrape_config_is_always_set(self):
-        container = self.harness.charm.unit.get_container(self.harness.charm._name)
-        config = container.pull(PROMETHEUS_CONFIG)
-        prometheus_scrape_config = scrape_config(config, "prometheus")
-        self.assertIsNotNone(prometheus_scrape_config, "No default config found")
-
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
     def test_honor_labels_is_always_set_in_scrape_configs(self, *unused):
@@ -230,9 +224,8 @@ class TestCharm(unittest.TestCase):
         config = container.pull(PROMETHEUS_CONFIG)
         prometheus_scrape_config = yaml.safe_load(config)
         for job in prometheus_scrape_config["scrape_configs"]:
-            if job["job_name"] != "prometheus":
-                self.assertIn("honor_labels", job)
-                self.assertTrue(job["honor_labels"])
+            self.assertIn("honor_labels", job)
+            self.assertTrue(job["honor_labels"])
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
@@ -280,13 +273,6 @@ def global_config(config_yaml):
     return config_dict["global"]
 
 
-def scrape_config(config_yaml, job_name):
-    config_dict = yaml.safe_load(config_yaml)
-    scrape_configs = config_dict["scrape_configs"]
-    for config in scrape_configs:
-        if config["job_name"] == job_name:
-            return config
-    return None
 
 
 @prom_multipatch
