@@ -393,7 +393,6 @@ class PrometheusCharm(CharmBase):
         """Scrape config for "external" self monitoring.
 
         This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
-        Not to be confused with `self._default_config()`.
         """
         port = urlparse(self.most_external_url).port
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
@@ -432,60 +431,6 @@ class PrometheusCharm(CharmBase):
         logging.warning(log_message)
         self._stored.status["log_level"] = to_tuple(BlockedStatus(log_message))
         return "debug"
-
-    @property
-    def _default_config(self):
-        """Default configuration for the Prometheus workload.
-
-        This scrape config is for prometheus to scrape itself, not to be confused with the
-        self-monitoring scrape job in `self_scraping_job()`.
-        """
-        config = {
-            "job_name": "prometheus",
-            "scrape_interval": "5s",
-            "scrape_timeout": "5s",
-            "metrics_path": "/metrics",
-            "honor_timestamps": True,
-            "scheme": "http",  # replaced with "https" below if behind TLS
-            "static_configs": [
-                {
-                    "targets": [f"{self._fqdn}:{self._port}"],
-                    "labels": {
-                        "juju_model": self._topology.model,
-                        "juju_model_uuid": self._topology.model_uuid,
-                        "juju_application": self._topology.application,
-                        "juju_unit": self._topology.unit,
-                        "juju_charm": self._topology.charm_name,
-                        "host": "localhost",
-                    },
-                }
-            ],
-            "relabel_configs": [
-                {
-                    "source_labels": [
-                        "juju_model",
-                        "juju_model_uuid",
-                        "juju_application",
-                        "juju_unit",
-                    ],
-                    "separator": "_",
-                    "target_label": "instance",
-                    "regex": "(.*)",
-                }
-            ],
-        }
-
-        if self._tls_available:
-            config.update(
-                {
-                    "scheme": "https",
-                    "tls_config": {
-                        "ca_file": self._ca_cert_path,
-                    },
-                }
-            )
-
-        return config
 
     @property
     def internal_url(self) -> str:
@@ -1116,7 +1061,6 @@ class PrometheusCharm(CharmBase):
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
 
-        prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         certs: Dict[str, str] = {}
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
