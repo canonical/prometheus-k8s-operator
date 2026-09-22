@@ -225,16 +225,18 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
+        # Self-monitoring is in-cluster (see `self_scraping_job`), so no `external_url` is
+        # advertised here: scrapers should not be sent through the ingress.
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
-            external_url=self.most_external_url,
-            refresh_event=[  # needed for ingress
-                self.ingress.on.ready_for_unit,
-                self.ingress.on.revoked_for_unit,
+            refresh_event=[
                 self.on.update_status,
                 self._cert_requirer.on.certificate_available,
+                # A unit joining or leaving changes the set of targets
+                self.on["prometheus-peers"].relation_joined,
+                self.on["prometheus-peers"].relation_departed,
             ],
         )
         self._prometheus_client = Prometheus(self.internal_url)
@@ -389,26 +391,59 @@ class PrometheusCharm(CharmBase):
         )
 
     @property
+    def unit_fqdns(self) -> List[str]:
+        """FQDNs of all the units of this application, including this unit.
+
+        On Kubernetes, unit FQDNs are deterministic: the leftmost label is the pod name
+        (`<app-name>-<unit-num>`), followed by the domain of the "endpoints" service, which is
+        shared by all the units. This means peer FQDNs can be derived from this unit's FQDN,
+        without having to exchange them over peer relation data.
+        """
+        _, _, domain = self._fqdn.partition(".")
+        if not domain:
+            # Not a k8s-style FQDN (e.g. "localhost"): peer FQDNs cannot be derived.
+            return [self._fqdn]
+
+        unit_names = {self.unit.name}
+        if peers := self.model.get_relation("prometheus-peers"):
+            unit_names.update(unit.name for unit in peers.units)
+
+        # Sorted for stable relation data across hooks.
+        return sorted(f"{unit_name.replace('/', '-')}.{domain}" for unit_name in unit_names)
+
+    @property
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
-        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
+        This scrape job is for a remote Prometheus (or any other scraper) to scrape this
+        prometheus, for self-monitoring.
+
+        Self-monitoring is assumed to be in-cluster, so the targets are the units' FQDNs and the
+        workload port, rather than the (possibly ingressed) external URL:
+
+        - The ingress may be serving a scheme different from the workload's own scheme (e.g. https
+          ingress in front of an http prometheus), in which case the scheme and port we advertise
+          here would not match what the ingress is actually listening on.
+        - The CA cert we hand over in `tls_config` is the one that signed *our* server cert; it
+          would generally not validate the ingress' server cert.
+        - Certs are signed with the FQDN as the SAN DNS, so scraping any other address (e.g. the
+          pod IP or the ingress hostname) would fail hostname verification.
         """
-        port = urlparse(self.most_external_url).port
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
         # to specify it here.
+        targets = [f"{fqdn}:{self._port}" for fqdn in self.unit_fqdns]
         if tls_config := self._tls_config:
             config = {
                 "scheme": "https",
                 "tls_config": {
                     "ca_file": tls_config.ca_cert,
                 },
-                "static_configs": [{"targets": [f"*:{port or 443}"]}],
+                "static_configs": [{"targets": targets}],
             }
         else:
             config = {
                 "scheme": "http",
-                "static_configs": [{"targets": [f"*:{port or 80}"]}],
+                "static_configs": [{"targets": targets}],
             }
 
         return [config]
