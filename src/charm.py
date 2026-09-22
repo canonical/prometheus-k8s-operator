@@ -225,8 +225,7 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        # Self-monitoring is in-cluster (see `self_scraping_job`), so no `external_url` is
-        # advertised here: scrapers should not be sent through the ingress.
+        # No `external_url`: self-monitoring is in-cluster, not through the ingress.
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
@@ -389,34 +388,20 @@ class PrometheusCharm(CharmBase):
 
     @property
     def self_scraping_job(self):
-        """Scrape config for "external" self monitoring.
+        """Scrape config for a remote scraper to scrape this prometheus, for self-monitoring.
 
-        This scrape job is for a remote Prometheus (or any other scraper) to scrape this
-        prometheus, for self-monitoring.
+        The target is this unit's FQDN and workload port, never the ingress URL: the ingress may
+        serve a different scheme and port than the workload, and our cert would not validate
+        against it.
 
-        Self-monitoring is assumed to be in-cluster, so the target is this unit's FQDN and the
-        workload port, rather than the (possibly ingressed) external URL:
-
-        - The ingress may be serving a scheme different from the workload's own scheme (e.g. an
-          https ingress in front of an http prometheus), in which case the scheme and port we
-          advertise here would not match what the ingress is actually listening on.
-        - The CA cert we hand over in `tls_config` is the one that signed *our* server cert; it
-          would generally not validate the ingress' server cert.
-        - Our cert is signed with the FQDN as the SAN DNS, so scraping any other address (e.g. the
-          pod IP or the ingress hostname) would fail hostname verification.
-
-        Note: only this unit is advertised as a target, because prometheus is not intended to be
-        scaled beyond one unit.
+        Note: only this unit is a target, because prometheus is not intended to be scaled.
         """
-        # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-        # to specify it here.
+        # `metrics_path` is automatically rendered by MetricsEndpointProvider.
         targets = [f"{self._fqdn}:{self._port}"]
         if tls_config := self._tls_config:
             config = {
                 "scheme": "https",
-                "tls_config": {
-                    "ca_file": tls_config.ca_cert,
-                },
+                "tls_config": {"ca_file": tls_config.ca_cert},
                 "static_configs": [{"targets": targets}],
             }
         else:
