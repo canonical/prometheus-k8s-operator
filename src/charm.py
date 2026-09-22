@@ -234,9 +234,6 @@ class PrometheusCharm(CharmBase):
             refresh_event=[
                 self.on.update_status,
                 self._cert_requirer.on.certificate_available,
-                # A unit joining or leaving changes the set of targets
-                self.on["prometheus-peers"].relation_joined,
-                self.on["prometheus-peers"].relation_departed,
             ],
         )
         self._prometheus_client = Prometheus(self.internal_url)
@@ -391,47 +388,29 @@ class PrometheusCharm(CharmBase):
         )
 
     @property
-    def unit_fqdns(self) -> List[str]:
-        """FQDNs of all the units of this application, including this unit.
-
-        On Kubernetes, unit FQDNs are deterministic: the leftmost label is the pod name
-        (`<app-name>-<unit-num>`), followed by the domain of the "endpoints" service, which is
-        shared by all the units. This means peer FQDNs can be derived from this unit's FQDN,
-        without having to exchange them over peer relation data.
-        """
-        _, _, domain = self._fqdn.partition(".")
-        if not domain:
-            # Not a k8s-style FQDN (e.g. "localhost"): peer FQDNs cannot be derived.
-            return [self._fqdn]
-
-        unit_names = {self.unit.name}
-        if peers := self.model.get_relation("prometheus-peers"):
-            unit_names.update(unit.name for unit in peers.units)
-
-        # Sorted for stable relation data across hooks.
-        return sorted(f"{unit_name.replace('/', '-')}.{domain}" for unit_name in unit_names)
-
-    @property
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
         This scrape job is for a remote Prometheus (or any other scraper) to scrape this
         prometheus, for self-monitoring.
 
-        Self-monitoring is assumed to be in-cluster, so the targets are the units' FQDNs and the
+        Self-monitoring is assumed to be in-cluster, so the target is this unit's FQDN and the
         workload port, rather than the (possibly ingressed) external URL:
 
-        - The ingress may be serving a scheme different from the workload's own scheme (e.g. https
-          ingress in front of an http prometheus), in which case the scheme and port we advertise
-          here would not match what the ingress is actually listening on.
+        - The ingress may be serving a scheme different from the workload's own scheme (e.g. an
+          https ingress in front of an http prometheus), in which case the scheme and port we
+          advertise here would not match what the ingress is actually listening on.
         - The CA cert we hand over in `tls_config` is the one that signed *our* server cert; it
           would generally not validate the ingress' server cert.
-        - Certs are signed with the FQDN as the SAN DNS, so scraping any other address (e.g. the
+        - Our cert is signed with the FQDN as the SAN DNS, so scraping any other address (e.g. the
           pod IP or the ingress hostname) would fail hostname verification.
+
+        Note: only this unit is advertised as a target, because prometheus is not intended to be
+        scaled beyond one unit.
         """
         # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
         # to specify it here.
-        targets = [f"{fqdn}:{self._port}" for fqdn in self.unit_fqdns]
+        targets = [f"{self._fqdn}:{self._port}"]
         if tls_config := self._tls_config:
             config = {
                 "scheme": "https",

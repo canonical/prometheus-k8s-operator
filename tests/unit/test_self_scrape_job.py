@@ -21,8 +21,7 @@ from ops.testing import PeerRelation, Relation, State
 from charm import PrometheusCharm, TLSConfig
 
 CA_CERT = "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----"
-MODEL_DOMAIN = "prometheus-k8s-endpoints.test-model.svc.cluster.local"
-FQDN = f"prometheus-k8s-0.{MODEL_DOMAIN}"
+FQDN = "prometheus-k8s-0.prometheus-k8s-endpoints.test-model.svc.cluster.local"
 PORT = 9090
 INGRESS_HOST = "traefik.example.com"
 INGRESS_PATH = "/test-model-prometheus-k8s-0"
@@ -137,28 +136,3 @@ def test_ingress_scheme_does_not_leak_into_scrape_job(
     targets = jobs[0]["static_configs"][0]["targets"]
     assert targets == [f"{FQDN}:{PORT}"]
 
-
-@pytest.mark.parametrize("tls", (False,), indirect=True)
-def test_self_scrape_job_includes_all_peer_units(context, prometheus_container, tls):
-    # GIVEN prometheus is scaled to three units
-    self_metrics = Relation("self-metrics-endpoint", remote_app_name="otelcol")
-    peers = PeerRelation("prometheus-peers", peers_data={1: {}, 2: {}})
-    state = State(
-        leader=True,
-        containers={prometheus_container},
-        relations=[self_metrics, peers],
-    )
-
-    # WHEN any event is emitted
-    out = context.run(context.on.update_status(), state)
-
-    # THEN every unit is a scrape target, addressed by its own FQDN
-    assert scrape_jobs_of(out)[0]["static_configs"] == [
-        {
-            "targets": [
-                f"prometheus-k8s-0.{MODEL_DOMAIN}:{PORT}",
-                f"prometheus-k8s-1.{MODEL_DOMAIN}:{PORT}",
-                f"prometheus-k8s-2.{MODEL_DOMAIN}:{PORT}",
-            ]
-        }
-    ]
