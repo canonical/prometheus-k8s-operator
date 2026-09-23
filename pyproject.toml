@@ -6,7 +6,7 @@ version = "0.0"
 requires-python = "~=3.14.0"
 
 dependencies = [
-  "ops[tracing]",
+  "ops[tracing]>=3.8.0", # 3.8.0 fixes the "_WebsocketWriter" finalizer warnings (canonical/operator#2547)
   "pyyaml",
   "cosl",
   "lightkube>=0.11",

@@ -1107,16 +1107,16 @@ wheels = [
 
 [[package]]
 name = "ops"
-version = "3.7.1"
+version = "3.8.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-api" },
     { name = "pyyaml" },
     { name = "websocket-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/60/ad398d889fd03b1b4f950fad54ad4d0cf7a81fde21f9866a8139c8f03684/ops-3.7.1.tar.gz", hash = "sha256:1765bf6d1cff376ea27608542e183b055c89f2c5f54bca602072bcc817195abc", size = 582424, upload-time = "2026-05-28T04:13:43.906Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/0a/6e5730c50c1737b505ccd0d7bc3c53c625745a75aae9faa2fe635ea7a473/ops-3.8.2.tar.gz", hash = "sha256:a516e76a76fdfd4a37f26f2b9956c332b56bda72014c8565ceb4f6deb137407f", size = 610712, upload-time = "2026-08-31T04:37:49.011Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ca/20/742e720af65f9ad23ae0cfe140502a10b2e74da6c63773f3999dad793661/ops-3.7.1-py3-none-any.whl", hash = "sha256:559dc6770e551da5f4b9686a5605ed927c140182eb38bcc31c1c531c2f98923a", size = 212723, upload-time = "2026-05-28T04:13:39.845Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/4c/ddaef2a0f8d208aed071087b61e6984bb8507cf202c965025446cf4cce8a/ops-3.8.2-py3-none-any.whl", hash = "sha256:dcead2241d17921441123425072dd6adddf5f337dc6d6fd2b3ba1fd60a0af822", size = 215761, upload-time = "2026-08-31T04:37:45.153Z" },
 ]
 
 [package.optional-dependencies]
@@ -1129,21 +1129,21 @@ tracing = [
 
 [[package]]
 name = "ops-scenario"
-version = "8.7.1"
+version = "8.8.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ops" },
     { name = "pyyaml" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/06/705b452b9145107978eb0400a1e751839ed1ec59dc152fa45a2e5fba0ea3/ops_scenario-8.7.1.tar.gz", hash = "sha256:25b24c7c612b8e089ad05f24a47c138999d1cc0a2683e0f7c74e0520c7bb6043", size = 78576, upload-time = "2026-05-28T04:13:45.292Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/06/fc2da6f27a9831b11ed55420b0d65720f6b96ee324fcea0e699e4e01b7ea/ops_scenario-8.8.2.tar.gz", hash = "sha256:4d9c8371ae02064352f852dda4cccd0fb825b8184f26ae2150c8b5bc1032c6b9", size = 86981, upload-time = "2026-08-31T04:37:50.287Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/45/c78501e1b8203207b7c43f62233b9fea3be5015f5230ce53d7deceb5d7a3/ops_scenario-8.7.1-py3-none-any.whl", hash = "sha256:01a8cee03c57a826b2dd9692571731d6307327cace7ac7865d9420e1136e7860", size = 69401, upload-time = "2026-05-28T04:13:41.39Z" },
+    { url = "https://files.pythonhosted.org/packages/15/15/abe6b080341cd6db8c9d1d7124903c48361f3cf783c8d8a08043560f1e1a/ops_scenario-8.8.2-py3-none-any.whl", hash = "sha256:4e2a8edc04e169739e0769a4cec0acbd6e0d82d771a3e5617223a9f537f3128a", size = 74916, upload-time = "2026-08-31T04:37:46.657Z" },
 ]
 
 [[package]]
 name = "ops-tracing"
-version = "3.7.1"
+version = "3.8.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -1151,9 +1151,9 @@ dependencies = [
     { name = "ops" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/a4/f56c5f146cb38a1092b68fe8f29b945b982c3daebfee6854785b60641437/ops_tracing-3.7.1.tar.gz", hash = "sha256:fc433a58c868d36a64fe708ef8c9318ec925af7908490057ce6274c116f49af8", size = 28599, upload-time = "2026-05-28T04:13:46.306Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/43/9b968604c7308a18a27176db2ff7b0f4035f04033d8782e3014530b712fa/ops_tracing-3.8.2.tar.gz", hash = "sha256:30049c9a28688dad4f34653b983daf9a7904ebc7d56203639ae2e99fdf7c388f", size = 29995, upload-time = "2026-08-31T04:37:51.223Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/3c/eed4b9c677050b211c60d64128226ba8e5f48a767f86eaf46486f883e727/ops_tracing-3.7.1-py3-none-any.whl", hash = "sha256:6b7a74e61477e0e47b42460aafc1669dfee98ec2e4a2f0360f0b86e8e6c49c3f", size = 31444, upload-time = "2026-05-28T04:13:42.546Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/bb/3ce7a5c59d0d149c615a221d829685538378264c2be97a1f80462f0a7a6d/ops_tracing-3.8.2-py3-none-any.whl", hash = "sha256:5809909692210aa3d782cad93a631fa69653b304d2abdc185922cca76e59621a", size = 32988, upload-time = "2026-08-31T04:37:47.818Z" },
 ]
 
 [[package]]
@@ -1309,7 +1309,7 @@ requires-dist = [
     { name = "minio", marker = "extra == 'dev'" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'dev'" },
     { name = "ops", extras = ["testing"], marker = "extra == 'dev'" },
-    { name = "ops", extras = ["tracing"] },
+    { name = "ops", extras = ["tracing"], specifier = ">=3.8.0" },
     { name = "prometheus-api-client", marker = "extra == 'dev'" },
     { name = "prometheus-client", marker = "extra == 'dev'" },
     { name = "pydantic", specifier = ">=2" },
