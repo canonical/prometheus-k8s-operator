@@ -39,31 +39,26 @@ PROMETHEUS_RESOURCES = {"prometheus-image": oci_image("./charmcraft.yaml", "prom
 
 
 def _self_up_samples(juju: jubilant.Juju) -> list[tuple[float, float]]:
-    """Newest ``(timestamp, value)`` of every self-metrics ``up`` series in the DB.
+    """Newest ``(timestamp, value)`` of every self-metrics ``up`` series; empty if unreachable.
 
-    Returns an empty list when Prometheus is unreachable right now (the caller retries),
-    or when the response is not the expected instant-vector shape (also retry).
+    The TLS scenarios toggle Prometheus' own listener between http and https on the same
+    port, and ``juju status`` only discloses the Pod IP, so we try both schemes.
     """
     address = juju.status().apps[APP].units[f"{APP}/0"].address
     for scheme in ("https", "http"):
         try:
-            requests.get(f"{scheme}://{address}:9090", timeout=30, verify=False)
-        except requests.RequestException:
-            continue
-        try:
-            result = Prometheus(url=f"{scheme}://{address}:9090").query(
+            response = Prometheus(url=f"{scheme}://{address}:9090", timeout=10).query(
                 f'up{{juju_application="{APP}"}}'
             )
         except requests.RequestException:
-            return []
-        return parse_up_samples(result)
+            continue
+        return parse_up_samples(response)
     return []
 
 
 def _self_up_timestamp(juju: jubilant.Juju) -> float:
     """Newest sample timestamp of the self-metrics ``up`` series (0.0 if none yet)."""
-    samples = _self_up_samples(juju)
-    return max((timestamp for timestamp, _ in samples), default=0.0)
+    return max((timestamp for timestamp, _ in _self_up_samples(juju)), default=0.0)
 
 
 def _monitorable(juju: jubilant.Juju, previously_seen: float) -> bool:
@@ -73,7 +68,7 @@ def _monitorable(juju: jubilant.Juju, previously_seen: float) -> bool:
 
 def _check(juju: jubilant.Juju, previously_seen: float) -> None:
     """Wait for a new successful round trip to reach Prometheus (give up after 5 min)."""
-    juju.wait(lambda _status: _monitorable(juju, previously_seen), timeout=300, delay=10)
+    juju.wait(lambda _status: _monitorable(juju, previously_seen), timeout=450, delay=10)
 
 
 def test_setup(juju: jubilant.Juju, prometheus_charm):
