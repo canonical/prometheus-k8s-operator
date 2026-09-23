@@ -26,7 +26,6 @@ it, so it must have scraped Prometheus through the Traefik door with the new set
 """
 
 import jubilant
-import pytest
 import requests
 from helpers import has_new_success_scrape, oci_image, parse_up_samples
 from observability_clients import Prometheus
