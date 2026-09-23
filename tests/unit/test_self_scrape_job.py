@@ -68,9 +68,11 @@ def test_self_scrape_job_is_in_cluster(context, prometheus_container, tls, ingre
     assert job["static_configs"] == [{"targets": [f"{FQDN}:{PORT}"]}]
     assert job.get("tls_config") == ({"ca_file": CA_CERT} if tls else None)
 
-    # AND the scraper is not pointed at the ingress url either (an empty path is dropped by juju)
-    assert relation.local_unit_data.get("prometheus_scrape_unit_path", "") == ""
+    # AND the scraper is not pointed at the ingress url either
     assert relation.local_unit_data["prometheus_scrape_unit_fqdn"] == FQDN
+
+    # AND no path is provided since the ingress url is not used for scraping
+    assert relation.local_unit_data.get("prometheus_scrape_unit_path", "") == ""
 
     # AND YET the ingress url is still what prometheus serves its UI on
     command = out.get_container("prometheus").layers["prometheus"].services["prometheus"].command
