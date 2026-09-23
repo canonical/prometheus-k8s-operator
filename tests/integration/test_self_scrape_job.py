@@ -77,7 +77,6 @@ def _check(juju: jubilant.Juju, previously_seen: float) -> None:
     juju.wait(lambda _status: _monitorable(juju, previously_seen), timeout=300, delay=10)
 
 
-@pytest.mark.abort_on_fail
 def test_setup(juju: jubilant.Juju, prometheus_charm):
     """Deploy everything and wire the otelcol round trip plus the Traefik door."""
     juju.deploy(prometheus_charm, app=APP, resources=PROMETHEUS_RESOURCES, trust=True)
@@ -99,13 +98,11 @@ def test_setup(juju: jubilant.Juju, prometheus_charm):
     _check(juju, previously_seen=0.0)
 
 
-@pytest.mark.abort_on_fail
 def test_encryption_off(juju: jubilant.Juju):
     """Scenario 1: no encryption anywhere."""
     _check(juju, _self_up_timestamp(juju))
 
 
-@pytest.mark.abort_on_fail
 def test_encryption_on_prometheus_only(juju: jubilant.Juju):
     """Scenario 2: Prometheus encrypts, Traefik stays plain (give Traefik the CA)."""
     previously_seen = _self_up_timestamp(juju)
@@ -114,7 +111,6 @@ def test_encryption_on_prometheus_only(juju: jubilant.Juju):
     _check(juju, previously_seen)
 
 
-@pytest.mark.abort_on_fail
 def test_encryption_everywhere(juju: jubilant.Juju):
     """Scenario 3: Prometheus and Traefik both encrypt."""
     previously_seen = _self_up_timestamp(juju)
@@ -122,7 +118,6 @@ def test_encryption_everywhere(juju: jubilant.Juju):
     _check(juju, previously_seen)
 
 
-@pytest.mark.abort_on_fail
 def test_encryption_on_traefik_only(juju: jubilant.Juju):
     """Scenario 4: Traefik still encrypts, Prometheus goes back to plain HTTP."""
     previously_seen = _self_up_timestamp(juju)
