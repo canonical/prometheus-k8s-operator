@@ -392,46 +392,22 @@ class PrometheusCharm(CharmBase):
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
-        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
-
-        The advertised scheme and port must match how a scraper actually reaches us. Behind an
-        ingress, that is the scheme and port Traefik reports in the ingress URL, which may well
-        differ from Prometheus' own TLS setup (e.g. an ingress serving plain HTTP in front of a
-        Prometheus serving TLS). Without an ingress, scrapers reach us in-cluster on our own
-        scheme and workload port.
-
-        `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-        to specify it here.
+        Tell scrapers how to reach Prometheus: via the ingress URL when there is one (its
+        scheme/port come from Traefik, which may differ from Prometheus' own TLS), otherwise
+        via our workload URL. `metrics_path` is rendered by MetricsEndpointProvider.
         """
-        if external_url := self.external_url:
-            parsed = urlparse(external_url)
-            scheme = parsed.scheme or "http"
-            config = {
-                "scheme": scheme,
-                "static_configs": [
-                    {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
-                ],
-            }
-            # TLS is only in play when the ingress actually serves it; the connection then
-            # terminates at the ingress, not at Prometheus, so we do not pin our serving CA.
-            if scheme == "https" and (tls_config := self._tls_config):
-                config["tls_config"] = {
-                    "ca_file": tls_config.ca_cert,
-                }
-            return [config]
-
-        if tls_config := self._tls_config:
-            config = {
-                "scheme": "https",
-                "tls_config": {
-                    "ca_file": tls_config.ca_cert,
-                },
-                "static_configs": [{"targets": [f"*:{self._port}"]}],
-            }
-        else:
-            config = {
-                "scheme": "http",
-                "static_configs": [{"targets": [f"*:{self._port}"]}],
+        parsed = urlparse(self.most_external_url)
+        scheme = parsed.scheme or "http"
+        config = {
+            "scheme": scheme,
+            "static_configs": [
+                {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
+            ],
+        }
+        # Only use tls_config when the scrape is actually over https.
+        if scheme == "https" and (tls_config := self._tls_config):
+            config["tls_config"] = {
+                "ca_file": tls_config.ca_cert,
             }
 
         return [config]
