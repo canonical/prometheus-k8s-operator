@@ -225,12 +225,14 @@ class PrometheusCharm(CharmBase):
             relation_name="alertmanager",
         )
 
-        # No `external_url`: self-monitoring is in-cluster, not through the ingress.
         self._scraping = MetricsEndpointProvider(
             self,
             relation_name="self-metrics-endpoint",
             jobs=self.self_scraping_job,
-            refresh_event=[
+            external_url=self.most_external_url,
+            refresh_event=[  # needed for ingress
+                self.ingress.on.ready_for_unit,
+                self.ingress.on.revoked_for_unit,
                 self.on.update_status,
                 self._cert_requirer.on.certificate_available,
             ],
@@ -388,26 +390,48 @@ class PrometheusCharm(CharmBase):
 
     @property
     def self_scraping_job(self):
-        """Scrape config for a remote scraper to scrape this prometheus, for self-monitoring.
+        """Scrape config for "external" self monitoring.
 
-        The target is this unit's FQDN and workload port, never the ingress URL: the ingress may
-        serve a different scheme and port than the workload, and our cert would not validate
-        against it.
+        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
 
-        Note: only this unit is a target, because prometheus is not intended to be scaled.
+        The advertised scheme and port must match how a scraper actually reaches us. Behind an
+        ingress, that is the scheme and port Traefik reports in the ingress URL, which may well
+        differ from Prometheus' own TLS setup (e.g. an ingress serving plain HTTP in front of a
+        Prometheus serving TLS). Without an ingress, scrapers reach us in-cluster on our own
+        scheme and workload port.
+
+        `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
+        to specify it here.
         """
-        # `metrics_path` is automatically rendered by MetricsEndpointProvider.
-        targets = [f"{self._fqdn}:{self._port}"]
+        if external_url := self.external_url:
+            parsed = urlparse(external_url)
+            scheme = parsed.scheme or "http"
+            config = {
+                "scheme": scheme,
+                "static_configs": [
+                    {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
+                ],
+            }
+            # TLS is only in play when the ingress actually serves it; the connection then
+            # terminates at the ingress, not at Prometheus, so we do not pin our serving CA.
+            if scheme == "https" and (tls_config := self._tls_config):
+                config["tls_config"] = {
+                    "ca_file": tls_config.ca_cert,
+                }
+            return [config]
+
         if tls_config := self._tls_config:
             config = {
                 "scheme": "https",
-                "tls_config": {"ca_file": tls_config.ca_cert},
-                "static_configs": [{"targets": targets}],
+                "tls_config": {
+                    "ca_file": tls_config.ca_cert,
+                },
+                "static_configs": [{"targets": [f"*:{self._port}"]}],
             }
         else:
             config = {
                 "scheme": "http",
-                "static_configs": [{"targets": targets}],
+                "static_configs": [{"targets": [f"*:{self._port}"]}],
             }
 
         return [config]
