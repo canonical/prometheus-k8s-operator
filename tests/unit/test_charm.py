@@ -133,6 +133,39 @@ class TestCharm(unittest.TestCase):
 
     @k8s_resource_multipatch
     @patch("lightkube.core.client.GenericSyncClient")
+    def test_metrics_wal_compression_uses_effective_default_on_upgrade(self, *unused):
+        # Harness exposes the already-resolved effective value and cannot model Juju's config
+        # provenance. This verifies that upgrade reconciliation honors the new `true` default;
+        # the old-default-to-new-default transition belongs in an integration test.
+        self.harness.charm.on.upgrade_charm.emit()
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(
+            cli_arg(plan, "--storage.tsdb.wal-compression"),
+            "--storage.tsdb.wal-compression",
+        )
+        self.assertIsNone(cli_arg(plan, "--no-storage.tsdb.wal-compression"))
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
+    def test_metrics_wal_compression_fails_safe_if_config_is_missing(self, *unused):
+        config_without_wal_compression = dict(self.harness.charm.model.config)
+        del config_without_wal_compression["metrics_wal_compression"]
+
+        with patch.object(
+            self.harness.charm.model, "_config", config_without_wal_compression
+        ):
+            self.harness.charm.on.upgrade_charm.emit()
+
+        plan = self.harness.get_container_pebble_plan("prometheus")
+        self.assertEqual(
+            cli_arg(plan, "--storage.tsdb.wal-compression"),
+            "--storage.tsdb.wal-compression",
+        )
+        self.assertIsNone(cli_arg(plan, "--no-storage.tsdb.wal-compression"))
+
+    @k8s_resource_multipatch
+    @patch("lightkube.core.client.GenericSyncClient")
     def test_metrics_wal_compression_can_be_disabled(self, *unused):
         self.harness.update_config({"metrics_wal_compression": False})
 
