@@ -79,7 +79,7 @@ def test_setup(juju: jubilant.Juju, prometheus_charm):
         app=OTEL,
         channel="2/edge",
         trust=True,
-        config={"global_scrape_interval": "5s", "tls_insecure_skip_verify": True},
+        config={"tls_insecure_skip_verify": True},
     )
     juju.deploy("traefik-k8s", app=TRAEFIK, channel="edge", trust=True)
     juju.deploy("self-signed-certificates", app=PROM_CA, channel="1/stable", trust=True)
