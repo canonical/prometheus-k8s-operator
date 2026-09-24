@@ -5,6 +5,7 @@ import dataclasses
 import json
 
 import yaml
+from cosl import LZMABase64
 from ops.model import ActiveStatus, BlockedStatus
 from scenario import Relation, State
 
@@ -91,6 +92,33 @@ INVALID_REMOTE_WRITE_RELATION = Relation(
     remote_app_data={
         "alert_rules": _alert_rules("remote-write-invalid-group", valid=False),
         "scrape_metadata": _metadata("remote-write-invalid"),
+    },
+)
+
+COMPRESSED_VALID_REMOTE_WRITE_RELATION = Relation(
+    "receive-remote-write",
+    remote_app_name="remote-write-valid",
+    remote_app_data={
+        "alert_rules": LZMABase64.compress(_alert_rules("remote-write-valid-group", valid=True)),
+        "scrape_metadata": _metadata("remote-write-valid"),
+    },
+)
+
+COMPRESSED_INVALID_REMOTE_WRITE_RELATION = Relation(
+    "receive-remote-write",
+    remote_app_name="remote-write-invalid",
+    remote_app_data={
+        "alert_rules": LZMABase64.compress(_alert_rules("remote-write-invalid-group", valid=False)),
+        "scrape_metadata": _metadata("remote-write-invalid"),
+    },
+)
+
+UNDECODABLE_REMOTE_WRITE_RELATION = Relation(
+    "receive-remote-write",
+    remote_app_name="remote-write-undecodable",
+    remote_app_data={
+        "alert_rules": "!!! neither json nor a compressed payload !!!",
+        "scrape_metadata": _metadata("remote-write-undecodable"),
     },
 )
 
@@ -277,3 +305,59 @@ def test_invalid_remote_write_relation_becoming_valid_recovers_to_active(
     # THEN the previous invalid status is cleared and valid rules are written
     assert _written_group_names(context, recovered_state) == {"remote-write-valid-group"}
     assert isinstance(_alert_rules_status(recovered_state), ActiveStatus)
+
+
+# The remote-write consumer may publish its rules LZMA-compressed and base64-encoded.
+# Filtering out invalid rules and blocking on them must work exactly the same either way.
+
+
+def test_compressed_valid_remote_write_relation(context, prometheus_container):
+    # GIVEN a remote-write relation whose valid rules are compressed
+    state_in = State(
+        leader=True,
+        relations=[COMPRESSED_VALID_REMOTE_WRITE_RELATION],
+        containers=[prometheus_container],
+    )
+
+    # WHEN the relation changed event is processed
+    state_out = context.run(
+        context.on.relation_changed(COMPRESSED_VALID_REMOTE_WRITE_RELATION), state_in
+    )
+
+    # THEN the rules are written and the alert-rule status remains active
+    assert _written_group_names(context, state_out) == {"remote-write-valid-group"}
+    assert isinstance(_alert_rules_status(state_out), ActiveStatus)
+
+
+def test_compressed_invalid_remote_write_relation(context, prometheus_container):
+    # GIVEN a remote-write relation whose compressed rules contain an invalid one
+    state_in = State(
+        leader=True,
+        relations=[VALID_SCRAPE_RELATION, COMPRESSED_INVALID_REMOTE_WRITE_RELATION],
+        containers=[prometheus_container],
+    )
+
+    # WHEN the relation changed event is processed
+    state_out = context.run(context.on.relation_changed(VALID_SCRAPE_RELATION), state_in)
+
+    # THEN the invalid rules are filtered out and the charm blocks, just as for plain JSON
+    assert _written_group_names(context, state_out) == {"scrape-valid-group"}
+    assert isinstance(_alert_rules_status(state_out), BlockedStatus)
+
+
+def test_undecodable_remote_write_relation(context, prometheus_container):
+    # GIVEN a remote-write relation whose rules are in an encoding the charm cannot read,
+    # e.g. a consumer that compressed its rules for a provider that was rolled back
+    state_in = State(
+        leader=True,
+        relations=[VALID_SCRAPE_RELATION, UNDECODABLE_REMOTE_WRITE_RELATION],
+        containers=[prometheus_container],
+    )
+
+    # WHEN the relation changed event is processed
+    state_out = context.run(context.on.relation_changed(VALID_SCRAPE_RELATION), state_in)
+
+    # THEN the unreadable rules are not written
+    assert _written_group_names(context, state_out) == {"scrape-valid-group"}
+    # AND the charm blocks, rather than silently dropping the consumer's alert rules
+    assert isinstance(_alert_rules_status(state_out), BlockedStatus)

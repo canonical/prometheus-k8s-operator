@@ -70,7 +70,7 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ubuntu/prometheus@sha256:a2249016b6429b3b5d9035b45c17231d30ec9cd68cc21b0d9323e3a17a17d09a  # renovate: oci-image tag: 3.11-26.04
+    upstream-source: ubuntu/prometheus@sha256:e5696a7facf4233d1d1c0d5be8c6f8b474026cf9db164a500718ab2401657ef7  # renovate: oci-image tag: 3.14-26.04
 
 storage:
   database:
@@ -138,7 +138,7 @@ requires:
     description: |
       Obtain a CA and a server certificate for Prometheus to use for TLS.
       The same CA cert is used for all in-cluster requests, e.g.:
-      - (client) scraping targets for self-monitoring
+      - (client) scraping metrics endpoints
       - (client) posting alerts to alertmanager server
       - (server) serving data to grafana
   charm-tracing:
@@ -258,6 +258,14 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
+    out_of_order_time_window:
+      default: "0s"
+      description: |
+        The time window within which out-of-order samples are accepted for ingestion.
+        Supported units: s, m, h (Prometheus duration format; "m" is minutes).
+        Set to "0s" to disable (default).
+        See https://prometheus.io/docs/prometheus/latest/configuration/configuration/#tsdb
+      type: string
 
 actions:
   validate-configuration:
