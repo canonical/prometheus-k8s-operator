@@ -116,5 +116,4 @@ def test_encryption_on_traefik_only(juju: jubilant.Juju):
     """Scenario 4: Traefik still encrypts, Prometheus goes back to plain HTTP."""
     previously_seen = _self_up_timestamp(juju)
     juju.remove_relation(f"{APP}:certificates", PROM_CA)
-    breakpoint()
     _check(juju, previously_seen)
