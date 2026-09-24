@@ -289,6 +289,9 @@ class PrometheusCharm(CharmBase):
             self._cert_requirer.on.certificate_available, self._on_certificate_available
         )
         self.framework.observe(
+            self.on.certificates_relation_broken, self._on_certificates_relation_broken
+        )
+        self.framework.observe(
             self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs
         )
         self.framework.observe(
@@ -392,23 +395,22 @@ class PrometheusCharm(CharmBase):
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
-        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
+        Tell scrapers how to reach Prometheus: via the ingress URL when there is one (its
+        scheme/port come from Traefik, which may differ from Prometheus' own TLS), otherwise
+        via our workload URL. `metrics_path` is rendered by MetricsEndpointProvider.
         """
-        port = urlparse(self.most_external_url).port
-        # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-        # to specify it here.
-        if tls_config := self._tls_config:
-            config = {
-                "scheme": "https",
-                "tls_config": {
-                    "ca_file": tls_config.ca_cert,
-                },
-                "static_configs": [{"targets": [f"*:{port or 443}"]}],
-            }
-        else:
-            config = {
-                "scheme": "http",
-                "static_configs": [{"targets": [f"*:{port or 80}"]}],
+        parsed = urlparse(self.most_external_url)
+        scheme = parsed.scheme or "http"
+        config = {
+            "scheme": scheme,
+            "static_configs": [
+                {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
+            ],
+        }
+        # Only use tls_config when the scrape is actually over https.
+        if scheme == "https" and (tls_config := self._tls_config):
+            config["tls_config"] = {
+                "ca_file": tls_config.ca_cert,
             }
 
         return [config]
@@ -514,6 +516,11 @@ class PrometheusCharm(CharmBase):
     def _on_certificate_available(self, _):
         self._update_cert()
         self._configure(_)
+
+    def _on_certificates_relation_broken(self, event):
+        """Drop the workload certificate and serve plain HTTP once the relation is gone."""
+        self._update_cert()
+        self._configure(event)
 
     def _on_receive_ca_certs(self, _):
         self._update_ca_certs()
