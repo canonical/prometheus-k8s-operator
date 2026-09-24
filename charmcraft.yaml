@@ -225,10 +225,7 @@ config:
         Whether to compress the write-ahead log (WAL).
         Depending on your data, you can expect the WAL size to be
         halved with little extra CPU load.
-        Enabled by default, matching the Prometheus workload default. Disabling this roughly
-        doubles the size of the `wal` directory, which counts towards the storage the workload
-        needs but is **not** reclaimed by `maximum_retention_size` (only persistent blocks are).
-        Disabling it therefore increases the risk of exhausting the `database` storage.
+        See https://prometheus.io/docs/prometheus/latest/storage/#write-ahead-log-wal
       type: boolean
       default: true
     evaluation_interval:
