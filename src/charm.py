@@ -841,8 +841,6 @@ class PrometheusCharm(CharmBase):
 
         args.append(f"--log.level={self.log_level}")
 
-        # Keep compression enabled if an old or incomplete config map does not contain this
-        # option. Only an explicit `false` configuration value may disable compression.
         if config.get("metrics_wal_compression") is False:
             args.append("--no-storage.tsdb.wal-compression")
         else:
