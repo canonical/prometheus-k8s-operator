@@ -362,7 +362,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 62
+LIBPATCH = 66
 
 # Version 0.0.53 needed for cosl.rules.generic_alert_groups
 PYDEPS = ["cosl>=0.0.53"]
@@ -1055,11 +1055,16 @@ class MetricsEndpointConsumer(Object):
                 try:
                     _validate_scrape_jobs(static_scrape_jobs)
                 except subprocess.CalledProcessError as e:
+                    logger.error(f"Invalid scrape job file: {e}")
                     if self._charm.unit.is_leader():
                         data = json.loads(relation.data[self._charm.app].get("event", "{}"))
                         data["scrape_job_errors"] = str(e)
                         relation.data[self._charm.app]["event"] = json.dumps(data)
                 else:
+                    if self._charm.unit.is_leader():
+                        data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                        data.pop("scrape_job_errors", None)
+                        relation.data[self._charm.app]["event"] = json.dumps(data)
                     scrape_jobs.extend(static_scrape_jobs)
 
         scrape_jobs = _dedupe_job_names(scrape_jobs)
@@ -1357,6 +1362,65 @@ class MetricsEndpointConsumer(Object):
             parts = [target, "80"]
 
         return parts
+
+    def has_invalid_scrape_jobs(self) -> bool:
+        """Check whether any relation reported invalid scrape jobs.
+
+        Validation errors, written to relation app data by this consumer
+        (see :meth:`jobs`), are read back to determine whether the relationship
+        currently carries an invalid scrape job.
+
+        Returns:
+            True if any related metrics provider reported scrape job validation
+            errors, False otherwise.
+        """
+        return self._has_relation_error("scrape_job_errors", "Scrape job validation error")
+
+    def has_invalid_alert_rules(self) -> bool:
+        """Check whether any relation reported invalid alert rules.
+
+        Validation errors, written to relation app data by this consumer
+        (see :attr:`alerts`), are read back to determine whether the relationship
+        currently carries invalid alert rules.
+
+        Returns:
+            True if any related metrics provider reported alert rule validation
+            errors, False otherwise.
+        """
+        return self._has_relation_error("errors", "Alert rule validation error")
+
+    def _has_relation_error(self, error_key: str, error_label: str) -> bool:
+        """Check whether any relation reported the given validation error.
+
+        Args:
+            error_key: the relation app data key that holds the validation error,
+                i.e. "scrape_job_errors" or "errors".
+            error_label: a human readable description of the validation error
+                type, used for logging, e.g. "Scrape job validation error".
+
+        Returns:
+            True if any related metrics provider reported the validation error,
+            False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
+
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if error_msg := event_data.get(error_key):
+                logger.error("%s on relation %s: %s", error_label, relation.id, error_msg)
+                return True
+
+        return False
 
 
 def _validate_scrape_jobs(jobs: list) -> bool:
@@ -1666,6 +1730,9 @@ class MetricsEndpointProvider(Object):
         else:
             if not isinstance(refresh_event, list):
                 refresh_event = [refresh_event]
+
+        # If there is no leader during relation_joined we will still need to set alert rules.
+        self.framework.observe(self._charm.on.leader_elected, self.set_scrape_job_spec)
 
         self.framework.observe(events.relation_joined, self.set_scrape_job_spec)
         for ev in refresh_event:
