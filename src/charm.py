@@ -289,6 +289,9 @@ class PrometheusCharm(CharmBase):
             self._cert_requirer.on.certificate_available, self._on_certificate_available
         )
         self.framework.observe(
+            self.on.certificates_relation_broken, self._on_certificates_relation_broken
+        )
+        self.framework.observe(
             self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs
         )
         self.framework.observe(
@@ -513,6 +516,11 @@ class PrometheusCharm(CharmBase):
     def _on_certificate_available(self, _):
         self._update_cert()
         self._configure(_)
+
+    def _on_certificates_relation_broken(self, event):
+        """Drop the workload certificate and serve plain HTTP once the relation is gone."""
+        self._update_cert()
+        self._configure(event)
 
     def _on_receive_ca_certs(self, _):
         self._update_ca_certs()

@@ -79,7 +79,7 @@ def test_setup(juju: jubilant.Juju, prometheus_charm):
         app=OTEL,
         channel="2/edge",
         trust=True,
-        config={"tls_insecure_skip_verify": True},
+        config={"global_scrape_interval": "15s", "tls_insecure_skip_verify": True},
     )
     juju.deploy("traefik-k8s", app=TRAEFIK, channel="edge", trust=True)
     juju.deploy("self-signed-certificates", app=PROM_CA, channel="1/stable", trust=True)
@@ -116,4 +116,5 @@ def test_encryption_on_traefik_only(juju: jubilant.Juju):
     """Scenario 4: Traefik still encrypts, Prometheus goes back to plain HTTP."""
     previously_seen = _self_up_timestamp(juju)
     juju.remove_relation(f"{APP}:certificates", PROM_CA)
+    breakpoint()
     _check(juju, previously_seen)
