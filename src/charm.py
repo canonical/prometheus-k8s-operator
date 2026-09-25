@@ -55,7 +55,7 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import AlertRulesCustomization, AlertRulesCustomizationError, JujuTopology
+from cosl import AlertRulesCustomization, AlertRulesCustomizationError, CosTool, JujuTopology
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -834,6 +834,10 @@ class PrometheusCharm(CharmBase):
         # The libs are responsible for returning only valid rules.
         metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
         remote_write_alerts = customization.apply(remote_write_alerts)
+
+        # Given that `AlertRulesCustomization` allows the user to patch `expr`,
+        # it is possible that after customizations, some alert rules may have invalid expressions.
+        # We should validate the rules post-transformation.
 
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
