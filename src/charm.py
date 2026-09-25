@@ -407,12 +407,6 @@ class PrometheusCharm(CharmBase):
                 {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
             ],
         }
-        # Only use tls_config when the scrape is actually over https.
-        if scheme == "https" and (tls_config := self._tls_config):
-            config["tls_config"] = {
-                "ca_file": tls_config.ca_cert,
-            }
-
         return [config]
 
     @property
