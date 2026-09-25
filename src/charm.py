@@ -905,7 +905,9 @@ class PrometheusCharm(CharmBase):
 
         args.append(f"--log.level={self.log_level}")
 
-        if config.get("metrics_wal_compression"):
+        if config.get("metrics_wal_compression") is False:
+            args.append("--no-storage.tsdb.wal-compression")
+        else:
             args.append("--storage.tsdb.wal-compression")
 
         if self._exemplars:
