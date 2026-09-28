@@ -55,7 +55,12 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import JujuTopology
+from cosl import (
+    AlertRulesCustomization,
+    AlertRulesCustomizationError,
+    AlertRulesCustomizationValidationError,
+    JujuTopology,
+)
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -129,6 +134,7 @@ class CompositeStatus(TypedDict):
     config: Tuple[str, str]
     alert_rules: Tuple[str, str]
     scrape_jobs: Tuple[str, str]
+    alert_rules_customizations: Tuple[str, str]
 
 
 def to_tuple(status: StatusBase) -> Tuple[str, str]:
@@ -170,6 +176,7 @@ class PrometheusCharm(CharmBase):
                 config=to_tuple(ActiveStatus()),
                 alert_rules=to_tuple(ActiveStatus()),
                 scrape_jobs=to_tuple(ActiveStatus()),
+                alert_rules_customizations=to_tuple(ActiveStatus()),
             )
         )
 
@@ -763,8 +770,31 @@ class PrometheusCharm(CharmBase):
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
+        try:
+            customization = AlertRulesCustomization.from_yaml(
+                cast(str, self.model.config.get("alert_rule_customizations") or ""),
+                query_type="promql"
+            )
+            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+        except AlertRulesCustomizationError as e:
+            logger.error("An error occurred while parsing alert rule customizations: %s", e)
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Customized alert rules are invalid. See debug-log")
+            )
+            customization = AlertRulesCustomization(query_type="promql")  # no-op: write rules unmodified
+
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
+
+        try:
+            metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
+            remote_write_alerts = customization.apply(remote_write_alerts)
+        except AlertRulesCustomizationValidationError:
+            # When this exception is raised, rules_customization treats `apply` as a no-op and returns the alert rules unchanged.
+            logger.info("Some alerts became valid after applying the provided customizations. ALL customizations are now dropped")
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Unable to validate alert rule customizations")
+            )
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
