@@ -162,7 +162,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 29
+LIBPATCH = 30
 
 logger = logging.getLogger(__name__)
 
@@ -705,7 +705,7 @@ class GrafanaSourceConsumer(Object):
             the specified relation.
         """
         hosts = {}
-        for unit in rel.units:
+        for unit in sorted(rel.units, key=lambda unit: unit.name):
             host_address = rel.data[unit].get("grafana_source_host")
             if not host_address:
                 continue
@@ -799,7 +799,7 @@ class GrafanaSourceConsumer(Object):
             )
             self._stored.sources_to_delete = set()
             peer_sources_to_delete = set(self.get_peer_data("sources_to_delete"))
-            sources_to_delete = set.union(old_sources_to_delete, peer_sources_to_delete)  # pyright: ignore
+            sources_to_delete = sorted(set.union(old_sources_to_delete, peer_sources_to_delete))  # pyright: ignore
             self.set_peer_data("sources_to_delete", sources_to_delete)
 
     def update_sources(self, relation: Optional[Relation] = None) -> None:
@@ -838,7 +838,7 @@ class GrafanaSourceConsumer(Object):
             if not self.get_peer_data(k):
                 self.set_peer_data(k, v)
 
-    def set_peer_data(self, key: str, data: Any) -> None:
+    def set_peer_data(self, key: str, data: Union[List[Any], Dict[str, Any]]) -> None:
         """Put information into the peer data bucket instead of `StoredState`."""
         peers = self._charm.peers  # type: ignore[attr-defined]
         if not peers or not peers.data:

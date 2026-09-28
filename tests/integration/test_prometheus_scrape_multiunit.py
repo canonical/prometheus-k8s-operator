@@ -101,13 +101,10 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     )
 
     # WHEN prometheus is not related to anything
-    # THEN all prometheus units should have only one scrape target (self-scraping)
+    # THEN all prometheus units should have no scrape targets
     for unit_num in range(num_units):
         targets = await get_prometheus_active_targets(ops_test, prometheus_app_name, unit_num)
-        assert len(targets) == 1
-        self_scrape = next(iter(targets))
-        assert self_scrape["labels"]["job"] == "prometheus"
-        assert self_scrape["labels"]["host"] == "localhost"
+        assert len(targets) == 0
 
     # WHEN prometheus is related to the testers
     await asyncio.gather(
@@ -121,7 +118,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
     )
     await ops_test.model.wait_for_idle(apps=app_names, status="active")
 
-    # THEN all prometheus units should have all scrape units as targets (as well as self-scraping)
+    # THEN all prometheus units should have all scrape units as targets
     # `targets_by_unit` is a List[List[dict]]: every unit has a List[dict] targets.
     targets_by_unit = await asyncio.gather(
         *[
@@ -129,7 +126,7 @@ async def test_prometheus_scrape_relation_with_prometheus_tester(
             for u in range(num_units)
         ]
     )
-    assert all(len(targets) == num_units + 1 for targets in targets_by_unit)
+    assert all(len(targets) == num_units for targets in targets_by_unit)
 
     # AND all prometheus units have the exact same targets
     # Only comparing the `labels` because comparing the entire `targets` dict would be cumbersome:
@@ -187,14 +184,14 @@ async def test_upgrade_prometheus(ops_test: OpsTest, prometheus_charm):
     """Upgrade prometheus and confirm all is still green (see also test_upgrade_charm.py)."""
     assert ops_test.model
     # GIVEN an existing "up" timeseries
-    query = 'count_over_time(up{host="localhost",job="prometheus"}[1y])'
+    query = f'count_over_time(up{{juju_application="{scrape_tester}"}}[1y])'
     up_before = await asyncio.gather(
         *[run_promql(ops_test, query, prometheus_app_name, u) for u in range(num_units)]
     )
     # Each response looks like this:
     # [
     #     {
-    #         "metric":{"instance":"localhost:9090","job":"prometheus"},
+    #         "metric":{"instance":"...","job":"..."},
     #         "value":[1652985131.383,"711"]
     #     }
     # ]
