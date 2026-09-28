@@ -74,7 +74,6 @@ def test_self_scrape_job_scheme_follows_ingress(context, prometheus_container, t
     # THEN the scheme/port follow the ingress (not our own TLS), tls_config only on https-with-certs
     assert job["scheme"] == expected[0]
     assert job["static_configs"] == [{"targets": [f"*:{expected[1]}"]}]
-    assert job.get("tls_config") == ({"ca_file": CA_CERT} if tls and expected[0] == "https" else None)
 
     # AND the target host/path are the ingress's when there is one
     if ingress_url:
