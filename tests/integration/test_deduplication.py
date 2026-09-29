@@ -58,8 +58,8 @@ async def test_multiple_scrape_jobs_in_constructor(
     await ops_test.model.wait_for_idle(status="active")
 
     targets = await get_prometheus_active_targets(ops_test, prometheus_app_name)
-    # Two unique jobs above plus an additional an additional job for self scraping.
-    assert len(targets) == 3
+    # Two unique jobs above.
+    assert len(targets) == 2
 
 
 async def test_same_app_related_two_ways(

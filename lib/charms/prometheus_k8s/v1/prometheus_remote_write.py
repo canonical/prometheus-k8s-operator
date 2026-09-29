@@ -11,23 +11,39 @@ Charms that need to push data to a charm exposing the Prometheus remote_write AP
 should use the `PrometheusRemoteWriteConsumer`. Charms that operate software that exposes
 the Prometheus remote_write API, that is, they can receive metrics data over remote_write,
 should use the `PrometheusRemoteWriteProducer`.
+
+## Alert rules encoding
+
+The consumer publishes its alert rules to the `alert_rules` key of its application
+databag. Because large deployments can produce enough alert rules to exceed Juju's
+relation data size limit, the rules can be stored LZMA-compressed and base64-encoded
+instead of as plain JSON.
+
+Compression is negotiated over the relation: the provider advertises the encodings it
+is able to read in the `alert_rules_encodings` key of its own application databag, and
+the consumer picks the best encoding both sides support. A consumer related to a
+provider running an older version of this library (which advertises nothing) keeps
+writing plain JSON, so upgrades are safe in any order.
+
+An admin can decode compressed rules with:
+```bash
+<alert-rules-from-show-unit> | base64 -d | xz -d | jq
+```
 """
 
 import copy
 import json
 import logging
+import lzma
 import os
-import platform
 import re
 import socket
-import subprocess
-import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Final, List, Mapping, Optional, Set, Tuple, Union, cast
 
-import yaml
-from cosl import JujuTopology
+from cosl import CosTool, JujuTopology, LZMABase64
 from cosl.rules import HOST_METRICS_MISSING_RULE_NAME, AlertRules, generic_alert_groups
+from cosl.types import OfficialRuleFileFormat
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -47,7 +63,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 12
+LIBPATCH = 19
 
 PYDEPS = ["cosl"]
 
@@ -60,6 +76,137 @@ DEFAULT_CONSUMER_NAME = "send-remote-write"
 RELATION_INTERFACE_NAME = "prometheus_remote_write"
 
 DEFAULT_ALERT_RULES_RELATIVE_PATH = "./src/prometheus_alert_rules"
+
+ALERT_RULES_KEY: Final[str] = "alert_rules"
+"""Databag key holding the consumer's alert rules."""
+
+ALERT_RULES_ENCODINGS_KEY: Final[str] = "alert_rules_encodings"
+"""Databag key with which the provider advertises the encodings it can read."""
+
+JSON_ENCODING: Final[str] = "json"
+"""Plain JSON alert rules, as written by every version of this library."""
+
+LZMA_ENCODING: Final[str] = "lzma"
+"""LZMA-compressed, base64-encoded JSON alert rules."""
+
+SUPPORTED_ALERT_RULES_ENCODINGS: Final[Tuple[str, ...]] = (LZMA_ENCODING, JSON_ENCODING)
+"""Alert rules encodings this library can read and write, most preferred first.
+
+This is in preference order, not sorted: it is a constant, so the bytes written to the
+databag are stable across hooks, which is what matters for avoiding spurious
+relation-changed events.
+"""
+
+_LZMA_BASE64_PREFIX: Final[str] = "/Td6WFoA"
+"""Base64 of the xz magic bytes, b"\\xfd7zXZ\\x00", every compressed payload starts with."""
+
+
+def _encode_alert_rules(rules: Mapping[str, Any], encoding: str = JSON_ENCODING) -> str:
+    """Serialize alert rules for storing them in a relation databag.
+
+    Keys are sorted so that the same rules always serialize to the same bytes: juju
+    compares databag values byte for byte, so an unstable key order would trigger a
+    spurious relation-changed on the other side of the relation on every hook.
+
+    Args:
+        rules: alert rules in the official Prometheus rule file format.
+        encoding: one of `SUPPORTED_ALERT_RULES_ENCODINGS`. Anything else is treated
+            as `JSON_ENCODING`, because plain JSON is readable by every version of
+            this library.
+
+    Returns:
+        The serialized alert rules.
+    """
+    serialized = json.dumps(rules, sort_keys=True)
+    if encoding == LZMA_ENCODING:
+        return LZMABase64.compress(serialized)
+    return serialized
+
+
+def _best_alert_rules_encoding(remote_app_databag: Optional[Mapping[str, str]]) -> str:
+    """Return the best alert rules encoding the remote app is able to read.
+
+    Providers advertise the encodings they support in their application databag.
+    Providers running an older version of this library advertise nothing, in which
+    case plain JSON is used for backwards compatibility.
+
+    Args:
+        remote_app_databag: the remote application databag, or None if it is not
+            readable yet (e.g. the relation is still being set up).
+
+    Returns:
+        One of `SUPPORTED_ALERT_RULES_ENCODINGS`.
+    """
+    raw = remote_app_databag.get(ALERT_RULES_ENCODINGS_KEY, "[]") if remote_app_databag else "[]"
+
+    try:
+        advertised = json.loads(raw)
+        if not isinstance(advertised, list):
+            raise TypeError("expected a list, got {}".format(type(advertised).__name__))
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(
+            "Ignoring malformed '%s' (%s); assuming the remote end is only able to read "
+            "uncompressed alert rules.",
+            ALERT_RULES_ENCODINGS_KEY,
+            e,
+        )
+        return JSON_ENCODING
+
+    for encoding in SUPPORTED_ALERT_RULES_ENCODINGS:
+        if encoding in advertised:
+            return encoding
+
+    # Either nothing was advertised (an older provider), or only encodings this library
+    # does not know about. Plain JSON is the encoding every version can read.
+    return JSON_ENCODING
+
+
+def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
+    """Deserialize alert rules read from a relation databag.
+
+    Both plain JSON and LZMA-compressed, base64-encoded JSON are accepted, regardless
+    of the encodings this library advertises, so that a provider can always read the
+    rules of a consumer running any version of this library.
+
+    Args:
+        raw: the raw databag value.
+
+    Returns:
+        The alert rules in the official Prometheus rule file format.
+
+    Raises:
+        ValueError: if `raw` holds neither alert rules nor a compressed payload of them.
+    """
+    if not raw:
+        return cast(OfficialRuleFileFormat, {})
+
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        # Not JSON at all, so this can only be a bare compressed payload.
+        decoded = raw
+
+    if isinstance(decoded, str):
+        # A compressed payload, either bare or (as pydantic based libraries write it)
+        # JSON-encoded.
+        if not decoded.startswith(_LZMA_BASE64_PREFIX):
+            raise ValueError(
+                "Expected either alert rules or an LZMA-compressed, base64-encoded"
+                " payload of them, got the string {!r:.60}".format(decoded)
+            )
+        try:
+            decoded = json.loads(LZMABase64.decompress(decoded))
+        except (ValueError, lzma.LZMAError) as e:
+            # ValueError covers both a malformed base64 payload (binascii.Error) and
+            # compressed content that is not JSON (json.JSONDecodeError).
+            raise ValueError("Could not decompress the alert rules: {}".format(e)) from e
+
+    if not isinstance(decoded, dict):
+        raise ValueError(
+            "Alert rules must be a JSON object, not {}".format(type(decoded).__name__)
+        )
+
+    return cast(OfficialRuleFileFormat, decoded)
 
 
 class RelationNotFoundError(Exception):
@@ -369,6 +516,10 @@ class PrometheusRemoteWriteConsumer(Object):
      If the syntax of a rule is invalid, the `MetricsEndpointProvider` logs an error and
      does not load the particular rule.
 
+     The alert rules are published to the `alert_rules` key of this application's databag,
+     LZMA-compressed and base64-encoded if the provider advertises that it can read them
+     that way, and as plain JSON otherwise. See the module docstring for details.
+
      To avoid false positives and false negatives the library will inject label filters
      automatically in the PromQL expression. For example if the charm provides an
      alert rule with an `expr` like this one:
@@ -455,14 +606,15 @@ class PrometheusRemoteWriteConsumer(Object):
         self._extra_alert_labels = extra_alert_labels
         self._peer_relation_name = peer_relation_name
         self.topology = JujuTopology.from_charm(charm)
-        self._tool = CosTool(self._charm)
+        self._tool = CosTool("promql")
         on_relation = self._charm.on[self._relation_name]
 
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
-        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_joined)
+        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_event)
+        self.framework.observe(on_relation.relation_changed, self._push_alerts_on_relation_event)
         self.framework.observe(
             self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
         )
@@ -493,7 +645,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
 
-    def _push_alerts_on_relation_joined(self, event: RelationEvent) -> None:
+    def _push_alerts_on_relation_event(self, event: RelationEvent) -> None:
         self._push_alerts_to_relation_databag(event.relation)
 
     def _push_alerts_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
@@ -529,7 +681,10 @@ class PrometheusRemoteWriteConsumer(Object):
                     alert_rules_as_dict, self._extra_alert_labels
                 )
             )
-        relation.data[self._charm.app]["alert_rules"] = json.dumps(alert_rules_as_dict)
+        remote_app_databag = relation.data.get(relation.app) if relation.app else None
+        relation.data[self._charm.app][ALERT_RULES_KEY] = _encode_alert_rules(
+            alert_rules_as_dict, _best_alert_rules_encoding(remote_app_databag)
+        )
 
     def reload_alerts(self) -> None:
         """Reload alert rules from disk and push to relation data."""
@@ -586,7 +741,7 @@ class PrometheusRemoteWriteConsumer(Object):
 
     def _duplicate_rules_per_unit(
         self,
-        alert_rules: Dict[str, Any],
+        alert_rules: Mapping[str, Any],
         peer_unit_names: Set[str],
         rule_names_to_duplicate: List[str],
         is_subordinate: bool = False,
@@ -603,7 +758,7 @@ class PrometheusRemoteWriteConsumer(Object):
             A Dict[str, any] the updated alert rules with the rules specified in rule_names_to_duplicate
             duplicated per unit. The list is to be assigned to the `groups` attribute of an object of type AlertRules.
         """
-        updated_alert_rules = copy.deepcopy(alert_rules)
+        updated_alert_rules: Dict[str, Any] = copy.deepcopy(dict(alert_rules))
 
         for group in updated_alert_rules.get("groups", {}):
             new_rules = []
@@ -611,7 +766,8 @@ class PrometheusRemoteWriteConsumer(Object):
                 if rule.get("alert", "") not in rule_names_to_duplicate:
                     new_rules.append(rule)
                 else:
-                    for name in peer_unit_names:
+                    # Sort unit names to guarantee a deterministic iteration order.
+                    for name in sorted(peer_unit_names):
                         juju_unit = name
                         modified_rule = copy.deepcopy(rule)
 
@@ -736,7 +892,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         super().__init__(charm, relation_name)
         self._charm = charm
-        self._tool = CosTool(self._charm)
+        self._tool = CosTool("promql")
         self._relation_name = relation_name
         self._get_server_url = server_url_func
         self._endpoint_path = endpoint_path
@@ -751,18 +907,58 @@ class PrometheusRemoteWriteProvider(Object):
             self._on_consumers_changed,
         )
         self.framework.observe(
+            on_relation.relation_broken,
+            self._on_consumers_changed,
+        )
+        self.framework.observe(
             on_relation.relation_changed,
             self._on_relation_changed,
+        )
+        # Consumers only compress their alert rules if we advertise that we can read them,
+        # so make sure the advertisement is (re)published after an upgrade or a leadership
+        # change, when no relation event may fire.
+        self.framework.observe(
+            self._charm.on.leader_elected,
+            self._publish_encodings_to_all_relation_databags,
+        )
+        self.framework.observe(
+            self._charm.on.upgrade_charm,
+            self._publish_encodings_to_all_relation_databags,
         )
 
     def _on_consumers_changed(self, event: RelationEvent) -> None:
         if not isinstance(event, RelationBrokenEvent):
             self.update_endpoint(event.relation)
-        self.on.consumers_changed.emit()
+            self.on.consumers_changed.emit()
+        else:
+            self.on.consumers_changed.emit()
 
     def _on_relation_changed(self, event: RelationEvent) -> None:
         """Flag Providers that data has changed, so they can re-read alerts."""
+        self._publish_alert_rules_encodings(event.relation)
         self.on.alert_rules_changed.emit(event.relation.id)
+
+    def _publish_encodings_to_all_relation_databags(self, _: HookEvent) -> None:
+        for relation in self.model.relations[self._relation_name]:
+            self._publish_alert_rules_encodings(relation)
+
+    def _publish_alert_rules_encodings(self, relation: Relation) -> None:
+        """Advertise the alert rules encodings this library is able to read.
+
+        Consumers use this to decide whether they may compress their alert rules: a
+        consumer related to a provider that does not advertise anything keeps writing
+        plain JSON, which every version of this library can read.
+
+        Args:
+            relation: The relation whose data to update.
+        """
+        if not self._charm.unit.is_leader():
+            # Only the leader unit can write to app data.
+            return
+
+        relation.data[self._charm.app][ALERT_RULES_ENCODINGS_KEY] = json.dumps(
+            SUPPORTED_ALERT_RULES_ENCODINGS
+        )
 
     def update_endpoint(self, relation: Optional[Relation] = None) -> None:
         """Triggers programmatically the update of the relation data.
@@ -773,6 +969,9 @@ class PrometheusRemoteWriteProvider(Object):
         host address change because the charmed operator becomes connected to an
         Ingress after the `prometheus_remote_write` relation is established.
 
+        The alert rules encodings this library can read are advertised at the same
+        time, so that consumers know they may compress their alert rules.
+
         Args:
             relation: An optional instance of `class:ops.model.Relation` to update.
                 If not provided, all instances of the `prometheus_remote_write`
@@ -782,6 +981,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         for relation in relations:
             self._set_endpoint_on_relation(relation)
+            self._publish_alert_rules_encodings(relation)
 
     def _set_endpoint_on_relation(self, relation: Relation) -> None:
         """Set the remote_write endpoint on relations.
@@ -826,12 +1026,25 @@ class PrometheusRemoteWriteProvider(Object):
         Returns:
             a dictionary mapping the name of an alert rule group to the group.
         """
-        alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        alerts: Dict[str, OfficialRuleFileFormat] = {}
+        unreadable: Dict[int, str] = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            try:
+                alert_rules = _decode_alert_rules(
+                    relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
+                )
+            except Exception as e:
+                # Reported like a validation error, so that the charm blocks on it instead
+                # of silently dropping the consumer's alert rules.
+                unreadable[relation.id] = str(e)
+                self._report_alert_rules_error(
+                    relation, "Could not decode the published alert rules: {}".format(e)
+                )
+                continue
+
             if not alert_rules:
                 continue
 
@@ -842,7 +1055,7 @@ class PrometheusRemoteWriteProvider(Object):
                 try:
                     scrape_metadata = json.loads(relation.data[relation.app]["scrape_metadata"])
                     identifier = JujuTopology.from_dict(scrape_metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
+                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)
 
                 except KeyError as e:
                     logger.debug(
@@ -857,21 +1070,50 @@ class PrometheusRemoteWriteProvider(Object):
                 )
                 continue
 
+            alerts[identifier] = alert_rules
             _, errmsg = self._tool.validate_alert_rules(alert_rules)
             if errmsg:
                 logger.error(f"Invalid alert rule file: {errmsg}")
-                if self._charm.unit.is_leader():
-                    data = json.loads(relation.data[self._charm.app].get("event", "{}"))
-                    data["errors"] = errmsg
-                    relation.data[self._charm.app]["event"] = json.dumps(data)
+                if alerts[identifier]:
+                    del alerts[identifier]
+                self._report_alert_rules_error(relation, errmsg)
                 continue
+            self._report_alert_rules_error(relation, None)
 
-            alerts[identifier] = alert_rules
+        if unreadable:
+            logger.error(
+                "Could not read the alert rules published over relation(s): %s",
+                "; ".join("{} ({})".format(rel_id, err) for rel_id, err in unreadable.items()),
+            )
 
         return alerts
 
+    def _report_alert_rules_error(self, relation: Relation, errmsg: Optional[str]) -> None:
+        """Report, or clear, an alert rules error for a relation.
+
+        The error is written to the `event` key of this application's databag, from where
+        `has_invalid_alert_rules` reads it back so the charm can block on it, and where the
+        consumer picks it up as an `alert_rule_status_changed` event.
+
+        Args:
+            relation: the relation the error pertains to.
+            errmsg: the error to report, or None to clear a previously reported one.
+        """
+        if not self._charm.unit.is_leader():
+            return
+
+        data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+        if errmsg:
+            data["errors"] = errmsg
+        elif "errors" not in data:
+            return
+        else:
+            data.pop("errors")
+
+        relation.data[self._charm.app]["event"] = json.dumps(data, sort_keys=True)
+
     def _get_identifier_by_alert_rules(
-        self, rules: Dict[str, Any]
+        self, rules: OfficialRuleFileFormat
     ) -> Tuple[Union[str, None], Union[JujuTopology, None]]:
         """Determine an appropriate dict key for alert rules.
 
@@ -891,7 +1133,9 @@ class PrometheusRemoteWriteProvider(Object):
         # Construct an ID based on what's in the alert rules if they have labels
         for group in rules["groups"]:
             try:
-                labels = group["rules"][0]["labels"]
+                labels = group["rules"][0].get("labels")
+                if not labels:
+                    continue
                 topology = JujuTopology(
                     # Don't try to safely get required constructor fields. There's already
                     # a handler for KeyErrors
@@ -918,7 +1162,7 @@ class PrometheusRemoteWriteProvider(Object):
 
         return None, None
 
-    def _inject_alert_expr_labels(self, rules: Dict[str, Any]) -> Dict[str, Any]:
+    def _inject_alert_expr_labels(self, rules: OfficialRuleFileFormat) -> OfficialRuleFileFormat:
         """Iterate through alert rules and inject topology into expressions.
 
         Args:
@@ -962,108 +1206,49 @@ class PrometheusRemoteWriteProvider(Object):
         rules["groups"] = modified_groups
         return rules
 
+    def has_invalid_alert_rules(self) -> bool:
+        """Check whether any relation reported invalid alert rules.
 
-# Copy/pasted from prometheus_scrape.py
-class CosTool:
-    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
+        Validation errors, written to relation app data by the :attr:`alerts`
+        property, are read back to determine whether the relation currently
+        carries an invalid set of alert rules.
 
-    _path = None
-    _disabled = False
+        Returns:
+            True if any related consumer reported alert rule validation errors,
+            False otherwise.
+        """
+        return self._has_relation_error("errors", "Alert rule validation error")
 
-    def __init__(self, charm):
-        self._charm = charm
+    def _has_relation_error(self, error_key: str, error_label: str) -> bool:
+        """Check whether any relation reported the given validation error.
 
-    @property
-    def path(self):
-        """Lazy lookup of the path of cos-tool."""
-        if self._disabled:
-            return None
-        if not self._path:
-            self._path = self._get_tool_path()
-            if not self._path:
-                logger.debug("Skipping injection of juju topology as label matchers")
-                self._disabled = True
-        return self._path
+        Args:
+            error_key: the relation app data key that holds the validation error,
+                i.e. "errors".
+            error_label: a human readable description of the validation error
+                type, used for logging, e.g. "Alert rule validation error".
 
-    def apply_label_matchers(self, rules) -> dict:
-        """Will apply label matchers to the expression of all alerts in all supplied groups."""
-        if not self.path:
-            return rules
-        for group in rules["groups"]:
-            rules_in_group = group.get("rules", [])
-            for rule in rules_in_group:
-                topology = {}
-                # if the user for some reason has provided juju_unit, we'll need to honor it
-                # in most cases, however, this will be empty
-                for label in [
-                    "juju_model",
-                    "juju_model_uuid",
-                    "juju_application",
-                    "juju_charm",
-                    "juju_unit",
-                ]:
-                    if label in rule["labels"]:
-                        topology[label] = rule["labels"][label]
+        Returns:
+            True if any related consumer reported the validation error,
+            False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
 
-                rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
-        return rules
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
 
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True, ""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            rule_path = Path(tmpdir + "/validate_rule.yaml")
-            rule_path.write_text(yaml.dump(rules))
-
-            args = [str(self.path), "validate", str(rule_path)]
-            # noinspection PyBroadException
+            event_raw = app_data.get("event", "{}")
             try:
-                self._exec(args)
-                return True, ""
-            except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join(
-                    [
-                        line
-                        for line in e.output.decode("utf8").splitlines()
-                        if "error validating" in line
-                    ]
-                )
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
 
-    def inject_label_matchers(self, expression, topology) -> str:
-        """Add label matchers to an expression."""
-        if not topology:
-            return expression
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
-            return expression
-        args = [str(self.path), "transform"]
-        args.extend(
-            ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
-        )
+            if error_msg := event_data.get(error_key):
+                logger.error("%s on relation %s: %s", error_label, relation.id, error_msg)
+                return True
 
-        args.extend(["{}".format(expression)])
-        # noinspection PyBroadException
-        try:
-            return self._exec(args)
-        except subprocess.CalledProcessError as e:
-            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            return expression
+        return False
 
-    def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.machine()
-        arch = "amd64" if arch == "x86_64" else arch
-        res = "cos-tool-{}".format(arch)
-        try:
-            path = Path(res).resolve(strict=True)
-            return path
-        except (FileNotFoundError, OSError):
-            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
-        return None
-
-    def _exec(self, cmd) -> str:
-        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        return result.stdout.decode("utf-8").strip()

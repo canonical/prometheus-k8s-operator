@@ -57,7 +57,7 @@ class Prometheus:
         #       rule_files:\n
         #       - /etc/prometheus/rules/juju_*.rules\n
         #       scrape_configs:\n
-        #       - job_name: prometheus\n
+        #       - job_name: my-job\n
         #       honor_timestamps: true\n
         #       scrape_interval: 5s\n
         #       scrape_timeout: 5s\n
@@ -65,7 +65,7 @@ class Prometheus:
         #       scheme: http\n
         #       static_configs:\n
         #       - targets:\n
-        #       - localhost:9090\n"
+        #       - some-target:8080\n"
         #   }
         # }
         async with aiohttp.ClientSession() as session:
@@ -175,18 +175,18 @@ class Prometheus:
                 #     "activeTargets": [
                 #       {
                 #         "discoveredLabels": {
-                #           "__address__": "localhost:9090",
+                #           "__address__": "some-target:8080",
                 #           "__metrics_path__": "/metrics",
                 #           "__scheme__": "http",
-                #           "job": "prometheus"
+                #           "job": "my-job"
                 #         },
                 #         "labels": {
-                #           "instance": "localhost:9090",
-                #           "job": "prometheus"
+                #           "instance": "some-target:8080",
+                #           "job": "my-job"
                 #         },
-                #         "scrapePool": "prometheus",
-                #         "scrapeUrl": "http://localhost:9090/metrics",
-                #         "globalUrl": "http://prom-0....local:9090/metrics",
+                #         "scrapePool": "my-job",
+                #         "scrapeUrl": "http://some-target:8080/metrics",
+                #         "globalUrl": "http://some-target....local:8080/metrics",
                 #         "lastError": "",
                 #         "lastScrape": "2022-05-12T16:54:19.019386006Z",
                 #         "lastScrapeDuration": 0.003985463,

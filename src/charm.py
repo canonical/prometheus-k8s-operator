@@ -23,7 +23,7 @@ from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificateTransferRequires,
 )
 from charms.grafana_k8s.v0.grafana_dashboard import GrafanaDashboardProvider
-from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+from charms.grafana_k8s.v1.grafana_source import GrafanaSourceProvider
 from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.mimir_coordinator_k8s.v0.prometheus_api import (
     DEFAULT_RELATION_NAME as PROMETHEUS_API_RELATION_NAME,
@@ -55,7 +55,12 @@ from charms.traefik_k8s.v1.ingress_per_unit import (
     IngressPerUnitRequirer,
     IngressPerUnitRevokedForUnitEvent,
 )
-from cosl import JujuTopology
+from cosl import (
+    AlertRulesCustomization,
+    AlertRulesCustomizationError,
+    AlertRulesCustomizationValidationError,
+    JujuTopology,
+)
 from cosl.interfaces.datasource_exchange import DatasourceDict, DatasourceExchange
 from cosl.time_validation import is_valid_timespec
 from lightkube.core.client import Client
@@ -127,6 +132,9 @@ class CompositeStatus(TypedDict):
     log_level: Tuple[str, str]
     k8s_patch: Tuple[str, str]
     config: Tuple[str, str]
+    alert_rules: Tuple[str, str]
+    scrape_jobs: Tuple[str, str]
+    alert_rules_customizations: Tuple[str, str]
 
 
 def to_tuple(status: StatusBase) -> Tuple[str, str]:
@@ -167,6 +175,9 @@ class PrometheusCharm(CharmBase):
                 log_level=to_tuple(ActiveStatus()),
                 k8s_patch=to_tuple(ActiveStatus()),
                 config=to_tuple(ActiveStatus()),
+                alert_rules=to_tuple(ActiveStatus()),
+                scrape_jobs=to_tuple(ActiveStatus()),
+                alert_rules_customizations=to_tuple(ActiveStatus()),
             )
         )
 
@@ -246,7 +257,6 @@ class PrometheusCharm(CharmBase):
         self.grafana_source_provider = GrafanaSourceProvider(
             charm=self,
             source_type="prometheus",
-            source_url=self.most_external_url,
             extra_fields={"timeInterval": PROMETHEUS_GLOBAL_SCRAPE_INTERVAL},
             refresh_event=[
                 self.ingress.on.ready_for_unit,
@@ -254,6 +264,9 @@ class PrometheusCharm(CharmBase):
                 self.on.update_status,
                 self._cert_requirer.on.certificate_available,
             ],
+            app_datasource=False,
+            unit_datasources=True,
+            unit_datasource_url=self.most_external_url,
         )
 
         self.catalogue = CatalogueConsumer(charm=self, item=self._catalogue_item)
@@ -282,6 +295,9 @@ class PrometheusCharm(CharmBase):
         self.framework.observe(self.ingress.on.revoked_for_unit, self._on_ingress_revoked)
         self.framework.observe(
             self._cert_requirer.on.certificate_available, self._on_certificate_available
+        )
+        self.framework.observe(
+            self.on.certificates_relation_broken, self._on_certificates_relation_broken
         )
         self.framework.observe(
             self._cert_transfer.on.certificate_set_updated, self._on_receive_ca_certs
@@ -336,6 +352,10 @@ class PrometheusCharm(CharmBase):
         if not is_valid_timespec(cast(str, retention_time)):
             event.add_status(BlockedStatus(f"Invalid time spec : {retention_time}"))
 
+        out_of_order_time_window = self.model.config.get("out_of_order_time_window", "")
+        if not is_valid_timespec(cast(str, out_of_order_time_window)):
+            event.add_status(BlockedStatus(f"Invalid time spec : {out_of_order_time_window}"))
+
         # "Push" statuses
         for status in self._stored.status.values():
             event.add_status(to_status(status))
@@ -386,26 +406,18 @@ class PrometheusCharm(CharmBase):
     def self_scraping_job(self):
         """Scrape config for "external" self monitoring.
 
-        This scrape job is for a remote Prometheus to scrape this prometheus, for self-monitoring.
-        Not to be confused with `self._default_config()`.
+        Tell scrapers how to reach Prometheus: via the ingress URL when there is one (its
+        scheme/port come from Traefik, which may differ from Prometheus' own TLS), otherwise
+        via our workload URL. `metrics_path` is rendered by MetricsEndpointProvider.
         """
-        port = urlparse(self.most_external_url).port
-        # `metrics_path` is automatically rendered by MetricsEndpointProvider, so no need
-        # to specify it here.
-        if tls_config := self._tls_config:
-            config = {
-                "scheme": "https",
-                "tls_config": {
-                    "ca_file": tls_config.ca_cert,
-                },
-                "static_configs": [{"targets": [f"*:{port or 443}"]}],
-            }
-        else:
-            config = {
-                "scheme": "http",
-                "static_configs": [{"targets": [f"*:{port or 80}"]}],
-            }
-
+        parsed = urlparse(self.most_external_url)
+        scheme = parsed.scheme or "http"
+        config = {
+            "scheme": scheme,
+            "static_configs": [
+                {"targets": [f"*:{parsed.port or (443 if scheme == 'https' else 80)}"]}
+            ],
+        }
         return [config]
 
     @property
@@ -426,60 +438,6 @@ class PrometheusCharm(CharmBase):
         logging.warning(log_message)
         self._stored.status["log_level"] = to_tuple(BlockedStatus(log_message))
         return "debug"
-
-    @property
-    def _default_config(self):
-        """Default configuration for the Prometheus workload.
-
-        This scrape config is for prometheus to scrape itself, not to be confused with the
-        self-monitoring scrape job in `self_scraping_job()`.
-        """
-        config = {
-            "job_name": "prometheus",
-            "scrape_interval": "5s",
-            "scrape_timeout": "5s",
-            "metrics_path": "/metrics",
-            "honor_timestamps": True,
-            "scheme": "http",  # replaced with "https" below if behind TLS
-            "static_configs": [
-                {
-                    "targets": [f"{self._fqdn}:{self._port}"],
-                    "labels": {
-                        "juju_model": self._topology.model,
-                        "juju_model_uuid": self._topology.model_uuid,
-                        "juju_application": self._topology.application,
-                        "juju_unit": self._topology.unit,
-                        "juju_charm": self._topology.charm_name,
-                        "host": "localhost",
-                    },
-                }
-            ],
-            "relabel_configs": [
-                {
-                    "source_labels": [
-                        "juju_model",
-                        "juju_model_uuid",
-                        "juju_application",
-                        "juju_unit",
-                    ],
-                    "separator": "_",
-                    "target_label": "instance",
-                    "regex": "(.*)",
-                }
-            ],
-        }
-
-        if self._tls_available:
-            config.update(
-                {
-                    "scheme": "https",
-                    "tls_config": {
-                        "ca_file": self._ca_cert_path,
-                    },
-                }
-            )
-
-        return config
 
     @property
     def internal_url(self) -> str:
@@ -568,6 +526,11 @@ class PrometheusCharm(CharmBase):
         """Update certificates and reconfigure when cert data is available."""
         self._update_cert()
         self._configure(_)
+
+    def _on_certificates_relation_broken(self, event):
+        """Drop the workload certificate and serve plain HTTP once the relation is gone."""
+        self._update_cert()
+        self._configure(event)
 
     def _on_receive_ca_certs(self, _):
         """Refresh trusted CA certificates received over relation data."""
@@ -697,7 +660,7 @@ class PrometheusCharm(CharmBase):
 
         # We use the internal url for grafana source due to
         # https://github.com/canonical/operator/issues/970
-        self.grafana_source_provider.update_source(self.internal_url)
+        self.grafana_source_provider.update_unit_source(self.internal_url)
         self.ingress.provide_ingress_requirements(
             scheme=urlparse(self.internal_url).scheme, port=self._port
         )
@@ -821,8 +784,31 @@ class PrometheusCharm(CharmBase):
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
+        try:
+            customization = AlertRulesCustomization.from_yaml(
+                cast(str, self.model.config.get("alert_rule_customizations") or ""),
+                query_type="promql"
+            )
+            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+        except AlertRulesCustomizationError as e:
+            logger.error("An error occurred while parsing alert rule customizations: %s", e)
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Customized alert rules are invalid. See debug-log")
+            )
+            customization = AlertRulesCustomization(query_type="promql")  # no-op: write rules unmodified
+
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
+
+        try:
+            metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
+            remote_write_alerts = customization.apply(remote_write_alerts)
+        except AlertRulesCustomizationValidationError:
+            # When this exception is raised, rules_customization treats `apply` as a no-op and returns the alert rules unchanged.
+            logger.info("Some alerts became valid after applying the provided customizations. ALL customizations are now dropped")
+            self._stored.status["alert_rules_customizations"] = to_tuple(
+                BlockedStatus("Unable to validate alert rule customizations")
+            )
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
@@ -832,7 +818,22 @@ class PrometheusCharm(CharmBase):
             self._push_alert_rules(remote_write_alerts)
             self._push(ALERTS_HASH_PATH, alerts_hash)
 
+        if self._has_alert_rule_errors():
+            self._stored.status["alert_rules"] = to_tuple(BlockedStatus("Invalid alert rules. See debug-log"))
+        else:
+            self._stored.status["alert_rules"] = to_tuple(ActiveStatus())
+
         return alert_rules_changed
+
+    def _has_alert_rule_errors(self) -> bool:
+        """Check if any alert-rule relation reported validation errors."""
+        return self.metrics_consumer.has_invalid_alert_rules() or (
+            self.remote_write_provider.has_invalid_alert_rules()
+        )
+
+    def _has_scrape_job_errors(self) -> bool:
+        """Check if any metrics-endpoint relation reported scrape job validation errors."""
+        return self.metrics_consumer.has_invalid_scrape_jobs()
 
     def _push_alert_rules(self, alerts):
         """Pushes alert rules from a rules file to the prometheus container.
@@ -878,7 +879,9 @@ class PrometheusCharm(CharmBase):
 
         args.append(f"--log.level={self.log_level}")
 
-        if config.get("metrics_wal_compression"):
+        if config.get("metrics_wal_compression") is False:
+            args.append("--no-storage.tsdb.wal-compression")
+        else:
             args.append("--storage.tsdb.wal-compression")
 
         if self._exemplars:
@@ -1107,7 +1110,6 @@ class PrometheusCharm(CharmBase):
         if alerting_config:
             prometheus_config["alerting"] = alerting_config
 
-        prometheus_config["scrape_configs"].append(self._default_config)  # type: ignore
         certs: Dict[str, str] = {}
         scrape_jobs = self.metrics_consumer.jobs()
         for job in scrape_jobs:
@@ -1117,10 +1119,24 @@ class PrometheusCharm(CharmBase):
             certs = {**certs, **processed_certs}
             prometheus_config["scrape_configs"].append(processed_job)  # type: ignore
 
+        if self._has_scrape_job_errors():
+            msg = "Invalid scrape jobs. See debug-log"
+            logger.error(msg)
+            self._stored.status["scrape_jobs"] = to_tuple(BlockedStatus(msg))
+        else:
+            self._stored.status["scrape_jobs"] = to_tuple(ActiveStatus())
+
         web_config = self._web_config()
 
+        storage_config = {}
         if self._exemplars:
-            prometheus_config["storage"] = {"exemplars": {"max_exemplars": self._exemplars}}
+            storage_config["exemplars"] = {"max_exemplars": self._exemplars}
+        if is_valid_timespec(
+            ooo := cast(str, self.model.config.get("out_of_order_time_window", ""))
+        ):
+            storage_config.setdefault("tsdb", {})["out_of_order_time_window"] = ooo
+        if storage_config:
+            prometheus_config["storage"] = storage_config
 
         if self.workload_tracing_endpoint:
             prometheus_config["tracing"] = self._tracing_config()

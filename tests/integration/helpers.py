@@ -229,6 +229,35 @@ def oci_image(metadata_file: str, image_name: str) -> str:
     return upstream_source
 
 
+def parse_up_samples(response: dict) -> list[tuple[float, float]]:
+    """Extract ``(timestamp, value)`` samples of an instant-vector query response.
+
+    The Prometheus API encodes sample values as JSON strings and timestamps as JSON
+    numbers: ``{"value": [1435781451.781, "1"]}``. Native histogram series carry a
+    ``histogram`` key instead of ``value`` and malformed entries are skipped.
+    """
+    samples = []
+    for series in response.get("data", {}).get("result", []):
+        value = series.get("value")
+        if not value:
+            continue
+        try:
+            samples.append((float(value[0]), float(value[1])))
+        except (TypeError, ValueError, IndexError):
+            continue
+    return samples
+
+
+def has_new_success_scrape(samples: list[tuple[float, float]], previously_seen: float) -> bool:
+    """Whether any self-scrape sample is successful and strictly newer than ``previously_seen``.
+
+    Prometheus never deletes series, so a sample may simply be a leftover from an earlier
+    configuration. Requiring the timestamp to be strictly newer proves a fresh scrape made
+    it through under the current configuration.
+    """
+    return any(value == 1.0 and timestamp > previously_seen for timestamp, value in samples)
+
+
 def uk8s_group() -> str:
     try:
         # Classically confined microk8s

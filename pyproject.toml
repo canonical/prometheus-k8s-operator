@@ -3,7 +3,7 @@
 [project]
 name = "prometheus-k8s"
 version = "0.0"
-requires-python = ">=3.10"
+requires-python = "~=3.14.0"
 
 dependencies = [
   "ops[tracing]",
@@ -11,8 +11,8 @@ dependencies = [
   "cosl",
   "lightkube>=0.11",
   "lightkube-models>=1.22.0.4",
-  "httpx==0.24.1",
-  "httpcore==0.17.3",
+  "httpx>=0.27",
+  "httpcore>=1.0.0",
   "cryptography",
   "jsonschema",
   "requests",
@@ -30,6 +30,7 @@ dev = [
   "pyright", 
   # Unit
   "pytest",
+  "pytest-bdd<8",
   "coverage[toml]",
   "ops[testing]",
   "pytest-asyncio",
@@ -51,6 +52,7 @@ dev = [
   "minio",
   "sh",
   "jubilant",
+  "observability-clients",
   "opentelemetry-exporter-otlp-proto-http",
 ]
 

@@ -30,7 +30,7 @@ description: |
   - Configurable Kubernetes resource limits for CPU and memory.
 
 links:
-  documentation: https://discourse.charmhub.io/t/prometheus-k8s-docs-index/5803
+  documentation: https://documentation.ubuntu.com/observability/latest/
   website: https://charmhub.io/prometheus-k8s
   source: https://github.com/canonical/prometheus-k8s-operator
   issues: https://github.com/canonical/prometheus-k8s-operator/issues
@@ -40,7 +40,7 @@ assumes:
   - juju >= 3.6
 
 platforms:
-  ubuntu@24.04:amd64:
+  ubuntu@26.04:amd64:
 
 parts:
   charm:
@@ -70,7 +70,7 @@ resources:
   prometheus-image:
     type: oci-image
     description: Container image for Prometheus
-    upstream-source: ubuntu/prometheus@sha256:3b037e9157370026b1e67e5b3edfb17fb08f22b8db2a22400baeb250963dd78f  # renovate: oci-image tag: 3.11-24.04
+    upstream-source: ubuntu/prometheus@sha256:e5696a7facf4233d1d1c0d5be8c6f8b474026cf9db164a500718ab2401657ef7  # renovate: oci-image tag: 3.14-26.04
 
 storage:
   database:
@@ -138,7 +138,7 @@ requires:
     description: |
       Obtain a CA and a server certificate for Prometheus to use for TLS.
       The same CA cert is used for all in-cluster requests, e.g.:
-      - (client) scraping targets for self-monitoring
+      - (client) scraping metrics endpoints
       - (client) posting alerts to alertmanager server
       - (server) serving data to grafana
   charm-tracing:
@@ -207,6 +207,7 @@ config:
       description: |
         How long to retain samples in the storage.
         Units Supported: y, w, d, h, m, s
+        If `maximum_retention_size` is also set, metrics will be dropped when **either** threshold has been exceeded.
       type: string
       default: 15d
     maximum_retention_size:
@@ -216,16 +217,17 @@ config:
         The percentage value is then converted to bytes and passed to prometheus with the
         `--storage.tsdb.retention.size` argument.
         If this field is set to an invalid value, the `--storage.tsdb.retention.size` argument is dropped. In such cases, retention is only determined by `metrics_retention_time`. 
-        Default is 80%.
+        Default is 80%. If `metrics_retention_time` is also set, metrics will be dropped when **either** threshold has been exceeded.
       type: string
       default: "80%"
     metrics_wal_compression:
       description: |
-        This flag enables compression of the write-ahead log (WAL).
+        Whether to compress the write-ahead log (WAL).
         Depending on your data, you can expect the WAL size to be
-        halved with little extra cpu load.
+        halved with little extra CPU load.
+        See https://prometheus.io/docs/prometheus/latest/storage/#write-ahead-log-wal
       type: boolean
-      default: false
+      default: true
     evaluation_interval:
       description: |
         How frequently rules will be evaluated.
@@ -253,7 +255,44 @@ config:
        Otherwise, the value is set to the greater of the setpoint or 100,000.
        Ref: https://prometheus.io/docs/prometheus/latest/feature_flags/#exemplars-storage
       type: int
+    out_of_order_time_window:
+      default: "0s"
+      description: |
+        The time window within which out-of-order samples are accepted for ingestion.
+        Supported units: s, m, h (Prometheus duration format; "m" is minutes).
+        Set to "0s" to disable (default).
+        See https://prometheus.io/docs/prometheus/latest/configuration/configuration/#tsdb
+      type: string
 
+    alert_rule_customizations:
+      type: string
+      description: |
+        A YAML string for customizing the alert rules that Prometheus receives from any
+        connected application via the `metrics-endpoint` or `receive-remote-write`
+        relations. The following top-level operations are supported: `remove` and `patch`.
+
+        `remove`: drop matching alerting rules (or entire groups).
+        Each entry requires a `where` selector.
+
+        `patch`: merge a `set` block into every matching alerting rule.
+        Each entry requires both a `where` selector and a `set` block.
+
+        Example:
+
+          remove:
+            - where:
+                alert: TargetDown
+            - where:
+                labels:
+                  juju_application: noisy-exporter
+
+          patch:
+            - where:
+                alert: HighLatency
+              set:
+                for: 30m
+                labels:
+                  severity: warning
 actions:
   validate-configuration:
     description: |
