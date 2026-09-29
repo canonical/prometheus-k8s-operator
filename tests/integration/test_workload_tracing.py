@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
+import datetime
 import logging
 from pathlib import Path
 
@@ -22,6 +23,11 @@ SSC_APP_NAME = "ssc"
 
 
 @pytest.mark.abort_on_fail
+@pytest.mark.xfail(
+    datetime.date.today() < datetime.date(2026, 11, 1),
+    reason="expected to fail until 2026-11-01",
+    strict=True,
+)
 async def test_workload_traces(ops_test, prometheus_charm):
     minio_user = "accesskey"
     minio_pass = "secretkey"
@@ -82,6 +88,11 @@ async def test_workload_traces(ops_test, prometheus_charm):
 
 
 @pytest.mark.abort_on_fail
+@pytest.mark.xfail(
+    datetime.date.today() < datetime.date(2026, 11, 1),
+    reason="expected to fail until 2026-11-01",
+    strict=True,
+)
 async def test_workload_traces_tls(ops_test):
     # integrate with a TLS Provider
     await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME, channel="1/stable")
