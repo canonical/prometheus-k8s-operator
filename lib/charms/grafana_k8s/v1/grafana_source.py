@@ -12,6 +12,63 @@ or library by providing a definitive reference guide to the
 structure of relation data which is shared between the Grafana
 charm and any charm providing datasource information.
 
+## What changed in LIBAPI v1 (HA datasources)
+
+`v1` adds support for a single, load-balanced, *application-level* datasource, in
+addition to the historical *per-unit* datasources. This fixes the long-standing problem
+where, in an HA deployment behind an ingress, the datasource UID changed on every leader
+re-election (because the UID embedded the unit number of whichever unit happened to be
+advertising), silently breaking every dashboard and alert that referenced it.
+
+A provider now chooses its datasource *topology* explicitly via two flags:
+
+- `app_datasource` (default `True`): the leader publishes one load-balanced address in
+  the **application** databag (`grafana_source_app_host`). Grafana mints exactly one
+  datasource for the whole application, with a UID of the form
+  `juju_{model}_{model_uuid}_{application}` — note there is **no unit number**, so the
+  UID is stable across leader re-elections. This is the correct shape for a clustered,
+  HA backend behind a single load-balanced address (Mimir/Loki/Tempo coordinators,
+  Alertmanager).
+- `unit_datasources` (default `False`): each unit publishes its own address in its
+  **unit** databag (`grafana_source_host`). Grafana mints one datasource per unit, each
+  with a UID of the form `juju_{model}_{model_uuid}_{application}_{unit_number}`. This is
+  the correct shape for a non-clustered backend where each unit is an independent
+  datasource (e.g. a standalone Prometheus).
+
+Both may be enabled at once (yielding one app-level datasource plus one per unit). If
+both are disabled, no address is published and a warning is logged.
+
+Ingress pairing (provider-charm responsibility — this library never talks to the ingress
+library, it only receives the URL you give it):
+
+- `app_datasource=True`  <-> use **ingress-per-app**; pass the app URL as
+  `app_datasource_url`.
+- `unit_datasources=True` <-> use **ingress-per-unit**; pass each unit's own URL as
+  `unit_datasource_url` (the value is per-unit, since the provider runs in every unit).
+
+### Breaking changes from v0
+
+- The `source_url` and `is_ingress_per_app` constructor arguments were removed. Use
+  `app_datasource`/`unit_datasources` and `app_datasource_url`/`unit_datasource_url`
+  instead.
+- The `update_source()` method was replaced by `update_app_source()` and
+  `update_unit_source()`.
+
+### Upgrade implications
+
+**This is a coordinated rollout** — Grafana and provider charms should be upgraded
+together.
+
+- **Both upgraded**: the datasource UID changes **once** (from `juju_..._{n}` to
+  `juju_..._{app}`), which breaks dashboards/alerts referencing the old UID a single
+  time; users must re-point them once. This is a one-off, deliberate break rather than
+  the recurring one it replaces.
+- **Old Grafana + new provider (app mode)**: the old v0 consumer ignores
+  `grafana_source_app_host` and sees an empty `grafana_source_host`, resulting in **no
+  datasource**. Upgrade Grafana to restore the datasource.
+- **New Grafana + old provider**: the old fragile per-unit behaviour continues (no
+  change until the provider is also upgraded).
+
 ## Provider Library Usage
 
 The Grafana charm interacts with its datasources using its charm
@@ -22,27 +79,31 @@ use case of a Prometheus (or Prometheus-compatible) datasource
 provider in a charm which `provides: grafana-source`, creation of a
 `GrafanaSourceProvider` object with the default arguments is sufficient.
 
-The default arguments are:
+The constructor arguments are:
 
     `charm`: `self` from the charm instantiating this library
-    `source_type`: None
-    `source_port`: None
-    `source_url`: None
-    `relation_name`: grafana-source
-    `refresh_event`: A `PebbleReady` event from `charm`, used to refresh
-        the IP address sent to Grafana on a charm lifecycle event or
-        pod restart
-    `extra_fields`: None
-    `secure_extra_fields`: None
+    `source_type`: **required** — the Grafana datasource type (e.g. "prometheus",
+        "loki", "tempo", "mimir", "alertmanager")
+    `source_port`: the port the datasource listens on (default: "")
+    `relation_name`: the relation name (default: "grafana-source")
+    `refresh_event`: a `PebbleReady` event from `charm`, used to refresh
+        the address sent to Grafana on a charm lifecycle event or pod restart
+        (default: auto-detected from the charm's single container, if any)
+    `extra_fields`: additional fields for Grafana's `jsonData` (default: None)
+    `secure_extra_fields`: additional fields for Grafana's `secureJsonData` (default: None)
+    `app_datasource`: publish a single app-level datasource (default: True)
+    `unit_datasources`: publish per-unit datasources (default: False)
+    `app_datasource_url`: explicit URL for the app-level datasource (default: None)
+    `unit_datasource_url`: explicit URL for this unit's datasource (default: None)
 
-The value of `source_url` should be a fully-resolvable URL for a valid Grafana
-source, e.g., `http://example.com/api` or similar.
+The values of `app_datasource_url` / `unit_datasource_url` should be a fully-resolvable
+URL for a valid Grafana source, e.g., `http://example.com/api` or similar.
 
 If your configuration requires any changes from these defaults, they
 may be set from the class constructor. It may be instantiated as
 follows:
 
-    from charms.grafana_k8s.v0.grafana_source import GrafanaSourceProvider
+    from charms.grafana_k8s.v1.grafana_source import GrafanaSourceProvider
 
     class FooCharm:
         def __init__(self, *args):
@@ -57,26 +118,38 @@ The first argument (`self`) should be a reference to the parent (datasource)
 charm, as this charm's model will be used for relation data, IP addresses,
 and lifecycle events.
 
-An instantiated `GrafanaSourceProvider` will ensure that each unit of its
-parent charm is added as a datasource in the Grafana configuration once a
-relation is established, using the [Grafana datasource provisioning](
+An instantiated `GrafanaSourceProvider` will ensure that, once a relation is
+established, this application is added as a datasource in the Grafana configuration
+using the [Grafana datasource provisioning](
 https://grafana.com/docs/grafana/latest/administration/provisioning/#data-sources)
-specification via YAML files.
+specification via YAML files. Depending on the `app_datasource`/`unit_datasources`
+flags, this is either a single application-level datasource, one datasource per unit,
+or both.
 
-This information is added to the relation data for the charms as serialized JSON
-from a dict, with a structure of:
+This information is added to the relation data for the charms with the following
+structure:
+
+**Application databag** (written by leader):
 ```
 {
-    "application": {
-        "model": charm.model.name, # from `charm` in the constructor
+    "grafana_source_data": {  # JSON-encoded
+        "model": charm.model.name,
         "model_uuid": charm.model.uuid,
         "application": charm.model.app.name,
         "type": source_type,
+        "extra_fields": {...},
+        "secure_extra_fields": {...},
     },
-    "unit/0": {
-        "uri": {ip_address}:{port}{path} # `ip_address` is derived at runtime, `port` from the constructor,
-                                         # and `path` from the constructor, if specified
-    },
+    # app-level address (when app_datasource=True):
+    "grafana_source_app_host": "{scheme}://{app}.{model}.svc.cluster.local:{port}{path}",
+}
+```
+
+**Unit databag** (written by each unit when unit_datasources=True):
+```
+{
+    "grafana_source_host": "{scheme}://{fqdn}:{port}{path}",
+}
 ```
 
 This is ingested by :class:`GrafanaSourceConsumer`, and is sufficient for configuration.
@@ -97,12 +170,16 @@ This relation must confirm to the `grafana-source` interface.
 For example a Grafana charm may instantiate the
 `GrafanaSourceConsumer` in its constructor as follows
 
-    from charms.grafana_k8s.v0.grafana_source import GrafanaSourceConsumer
+    from charms.grafana_k8s.v1.grafana_source import GrafanaSourceConsumer
 
     def __init__(self, *args):
         super().__init__(*args)
         ...
-        self.grafana_source_consumer = GrafanaSourceConsumer(self)
+        self.grafana_source_consumer = GrafanaSourceConsumer(
+            self,
+            grafana_uid=self.unique_name,
+            grafana_base_url=self.external_url,
+        )
         ...
 
 2. A Grafana charm also needs to listen to the
@@ -158,11 +235,11 @@ from ops.model import Relation
 LIBID = "974705adb86f40228298156e34b460dc"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 0
+LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 30
+LIBPATCH = 1
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +254,7 @@ class GrafanaSourceData:
 
     datasource_uids: Dict[str, str]
     external_url: Optional[str]
+    app_datasource_uid: Optional[str] = None
 
     def get_unit_uid(self, unit: str):
         """Return the UID for a given unit."""
@@ -185,6 +263,15 @@ class GrafanaSourceData:
         else:
             datasource_uid = ""
         return datasource_uid
+
+    def get_app_uid(self) -> Optional[str]:
+        """Return the UID for the application-level (load-balanced) datasource.
+
+        Returns None if the remote Grafana did not assign an app-level datasource UID
+        (e.g. the provider only published per-unit datasources, or the remote Grafana
+        predates app-level datasource support).
+        """
+        return self.app_datasource_uid
 
 
 class RelationNotFoundError(Exception):
@@ -325,12 +412,14 @@ class GrafanaSourceProvider(Object):
         charm: CharmBase,
         source_type: str,
         source_port: Optional[str] = "",
-        source_url: Optional[str] = "",
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         relation_name: str = DEFAULT_RELATION_NAME,
         extra_fields: Optional[dict] = None,
         secure_extra_fields: Optional[dict] = None,
-        is_ingress_per_app: bool = False,
+        app_datasource: bool = True,
+        unit_datasources: bool = False,
+        app_datasource_url: Optional[str] = None,
+        unit_datasource_url: Optional[str] = None,
     ) -> None:
         """Construct a Grafana charm client.
 
@@ -348,6 +437,31 @@ class GrafanaSourceProvider(Object):
                 port=<port>
             )
 
+        The provider can publish two distinct kinds of datasource, controlled by the
+        ``app_datasource`` and ``unit_datasources`` flags:
+
+        - An **application-level** datasource (``app_datasource=True``, the default):
+          the leader publishes a single, load-balanced address in the application
+          databag. The consumer mints exactly one datasource for the whole application
+          with a UID that does NOT include a unit number, so it is stable across leader
+          re-elections. This is the correct representation for an HA, clustered backend
+          (e.g. a Mimir/Loki/Tempo coordinator, or Alertmanager) sitting behind a single
+          load-balanced address. When behind an ingress, pair this with
+          ingress-per-app and pass the app ingress URL as ``app_datasource_url``.
+
+        - **Per-unit** datasources (``unit_datasources=True``): each unit publishes its
+          own address in its unit databag, and the consumer mints one datasource per
+          unit, each keyed by unit number. This is the correct representation for a
+          non-clustered backend where each unit is an independent datasource (e.g. a
+          standalone Prometheus). When behind an ingress, pair this with
+          ingress-per-unit and pass each unit's own ingress URL as
+          ``unit_datasource_url`` (the value is per-unit, since this object runs as a
+          separate instance in every unit).
+
+        Both flags may be set at once (yielding one app-level datasource plus one
+        per-unit datasource for each unit). If both are False, no datasource address is
+        published at all and a warning is logged.
+
         Args:
             charm: a :class:`CharmBase` object which manages this
                 :class:`GrafanaSourceProvider` object. Generally this is
@@ -356,11 +470,8 @@ class GrafanaSourceProvider(Object):
                 required for Grafana configuration. The value must match
                 the DataSource type from the Grafana perspective.
             source_port: an optional (default `9090`) source port
-                required for Grafana configuration.
-            source_url: an optional source URL which can be used, for example, if
-                ingress for a source is enabled, or a URL path to the API consumed
-                by the datasource must be specified for another reason. If set,
-                'source_port' will not be used.
+                required for Grafana configuration. Used to build the datasource
+                address when an explicit URL is not provided.
             relation_name: string name of the relation that is provides the
                 Grafana source service. It is strongly advised not to change
                 the default, so that people deploying your charm will have a
@@ -373,9 +484,21 @@ class GrafanaSourceProvider(Object):
                 for some datasources in the `jsonData` field
             secure_extra_fields: a :dict: which is used for additional information required
                 for some datasources in the `secureJsonData`
-            is_ingress_per_app: whether this application is behind an ingress, specifically ingress-per-app. If set to True, then only
-                the leader unit will be listed as a datasource in grafana. If False, each
-                follower unit will show up as a datasource as well.
+            app_datasource: whether to publish a single, load-balanced datasource for the
+                whole application in the application databag. Defaults to True. The
+                resulting datasource UID is stable across leader re-elections.
+            unit_datasources: whether to publish one datasource per unit, each keyed by
+                unit number. Defaults to False.
+            app_datasource_url: an optional fully-resolvable URL for the application-level
+                datasource (e.g. an ingress-per-app URL). If unset, a Kubernetes
+                load-balanced service address is constructed from the application name.
+                Pass the base URL only: for ``source_type == "mimir"`` the library
+                appends the ``/prometheus`` query path itself.
+            unit_datasource_url: an optional fully-resolvable URL for this unit's
+                datasource (e.g. an ingress-per-unit URL). If unset, the unit's own FQDN
+                is used. This value is per-unit. Pass the base URL only: for
+                ``source_type == "mimir"`` the library appends the ``/prometheus`` query
+                path itself.
         """
         _validate_relation_by_interface_and_direction(
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
@@ -405,26 +528,26 @@ class GrafanaSourceProvider(Object):
         elif not isinstance(refresh_event, list):
             refresh_event = [refresh_event]
 
-        if source_port and source_url:
-            logger.warning(
-                "Both `source_port` and `source_url` were specified! Using "
-                "`source_url` as the address."
-            )
-
         self._source_port = source_port
 
-        # If there's no ingress, then each unit is a datasource.
-        # If there is an ingress, then only the leader is a datasource.
-        self._this_unit_is_datasource = (not is_ingress_per_app) or charm.unit.is_leader()
+        self._app_datasource = app_datasource
+        self._unit_datasources = unit_datasources
+        self._app_datasource_url = self._sanitize_source_url(app_datasource_url)
+        self._unit_datasource_url = self._sanitize_source_url(unit_datasource_url)
 
-        self._source_url = self._sanitize_source_url(source_url)
+        if not app_datasource and not unit_datasources:
+            logger.warning(
+                "GrafanaSourceProvider was instantiated with both `app_datasource` and "
+                "`unit_datasources` set to False. No datasource address will be published, "
+                "so this application will not appear as a datasource in Grafana."
+            )
 
         self.framework.observe(events.relation_joined, self._set_sources_from_event)
         self.framework.observe(events.relation_changed, self._set_sources_from_event)
         self.framework.observe(events.relation_departed, self._set_sources_from_event)
         self.framework.observe(events.relation_broken, self._set_sources_from_event)
         for ev in refresh_event:
-            self.framework.observe(ev, self._set_unit_details)
+            self.framework.observe(ev, self._set_host_details)
 
     def _sanitize_source_url(self, source_url: Optional[str]) -> Optional[str]:
         if source_url and not re.match(r"^\w+://", source_url):
@@ -435,9 +558,26 @@ class GrafanaSourceProvider(Object):
             source_url = "http://{}".format(source_url)
         return source_url
 
-    def update_source(self, source_url: Optional[str] = ""):
-        """Trigger the update of relation data."""
-        self._source_url = self._sanitize_source_url(source_url)
+    def update_app_source(self, app_datasource_url: Optional[str] = ""):
+        """Update the application-level datasource URL and re-publish relation data.
+
+        Useful when the load-balanced address (e.g. an ingress-per-app URL) becomes
+        available or changes after this object is constructed.
+        """
+        self._app_datasource_url = self._sanitize_source_url(app_datasource_url)
+
+        for rel in self._charm.model.relations.get(self._relation_name, []):
+            if not rel:
+                continue
+            self._set_sources(rel)
+
+    def update_unit_source(self, unit_datasource_url: Optional[str] = ""):
+        """Update this unit's datasource URL and re-publish relation data.
+
+        Useful when this unit's address (e.g. an ingress-per-unit URL) becomes
+        available or changes after this object is constructed. The value is per-unit.
+        """
+        self._unit_datasource_url = self._sanitize_source_url(unit_datasource_url)
 
         for rel in self._charm.model.relations.get(self._relation_name, []):
             if not rel:
@@ -464,6 +604,7 @@ class GrafanaSourceProvider(Object):
             grafana_data = GrafanaSourceData(
                 datasource_uids=json.loads(app_databag.get("datasource_uids", "{}")),
                 external_url=app_databag.get("grafana_base_url"),
+                app_datasource_uid=app_databag.get("app_datasource_uid") or None,
             )
             data[grafana_uid] = grafana_data
         return data
@@ -483,7 +624,7 @@ class GrafanaSourceProvider(Object):
 
     def _set_sources(self, rel: Relation):
         """Inform the consumer about the source configuration."""
-        self._set_unit_details(rel)
+        self._set_host_details(rel)
 
         if not self._charm.unit.is_leader():
             return
@@ -508,22 +649,49 @@ class GrafanaSourceProvider(Object):
         }
         return data
 
-    def _set_unit_details(self, _: Union[BoundEvent, RelationEvent, Relation]):
-        """Set unit host details.
+    def _build_url(self, explicit_url: Optional[str], host: str) -> str:
+        """Build a datasource URL, applying datasource-type-specific path suffixes.
 
-        Each time a provider charm container is restarted it updates its own host address in the
-        unit relation data for the Prometheus consumer.
+        Args:
+            explicit_url: a pre-sanitized URL to use as-is, if set.
+            host: the host (without scheme/port) used to construct a URL when
+                ``explicit_url`` is not set.
+        """
+        url = explicit_url or "http://{}:{}".format(host, self._source_port)
+        if self._source_type == "mimir":
+            url = "{}/prometheus".format(url)
+        return url
+
+    def _set_host_details(self, _: Union[BoundEvent, RelationEvent, Relation]):
+        """Set host details in relation data.
+
+        Each unit publishes its own address in its unit databag when per-unit
+        datasources are enabled. The leader additionally publishes a single,
+        load-balanced address in the application databag when an application-level
+        datasource is enabled. This is (re)run on refresh events so addresses are
+        refreshed after a pod or machine/VM restart.
         """
         for relation in self._charm.model.relations[self._relation_name]:
-            if self._this_unit_is_datasource:
-                url = self._source_url or "http://{}:{}".format(
-                    socket.getfqdn(), self._source_port
+            grafana_source_host = ""
+            # Per-unit datasource: this unit advertises its own address.
+            if self._unit_datasources:
+                grafana_source_host = self._build_url(
+                    self._unit_datasource_url, socket.getfqdn()
                 )
-                if self._source_type == "mimir":
-                    url = f"{url}/prometheus"
-                relation.data[self._charm.unit]["grafana_source_host"] = url
+
+            relation.data[self._charm.unit]["grafana_source_host"] = grafana_source_host
+
+            # Application-level datasource: only the leader writes to the app databag.
+            if not self._charm.unit.is_leader():
+                continue
+
+            if self._app_datasource:
+                app_host = f"{self._charm.app.name}.{self._charm.model.name}.svc.cluster.local"
+                relation.data[self._charm.app]["grafana_source_app_host"] = self._build_url(
+                    self._app_datasource_url, app_host
+                )
             else:
-                relation.data[self._charm.unit]["grafana_source_host"] = ""
+                relation.data[self._charm.app]["grafana_source_app_host"] = ""
 
 
 class GrafanaSourceConsumer(Object):
@@ -640,14 +808,23 @@ class GrafanaSourceConsumer(Object):
         self.on.sources_changed.emit()  # pyright: ignore
         self.on.sources_to_delete_changed.emit()  # pyright: ignore
 
-    def _publish_source_uids(self, rel: Relation, uids: Dict[str, str]):
+    def _publish_source_uids(
+        self, rel: Relation, uids: Dict[str, str], app_uid: Optional[str] = None
+    ):
         """Share the datasource UIDs back to the datasources.
+
+        Args:
+            rel: the relation whose app databag is written to.
+            uids: mapping of provider unit name -> per-unit datasource UID.
+            app_uid: the application-level (load-balanced) datasource UID, or None if the
+                provider did not publish an application-level datasource.
 
         Assumes only leader unit will call this method
         """
         rel.data[self._charm.app]["grafana_uid"] = self._grafana_uid
         rel.data[self._charm.app]["datasource_uids"] = json.dumps(uids)
         rel.data[self._charm.app]["grafana_base_url"] = self._grafana_base_url
+        rel.data[self._charm.app]["app_datasource_uid"] = app_uid or ""
 
     def _get_source_config(self, rel: Relation):
         """Generate configuration from data stored in relation data by providers."""
@@ -687,8 +864,56 @@ class GrafanaSourceConsumer(Object):
 
             data.append(host_data)
 
-        # share the unique source names back to the datasource units
-        self._publish_source_uids(rel, {ds["unit"]: ds["source_name"] for ds in data})
+        # Application-level (load-balanced) datasource. If the provider published an
+        # address in its application databag, mint a single datasource for the whole
+        # application with a UID that does NOT include a unit number, so it is stable
+        # across leader re-elections.
+        app_source_name = None
+        app_host_addr = rel.data[rel.app].get("grafana_source_app_host")  # type: ignore
+        if app_host_addr:
+            app_source_name = "juju_{}_{}_{}".format(
+                source_data["model"],
+                source_data["model_uuid"],
+                source_data["application"],
+            )
+            app_host = (
+                "http://{}".format(app_host_addr)
+                if not re.match(r"^\w+://", app_host_addr)
+                else app_host_addr
+            )
+            app_source_data = {
+                "unit": None,
+                "source_name": app_source_name,
+                "source_type": source_data["type"],
+                "url": app_host,
+            }
+            if source_data.get("extra_fields", None):
+                app_source_data["extra_fields"] = source_data.get("extra_fields")
+
+            if source_data.get("secure_extra_fields", None):
+                app_source_data["secure_extra_fields"] = source_data.get("secure_extra_fields")
+
+            if app_source_name in sources_to_delete:
+                sources_to_delete.remove(app_source_name)
+
+            data.append(app_source_data)
+
+        if not data:
+            logger.warning(
+                "grafana-source relation %s (app %r) provided source metadata but no "
+                "datasource address (neither `grafana_source_host` nor "
+                "`grafana_source_app_host`); no datasource will be created.",
+                rel.id,
+                rel.app.name if rel.app else "unknown",
+            )
+
+        # share the unique source names back to the datasource units. The per-unit UIDs
+        # go in the unit-keyed map; the app-level UID is published separately.
+        self._publish_source_uids(
+            rel,
+            {ds["unit"]: ds["source_name"] for ds in data if ds.get("unit")},
+            app_uid=app_source_name,
+        )
 
         self.set_peer_data("sources_to_delete", list(sources_to_delete))
         return data
@@ -742,13 +967,17 @@ class GrafanaSourceConsumer(Object):
         removed_source = stored_sources.pop(str(rel_id), None)
         if removed_source:
             if event.unit:
-                # Remove one unit only
-                dead_unit = [s for s in removed_source if s["unit"] == event.unit.name][0]
-                self._remove_source(dead_unit["source_name"])
+                # Remove one unit only. App-level sources (unit is None) are
+                # load-balanced and must survive individual unit departures, so they are
+                # skipped here and only removed when the whole relation is broken.
+                dead_units = [s for s in removed_source if s.get("unit") == event.unit.name]
+                if dead_units:
+                    self._remove_source(dead_units[0]["source_name"])
 
-                # Re-update the list of stored sources
-                stored_sources[rel_id] = [
-                    dict(s) for s in removed_source if s["unit"] != event.unit.name
+                # Re-update the list of stored sources, preserving all non-departing
+                # sources (including the app-level source).
+                stored_sources[str(rel_id)] = [
+                    dict(s) for s in removed_source if s.get("unit") != event.unit.name
                 ]
             else:
                 for host in removed_source:
@@ -757,8 +986,13 @@ class GrafanaSourceConsumer(Object):
             self.set_peer_data("sources", stored_sources)
 
             # update this relation's shared datasource names after removing this unit/source
+            app_uid = next(
+                (s["source_name"] for s in removed_source if not s.get("unit")), None
+            )
             self._publish_source_uids(
-                event.relation, {ds["unit"]: ds["source_name"] for ds in removed_source}
+                event.relation,
+                {ds["unit"]: ds["source_name"] for ds in removed_source if ds.get("unit")},
+                app_uid=app_uid,
             )
 
             return True

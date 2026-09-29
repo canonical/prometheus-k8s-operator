@@ -30,6 +30,7 @@ dev = [
   "pyright", 
   # Unit
   "pytest",
+  "pytest-bdd<8",
   "coverage[toml]",
   "ops[testing]",
   "pytest-asyncio",
@@ -51,6 +52,7 @@ dev = [
   "minio",
   "sh",
   "jubilant",
+  "observability-clients",
   "opentelemetry-exporter-otlp-proto-http",
 ]
 

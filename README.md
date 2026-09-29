@@ -64,7 +64,7 @@ This UI is accessed on port 9090 at the Prometheus charm's address. This assumes
 
 ### Adding scrape targets
 
-When Prometheus is deployed it will only scrape metrics from itself. This is the default behavior of Prometheus. Additional metrics endpoints may be added to the Prometheus charm through relations with other charms. Currently the following charms are supported
+When Prometheus is deployed it does not scrape any metrics endpoints. Metrics endpoints may be added to the Prometheus charm through relations with other charms. Currently the following charms are supported
 
 - Any charm that uses the `prometheus_scrape` interface to provide a metrics endpoint and optionally alert rules for Prometheus.
 - The [Prometheus Scrape Target](https://github.com/canonical/prometheus-scrape-target-k8s-operator) charm may be used to scrape metrics endpoint that are not part of any Juju Model.

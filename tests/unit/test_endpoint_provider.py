@@ -929,7 +929,7 @@ class CharmProvidingPromBakedInRules(CharmBase):
         self.provider = MetricsEndpointProvider(
             self, jobs=JOBS, alert_rules_path=str(PROJECT_DIR / "src" / "prometheus_alert_rules")
         )
-        self.tool = CosTool(self)
+        self.tool = CosTool("promql")
 
 
 class TestBakedInAlertRules(unittest.TestCase):

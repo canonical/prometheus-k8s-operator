@@ -380,18 +380,19 @@ wheels = [
 
 [[package]]
 name = "cosl"
-version = "1.9.1"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "diskcache" },
     { name = "ops" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/f1/6bc646976c499e9bb7a048ef17b6295f23b145f11f1cee4207ce10494342/cosl-1.9.1.tar.gz", hash = "sha256:80d899b5f278bf64252eb94bfb1bbd03dade5073c2cbc0ea43e9abc68be9ee1e", size = 150395, upload-time = "2026-03-31T12:50:20.064Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/25/af41ed618d501d285c280f15a2659592192d267c5ffa3ad3d10be96fabb6/cosl-1.11.0.tar.gz", hash = "sha256:eb0da1a001b97c2737dc2f10f57d39de9d55fd99cdf06dafe1b36af8e197accf", size = 182682, upload-time = "2026-09-28T17:46:30.713Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/1d/558af69f639d6772be034b13417a7bbeb92a56939f891493d1546e724213/cosl-1.9.1-py3-none-any.whl", hash = "sha256:201107a68f398b8a5f5e91f6dcaeb1777e7b2816a1592c8eea4a491d1750e1a6", size = 38217, upload-time = "2026-03-31T12:50:18.87Z" },
+    { url = "https://files.pythonhosted.org/packages/78/8e/f0da28395ff9ca00a87913424fb88e36c1fe29716692797110fcb861b898/cosl-1.11.0-py3-none-any.whl", hash = "sha256:54b60c30273a75cb7be73fa2a75357f4c35cd9a4c2fb43630f5984e8539681e9", size = 46015, upload-time = "2026-09-28T17:46:29.23Z" },
 ]
 
 [[package]]
@@ -521,6 +522,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f9/6b/6a4a5aaf38535eb332c2856aa08e73ed7c549d0851b1215401af0a2db1a7/deepdiff-9.1.0.tar.gz", hash = "sha256:07e9e366fab4297755153c4eab795ad4ef3cbd0d51660e847f5751c6bd727687", size = 382149, upload-time = "2026-05-15T20:18:05.751Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/26/4a2bad8eb430d8d805a4642c4bff25103a37548d74ab346f8b1e024abcc5/deepdiff-9.1.0-py3-none-any.whl", hash = "sha256:80c0460e1993b04f6f0ca79abf25548b129fd218478c4ebb08f80560f5d10610", size = 184662, upload-time = "2026-05-15T20:18:03.956Z" },
+]
+
+[[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
 ]
 
 [[package]]
@@ -895,6 +905,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mako"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/09/e07c4b5579a79f4b16f8d4f29f6c54514ac787c4ad506b8c4f28a0e6b0bf/mako-1.4.3.tar.gz", hash = "sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a", size = 412799, upload-time = "2026-09-22T20:54:31.509Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/a0/053d6af3e8f871e0073b4a36732d9e65be77a72e5434c31b94f6af78a6bb/mako-1.4.3-py3-none-any.whl", hash = "sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f", size = 80164, upload-time = "2026-09-22T20:54:33.128Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1022,6 +1044,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0b/5f/19930f824ffeb0ad4372da4812c50edbd1434f678c90c2733e1188edfc63/oauthlib-3.3.1.tar.gz", hash = "sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9", size = 185918, upload-time = "2025-06-19T22:48:08.269Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/be/9c/92789c596b8df838baa98fa71844d84283302f7604ed565dafe5a6b5041a/oauthlib-3.3.1-py3-none-any.whl", hash = "sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1", size = 160065, upload-time = "2025-06-19T22:48:06.508Z" },
+]
+
+[[package]]
+name = "observability-clients"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "tenacity" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ce/00/08c1f283fab6c6c731796810831633302a7d29ba20b7fe796906b4583a85/observability_clients-0.1.2.tar.gz", hash = "sha256:a0c3193c6b9031b5072495ef980566bec6171edcce44ad0daa9b73464116dd0d", size = 58836, upload-time = "2026-09-17T08:23:02.636Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b1/dd/173ddc5cb39ea45c6fc07920456f5e1018bcd43b89aed8d538a9f7204c30/observability_clients-0.1.2-py3-none-any.whl", hash = "sha256:dd8b27c6d26c9e3f31229a6c3f0583eeabb8aaefb4fc82feca60213b2428930c", size = 14339, upload-time = "2026-09-17T08:23:01.658Z" },
 ]
 
 [[package]]
@@ -1190,6 +1225,28 @@ wheels = [
 ]
 
 [[package]]
+name = "parse"
+version = "1.22.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/ee/0d009de843577b7a4893517fe517b54791e576dedd00ed9209c8498eddc2/parse-1.22.2.tar.gz", hash = "sha256:8ff0b98202798b8cefa4f8fac06b670d6d00e5ec6ecbbacaf97ac0d0e93a54e6", size = 37675, upload-time = "2026-09-18T16:45:10.111Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/a5/fa3a1c9cf935b6e3dedb85647ce9ee98decc830feaf63102c3b5b8a72558/parse-1.22.2-py2.py3-none-any.whl", hash = "sha256:b8ed6f889ca625b6b3aed4ec1439eb9421fde31814c2b1d550ccd8df5733a5b6", size = 21190, upload-time = "2026-09-18T16:45:09.146Z" },
+]
+
+[[package]]
+name = "parse-type"
+version = "0.6.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parse" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/ea/42ba6ce0abba04ab6e0b997dcb9b528a4661b62af1fe1b0d498120d5ea78/parse_type-0.6.6.tar.gz", hash = "sha256:513a3784104839770d690e04339a8b4d33439fcd5dd99f2e4580f9fc1097bfb2", size = 98012, upload-time = "2025-08-11T22:53:48.066Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/8d/eef3d8cdccc32abdd91b1286884c99b8c3a6d3b135affcc2a7a0f383bb32/parse_type-0.6.6-py2.py3-none-any.whl", hash = "sha256:3ca79bbe71e170dfccc8ec6c341edfd1c2a0fc1e5cfd18330f93af938de2348c", size = 27085, upload-time = "2025-08-11T22:53:46.396Z" },
+]
+
+[[package]]
 name = "parso"
 version = "0.8.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1271,6 +1328,7 @@ dev = [
     { name = "jubilant" },
     { name = "juju" },
     { name = "minio" },
+    { name = "observability-clients" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "ops", extra = ["testing"] },
     { name = "prometheus-api-client" },
@@ -1278,6 +1336,7 @@ dev = [
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pytest-bdd" },
     { name = "pytest-httpserver" },
     { name = "pytest-interface-tester" },
     { name = "pytest-operator" },
@@ -1307,6 +1366,7 @@ requires-dist = [
     { name = "lightkube", specifier = ">=0.11" },
     { name = "lightkube-models", specifier = ">=1.22.0.4" },
     { name = "minio", marker = "extra == 'dev'" },
+    { name = "observability-clients", marker = "extra == 'dev'" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'dev'" },
     { name = "ops", extras = ["testing"], marker = "extra == 'dev'" },
     { name = "ops", extras = ["tracing"] },
@@ -1316,6 +1376,7 @@ requires-dist = [
     { name = "pyright", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
+    { name = "pytest-bdd", marker = "extra == 'dev'", specifier = "<8" },
     { name = "pytest-httpserver", marker = "extra == 'dev'" },
     { name = "pytest-interface-tester", marker = "extra == 'dev'", specifier = ">2.0.0" },
     { name = "pytest-operator", marker = "extra == 'dev'" },
@@ -1652,6 +1713,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ae/53/57663d99acaac2fcdafdc697e52a9b1b7d6fcf36616281ff9768a44e7ff3/pytest_asyncio-0.21.2.tar.gz", hash = "sha256:d67738fc232b94b326b9d060750beb16e0074210b98dd8b58a5239fa2a154f45", size = 30656, upload-time = "2024-04-29T13:23:24.738Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9c/ce/1e4b53c213dce25d6e8b163697fbce2d43799d76fa08eea6ad270451c370/pytest_asyncio-0.21.2-py3-none-any.whl", hash = "sha256:ab664c88bb7998f711d8039cacd4884da6430886ae8bbd4eded552ed2004f16b", size = 13368, upload-time = "2024-04-29T13:23:23.126Z" },
+]
+
+[[package]]
+name = "pytest-bdd"
+version = "7.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mako" },
+    { name = "packaging" },
+    { name = "parse" },
+    { name = "parse-type" },
+    { name = "pytest" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/49/9a/45c2aa5241513eb3169d9aa600933104a59dc12e8754ad63cf16dd8b9dcb/pytest_bdd-7.3.0.tar.gz", hash = "sha256:9dfeb1d8565d9548907f36a5a9e2c8e1e0cbac3b2724e17331b87386a19fbc16", size = 47435, upload-time = "2024-09-21T09:52:28.744Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/30/557b1cf7b951ad47d822f0495a248c0a18e6e12e4e3287bd63a85aeceb4b/pytest_bdd-7.3.0-py3-none-any.whl", hash = "sha256:168ede4a118e348feb70182590ee4a2f856e68dafe54a75a4e9203da37d4ade6", size = 42218, upload-time = "2024-09-21T09:52:26.404Z" },
 ]
 
 [[package]]
