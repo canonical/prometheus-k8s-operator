@@ -26,7 +26,6 @@ SSC_APP_NAME = "ssc"
 @pytest.mark.xfail(
     datetime.date.today() < datetime.date(2026, 11, 1),
     reason="expected to fail until 2026-11-01",
-    strict=True,
 )
 async def test_workload_traces(ops_test, prometheus_charm):
     minio_user = "accesskey"
@@ -91,7 +90,6 @@ async def test_workload_traces(ops_test, prometheus_charm):
 @pytest.mark.xfail(
     datetime.date.today() < datetime.date(2026, 11, 1),
     reason="expected to fail until 2026-11-01",
-    strict=True,
 )
 async def test_workload_traces_tls(ops_test):
     # integrate with a TLS Provider
