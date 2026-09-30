@@ -16,98 +16,10 @@ from _alert_rule_customization_helpers import (
     read_all_rules,
 )
 from ops.model import ActiveStatus, BlockedStatus
-from pytest_bdd import given, parsers, scenario, then, when
+from pytest_bdd import given, parsers, scenarios, then, when
 from scenario import State
 
-# ---------------------------------------------------------------------------
-# Scenarios
-# ---------------------------------------------------------------------------
-
-
-@scenario("features/alert_rule_customizations.feature", "The charm becomes blocked when the customization is invalid YAML")
-def test_blocked_invalid_yaml():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "The charm becomes blocked when the customization has invalid keys")
-def test_blocked_invalid_keys():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "The charm becomes blocked when the customization has an invalid operation key")
-def test_blocked_invalid_op_key():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Removing an alert by name drops only that alert")
-def test_remove_by_name():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Removing an alert by group name drops the entire group")
-def test_remove_by_group():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching sets a field on a matching alert")
-def test_patch_field():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching replaces the expression of a matching alert")
-def test_patch_expr():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching adds a new label and preserves existing labels")
-def test_patch_adds_label():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching overwrites an existing label")
-def test_patch_overwrites_label():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching matches by label value and only touches matching alerts")
-def test_patch_by_label():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Multiple patch operations are each applied")
-def test_multiple_patches():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Removing and patching can be combined")
-def test_remove_and_patch():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "Patching and removing apply to rules from both relation endpoints")
-def test_both_endpoints():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "The charm becomes blocked when the customization yields invalid rules")
-def test_blocked_invalid_rules():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "A remove that matches nothing results in no change")
-def test_remove_no_match():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "A patch that matches nothing results in no change")
-def test_patch_no_match():
-    pass
-
-
-@scenario("features/alert_rule_customizations.feature", "A remove and patch that match nothing result in no change")
-def test_remove_patch_no_match():
-    pass
-
+scenarios("features/alert_rule_customizations.feature")
 
 # ---------------------------------------------------------------------------
 # Given
