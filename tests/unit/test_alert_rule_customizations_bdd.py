@@ -150,6 +150,21 @@ def then_active_customizations(state_out):
     assert isinstance(customization_status(state_out), ActiveStatus)
 
 
+@then(
+    parsers.parse(
+        'the charm is in ActiveStatus for alert_rule_customizations with message "{message}"'
+    )
+)
+def then_active_customizations_with_message(message, state_out):
+    status = customization_status(state_out)
+    assert isinstance(
+        status, ActiveStatus
+    ), f"expected ActiveStatus, got {type(status).__name__}"
+    assert (
+        status.message == message
+    ), f"expected message {message!r}, got {status.message!r}"
+
+
 @then("all provided alert rules are still written unchanged")
 def then_all_rules_still_written(state_out, base_state):
     context = base_state["context"]

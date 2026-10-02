@@ -770,31 +770,45 @@ class PrometheusCharm(CharmBase):
 
         Returns: A boolean indicating if new or different alert rules were pushed.
         """
-        try:
-            customization = AlertRulesCustomization.from_yaml(
-                cast(str, self.model.config.get("alert_rule_customizations") or ""),
-                query_type="promql"
-            )
-            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
-        except AlertRulesCustomizationError as e:
-            logger.error("An error occurred while parsing alert rule customizations: %s", e)
-            self._stored.status["alert_rules_customizations"] = to_tuple(
-                BlockedStatus("Customized alert rules are invalid. See debug-log")
-            )
-            customization = AlertRulesCustomization(query_type="promql")  # no-op: write rules unmodified
+        customizations = cast(str, self.model.config.get("alert_rule_customizations") or "")
 
         metrics_consumer_alerts = self.metrics_consumer.alerts
         remote_write_alerts = self.remote_write_provider.alerts
 
-        try:
-            metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
-            remote_write_alerts = customization.apply(remote_write_alerts)
-        except AlertRulesCustomizationValidationError:
-            # When this exception is raised, rules_customization treats `apply` as a no-op and returns the alert rules unchanged.
-            logger.info("Some alerts became valid after applying the provided customizations. ALL customizations are now dropped")
-            self._stored.status["alert_rules_customizations"] = to_tuple(
-                BlockedStatus("Unable to validate alert rule customizations")
-            )
+        if customizations.strip():
+            try:
+                customization = AlertRulesCustomization.from_yaml(customizations, query_type="promql")
+            except AlertRulesCustomizationError as e:
+                logger.error("An error occurred while parsing alert rule customizations: %s", e)
+                self._stored.status["alert_rules_customizations"] = to_tuple(
+                    BlockedStatus("Customized alert rules are invalid. See debug-log")
+                )
+            else:
+                metrics_consumer_alerts_original = metrics_consumer_alerts
+                remote_write_alerts_original = remote_write_alerts
+
+                try:
+                    metrics_consumer_alerts = customization.apply(metrics_consumer_alerts)
+                    remote_write_alerts = customization.apply(remote_write_alerts)
+                except AlertRulesCustomizationValidationError:
+                    logger.info(
+                        "Some alerts became invalid after applying the provided customizations. "
+                        "ALL customizations are now dropped"
+                    )
+                    self._stored.status["alert_rules_customizations"] = to_tuple(
+                        BlockedStatus("Unable to validate alert rule customizations")
+                    )
+                else:
+                    if (metrics_consumer_alerts == metrics_consumer_alerts_original
+                            and remote_write_alerts == remote_write_alerts_original):
+                        self._stored.status["alert_rules_customizations"] = to_tuple(
+                            ActiveStatus("Customizations matched no rules; rules unchanged")
+                        )
+                    else:
+                        self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+        else:
+            self._stored.status["alert_rules_customizations"] = to_tuple(ActiveStatus())
+
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
 
