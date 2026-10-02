@@ -214,7 +214,7 @@ Feature: Alert rule customizations
             alert: TotallyMadeUpAlert
       """
     Then the written alert rules are unchanged
-    And the charm is in ActiveStatus for alert_rule_customizations
+    And the charm is in ActiveStatus for alert_rule_customizations with message "Customizations matched no rules; rules unchanged"
 
   Scenario: A patch that matches nothing results in no change
     When the customization is set to:
@@ -226,7 +226,7 @@ Feature: Alert rule customizations
             for: 30m
       """
     Then the written alert rules are unchanged
-    And the charm is in ActiveStatus for alert_rule_customizations
+    And the charm is in ActiveStatus for alert_rule_customizations with message "Customizations matched no rules; rules unchanged"
 
   Scenario: A remove and patch that match nothing result in no change
     When the customization is set to:
@@ -241,4 +241,4 @@ Feature: Alert rule customizations
             for: 30m
       """
     Then the written alert rules are unchanged
-    And the charm is in ActiveStatus for alert_rule_customizations
+    And the charm is in ActiveStatus for alert_rule_customizations with message "Customizations matched no rules; rules unchanged"
