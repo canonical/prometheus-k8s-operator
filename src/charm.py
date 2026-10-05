@@ -793,7 +793,7 @@ class PrometheusCharm(CharmBase):
             # When this exception is raised, rules_customization treats `apply` as a no-op and returns the alert rules unchanged.
             logger.info("Some alerts became valid after applying the provided customizations. ALL customizations are now dropped")
             self._stored.status["alert_rules_customizations"] = to_tuple(
-                BlockedStatus("Unable to validate alert rule customizations")
+                BlockedStatus("Unable to validate alert rule customizations. See debug-log")
             )
         alerts_hash = sha256(str(metrics_consumer_alerts) + str(remote_write_alerts))
         alert_rules_changed = alerts_hash != self._pull(ALERTS_HASH_PATH)
