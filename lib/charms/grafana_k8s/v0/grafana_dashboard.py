@@ -180,16 +180,12 @@ import json
 import logging
 import lzma
 import os
-import platform
 import re
-import subprocess
-import tempfile
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
-import yaml
-from cosl import DashboardPath40UID, LZMABase64
-from cosl.types import type_convert_stored
+from typing import Any, Callable, Dict, List, Optional
+from cosl import CosTool, DashboardPath40UID, LZMABase64
+from cosl.types import QueryType, type_convert_stored
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -217,7 +213,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 52
+LIBPATCH = 53
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -830,7 +826,10 @@ class CharmedDashboard:
         # Do the same for any offsets
         offset_re = re.compile(r"offset\s+(?P<value>-?\s*[$\w]+)")
 
-        known_datasources = {"${prometheusds}": "promql", "${lokids}": "logql"}
+        known_datasources: Dict[str, QueryType] = {
+            "${prometheusds}": "promql",
+            "${lokids}": "logql",
+        }
 
         targets = panel["targets"]
 
@@ -872,7 +871,9 @@ class CharmedDashboard:
             # actual type is without re-implementing a complete dashboard parser, but no
             # harm will some from passing invalid promql -- we'll just get the original back.
             #
-            replacement = transformer.inject_label_matchers(expr, topology, querytype)
+            replacement = transformer.inject_label_matchers(
+                expr, {k: k for k in topology}, querytype, dashboard_variable=True
+            )
 
             if replacement == target["expr"]:
                 # promql-transform caught an error. Move on
@@ -1447,7 +1448,11 @@ class GrafanaDashboardConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._transformer = CosTool(self._charm)
+        # A default query type is required here: cosl's `CosTool` only accepts the query
+        # type via the per-method `query_type` kwarg, but `_modify_panel` passes it
+        # positionally (per-panel, promql or logql), which the `ensure_querytype` guard
+        # does not see. "promql" is just a placeholder to satisfy that guard.
+        self._transformer = CosTool("promql")
 
         self._stored.set_default(dashboards={})  # type: ignore
 
@@ -2122,125 +2127,3 @@ class GrafanaDashboardAggregator(Object):
             "application": event.app.name,  # type: ignore
             "unit": event.unit.name,  # type: ignore
         }
-
-
-class CosTool:
-    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
-
-    _path = None
-    _disabled = False
-
-    def __init__(self, charm):
-        self._charm = charm
-
-    @property
-    def path(self):
-        """Lazy lookup of the path of cos-tool."""
-        if self._disabled:
-            return None
-        if not self._path:
-            self._path = self._get_tool_path()
-            if not self._path:
-                logger.debug("Skipping injection of juju topology as label matchers")
-                self._disabled = True
-        return self._path
-
-    def apply_label_matchers(self, rules: dict, type: str) -> dict:
-        """Will apply label matchers to the expression of all alerts in all supplied groups."""
-        if not self.path:
-            return rules
-        for group in rules["groups"]:
-            rules_in_group = group.get("rules", [])
-            for rule in rules_in_group:
-                topology = {}
-                # if the user for some reason has provided juju_unit, we'll need to honor it
-                # in most cases, however, this will be empty
-                for label in [
-                    "juju_model",
-                    "juju_model_uuid",
-                    "juju_application",
-                    "juju_charm",
-                    "juju_unit",
-                ]:
-                    if label in rule["labels"]:
-                        topology[label] = rule["labels"][label]
-
-                rule["expr"] = self.inject_label_matchers(rule["expr"], topology, type)
-        return rules
-
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True, ""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            rule_path = Path(tmpdir + "/validate_rule.yaml")
-
-            # Smash "our" rules format into what upstream actually uses, which is more like:
-            #
-            # groups:
-            #   - name: foo
-            #     rules:
-            #       - alert: SomeAlert
-            #         expr: up
-            #       - alert: OtherAlert
-            #         expr: up
-            transformed_rules = {"groups": []}  # type: ignore
-            for i, rule in enumerate(rules["groups"]):
-                transformed = {"name": f"group_{i}", "rules": [rule]}
-                transformed_rules["groups"].append(transformed)
-
-            rule_path.write_text(yaml.safe_dump(transformed_rules, sort_keys=True)) # databag-order: ignore
-
-            args = [str(self.path), "validate", str(rule_path)]
-            # noinspection PyBroadException
-            try:
-                self._exec(args)
-                return True, ""
-            except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join([line for line in e.output if "error validating" in line])
-
-    def inject_label_matchers(self, expression: str, topology: dict, type: str) -> str:
-        """Add label matchers to an expression."""
-        if not topology:
-            return expression
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
-            return expression
-        args = [str(self.path), "--format", type, "transform"]
-
-        variable_topology = {k: "${}".format(k) for k in topology.keys()}
-        args.extend(
-            [
-                "--label-matcher={}={}".format(key, value)
-                for key, value in variable_topology.items()
-            ]
-        )
-
-        # Pass a leading "--" so expressions with a negation or subtraction aren't interpreted as
-        # flags
-        args.extend(["--", "{}".format(expression)])
-        # noinspection PyBroadException
-        try:
-            return re.sub(r'="\$juju', r'=~"$juju', self._exec(args))
-        except subprocess.CalledProcessError as e:
-            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            return expression
-
-    def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.machine()
-        arch = "amd64" if arch == "x86_64" else arch
-        res = "cos-tool-{}".format(arch)
-        try:
-            path = Path(res).resolve(strict=True)
-            return path
-        except (FileNotFoundError, OSError):
-            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
-        return None
-
-    def _exec(self, cmd) -> str:
-        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-        output = result.stdout.decode("utf-8").strip()
-        return output
