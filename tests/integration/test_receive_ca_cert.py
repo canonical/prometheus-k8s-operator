@@ -19,7 +19,7 @@ async def test_unknown_authority(juju: jubilant.Juju, prometheus_charm: str):
     """Scenario: Prometheus fails to scrape metrics from a server signed by unknown authority."""
     # GIVEN a scrape target signed by a self-signed certificate
     # WHEN related to prometheus
-    juju.deploy("alertmanager-k8s", app="am", channel="2/edge", trust=True)
+    juju.deploy("alertmanager-k8s", app="am", channel="0.34/edge", trust=True)
     juju.deploy("self-signed-certificates", app="ca", channel="1/stable", trust=True)
     juju.deploy(prometheus_charm, app="prom", resources=PROMETHEUS_RESOURCES, trust=True)
     juju.integrate("am:certificates", "ca:certificates")
