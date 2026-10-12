@@ -83,7 +83,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 23
+LIBPATCH = 24
 
 log = logging.getLogger(__name__)
 
@@ -187,8 +187,8 @@ def _validate_data(data: Any, schema: Any) -> None:
     if not DO_VALIDATION:
         return
     try:
-        jsonschema.validate(instance=data, schema=schema)  # pyright: ignore[reportUnboundVariable]
-    except jsonschema.ValidationError as e:  # pyright: ignore[reportUnboundVariable]
+        jsonschema.validate(instance=data, schema=schema)  # pyright: ignore[reportPossiblyUnboundVariable]
+    except jsonschema.ValidationError as e:  # pyright: ignore[reportPossiblyUnboundVariable]
         raise DataValidationError(data, schema) from e
 
 
@@ -685,7 +685,7 @@ class IngressPerUnitRequirerEvents(ObjectEvents):
 class IngressPerUnitRequirer(_IngressPerUnitBase):
     """Implementation of the requirer of ingress_per_unit."""
 
-    on: IngressPerUnitRequirerEvents = IngressPerUnitRequirerEvents()
+    on = IngressPerUnitRequirerEvents()  # type: ignore
     # used to prevent spurious urls to be sent out if the event we're currently
     # handling is a relation-broken one.
     _stored = StoredState()
@@ -721,19 +721,25 @@ class IngressPerUnitRequirer(_IngressPerUnitBase):
                 requirer unit; if unspecified, the FQDN of the unit will be
                 used instead.
             port: port to be used by the ingress provider to address the
-                    requirer unit.
-            mode: mode to be used between "tcp" and "http".
+                    requirer unit (int); required if any request arg is set.
+            mode: mode to be used between "tcp" and "http" (defaults to "http").
             listen_to: Choose which events should be fired on this unit:
                 "only-this-unit": this unit will only be notified when ingress
                   is ready/revoked for this unit.
                 "all-units": this unit will be notified when ingress is
                   ready/revoked for any unit of this application, including
                   itself.
-                "all": this unit will receive both event types (which means it
+                "both": this unit will receive both event types (which means it
                   will be notified *twice* of changes to this unit's ingress!).
-            strip_prefix: remove prefixes from the URL path.
-            redirect_https: redirect incoming requests to HTTPS
-            scheme: callable returning the scheme to use when constructing the ingress url.
+            strip_prefix: Configure Traefik to strip the path prefix given to the requirer's
+                backend when forwarding a request (defaults to False). This only affects what
+                path the requirer's workload sees; it does not change the ingress URL(s)
+                returned to clients, which always include the model/app/unit path prefix in
+                "path" routing mode. See the "How to integrate your charm to Traefik" how-to
+                guide for details.
+            redirect_https: redirect incoming requests to HTTPS (defaults to False).
+            scheme: callable returning the scheme (e.g. "http" or "https") to use when
+                constructing the ingress url; defaults to always returning "http".
         """
         super().__init__(charm, relation_name)
         self._stored.set_default(current_urls=None)  # type: ignore
