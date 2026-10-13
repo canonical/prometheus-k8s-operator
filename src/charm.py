@@ -597,7 +597,9 @@ class PrometheusCharm(CharmBase):
 
         # Refresh system certs
         self.container.exec(["update-ca-certificates", "--fresh"]).wait()
-        self.container.restart("prometheus")
+        # Guard against restarting a service that may not exist yet.
+        if "prometheus" in self.container.get_services():
+            self.container.restart("prometheus")
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.
@@ -737,6 +739,9 @@ class PrometheusCharm(CharmBase):
 
         This runs after the workload container starts.
         """
+        # A container/pod restart recreates the workload
+        # container's filesystem, so we need to update certs.
+        self._update_ca_certs()
         self._configure(event)
         if version := self._prometheus_version:
             self.unit.set_workload_version(version)

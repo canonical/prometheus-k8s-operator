@@ -4,7 +4,7 @@
 
 import json
 
-from ops.testing import Relation, State
+from ops.testing import Container, Exec, Relation, State
 
 from src.charm import RECV_CA_CERT_FOLDER_PATH
 
@@ -67,3 +67,50 @@ def test_ca_forwarded_over_rel_data(context, prometheus_container):
     assert certs_dir.exists()
     certs = {file.read_text() for file in certs_dir.glob("*.crt")}
     assert certs == {cert2a, cert2b}
+
+
+def test_ca_trust_survives_a_workload_container_restart(context, prometheus_container):
+    cert = "-----BEGIN CERTIFICATE-----\n ... cert ... \n-----END CERTIFICATE-----"
+
+    # GIVEN a `receive-ca-cert` relation whose CA was already trusted...
+    relation = Relation("receive-ca-cert", remote_app_data={"certificates": json.dumps([cert])})
+    state = State(leader=True, containers={prometheus_container}, relations=[relation])
+
+    # ...but the workload container's filesystem is fresh (no CA files on disk),
+    # simulating a restarted container whose relation data hasn't changed.
+    assert not prometheus_container.get_filesystem(context).joinpath(
+        RECV_CA_CERT_FOLDER_PATH.lstrip("/")
+    ).exists()
+
+    # WHEN only `pebble-ready` fires (no relation event)
+    out = context.run(context.on.pebble_ready(prometheus_container), state)
+
+    # THEN the CA trust bundle is (re)written anyway
+    fs = out.get_container("prometheus").get_filesystem(context)
+    certs_dir = fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/"))
+    assert certs_dir.exists()
+    assert {f.read_text() for f in certs_dir.glob("*.crt")} == {cert}
+
+
+def test_pebble_ready_does_not_crash_before_the_service_exists(context):
+    """`_update_ca_certs` must not blow up restarting a service that was never started.
+
+    On the very first `pebble-ready` of a fresh unit (before `_configure` has ever added the
+    pebble layer), there is no "prometheus" service yet to restart.
+    """
+    container = Container(
+        "prometheus",
+        can_connect=True,
+        execs={Exec(["update-ca-certificates", "--fresh"], return_code=0, stdout="")},
+    )
+    cert = "-----BEGIN CERTIFICATE-----\n ... cert ... \n-----END CERTIFICATE-----"
+    relation = Relation("receive-ca-cert", remote_app_data={"certificates": json.dumps([cert])})
+    state = State(leader=True, containers={container}, relations=[relation])
+
+    # WHEN pebble-ready fires before any layer/service has ever been added
+    out = context.run(context.on.pebble_ready(container), state)
+
+    # THEN the charm doesn't crash, and the CA cert is still written to disk
+    fs = out.get_container("prometheus").get_filesystem(context)
+    certs_dir = fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/"))
+    assert {f.read_text() for f in certs_dir.glob("*.crt")} == {cert}
