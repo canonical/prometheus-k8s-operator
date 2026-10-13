@@ -563,7 +563,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 34
+LIBPATCH = 35
 
 PYDEPS = ["cosl"]
 
@@ -2725,12 +2725,14 @@ class LogForwarder(ConsumerBase):
 
     def _update_logging(self, event: RelationEvent):
         """Update the log forwarding to match the active Loki endpoints."""
-        if not (loki_endpoints := self._retrieve_endpoints_from_relation()):
+        loki_endpoints = self._retrieve_endpoints_from_relation()
+        if not loki_endpoints:
             logger.warning("No Loki endpoints available")
-            return
 
         for container in self._charm.unit.containers.values():
             if container.can_connect():
+                # Reconcile even when no endpoints remain: this disables the targets of
+                # endpoints that went away on relation-departed/relation-broken.
                 self._update_endpoints(container, loki_endpoints)
             # else: `_update_endpoints` will be called on pebble-ready anyway.
 
