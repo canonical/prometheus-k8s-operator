@@ -587,19 +587,37 @@ class PrometheusCharm(CharmBase):
 
         # Obtain certs from relation data
         ca_certs = self._cert_transfer.get_all_certificates()
+        desired = {
+            RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt": cert for i, cert in enumerate(ca_certs)
+        }
 
-        # Clean-up previously existing certs
-        self.container.remove_path(RECV_CA_CERT_FOLDER_PATH, recursive=True)
+        # Compare against what's already on disk
+        existing = {}
+        if self.container.isdir(RECV_CA_CERT_FOLDER_PATH):
+            existing = {
+                str(f.path): self.container.pull(f.path).read()
+                for f in self.container.list_files(RECV_CA_CERT_FOLDER_PATH)
+            }
+        if existing == desired:
+            return
 
-        # Write current certs
-        for i, cert in enumerate(ca_certs):
-            self.container.push(RECV_CA_CERT_FOLDER_PATH + f"/{i}.crt", cert, make_dirs=True)
+        try:
+            # Clean-up previously existing certs
+            self.container.remove_path(RECV_CA_CERT_FOLDER_PATH, recursive=True)
 
-        # Refresh system certs
-        self.container.exec(["update-ca-certificates", "--fresh"]).wait()
-        # Guard against restarting a service that may not exist yet.
-        if "prometheus" in self.container.get_services():
-            self.container.restart("prometheus")
+            # Write current certs
+            for path, cert in desired.items():
+                self.container.push(path, cert, make_dirs=True)
+
+            # Refresh system certs
+            self.container.exec(["update-ca-certificates", "--fresh"]).wait()
+            # Guard against restarting a service that may not exist yet.
+            if "prometheus" in self.container.get_services():
+                self.container.restart("prometheus")
+        except PebbleError as e:
+            # Don't let a transient Pebble issue crash the hook;
+            # the next pebble-ready/config-changed will retry this.
+            logger.error("Failed to refresh CA certs in the workload container: %s", e)
 
     def _configure(self, _):
         """Reconfigure and either reload or restart Prometheus.

@@ -3,6 +3,7 @@
 
 
 import json
+from unittest.mock import patch
 
 from ops.testing import Container, Exec, Relation, State
 
@@ -90,6 +91,33 @@ def test_ca_trust_survives_a_workload_container_restart(context, prometheus_cont
     certs_dir = fs.joinpath(RECV_CA_CERT_FOLDER_PATH.lstrip("/"))
     assert certs_dir.exists()
     assert {f.read_text() for f in certs_dir.glob("*.crt")} == {cert}
+
+
+def test_update_ca_certs_is_a_noop_when_nothing_changed(context, prometheus_container):
+    cert = "-----BEGIN CERTIFICATE-----\n ... cert ... \n-----END CERTIFICATE-----"
+    relation = Relation("receive-ca-cert", remote_app_data={"certificates": json.dumps([cert])})
+    state = State(leader=True, containers={prometheus_container}, relations=[relation])
+
+    with context(context.on.pebble_ready(prometheus_container), state) as manager:
+        charm = manager.charm
+
+        # GIVEN the certs have already been written to the workload container once
+        charm._update_ca_certs()
+        fs = charm.unit.get_container("prometheus").list_files(RECV_CA_CERT_FOLDER_PATH)
+        assert {f.path for f in fs} == {RECV_CA_CERT_FOLDER_PATH + "/0.crt"}
+
+        # WHEN `_update_ca_certs` is called again with nothing changed
+        with (
+            patch("ops.model.Container.exec") as mock_exec,
+            patch("ops.model.Container.restart") as mock_restart,
+            patch("ops.model.Container.remove_path") as mock_remove_path,
+        ):
+            charm._update_ca_certs()
+
+        # THEN none of the cert-refresh/restart machinery is invoked a second time
+        mock_exec.assert_not_called()
+        mock_restart.assert_not_called()
+        mock_remove_path.assert_not_called()
 
 
 def test_pebble_ready_does_not_crash_before_the_service_exists(context):
