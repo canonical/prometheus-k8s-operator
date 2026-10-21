@@ -15,6 +15,8 @@ variable "channel" {
   type        = string
 
   validation {
+    # Modules are released per track (e.g. tf-3.14.x), so the channel must use
+    # this track's prefix rather than the legacy "dev/" default.
     condition     = startswith(var.channel, "3.14/")
     error_message = "The track of the channel must be '3.14/'. e.g. '3.14/edge'."
   }
