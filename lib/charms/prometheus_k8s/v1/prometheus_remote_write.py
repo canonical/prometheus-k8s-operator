@@ -575,7 +575,10 @@ class PrometheusRemoteWriteConsumer(Object):
             peer_relation_name: Name of the peer relation containing units of this charm.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
             extra_alert_labels: Dict of extra labels to inject alert rules with.
-            observe_events: Flag to toggle observing events.
+            observe_events: Whether to observe the charm's relation and lifecycle events. If
+                False, no events are observed: `endpoints_changed` is never emitted and alert
+                rules are not pushed automatically, so the charm must call `reload_alerts()`
+                itself.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
