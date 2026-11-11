@@ -232,6 +232,43 @@ class TestRemoteWriteConsumer(unittest.TestCase):
             assert False  # Could not find the correct alert rule to check
 
 
+class RemoteWriteConsumerNoObserveCharm(CharmBase):
+    @patch_cos_tool_path
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+        self.remote_write_consumer = PrometheusRemoteWriteConsumer(
+            self,
+            RELATION_NAME,
+            alert_rules_path=str(UNITTEST_DIR / "prometheus_alert_rules"),
+            peer_relation_name="peers",
+            observe_events=False,
+        )
+
+
+class TestRemoteWriteConsumerNoObserve(unittest.TestCase):
+    def setUp(self):
+        self.harness = Harness(RemoteWriteConsumerNoObserveCharm, meta=METADATA)
+        self.addCleanup(self.harness.cleanup)
+        self.harness.set_leader(True)
+        self.harness.set_model_name("test")
+        self.harness.begin_with_initial_hooks()
+
+    def test_alerts_not_pushed_on_relation_events(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        self.assertNotIn(
+            "alert_rules", self.harness.get_relation_data(rel_id, self.harness.charm.app)
+        )
+
+    def test_reload_alerts_pushes_alerts(self):
+        rel_id = self.harness.add_relation(RELATION_NAME, "provider")
+        self.harness.add_relation_unit(rel_id, "provider/0")
+        self.harness.charm.remote_write_consumer.reload_alerts()
+        self.assertIn(
+            "alert_rules", self.harness.get_relation_data(rel_id, self.harness.charm.app)
+        )
+
+
 @prom_multipatch
 class TestRemoteWriteProvider(unittest.TestCase):
     @prom_multipatch
