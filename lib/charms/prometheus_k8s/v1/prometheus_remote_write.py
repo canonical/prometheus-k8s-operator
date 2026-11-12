@@ -615,28 +615,30 @@ class PrometheusRemoteWriteConsumer(Object):
         self._observe_events = observe_events
         on_relation = self._charm.on[self._relation_name]
 
-        if self._observe_events:
-            self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
-            self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
-            self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
-            self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
-            self.framework.observe(
-                on_relation.relation_joined, self._push_alerts_on_relation_event
-            )
-            self.framework.observe(
-                on_relation.relation_changed, self._push_alerts_on_relation_event
-            )
-            self.framework.observe(
-                self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
-            )
-            self.framework.observe(
-                self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
-            )
-            if refresh_event:
-                if not isinstance(refresh_event, list):
-                    refresh_event = [refresh_event]
-                for ev in refresh_event:
-                    self.framework.observe(ev, self._push_alerts_to_all_relation_databags)
+        if not self._observe_events:
+            return
+           
+        self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
+        self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
+        self.framework.observe(
+            on_relation.relation_joined, self._push_alerts_on_relation_event
+        )
+        self.framework.observe(
+            on_relation.relation_changed, self._push_alerts_on_relation_event
+        )
+        self.framework.observe(
+            self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
+        )
+        self.framework.observe(
+            self._charm.on.upgrade_charm, self._push_alerts_to_all_relation_databags
+        )
+        if refresh_event:
+            if not isinstance(refresh_event, list):
+                refresh_event = [refresh_event]
+            for ev in refresh_event:
+                self.framework.observe(ev, self._push_alerts_to_all_relation_databags)
 
     def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
         self.on.endpoints_changed.emit(relation_id=event.relation.id)
