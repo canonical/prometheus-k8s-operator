@@ -617,7 +617,6 @@ class PrometheusRemoteWriteConsumer(Object):
 
         if not self._observe_events:
             return
-           
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
