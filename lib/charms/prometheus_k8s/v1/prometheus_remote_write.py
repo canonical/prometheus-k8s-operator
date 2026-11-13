@@ -63,7 +63,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 19
+LIBPATCH = 20
 
 PYDEPS = ["cosl"]
 
@@ -558,6 +558,7 @@ class PrometheusRemoteWriteConsumer(Object):
         peer_relation_name: str,
         forward_alert_rules: bool = True,
         extra_alert_labels: Dict = {},
+        observe_events: bool = True,
     ):
         """API to manage a required relation with the `prometheus_remote_write` interface.
 
@@ -574,6 +575,10 @@ class PrometheusRemoteWriteConsumer(Object):
             peer_relation_name: Name of the peer relation containing units of this charm.
             forward_alert_rules: Flag to toggle forwarding of charmed alert rules.
             extra_alert_labels: Dict of extra labels to inject alert rules with.
+            observe_events: Whether to observe the charm's relation and lifecycle events. If
+                False, no events are observed: `endpoints_changed` is never emitted and alert
+                rules are not pushed automatically, so the charm must call `reload_alerts()`
+                itself.
 
         Raises:
             RelationNotFoundError: If there is no relation in the charm's metadata.yaml
@@ -607,14 +612,21 @@ class PrometheusRemoteWriteConsumer(Object):
         self._peer_relation_name = peer_relation_name
         self.topology = JujuTopology.from_charm(charm)
         self._tool = CosTool("promql")
+        self._observe_events = observe_events
         on_relation = self._charm.on[self._relation_name]
 
+        if not self._observe_events:
+            return
         self.framework.observe(on_relation.relation_joined, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_changed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_departed, self._handle_endpoints_changed)
         self.framework.observe(on_relation.relation_broken, self._on_relation_broken)
-        self.framework.observe(on_relation.relation_joined, self._push_alerts_on_relation_event)
-        self.framework.observe(on_relation.relation_changed, self._push_alerts_on_relation_event)
+        self.framework.observe(
+            on_relation.relation_joined, self._push_alerts_on_relation_event
+        )
+        self.framework.observe(
+            on_relation.relation_changed, self._push_alerts_on_relation_event
+        )
         self.framework.observe(
             self._charm.on.leader_elected, self._push_alerts_to_all_relation_databags
         )
@@ -1251,4 +1263,3 @@ class PrometheusRemoteWriteProvider(Object):
                 return True
 
         return False
-

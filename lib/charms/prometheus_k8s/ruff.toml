@@ -1,0 +1,5 @@
+# The charm libraries may be used by charms running Python 3.8 (e.g. machine charms on
+# Ubuntu 20.04), so they must not be linted/formatted with the repo's Python 3.14 target.
+# Mirrors the pyright execution environment for this folder in pyproject.toml.
+extend = "../../../pyproject.toml"
+target-version = "py38"
